@@ -8,7 +8,6 @@
 # Tag scheme:
 #   CUDA-v0.1.0, CUDA-latest         → NVIDIA GPUs (arm64 + amd64)
 #   ROCm-v0.1.0, ROCm-latest         → AMD GPUs (amd64)
-#   Intel-v0.1.0, Intel-latest       → Intel CPUs/GPUs (amd64)
 #   v0.1.0, latest                   → Common Ubuntu base (arm64 + amd64)
 # ────────────────────────────────────────────────────────────────────────────────
 
@@ -70,10 +69,6 @@ jobs:
             platform: linux/amd64
             tag-suffix: ROCm
             description: "AMD ROCm 7.2.4 PyTorch 2.10 — Instinct MI300X, MI250X, Radeon PRO"
-          - dockerfile: Dockerfile.Intel
-            platform: linux/amd64
-            tag-suffix: Intel
-            description: "Intel-optimized PyTorch 2.8 — Xeon AMX/AVX-512, Arc/Flex/Max GPUs"
           - dockerfile: Dockerfile.Ubuntu
             platform: linux/arm64,linux/amd64
             tag-suffix: ubuntu
@@ -161,22 +156,27 @@ jobs:
           V="${{ needs.version.outputs.version }}"
           echo "### 🐳 Published CodeFreedom Images" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Platform | Image Tag | Base | Arch |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "|----------|-----------|------|------|" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| NVIDIA CUDA | \`CUDA-v${V}\` | NVIDIA PyTorch 26.04 | arm64 + amd64 |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| AMD ROCm | \`ROCm-v${V}\` | ROCm 7.2.4 PyTorch 2.10 | amd64 |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Intel | \`Intel-v${V}\` | Intel IPEX PyTorch 2.8 | amd64 |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Ubuntu | \`ubuntu-v${V}\` | Ubuntu 26.04 | arm64 + amd64 |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "#### 🔥 PyTorch Variants (AI inference capable)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Platform | Image Tag | Base |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "|----------|-----------|------|" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| ARM64 Blackwell | \`ARM64.Blackwell-pytorch-v${V}\` | NVIDIA PyTorch 26.04 |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| ARM64 | \`ARM64-pytorch-v${V}\` | NVIDIA PyTorch 26.04 |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Intel | \`Intel-pytorch-v${V}\` | Intel IPEX PyTorch 2.8 |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| AMD | \`AMD-pytorch-v${V}\` | ROCm 7.2.4 PyTorch 2.10 |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "#### 🪶 Lightweight Variants (no PyTorch)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Platform | Image Tag | Base |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "|----------|-----------|------|" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| ARM64 Blackwell | \`ARM64.Blackwell-v${V}\` | Debian 13 slim |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| ARM64 | \`ARM64-v${V}\` | Debian 13 slim |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Intel | \`Intel-v${V}\` | Debian 13 slim |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| AMD | \`AMD-v${V}\` | Debian 13 slim |" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
           echo "**Registries:** \`docker.io/nilayparikh/codefreedom\` · \`ghcr.io/nilayparikh/codefreedom\`" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
           echo '```bash' >> "${GITHUB_STEP_SUMMARY}"
-          echo "# CUDA (NVIDIA GPUs — DGX, H100, A100, L40S, RTX)" >> "${GITHUB_STEP_SUMMARY}"
-          echo "docker pull nilayparikh/codefreedom:CUDA-v${V}" >> "${GITHUB_STEP_SUMMARY}"
-          echo "# ROCm (AMD GPUs — Instinct MI300X, MI250X)" >> "${GITHUB_STEP_SUMMARY}"
-          echo "docker pull nilayparikh/codefreedom:ROCm-v${V}" >> "${GITHUB_STEP_SUMMARY}"
-          echo "# Intel (Xeon CPUs — AMX/AVX-512)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "# Pull PyTorch variant" >> "${GITHUB_STEP_SUMMARY}"
+          echo "docker pull nilayparikh/codefreedom:ARM64.Blackwell-pytorch-v${V}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "# Pull lightweight variant" >> "${GITHUB_STEP_SUMMARY}"
           echo "docker pull nilayparikh/codefreedom:Intel-v${V}" >> "${GITHUB_STEP_SUMMARY}"
-          echo "# Ubuntu (common — all archs, no PyTorch)" >> "${GITHUB_STEP_SUMMARY}"
-          echo "docker pull nilayparikh/codefreedom:ubuntu-v${V}" >> "${GITHUB_STEP_SUMMARY}"
           echo '```' >> "${GITHUB_STEP_SUMMARY}"
