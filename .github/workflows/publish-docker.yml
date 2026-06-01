@@ -1,0 +1,182 @@
+# ── CodeFreedom Docker Publish Workflow ────────────────────────────────────────
+# Builds and publishes multi-platform Docker images to:
+#   • Docker Hub:    docker.io/nilayparikh/codefreedom
+#   • GitHub CR:     ghcr.io/nilayparikh/codefreedom
+#
+# Triggered on: push to main, version tags (v*), or manual dispatch.
+#
+# Tag scheme:
+#   CUDA-v0.1.0, CUDA-latest         → NVIDIA GPUs (arm64 + amd64)
+#   ROCm-v0.1.0, ROCm-latest         → AMD GPUs (amd64)
+#   Intel-v0.1.0, Intel-latest       → Intel CPUs/GPUs (amd64)
+#   v0.1.0, latest                   → Common Ubuntu base (arm64 + amd64)
+# ────────────────────────────────────────────────────────────────────────────────
+
+name: Publish Docker Images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+    paths:
+      - "docker/claude-code/**"
+      - ".github/workflows/publish-docker.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+env:
+  DOCKER_HUB_REPO: nilayparikh/codefreedom
+  GHCR_REPO: ghcr.io/nilayparikh/codefreedom
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  # ── Extract version from pyproject.toml ──────────────────────────────────
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      major_minor: ${{ steps.version.outputs.major_minor }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
+          echo "📦 Version: v${VERSION}"
+
+  # ── Build & push each platform variant ───────────────────────────────────
+  build:
+    needs: [version]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: Dockerfile.CUDA
+            platform: linux/arm64,linux/amd64
+            tag-suffix: CUDA
+            description: "NVIDIA CUDA PyTorch 26.04 — all NVIDIA GPUs (DGX GB200, H100, A100, L40S, RTX)"
+          - dockerfile: Dockerfile.ROCm
+            platform: linux/amd64
+            tag-suffix: ROCm
+            description: "AMD ROCm 7.2.4 PyTorch 2.10 — Instinct MI300X, MI250X, Radeon PRO"
+          - dockerfile: Dockerfile.Intel
+            platform: linux/amd64
+            tag-suffix: Intel
+            description: "Intel-optimized PyTorch 2.8 — Xeon AMX/AVX-512, Arc/Flex/Max GPUs"
+          - dockerfile: Dockerfile.Ubuntu
+            platform: linux/arm64,linux/amd64
+            tag-suffix: ubuntu
+            description: "Common Ubuntu 26.04 base — no PyTorch, Claude Code + dev tools only"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for cross-platform ARM64 builds)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,amd64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Registry authentication ──────────────────────────────────────
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Metadata ──────────────────────────────────────────────────────
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.DOCKER_HUB_REPO }}
+            ${{ env.GHCR_REPO }}
+          tags: |
+            type=raw,value=${{ matrix.tag-suffix }}-v${{ needs.version.outputs.version }}
+            type=raw,value=${{ matrix.tag-suffix }}-v${{ needs.version.outputs.major_minor }}
+            type=raw,value=${{ matrix.tag-suffix }}-latest
+          labels: |
+            org.opencontainers.image.title=CodeFreedom - Claude Code (${{ matrix.tag-suffix }})
+            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.version=v${{ needs.version.outputs.version }}
+            com.codefreedom.platform=${{ matrix.tag-suffix }}
+
+      # ── Build and push ────────────────────────────────────────────────
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/claude-code/
+          file: docker/claude-code/${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            CODEFREEDOM_VERSION=v${{ needs.version.outputs.version }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.tag-suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.tag-suffix }}
+
+      # ── Provenance attestation ────────────────────────────────────────
+      - name: Generate artifact attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.GHCR_REPO }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  # ── Summary ────────────────────────────────────────────────────────────
+  summary:
+    needs: [version, build]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Print summary
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          echo "### 🐳 Published CodeFreedom Images" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Platform | Image Tag | Base | Arch |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "|----------|-----------|------|------|" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| NVIDIA CUDA | \`CUDA-v${V}\` | NVIDIA PyTorch 26.04 | arm64 + amd64 |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| AMD ROCm | \`ROCm-v${V}\` | ROCm 7.2.4 PyTorch 2.10 | amd64 |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Intel | \`Intel-v${V}\` | Intel IPEX PyTorch 2.8 | amd64 |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Ubuntu | \`ubuntu-v${V}\` | Ubuntu 26.04 | arm64 + amd64 |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "**Registries:** \`docker.io/nilayparikh/codefreedom\` · \`ghcr.io/nilayparikh/codefreedom\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo '```bash' >> "${GITHUB_STEP_SUMMARY}"
+          echo "# CUDA (NVIDIA GPUs — DGX, H100, A100, L40S, RTX)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "docker pull nilayparikh/codefreedom:CUDA-v${V}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "# ROCm (AMD GPUs — Instinct MI300X, MI250X)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "docker pull nilayparikh/codefreedom:ROCm-v${V}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "# Intel (Xeon CPUs — AMX/AVX-512)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "docker pull nilayparikh/codefreedom:Intel-v${V}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "# Ubuntu (common — all archs, no PyTorch)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "docker pull nilayparikh/codefreedom:ubuntu-v${V}" >> "${GITHUB_STEP_SUMMARY}"
+          echo '```' >> "${GITHUB_STEP_SUMMARY}"

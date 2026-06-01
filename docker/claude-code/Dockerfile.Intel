@@ -1,0 +1,132 @@
+# ── Claude Code Docker Image — Intel PyTorch ───────────────────────────────────
+# Platform: Intel x86_64 (Xeon CPUs — AMX, AVX-512, VNNI; Arc/Flex/Max GPUs)
+# Architecture: linux/amd64
+#
+# @platform  Intel
+# @version   v0.1.0
+# @arch      linux/amd64
+#
+# Base: intel/intel-optimized-pytorch:2.8.0-pip-base
+#   • Ubuntu 22.04, Python 3.11, PyTorch 2.8, Intel Extension for PyTorch (IPEX)
+#
+# Build:
+#   docker build --build-arg CODEFREEDOM_VERSION=v0.1.0 \
+#     -t codefreedom:Intel-v0.1.0 \
+#     -f docker/claude-code/Dockerfile.Intel docker/claude-code/
+# ────────────────────────────────────────────────────────────────────────────────
+
+ARG CODEFREEDOM_VERSION=v0.1.0
+
+# 1. Intel-optimized PyTorch (CPU: AMX, AVX-512, VNNI)
+FROM intel/intel-optimized-pytorch:2.8.0-pip-base
+
+ARG CODEFREEDOM_VERSION
+
+LABEL org.opencontainers.image.title="CodeFreedom - Claude Code (Intel PyTorch)" \
+      org.opencontainers.image.description="Claude Code with Intel-optimized PyTorch 2.8 for Xeon CPUs (AMX/AVX-512/VNNI)" \
+      org.opencontainers.image.version="${CODEFREEDOM_VERSION}" \
+      org.opencontainers.image.vendor="nilayparikh" \
+      org.opencontainers.image.authors="Nilay Parikh" \
+      com.codefreedom.platform="Intel" \
+      com.codefreedom.arch="linux/amd64"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 2. System packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    ca-certificates \
+    shellcheck \
+    fd-find \
+    tree \
+    ripgrep \
+    jq \
+    yq \
+    zoxide \
+    sd \
+    unzip \
+    openssh-client \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s $(which fdfind) /usr/local/bin/fd
+
+# 3. Node.js LTS (v20)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. GitHub CLI
+RUN mkdir -p /usr/share/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5. Productivity utilities (x86_64 binaries)
+RUN set -eux; \
+    curl -fsSL -o /tmp/ast-grep.zip \
+      https://github.com/ast-grep/ast-grep/releases/latest/download/app-x86_64-unknown-linux-gnu.zip; \
+    unzip /tmp/ast-grep.zip -d /tmp/ast-grep; \
+    install -Dm755 /tmp/ast-grep/ast-grep /usr/local/bin/ast-grep; \
+    curl -fsSL -o /tmp/difft.tar.gz \
+      https://github.com/Wilfred/difftastic/releases/latest/download/difft-x86_64-unknown-linux-gnu.tar.gz; \
+    tar -xzf /tmp/difft.tar.gz -C /tmp; \
+    install -Dm755 /tmp/difft /usr/local/bin/difft; \
+    ln -fs /usr/local/bin/difft /usr/local/bin/difftastic; \
+    curl -fsSL -o /tmp/scc.tar.gz \
+      https://github.com/boyter/scc/releases/latest/download/scc_Linux_x86_64.tar.gz; \
+    tar -xzf /tmp/scc.tar.gz -C /tmp; \
+    install -Dm755 /tmp/scc /usr/local/bin/scc; \
+    curl -fsSL -o /tmp/watchexec.deb \
+      https://github.com/watchexec/watchexec/releases/latest/download/watchexec-2.5.1-x86_64-unknown-linux-gnu.deb; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends /tmp/watchexec.deb; \
+    rm -rf /tmp/* /var/lib/apt/lists/*
+
+# 6. Claude Code
+RUN npm install -g @anthropic-ai/claude-code
+
+# 7. Trivy security scanner
+RUN apt-get update && apt-get install -y --no-install-recommends wget gnupg \
+    && wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null \
+    && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" > /etc/apt/sources.list.d/trivy.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends trivy \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN trivy plugin install mcp
+
+# 8. Non-root user
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN set -eux; \
+    group_name="$(getent group "${USER_GID}" | cut -d: -f1 || true)"; \
+    if [ -z "${group_name}" ]; then \
+        group_name="${USERNAME}"; \
+        groupadd --gid "${USER_GID}" "${group_name}"; \
+    fi; \
+    useradd --non-unique --uid "${USER_UID}" --gid "${group_name}" -m -s /bin/bash "${USERNAME}"; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends sudo; \
+    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}"; \
+    chmod 0440 "/etc/sudoers.d/${USERNAME}"; \
+    mkdir -p /workspace; \
+    chown "${USER_UID}:${USER_GID}" /workspace; \
+    rm -rf /var/lib/apt/lists/*
+
+# 9. Environment
+ENV CLAUDE_CODE_ATTRIBUTION_HEADER="0" \
+    IS_SANDBOX="1" \
+    CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL="1" \
+    CLAUDE_CODE_AUTO_CONNECT_IDE="false" \
+    CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL="1" \
+    DISABLE_INSTALLATION_CHECKS="1" \
+    HOME="/home/${USERNAME}"
+
+WORKDIR /workspace

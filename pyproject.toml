@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codefreedom"
+version = "0.1.0"
+description = "CLI for running Claude Code through LiteLLM — local AI inference, anywhere"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+authors = [{ name = "Nilay Parikh", email = "nilay.parikh@gmail.com" }]
+keywords = ["claude-code", "litellm", "ai", "llm", "local-inference"]
+
+# ── Dependencies ────────────────────────────────────────────────────────────
+#   PyYAML         — YAML parsing (litellm config validation)
+#   types-PyYAML   — type stubs needed by litellm's config parser at runtime
+dependencies = ["PyYAML>=6.0", "types-PyYAML"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# ── Optional Dependencies ───────────────────────────────────────────────────
+#   litellm[proxy]  — LiteLLM proxy with all extras (websockets, gunicorn, etc.)
+#                     Required for: codefreedom proxy --up --native
+#                     Not needed for Docker Compose mode.
+#   dev             — Development extras (type checking, linting)
+[project.optional-dependencies]
+litellm = ["litellm[proxy]>=1.50", "prometheus-client>=0.20"]
+dev = ["mypy>=1.0", "ruff>=0.1", "pytest>=7.0", "types-PyYAML"]
+all = ["codefreedom[litellm,dev]"]
+
+[project.scripts]
+codefreedom = "codefreedom.cli.main:main"
+cf = "codefreedom.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/nilayparikh/codefreedom"
+Repository = "https://github.com/nilayparikh/codefreedom"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pylint.main]
+# Tests don't need docstrings on every method, and pytest is used implicitly
+ignored-modules = ["tests.*"]
+
+[tool.pylint."messages control"]
+disable = [
+    "missing-function-docstring",             # tests don't need per-method docstrings
+    "missing-class-docstring",                # test classes are self-documenting
+    "unused-import",                          # pytest fixture imports look unused
+    "use-implicit-booleaness-not-comparison", # assert == {} is clearer in tests
+]
+
+[tool.mypy]
+ignore_missing_imports = true
