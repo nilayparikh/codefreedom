@@ -1,0 +1,50 @@
+---
+# ── Anthropic-Compatible Provider ─────────────────────────────────────────────
+# Generic Anthropic-compatible endpoint — bring your own model.
+#
+# Use this for any service that exposes an Anthropic-compatible Messages API:
+#   - Self-hosted backends with Anthropic API compatibility
+#   - Third-party proxies or gateways that speak the Anthropic protocol
+#   - Any endpoint that accepts /v1/messages
+#
+# ── HOW TO CONFIGURE ───────────────────────────────────────────────────────
+# Set these in your .env or .env.secrets:
+#
+#   ANTHROPIC_COMPAT_BASE_URL=http://localhost:8000
+#   ANTHROPIC_COMPAT_API_KEY=sk-your-key
+#   ANTHROPIC_COMPAT_MODEL=claude-sonnet-4-20250514
+#
+# To add more models, copy the model block below and adjust the name/lite_model.
+# ──────────────────────────────────────────────────────────────────────────
+
+# model_list:
+#   - model_name: Anthropic-Compatible/Default
+#     litellm_params: &anthropic_compat_params
+#       model: anthropic/os.environ/ANTHROPIC_COMPAT_MODEL
+#       api_base: os.environ/ANTHROPIC_COMPAT_BASE_URL
+#       api_key: os.environ/ANTHROPIC_COMPAT_API_KEY
+#       timeout: 300
+#       drop_params: true
+#       max_tokens: 4096
+
+#     model_info: &anthropic_compat_model_info
+#       id: "anthropic-compat-default"
+#       db_model: false
+#       mode: chat
+#       context_window: 200000
+#       max_tokens: 200000
+#       max_input_tokens: 190000
+#       max_output_tokens: 4096
+#       supports_system_messages: true
+#       supports_native_streaming: true
+#       supports_vision: true
+#       supported_openai_params:
+#         - tools
+#         - tool_choice
+#         - max_tokens
+#         - max_completion_tokens
+#         - stream
+#         - stream_options
+#         - temperature
+#         - top_p
+#         - stop

@@ -1,0 +1,57 @@
+---
+# ── OpenAI-Compatible Provider ────────────────────────────────────────────────
+# Generic OpenAI-compatible endpoint — bring your own model.
+#
+# Use this for any service that exposes an OpenAI-compatible API:
+#   - Self-hosted backends (llama.cpp server, Ollama, vLLM, etc.)
+#   - Third-party proxies or gateways
+#   - Any endpoint that accepts /v1/chat/completions
+#
+# ── HOW TO CONFIGURE ───────────────────────────────────────────────────────
+# Set these in your .env or .env.secrets:
+#
+#   OPENAI_COMPAT_BASE_URL=http://localhost:8000/v1
+#   OPENAI_COMPAT_API_KEY=sk-your-key
+#   OPENAI_COMPAT_MODEL=openai/your-model-name
+#
+# To add more models, copy the model block below and adjust the name/lite_model.
+# ──────────────────────────────────────────────────────────────────────────
+
+# model_list:
+#   - model_name: OpenAI-Compatible/Default
+#     litellm_params: &openai_compat_params
+#       model: openai/os.environ/OPENAI_COMPAT_MODEL
+#       api_base: os.environ/OPENAI_COMPAT_BASE_URL
+#       api_key: os.environ/OPENAI_COMPAT_API_KEY
+#       timeout: 300
+#       drop_params: true
+#       max_tokens: 131072
+#       max_completion_tokens: 16384
+
+#       extra_body:
+#         stream_options:
+#           include_usage: true
+
+#     model_info: &openai_compat_model_info
+#       id: "openai-compat-default"
+#       db_model: false
+#       mode: chat
+#       context_window: 131072
+#       max_tokens: 131072
+#       max_input_tokens: 114688
+#       max_output_tokens: 16384
+#       supports_system_messages: true
+#       supports_native_streaming: true
+#       supports_vision: false
+#       supported_openai_params:
+#         - tools
+#         - tool_choice
+#         - parallel_tool_calls
+#         - response_format
+#         - max_tokens
+#         - max_completion_tokens
+#         - stream
+#         - stream_options
+#         - temperature
+#         - top_p
+#         - stop
