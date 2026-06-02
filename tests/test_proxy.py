@@ -18,52 +18,52 @@ from codefreedom.cli.proxy import (
     run,
 )
 
+_FAKE_CF_DIR = Path("/nonexistent/.codefreedom")
+
 
 class TestFindComposeFile:
-    """Tests for _find_compose_file path resolution."""
+    """Tests for _find_compose_file — only ~/.codefreedom/proxy/."""
 
-    def test_finds_in_package_dir(self, monkeypatch, tmp_path):
-        compose = tmp_path / "litellm" / "docker-compose.litellm.yml"
+    def test_finds_in_codefreedom_dir(self, monkeypatch, tmp_path):
+        compose = tmp_path / "proxy" / "docker-compose.yml"
         compose.parent.mkdir(parents=True)
         compose.write_text("")
-        # Simulate running from package dir
-        monkeypatch.setattr("codefreedom.cli.proxy._PACKAGE_DIR", tmp_path)
+        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
         result = _find_compose_file()
         assert result == compose
 
-    def test_falls_back_to_cwd(self, monkeypatch, tmp_path):
-        compose = tmp_path / "litellm" / "docker-compose.litellm.yml"
-        compose.parent.mkdir(parents=True)
-        compose.write_text("")
-        monkeypatch.setattr("codefreedom.cli.proxy._PACKAGE_DIR", Path("/nonexistent"))
-        with patch("pathlib.Path.cwd", return_value=tmp_path):
-            result = _find_compose_file()
-        assert result == compose
-
     def test_returns_none_when_not_found(self, monkeypatch):
-        monkeypatch.setattr("codefreedom.cli.proxy._PACKAGE_DIR", Path("/nonexistent"))
-        with patch("pathlib.Path.cwd", return_value=Path("/nonexistent")):
-            result = _find_compose_file()
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy._CODEFREEDOM_DIR", Path("/nonexistent")
+        )
+        result = _find_compose_file()
         assert result is None
 
 
 class TestFindConfigFile:
-    """Tests for _find_config_file path resolution."""
+    """Tests for _find_config_file — only ~/.codefreedom/proxy/config/."""
 
-    def test_finds_config(self, monkeypatch, tmp_path):
-        config = tmp_path / "litellm" / "config" / "config.yaml"
+    def test_finds_in_codefreedom_dir(self, monkeypatch, tmp_path):
+        config = tmp_path / "proxy" / "config" / "config.yaml"
         config.parent.mkdir(parents=True)
         config.write_text("")
-        monkeypatch.setattr("codefreedom.cli.proxy._PACKAGE_DIR", tmp_path)
+        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
         result = _find_config_file()
         assert result == config
+
+    def test_returns_none_when_not_found(self, monkeypatch):
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy._CODEFREEDOM_DIR", Path("/nonexistent")
+        )
+        result = _find_config_file()
+        assert result is None
 
 
 class TestValidate:
     """Tests for _validate — config validation."""
 
     def test_valid_config_passes(self, monkeypatch, tmp_path):
-        _write_config(
+        _write_proxy_config(
             tmp_path,
             {
                 "include": [],
@@ -72,28 +72,27 @@ class TestValidate:
                 "litellm_settings": {},
             },
         )
-        monkeypatch.setattr("codefreedom.cli.proxy._PACKAGE_DIR", tmp_path)
-        with patch.object(Path, "cwd", return_value=tmp_path):
-            result = _validate()
+        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
+        result = _validate()
         assert result == 0
 
     def test_missing_config_file(self, monkeypatch):
-        monkeypatch.setattr("codefreedom.cli.proxy._PACKAGE_DIR", Path("/nonexistent"))
-        with patch.object(Path, "cwd", return_value=Path("/nonexistent")):
-            result = _validate()
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy._CODEFREEDOM_DIR", Path("/nonexistent")
+        )
+        result = _validate()
         assert result == 1
 
     def test_yaml_parse_error(self, monkeypatch, tmp_path):
-        config_dir = tmp_path / "litellm" / "config"
-        config_dir.mkdir(parents=True)
-        (config_dir / "config.yaml").write_text(": invalid yaml : :")
-        monkeypatch.setattr("codefreedom.cli.proxy._PACKAGE_DIR", tmp_path)
-        with patch.object(Path, "cwd", return_value=tmp_path):
-            result = _validate()
+        _write_proxy_config(tmp_path, {})
+        config_path = tmp_path / "proxy" / "config" / "config.yaml"
+        config_path.write_text(": invalid yaml : :")
+        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
+        result = _validate()
         assert result == 1
 
     def test_missing_provider_file_reported(self, monkeypatch, tmp_path):
-        _write_config(
+        _write_proxy_config(
             tmp_path,
             {
                 "include": ["providers/missing.yaml"],
@@ -102,9 +101,8 @@ class TestValidate:
                 "litellm_settings": {},
             },
         )
-        monkeypatch.setattr("codefreedom.cli.proxy._PACKAGE_DIR", tmp_path)
-        with patch.object(Path, "cwd", return_value=tmp_path):
-            result = _validate()
+        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
+        result = _validate()
         assert result == 1  # missing provider = validation failure
 
 
@@ -152,33 +150,47 @@ class TestRun:
             down=False,
             status=False,
             validate=False,
-            native=False,
+            docker=False,
             port=4000,
             host="0.0.0.0",
         )
         result = run(args)
         assert result == 1
 
-    def test_up_starts_compose(self, monkeypatch):
+    def test_up_docker_compose_not_found(self, monkeypatch):
         args = argparse.Namespace(
             up=True,
             down=False,
             status=False,
             validate=False,
-            native=False,
+            docker=True,
             port=4000,
             host="0.0.0.0",
         )
         monkeypatch.setattr("codefreedom.cli.proxy._find_compose_file", lambda: None)
         result = run(args)
-        assert result == 1  # compose file not found
+        assert result == 1  # docker compose file not found
+
+    def test_up_native_config_not_found(self, monkeypatch):
+        args = argparse.Namespace(
+            up=True,
+            down=False,
+            status=False,
+            validate=False,
+            docker=False,
+            port=4000,
+            host="0.0.0.0",
+        )
+        monkeypatch.setattr("codefreedom.cli.proxy._find_config_file", lambda: None)
+        result = run(args)
+        assert result == 1  # config file not found (native mode)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
-def _write_config(tmp_path: Path, data: dict) -> Path:
-    config_dir = tmp_path / "litellm" / "config"
+def _write_proxy_config(tmp_path: Path, data: dict) -> Path:
+    config_dir = tmp_path / "proxy" / "config"
     config_dir.mkdir(parents=True)
     config_file = config_dir / "config.yaml"
     config_file.write_text(yaml.dump(data))

@@ -10,19 +10,23 @@ profile-based model routing through your LiteLLM proxy.
 ## Quick Reference
 
 ```bash
-# Default: Docker mode with Flash model
+# Default: native mode with Flash model
 codefreedom claude
 cf cc
 
-# Local mode (no Docker container)
-codefreedom claude --local
+# Sandbox mode (Docker container with isolated .claude state)
+codefreedom claude --sandbox
+
+# Native Anthropic models/auth (bypasses proxy, uses /login)
+codefreedom claude --native-models
+codefreedom claude --native-models --sandbox
 
 # Pick a model profile
 codefreedom claude --profile pro
 codefreedom claude --profile ultra
 
-# Combine: local mode + a specific profile
-codefreedom claude --local --profile pro
+# Combine: sandbox mode + a specific profile
+codefreedom claude --sandbox --profile pro
 
 # List available profiles
 codefreedom claude --list-profiles
@@ -44,7 +48,7 @@ codefreedom claude --profile pro --worktree feature-x
 | Dependency                 | Required For                    | Notes                                           |
 | -------------------------- | ------------------------------- | ----------------------------------------------- |
 | `docker`                   | Docker mode                     | Standard install                                |
-| `claude` CLI               | `--local` mode                  | `npm install -g @anthropic-ai/claude-code`      |
+| `claude` CLI               | Native/local mode               | `npm install -g @anthropic-ai/claude-code`      |
 | `jq`                       | `--profile` / `--list-profiles` | `apt install jq` or `brew install jq`           |
 | `NVIDIA Container Toolkit` | GPU passthrough                 | `nvidia-ctk runtime configure --runtime=docker` |
 
@@ -52,15 +56,36 @@ The Docker image is pulled from GHCR automatically — no local build needed for
 
 ## Execution Modes
 
-### Docker Mode (Default)
+### Native Mode (Default)
 
-Runs Claude Code inside a persistent Docker container with GPU passthrough,
-network isolation, and full model routing through LiteLLM.
+Runs Claude Code directly on the host (no Docker container). Profiles use the
+host's `~/.claude` directory directly. Requires Node.js and the Claude CLI:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
 
 ```bash
 codefreedom claude
-# or explicitly
-codefreedom claude --profile default
+# or with a profile
+codefreedom claude --profile pro
+```
+
+**By default, native mode routes through the LiteLLM proxy** —
+`ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` from your profile are preserved.
+Use `--native-models` if you want to bypass the proxy and use native Anthropic
+`/login` auth instead.
+
+### Sandbox Mode (`--sandbox`)
+
+Runs Claude Code inside a persistent Docker container with GPU passthrough,
+network isolation, profile-isolated `~/.codefreedom/{profile}/.claude` state,
+and full model routing through LiteLLM.
+
+```bash
+codefreedom claude --sandbox
+# or with a specific profile
+codefreedom claude --sandbox --profile default
 ```
 
 **Container lifecycle:**
@@ -89,36 +114,60 @@ container alive, and each invocation attaches via `docker exec -it`. Multiple
 terminals can each run `codefreedom claude` simultaneously, and `Ctrl+C` only
 affects that session.
 
-### Local Mode
+### Sandbox Mode
 
-Runs Claude Code directly on the host (no Docker container). Useful for
-lightweight tasks, testing, or environments where Docker isn't available.
-
-```bash
-codefreedom claude --local
-```
-
-**Requirements:** The `claude` CLI must be installed on the host:
+Runs Claude Code inside a persistent Docker container with GPU passthrough,
+profile-isolated `~/.codefreedom/{profile}/.claude` state, and multi-session support.
 
 ```bash
-npm install -g @anthropic-ai/claude-code
+codefreedom claude --sandbox
 ```
 
-**Trade-offs vs Docker mode:**
+**The sandbox has its own isolated `.claude` directory** — conversation history,
+settings, and session state are stored in `~/.codefreedom/{profile}/.claude`
+so each profile stays completely separate from your host's `~/.claude` and
+from other profiles.
 
-| Aspect                           | Docker Mode                       | Local Mode            |
+**Requirements:**
+
+```bash
+docker --version
+```
+
+**Trade-offs vs native mode:**
+
+| Aspect                           | Sandbox Mode                      | Native Mode           |
 | -------------------------------- | --------------------------------- | --------------------- |
 | Isolation                        | Full container sandbox            | Host environment      |
 | GPU passthrough                  | Automatic (`--gpus all`)          | Requires manual setup |
 | Concurrent sessions              | Yes (multi-exec)                  | Host-dependent        |
+| `.claude` state isolation        | ✅ per-profile                    | ❌ shared host dir    |
 | `--dangerously-skip-permissions` | Safe (container boundaries)       | Requires trust        |
 | Startup time                     | ~2s (exec into running container) | ~0.5s (direct)        |
+
+### Native Models Mode
+
+Use `--native-models` to bypass the LiteLLM proxy and use Claude Code's native
+Anthropic model discovery and `/login` authentication. This strips
+`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and `IS_SANDBOX` from the
+environment, so Claude Code falls back to its default behavior.
+
+```bash
+# Native mode with native Anthropic models
+codefreedom claude --native-models
+
+# Sandbox mode with native Anthropic models
+codefreedom claude --native-models --sandbox
+```
+
+`--native-models` is the **only** way to get native `/login` auth — all
+profiles (including `bare`) route through the LiteLLM proxy by default.
 
 ## Profile System
 
 Profiles define sets of environment variables that control Claude Code's
 model selection, routing, and behavior. They are defined in
-`profiles/claude-code-profiles.json`.
+`~/.codefreedom/profiles/claude-code.json` (initialized via `codefreedom --init`).
 
 ### How Profiles Work
 
@@ -129,18 +178,18 @@ model selection, routing, and behavior. They are defined in
        ↓
 workspace/.env  (project configuration)
        ↓
-profile env     (mode-specific overrides from claude-code-profiles.json)
+profile env     (mode-specific overrides from profiles)
        ↓
 script defaults (fallback values in codefreedom)
 ```
 
 2. **Profile inheritance:** Most profiles inherit from `default`. The inheritance rules are:
 
-| Profile               | Inheritance             | Effect                                                                                      |
-| --------------------- | ----------------------- | ------------------------------------------------------------------------------------------- |
-| `default`             | Standalone              | Loads its own env vars directly                                                             |
-| `bare`                | Standalone              | Loads only its minimal env vars — **no model aliases, no sandbox settings, no preferences** |
-| `ultra`, `pro`, `air` | Inherits from `default` | Loads `default` env vars first, then overlays profile-specific overrides                    |
+| Profile               | Inheritance             | Effect                                                                                                                           |
+| --------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `default`             | Standalone              | Loads its own env vars directly                                                                                                  |
+| `bare`                | Standalone              | Loads only its minimal env vars — **no model aliases, no sandbox settings, no preferences**. Still routes through LiteLLM proxy. |
+| `ultra`, `pro`, `air` | Inherits from `default` | Loads `default` env vars first, then overlays profile-specific overrides                                                         |
 
 This means `ultra`, `pro`, and `air` only need to specify what's different
 (`CLAUDE_MODEL`). Everything else — sandbox settings, model aliases, IDE
@@ -163,24 +212,25 @@ suppression flags — comes from `default`.
 }
 ```
 
-4. **All profiles share the same `~/.claude` and `workspace/.claude` directories.**
+4. **In sandbox mode, each profile gets an isolated `~/.codefreedom/{profile}/.claude` directory.**
+   In native mode, profiles use the host's `~/.claude` directly.
    This means:
-   - Conversation history is preserved across profile switches
-   - Settings, skills, plugins, and session state are consistent
-   - Only runtime behavior changes (which model is used, which endpoint is targeted)
+   - Sandbox: conversation history, settings, and session state are **isolated per profile**
+   - Sandbox: `~/.codefreedom/` houses all sandbox state, separate from your host `~/.claude`
+   - Native: `~/.claude` on the host is shared across profiles (traditional behavior)
 
 5. Profiles are resolved on the **host side** before Docker exec — no
    container rebuild needed.
 
 ### Built-in Profiles
 
-| Profile   | Model               | Inheritance             | Best For                                     |
-| --------- | ------------------- | ----------------------- | -------------------------------------------- |
-| `default` | `CodeFreedom/Flash` | Standalone (base)       | General purpose, discovery, scanning         |
-| `ultra`   | `CodeFreedom/Ultra` | Inherits from `default` | Architecture, planning, complex reasoning    |
-| `pro`     | `CodeFreedom/Pro`   | Inherits from `default` | Bounded implementation, precise code writing |
-| `air`     | `CodeFreedom/Air`   | Inherits from `default` | Mechanical scanning, large-file reading      |
-| `bare`    | _(default)_         | Standalone (minimal)    | Minimal mode — native Anthropic auth         |
+| Profile   | Model               | Inheritance             | Best For                                                |
+| --------- | ------------------- | ----------------------- | ------------------------------------------------------- |
+| `default` | `CodeFreedom/Flash` | Standalone (base)       | General purpose, discovery, scanning                    |
+| `ultra`   | `CodeFreedom/Ultra` | Inherits from `default` | Architecture, planning, complex reasoning               |
+| `pro`     | `CodeFreedom/Pro`   | Inherits from `default` | Bounded implementation, precise code writing            |
+| `air`     | `CodeFreedom/Air`   | Inherits from `default` | Mechanical scanning, large-file reading                 |
+| `bare`    | _(default)_         | Standalone (minimal)    | Minimal mode — no aliases, routes through LiteLLM proxy |
 
 ### Multi-Endpoint Profiles
 
@@ -219,11 +269,12 @@ If you previously used `.init`'s `claude-code.py` or `claude-code.sh`:
 | `./claude-code.py`                 | `codefreedom claude`                 |
 | `./claude-code.sh`                 | `codefreedom claude`                 |
 | `./claude-code.py --profile pro`   | `codefreedom claude --profile pro`   |
-| `./claude-code.py --local`         | `codefreedom claude --local`         |
+| `./claude-code.py --local`         | `codefreedom claude --sandbox`       |
+| `./claude-code.py --native`        | `codefreedom claude --native-models` |
 | `./claude-code.py --stop`          | `codefreedom claude --stop`          |
 | `./claude-code.py --status`        | `codefreedom claude --status`        |
 | `./claude-code.py --list-profiles` | `codefreedom claude --list-profiles` |
 
-The profiles file is now at `profiles/claude-code-profiles.json` instead of
-the workspace root. Copy your custom profiles from `.init`'s root
-`claude-code-profiles.json` into codefreedom's `profiles/` directory.
+The profiles file is at `~/.codefreedom/profiles/claude-code.json` (initialized
+via `codefreedom --init`). Copy your custom profiles from `.init`'s root
+`claude-code-profiles.json` into `~/.codefreedom/profiles/claude-code.json`.

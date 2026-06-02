@@ -9,11 +9,17 @@ This guide walks you through installing and configuring CodeFreedom.
 | Python 3.10+             | CLI                         | `python3 --version`                                        |
 | Docker                   | Docker mode + LiteLLM proxy | [docs.docker.com](https://docs.docker.com/engine/install/) |
 | NVIDIA Container Toolkit | GPU passthrough             | `nvidia-ctk runtime configure --runtime=docker`            |
-| Node.js + `claude` CLI   | `--local` mode              | `npm install -g @anthropic-ai/claude-code`                 |
+| Node.js + `claude` CLI   | Native/local mode           | `npm install -g @anthropic-ai/claude-code`                 |
 
 ## Installation
 
-### From Source (Recommended)
+### From PyPI (Recommended)
+
+```bash
+pip install codefreedom
+```
+
+### From Source
 
 ```bash
 git clone https://github.com/nilayparikh/codefreedom.git
@@ -28,6 +34,37 @@ codefreedom --help
 cf --help
 ```
 
+## Initialize CodeFreedom
+
+```bash
+# Creates ~/.codefreedom/ with default profiles, schema, and proxy configs
+codefreedom --init
+
+# Force overwrite existing configs
+codefreedom --init --force
+```
+
+This populates:
+
+```
+~/.codefreedom/
+├── profiles/
+│   ├── claude-code.json                  # Profile definitions
+│   └── claude-code-profiles.schema.json  # JSON Schema
+└── proxy/
+    ├── docker-compose.yml                # Docker Compose for LiteLLM
+    └── config/
+        ├── config.yaml                   # LiteLLM configuration
+        └── providers/                    # Provider-specific configs
+            ├── deepseek.yaml
+            ├── azure-foundry.yaml
+            ├── nvidia.yaml
+            ├── local.yaml
+            ├── openai-compatible.yaml
+            ├── anthropic-compatible.yaml
+            └── opencode-zen.yaml
+```
+
 ## I want to use...
 
 | Your use case                                 | Jump to                                                                                          |
@@ -35,51 +72,57 @@ cf --help
 | **Cloud APIs only** (DeepSeek, Azure, etc.)   | [Configuration → Adding a cloud provider](configuration.md#adding-a-cloud-provider)              |
 | **Self-hosted OpenAI-compatible endpoint**    | [Configuration → OpenAI-compatible](configuration.md#adding-an-openai-compatible-endpoint)       |
 | **Self-hosted Anthropic-compatible endpoint** | [Configuration → Anthropic-compatible](configuration.md#adding-an-anthropic-compatible-endpoint) |
-| **Anthropic API directly** (no proxy)         | Use `codefreedom claude --profile bare`                                                          |
+| **Anthropic API directly** (no proxy)         | Use `codefreedom claude --native-models` or `codefreedom claude --profile bare`                  |
 
 ### Configuration
 
-```bash
-# Copy the example config and environment files
-cp -r litellm.examples/config litellm/
-cp litellm.examples/.env.example .env
-cp litellm.examples/.env.secrets.example .env.secrets
+Edit the proxy config files in `~/.codefreedom/proxy/config/`:
 
-# Edit .env.secrets with your API keys (NEVER commit this file)
-# At minimum, set LITELLM_MASTER_KEY (proxy auth — required)
+```bash
+# Edit the main proxy config
+vim ~/.codefreedom/proxy/config/config.yaml
+
+# Add provider-specific configs
+vim ~/.codefreedom/proxy/config/providers/deepseek.yaml
+vim ~/.codefreedom/proxy/config/providers/azure-foundry.yaml
 ```
 
-> **What's happening:** `litellm.examples/` has fully documented templates with
-> every option explained inline. You copy them into `litellm/` (runtime — gitignored)
-> and `.env` / `.env.secrets` at the project root.
+Every provider is **opt-in**. If you don't configure it, it stays disabled.
 
-For cloud providers, add your API keys to `.env.secrets`:
+Set your API keys as environment variables or in a `.env.secrets` file:
 
 ```bash
-# .env.secrets (NEVER commit this file)
-LITELLM_MASTER_KEY=sk-your-proxy-key   # Required — proxy auth token
-DEEPSEEK_API_KEY=sk-your-key           # Optional — leave empty to disable
-MICROSOFT_FOUNDRY_API_KEY=your-key     # Optional
-NVIDIA_API_KEY=nvapi-your-key          # Optional
-OPENCODE_ZEN_API_KEY=your-key          # Optional
+# Required
+export LITELLM_MASTER_KEY="sk-your-proxy-key"
+
+# Optional — set only for providers you use
+export DEEPSEEK_API_KEY="sk-your-key"
+export AZURE_FOUNDRY_API_KEY="your-key"
+export NVIDIA_API_KEY="nvapi-your-key"
+export OPENCODE_ZEN_API_KEY="your-key"
 ```
 
 ### Start the Proxy
 
 ```bash
-# Using codefreedom CLI (recommended)
+# Via Docker Compose (recommended)
+codefreedom proxy --up --docker
+
+# Or natively (requires: pip install codefreedom[litellm])
 codefreedom proxy --up
 
-# Or using Docker Compose directly
-docker compose --profile all up -d
+# Validate config before starting
+codefreedom proxy --validate
+
+# Check status
+codefreedom proxy --status
 ```
 
 Verify it's running:
 
 ```bash
-cf proxy --status
 curl http://localhost:4000/v1/models \
-  -H "Authorization: Bearer $(grep LITELLM_MASTER_KEY .env.secrets | cut -d= -f2)"
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY"
 ```
 
 ### Database (Optional)
@@ -88,52 +131,32 @@ The proxy runs **stateless by default** — no database, no Prisma, no persisten
 Model routing works out of the box. The LiteLLM Admin UI, spend tracking, and
 key management require a PostgreSQL database.
 
-To add PostgreSQL later:
+To add PostgreSQL later, edit `~/.codefreedom/proxy/config/config.yaml`:
 
-```bash
-# .env
-DATABASE_URL=postgresql://litellm_interface:YOUR_PASSWORD@postgres:5432/litellm_interface
-
-# Then update litellm/config/config.yaml:
-#   - Uncomment: database_url: os.environ/DATABASE_URL
-#   - Change store_model_in_db: false → true
-#   - Change store_prompts_in_spend_logs: false → true
+```yaml
+# Uncomment and set:
+database_url: "postgresql://user:pass@host:5432/litellm"
+store_model_in_db: true
+store_prompts_in_spend_logs: true
 ```
 
 See [LiteLLM Proxy → Database](litellm.md#database-backends) for details.
-
-````
 
 If using `.init`'s PostgreSQL, ensure both projects share the same Docker network:
 
 ```bash
 # The .init stack creates an 'init_default' network.
-# To connect codefreedom to it, add this to litellm/docker-compose.litellm.yml:
+# To connect codefreedom to it, add this to ~/.codefreedom/proxy/docker-compose.yml:
 networks:
   default:
     external: true
     name: init_default
-````
-
-## Starting the Proxy
-
-```bash
-# Via docker compose
-docker compose up -d
-
-# Or via the CLI
-codefreedom proxy --up
-
-# Check status
-codefreedom proxy --status
 ```
-
-The LiteLLM proxy is now running at `http://localhost:4000`.
 
 ## Launching Claude Code
 
 ```bash
-# Basic invocation (Docker mode, Flash model)
+# Basic invocation (native mode, Flash model)
 codefreedom claude
 
 # Or with the short alias
@@ -142,10 +165,13 @@ cf cc
 # Pick a model profile
 cf cc --profile pro      # Implementation work
 cf cc --profile ultra    # Architecture/planning
-cf cc --profile bare     # Native Anthropic auth
+cf cc --profile bare     # Minimal — no model aliases
 
-# Run without Docker (requires Node.js + claude CLI)
-cf cc --local
+# Run inside a sandboxed Docker container
+cf cc --sandbox
+
+# Use native Anthropic /login auth (bypass proxy)
+cf cc --native-models
 
 # Pass arguments to Claude
 cf cc -p "Write a function that..."
@@ -168,14 +194,14 @@ All commands have short aliases. Use `codefreedom` or `cf` interchangeably.
 | `cf proxy --status`      | `cf px --status`   | Show proxy status            | `docker compose ps`                  |
 | `cf proxy --validate`    | `cf px --validate` | Validate LiteLLM config      | —                                    |
 | `cf proxy --up --native` | —                  | Run litellm without Docker   | —                                    |
-| `cf claude`              | `cf cc`            | Launch Claude Code (Docker)  | —                                    |
-| `cf cc --local`          | —                  | Run Claude Code natively     | —                                    |
+| `cf claude`              | `cf cc`            | Launch Claude Code (native)  | —                                    |
+| `cf cc --sandbox`        | —                  | Run Claude Code in sandbox   | —                                    |
 | `cf cc --profile NAME`   | —                  | Use named profile            | —                                    |
 | `cf cc --stop`           | —                  | Stop Claude container        | —                                    |
 
 ## Profiles
 
-Profiles are defined in `profiles/claude-code-profiles.json`. The default profile routes through your local LiteLLM proxy at `http://localhost:4000`.
+Profiles are defined in `~/.codefreedom/profiles/claude-code.json`. The default profile routes through your local LiteLLM proxy at `http://localhost:4000`.
 
 To create a custom profile, add an entry:
 

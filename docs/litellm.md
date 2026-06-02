@@ -9,10 +9,22 @@ tracking, key management, and prompt logging.
 > See the [Configuration Guide](configuration.md) for a complete walkthrough
 > of user profiles and how to disable providers you don't need.
 
+Configuration files are in `~/.codefreedom/proxy/` (initialized via `codefreedom --init`).
+
 ## Quick Start
 
 ```bash
-docker compose up -d
+# Initialize configs
+codefreedom --init
+
+# Start via Docker Compose
+codefreedom proxy --up --docker
+
+# Or start natively
+codefreedom proxy --up
+
+# Validate config
+codefreedom proxy --validate
 ```
 
 The proxy is available at `http://localhost:4000`.
@@ -30,8 +42,8 @@ The proxy starts with **no database connection**. This means:
 - ❌ No Admin UI (login requires a database)
 - ❌ No spend tracking, key management, or prompt logging
 
-To use this mode, **do not set `DATABASE_URL`** in `.env`. The proxy
-config (`litellm/config/config.yaml`) has `store_model_in_db: false`
+To use this mode, **do not set `database_url`** in the proxy config.
+The config (`~/.codefreedom/proxy/config/config.yaml`) has `store_model_in_db: false`
 and no `database_url` line.
 
 ### PostgreSQL (Production)
@@ -39,13 +51,13 @@ and no `database_url` line.
 Connect to a PostgreSQL instance to unlock full LiteLLM features:
 Admin UI, API key management, spend tracking, Teams/SSO, and prompt logging.
 
-**Step 1: Set `DATABASE_URL` in `.env`:**
+**Step 1: Set `DATABASE_URL` as an environment variable:**
 
 ```bash
-DATABASE_URL=postgresql://litellm_interface:YOUR_PASSWORD@postgres:5432/litellm_interface
+export DATABASE_URL="postgresql://litellm_interface:YOUR_PASSWORD@postgres:5432/litellm_interface"
 ```
 
-**Step 2: Enable database features in `litellm/config/config.yaml`:**
+**Step 2: Enable database features in `~/.codefreedom/proxy/config/config.yaml`:**
 
 ```yaml
 general_settings:
@@ -57,7 +69,8 @@ general_settings:
 **Step 3: Restart the proxy:**
 
 ```bash
-docker compose down && docker compose up -d
+codefreedom proxy --down
+codefreedom proxy --up --docker
 ```
 
 The Prisma migration runs automatically on first start — LiteLLM creates the
@@ -67,7 +80,7 @@ schema in your PostgreSQL database.
 
 If you have the `.init` stack running, its PostgreSQL is available on the
 `init_default` Docker network. Add the network config to
-`litellm/docker-compose.litellm.yml`:
+`~/.codefreedom/proxy/docker-compose.yml`:
 
 ```yaml
 networks:
@@ -79,12 +92,12 @@ networks:
 Then set `DATABASE_URL` to point to the `postgres` container:
 
 ```bash
-DATABASE_URL=postgresql://litellm_interface:${INTERFACE_DB_PASSWORD}@postgres:5432/litellm_interface
+export DATABASE_URL="postgresql://litellm_interface:${INTERFACE_DB_PASSWORD}@postgres:5432/litellm_interface"
 ```
 
 ## Provider Configuration
 
-Provider definitions live in `litellm/config/providers/`. Each YAML file
+Provider definitions live in `~/.codefreedom/proxy/config/providers/`. Each YAML file
 defines one or more models from a specific provider.
 
 ### Available Providers
@@ -99,54 +112,46 @@ defines one or more models from a specific provider.
 | Anthropic-Compatible | `providers/anthropic-compatible.yaml` | Any Anthropic-compatible endpoint (bring your own) |
 | Local                | `providers/local.yaml`                | Two pre-configured local backends                  |
 
-> The OpenAI-Compatible and Anthropic-Compatible providers are **commented out**
-> by default. See the [Configuration Guide](configuration.md) for step-by-step
-> instructions on enabling them.
-
 ### Enabling a Provider
 
-Set the corresponding API key in `.env.secrets`. Leave the key empty to
+Set the corresponding API key as an environment variable. Leave the key empty to
 **disable** the provider — LiteLLM will skip it automatically. You can also
 **remove the provider file from `config.yaml`** to fully exclude it.
 
 ```bash
 # Enable DeepSeek
-DEEPSEEK_API_KEY=sk-your-key
+export DEEPSEEK_API_KEY="sk-your-key"
 
 # Disable Azure — leave empty or remove the line entirely
-MICROSOFT_FOUNDRY_API_KEY=
+export MICROSOFT_FOUNDRY_API_KEY=""
 
 # Disable Local — leave empty or remove the line entirely
-LOCAL_M_API_KEY=
-LOCAL_S_API_KEY=
+export LOCAL_M_API_KEY=""
+export LOCAL_S_API_KEY=""
 ```
 
 ### Disabling Providers (Cloud-Only Users)
 
 If you're a **cloud-only user** (no local models), you must disable the local provider:
 
-1. **In `.env.secrets`** — leave `LOCAL_M_API_KEY` and `LOCAL_S_API_KEY` empty
-2. **In `litellm/config/config.yaml`** — comment out or remove the line:
+1. Leave `LOCAL_M_API_KEY` and `LOCAL_S_API_KEY` empty
+2. In `~/.codefreedom/proxy/config/config.yaml` — comment out or remove the line:
    ```yaml
    include:
      - providers/deepseek.yaml
      # - providers/local.yaml        ← disabled
    ```
-3. **In `.env`** — point model aliases to cloud models, not `DGX/Qwen*`:
-   ```bash
-   LITELLM_MODEL_ALIAS_PRO="DeepSeek/DeepSeek-V4-Flash"
-   LITELLM_MODEL_ALIAS_FLASH="DeepSeek/DeepSeek-V4-Flash"
+3. Point model aliases to cloud models in the profiles:
+   ```json
+   "CLAUDE_MODEL": "DeepSeek/DeepSeek-V4-Flash"
    ```
-
-For a complete reference on disabling all provider types, see the
-[Configuration Guide → Disabling providers](configuration.md#disabling-providers-you-dont-need).
 
 ### Adding a New Provider
 
-1. Create a new YAML file in `litellm/config/providers/`
+1. Create a new YAML file in `~/.codefreedom/proxy/config/providers/`
 2. Define your `model_list` entries with `litellm_params` and `model_info`
-3. Add the file to the `include` list in `litellm/config/config.yaml`
-4. Add any required environment variables to `.env.example`
+3. Add the file to the `include` list in `~/.codefreedom/proxy/config/config.yaml`
+4. Set any required environment variables
 
 ## Model Aliases
 

@@ -2,20 +2,23 @@
   "$schema": "claude-code-profiles.schema.json",
   "description": "Claude Code profiles for codefreedom — each profile sets model selection, API endpoint, and auth explicitly.",
   "notes": [
-    "All profiles share the same ~/.claude and workspace/.claude directories.",
+    "In sandbox mode (--sandbox), each profile gets its own isolated ~/.codefreedom/{profile}/.claude directory.",
     "'default' is the base profile — 'ultra', 'pro', and 'air' inherit from it.",
-    "'bare' is standalone: it sets NO auth or endpoint, so Claude Code uses its default Anthropic authentication (OAuth/login).",
-    "Inheritance: default vars → profile vars (profile vars win on conflict).",
+    "'bare' is standalone: minimal profile with no model aliases, sandbox settings, or preferences — but still routes through LiteLLM proxy.",
+    "Only '--native-models' forces native Anthropic /login auth (by stripping ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN).",
+    "sandbox_image is inherited from 'default' unless the child profile explicitly overrides it.",
     "ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN must be set explicitly per profile.",
-    "Secrets (~/.env.secrets) are loaded but profiles define their own auth explicitly."
+    "Secrets (~/.env.secrets) are loaded but profiles define their own auth explicitly.",
+    "Use sandbox.env to declare env vars that should only be forwarded in --sandbox mode (e.g., GITHUB_PERSONAL_ACCESS_TOKEN).",
+    "Use local.env to declare env vars that should only apply in native mode."
   ],
   "profiles": {
     "default": {
       "description": "Base profile — routes through local LiteLLM proxy. Other profiles inherit from this.",
+      "sandbox_image": "ghcr.io/nilayparikh/codefreedom:latest",
       "env": {
         "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
         "CLAUDE_MODEL": "CodeFreedom/Flash",
-        "IS_SANDBOX": "1",
         "ANTHROPIC_BASE_URL": "http://localhost:4000",
         "ANTHROPIC_AUTH_TOKEN": "${LITELLM_MASTER_KEY}",
         "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
@@ -34,17 +37,26 @@
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": "CodeFreedom/Flash",
         "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "CodeFreedom/Flash",
         "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Flash via LiteLLM",
-        "ANTHROPIC_CUSTOM_MODEL_OPTION": ".INIT/Air",
-        "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "INIT/Air",
+        "ANTHROPIC_CUSTOM_MODEL_OPTION": "CodeFreedom/Air",
+        "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "CodeFreedom/Air",
         "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Air via LiteLLM"
+      },
+      "sandbox": {
+        "env": {
+          "IS_SANDBOX": "1",
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}",
+          "GH_TOKEN": "${GH_TOKEN}"
+        }
       }
     },
     "bare": {
-      "description": "Standalone — no proxy config, no model aliases. Claude Code uses its native Anthropic authentication (OAuth/login).",
+      "description": "Standalone — minimal: no model aliases, no sandbox settings, no preferences. Still routes through LiteLLM proxy.",
       "env": {
         "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "0",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-        "DISABLE_INSTALLATION_CHECKS": "1"
+        "DISABLE_INSTALLATION_CHECKS": "1",
+        "ANTHROPIC_BASE_URL": "http://localhost:4000",
+        "ANTHROPIC_AUTH_TOKEN": "${LITELLM_MASTER_KEY}"
       }
     },
     "ultra": {

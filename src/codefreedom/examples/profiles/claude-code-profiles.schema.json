@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "claude-code-profiles.schema.json",
+  "title": "Claude Code Profiles",
+  "description": "Schema for claude-code-profiles.json — defines named profiles for model selection, API endpoint, and auth.",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Description of the profiles file"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Usage notes about how profiles work"
+    },
+    "profiles": {
+      "type": "object",
+      "description": "Named profiles. Each profile inherits from 'default' (except 'bare' which is standalone).",
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string",
+              "description": "Human-readable description of this profile"
+            },
+            "sandbox_image": {
+              "type": "string",
+              "description": "Docker image used for sandboxed execution (when --sandbox is passed). Inherits from 'default' if not set on a child profile."
+            },
+            "env": {
+              "type": "object",
+              "description": "Environment variables set by this profile — applied in both native and sandbox modes",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "sandbox": {
+              "type": "object",
+              "description": "Sandbox-mode overrides. env here merges on top of the base env when --sandbox is used.",
+              "properties": {
+                "env": {
+                  "type": "object",
+                  "description": "Environment variables applied only in sandbox mode (overrides base env)",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "local": {
+              "type": "object",
+              "description": "Local-mode overrides. env here merges on top of the base env when running natively.",
+              "properties": {
+                "env": {
+                  "type": "object",
+                  "description": "Environment variables applied only in local/native mode (overrides base env)",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "description",
+            "env"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "minProperties": 1
+    }
+  },
+  "required": [
+    "profiles"
+  ],
+  "additionalProperties": true
+}

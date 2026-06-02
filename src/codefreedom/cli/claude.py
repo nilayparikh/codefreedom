@@ -1,7 +1,7 @@
 """Claude Code subcommand — launch Claude Code with profile-based routing.
 
 Usage:
-    codefreedom claude [--profile NAME] [--local] [--stop|--status|--list-profiles] [claude-args...]
+    codefreedom claude [--profile NAME] [--sandbox] [--stop|--status|--list-profiles] [claude-args...]
     cf cc [same]
 """
 
@@ -12,17 +12,21 @@ from pathlib import Path
 
 from codefreedom.env_loader import eprint, load_env_chain
 from codefreedom.launcher import run_docker, run_local, status, stop
-from codefreedom.profiles import list_profiles, load_profile_env
+from codefreedom.profiles import (
+    get_profile_sandbox_image,
+    list_profiles,
+    load_profile_env,
+)
 
-# Default locations for profiles file — searched in order:
-#   1. profiles/claude-code-profiles.json (project profiles dir)
-#   2. claude-code-profiles.json (workspace root — legacy)
+# Default location for profiles — ~/.codefreedom/profiles/claude-code.json
 # Can be overridden with CODEFREEDOM_PROFILES_FILE env var
 import os as _os
 
+_CODEFREEDOM_DIR = Path.home() / ".codefreedom"
+
 DEFAULT_PROFILES_FILE = _os.environ.get(
     "CODEFREEDOM_PROFILES_FILE",
-    "profiles/claude-code-profiles.json",
+    str(_CODEFREEDOM_DIR / "profiles" / "claude-code.json"),
 )
 
 
@@ -52,6 +56,10 @@ def run(args: argparse.Namespace) -> int:
                 if len(p["env_keys"]) > 5:
                     keys_summary += ", …"
                 eprint(f"    sets: {keys_summary}")
+            if p.get("sandbox_env_keys"):
+                eprint(f"    sandbox: {', '.join(p['sandbox_env_keys'])}")
+            if p.get("local_env_keys"):
+                eprint(f"    local: {', '.join(p['local_env_keys'])}")
             eprint()
         return 0
 
@@ -71,8 +79,11 @@ def run(args: argparse.Namespace) -> int:
     profiles_path = _resolve_profiles_path()
 
     profile_env: dict = {}
+    sandbox_image: str | None = None
+    mode = "sandbox" if args.sandbox else "local"
     if profiles_path.exists():
-        profile_env = load_profile_env(profile_name, profiles_path, base_env)
+        profile_env = load_profile_env(profile_name, profiles_path, base_env, mode)
+        sandbox_image = get_profile_sandbox_image(profile_name, profiles_path)
     elif profile_name != "default":
         eprint(
             f"[ERROR] Profile '{profile_name}' requested but no profiles file found."
@@ -82,20 +93,30 @@ def run(args: argparse.Namespace) -> int:
         eprint("[PROFILE] No profiles file found. Using defaults only.")
 
     # ── Route execution ────────────────────────────────────────────────────
-    if args.local:
-        return run_local(profile_env, args.claude_args)
+    if args.native_models:
+        # Strip proxy-auth env vars so Claude Code uses its native /login auth
+        _NATIVE_STRIP_VARS = {
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_BASE_URL",
+            "IS_SANDBOX",
+        }
+        for var in _NATIVE_STRIP_VARS:
+            if var in profile_env:
+                eprint(
+                    f"[NATIVE] Stripping '{var}' — using native Anthropic /login auth"
+                )
+                del profile_env[var]
+
+    if args.sandbox:
+        return run_docker(
+            profile_env, args.claude_args, workspace_dir, profile_name, sandbox_image
+        )
     else:
-        return run_docker(profile_env, args.claude_args, workspace_dir)
+        return run_local(profile_env, args.claude_args)
 
 
 def _resolve_profiles_path() -> Path:
-    """Find the profiles file, trying multiple locations."""
-    candidates = [
-        Path(DEFAULT_PROFILES_FILE),  # primary (profiles/ dir)
-        Path("claude-code-profiles.json"),  # legacy (cwd root)
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    # Return primary so error messages show the preferred path
-    return Path(DEFAULT_PROFILES_FILE)
+    """Return the profiles path (~/.codefreedom/profiles/claude-code.json)."""
+    if _os.environ.get("CODEFREEDOM_PROFILES_FILE"):
+        return Path(_os.environ["CODEFREEDOM_PROFILES_FILE"])
+    return _CODEFREEDOM_DIR / "profiles" / "claude-code.json"
