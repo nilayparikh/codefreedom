@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codefreedom"
-version = "v0.0.1"
+version = "0.0.1"
 description = "CLI for running Claude Code through LiteLLM — local AI inference, anywhere"
 readme = "README.md"
 license = { text = "Apache-2.0" }
