@@ -1,5 +1,5 @@
 ---
-title: Proxy
+title: LiteLLM Proxy
 layout: default
 nav_order: 2
 ---

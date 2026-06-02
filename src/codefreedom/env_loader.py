@@ -1,9 +1,9 @@
 """Environment variable loading with .env and .env.secrets support.
 
 Load order (later sources override earlier):
-  1. workspace/.env      (project configuration — database, model aliases, URLs)
-  2. workspace/.env.secrets  (API keys, passwords — skips if file is missing)
-  3. process environment (highest precedence — machine-level overrides)
+  1. workspace/.env      (project configuration -- database, model aliases, URLs)
+  2. workspace/.env.secrets  (API keys, passwords -- skips if file is missing)
+  3. process environment (highest precedence -- machine-level overrides)
 
 This means:
   - .env.secrets values override .env values
@@ -83,18 +83,18 @@ def load_env_chain(workspace_dir: Path) -> Dict[str, str]:
     secrets_workspace = workspace_dir / ".env.secrets"
     merged: Dict[str, str] = {}
 
-    # 1. workspace/.env — project configuration (lowest precedence)
+    # 1. workspace/.env -- project configuration (lowest precedence)
     if env_file.exists():
         merged.update(load_dotenv(env_file))
         eprint(f"  [ENV] Loaded config from {env_file}")
 
-    # 2. workspace/.env.secrets — API keys, passwords (overrides .env)
+    # 2. workspace/.env.secrets -- API keys, passwords (overrides .env)
     if secrets_workspace.exists():
         merged.update(load_dotenv(secrets_workspace))
         eprint(f"  [ENV] Loaded secrets from {secrets_workspace}")
-    # No fallback to ~/.env.secrets — if missing, assume keys are in system env.
+    # No fallback to ~/.env.secrets -- if missing, assume keys are in system env.
 
-    # 3. Process environment (highest precedence — machine-level overrides)
+    # 3. Process environment (highest precedence -- machine-level overrides)
     for key, val in os.environ.items():
         merged[key] = val
 

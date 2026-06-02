@@ -1,4 +1,4 @@
-"""Claude Code Docker launcher — runs Claude Code in a persistent container.
+"""Claude Code Docker launcher -- runs Claude Code in a persistent container.
 
 Provides the core execution engine for launching Claude Code through Docker
 with profile-based model routing."""
@@ -188,7 +188,7 @@ def stop() -> int:
 def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
     """Create ~/.codefreedom/sandbox/{profile}/.claude and seed .claude.json for sandbox isolation.
 
-    Returns (claude_dir, claude_json_path) — the .claude directory and the
+    Returns (claude_dir, claude_json_path) -- the .claude directory and the
     .claude.json file path inside the profile's sandbox directory.
     """
     profile_dir = CODEFREEDOM_DIR / "sandbox" / profile_name

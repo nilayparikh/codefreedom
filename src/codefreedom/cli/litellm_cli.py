@@ -1,4 +1,4 @@
-"""LiteLLM subcommand — start, stop, validate, status.
+"""LiteLLM subcommand -- start, stop, validate, status.
 
 Usage:
     codefreedom litellm --start    Start LiteLLM proxy
@@ -104,9 +104,9 @@ def _start_compose() -> int:
         check=False,
     )
     if result.returncode == 0:
-        eprint("[litellm] ✓ Proxy started at http://localhost:4000")
+        eprint("[litellm] [OK] Proxy started at http://localhost:4000")
     else:
-        eprint("[litellm] ✖ Failed to start. Check docker logs.")
+        eprint("[litellm] [FAIL] Failed to start. Check docker logs.")
     return result.returncode
 
 
@@ -152,7 +152,7 @@ def _start_native(args: argparse.Namespace) -> int:
 
     try:
         proc = subprocess.Popen(cmd)
-        eprint(f"[litellm] ✓ Proxy starting (PID: {proc.pid})")
+        eprint(f"[litellm] [OK] Proxy starting (PID: {proc.pid})")
         eprint("[litellm]   Press Ctrl+C to stop.")
         proc.wait()
         return proc.returncode
@@ -181,7 +181,7 @@ def _stop() -> int:
         check=False,
     )
     if result.returncode == 0:
-        eprint("[litellm] ✓ Proxy stopped.")
+        eprint("[litellm] [OK] Proxy stopped.")
     return result.returncode
 
 
@@ -216,27 +216,27 @@ def _validate() -> int:
         with open(config_file, encoding="utf-8") as f:
             config = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        eprint(f"  ✖  YAML parse error: {e}")
+        eprint(f"  [FAIL]  YAML parse error: {e}")
         return 1
     except FileNotFoundError:
-        eprint(f"  ✖  File not found: {config_file}")
+        eprint(f"  [FAIL]  File not found: {config_file}")
         return 1
 
     if not isinstance(config, dict):
-        eprint("  ✖  Config must be a YAML dictionary.")
+        eprint("  [FAIL]  Config must be a YAML dictionary.")
         return 1
 
     # Check includes
     includes = config.get("include", [])
     if not includes:
-        eprint("  ⚠  No provider includes found in config.yaml")
+        eprint("  [WARN]  No provider includes found in config.yaml")
         eprint("     Run: codefreedom setup")
     else:
         config_dir = config_file.parent
         for inc in includes:
             provider_file = config_dir / inc
             if provider_file.exists():
-                eprint(f"  ✓  {inc}")
+                eprint(f"  [OK]  {inc}")
                 # Validate provider file
                 try:
                     with open(provider_file, encoding="utf-8") as f:
@@ -250,35 +250,35 @@ def _validate() -> int:
                         if api_key_ref.startswith("os.environ/"):
                             env_var = api_key_ref[len("os.environ/") :]
                             if not _env_is_set(env_var):
-                                eprint(f"    ⚠  {name}: env var {env_var} is not set")
+                                eprint(f"    [WARN]  {name}: env var {env_var} is not set")
                             else:
-                                eprint(f"    ✓  {name} (auth: {env_var} ✓)")
+                                eprint(f"    [OK]  {name} (auth: {env_var} [OK])")
                         else:
-                            eprint(f"    ✓  {name}")
+                            eprint(f"    [OK]  {name}")
                 except yaml.YAMLError as e:
-                    eprint(f"    ✖  {inc}: YAML error — {e}")
+                    eprint(f"    [FAIL]  {inc}: YAML error -- {e}")
                     errors.append(f"YAML error in {inc}: {e}")
             else:
-                eprint(f"  ✖  {inc} — file not found")
+                eprint(f"  [FAIL]  {inc} -- file not found")
                 errors.append(f"Missing provider file: {inc}")
 
     # Check essential settings
     general = config.get("general_settings", {})
     if not general.get("database_url"):
-        eprint("  ⚠  database_url not set in general_settings")
+        eprint("  [WARN]  database_url not set in general_settings")
 
     litellm_settings = config.get("litellm_settings", {})
     if not litellm_settings:
-        eprint("  ⚠  litellm_settings section is empty")
+        eprint("  [WARN]  litellm_settings section is empty")
 
     router = config.get("router_settings", {})
     aliases = router.get("model_group_alias", {})
     if aliases:
-        eprint(f"  ✓  Model aliases: {len(aliases)} defined")
+        eprint(f"  [OK]  Model aliases: {len(aliases)} defined")
         for alias, model in aliases.items():
             eprint(f"       {alias} → {model}")
     else:
-        eprint("  ⚠  No model_group_alias defined")
+        eprint("  [WARN]  No model_group_alias defined")
 
     eprint()
     _print_validation_result(errors)
@@ -298,9 +298,9 @@ def _validate_basic(config_file: Path, errors: List[str]) -> None:
     ]
     for marker, label in checks:
         if marker in content:
-            eprint(f"  ✓  {label} found")
+            eprint(f"  [OK]  {label} found")
         else:
-            eprint(f"  ✖  {label} missing")
+            eprint(f"  [FAIL]  {label} missing")
             errors.append(f"Missing: {label}")
 
     # Check provider files exist
@@ -311,9 +311,9 @@ def _validate_basic(config_file: Path, errors: List[str]) -> None:
             provider_file = line[2:].strip()
             full = config_dir / provider_file
             if full.exists():
-                eprint(f"  ✓  {provider_file}")
+                eprint(f"  [OK]  {provider_file}")
             else:
-                eprint(f"  ✖  {provider_file} — not found")
+                eprint(f"  [FAIL]  {provider_file} -- not found")
                 errors.append(f"Missing: {provider_file}")
 
 
@@ -327,11 +327,11 @@ def _env_is_set(var_name: str) -> bool:
 def _print_validation_result(errors: List[str]) -> None:
     """Print validation summary."""
     if errors:
-        eprint(f"  ✖  {len(errors)} issue(s) found.")
+        eprint(f"  [FAIL]  {len(errors)} issue(s) found.")
         for e in errors:
             eprint(f"       - {e}")
     else:
-        eprint("  ✓  Configuration looks good!")
+        eprint("  [OK]  Configuration looks good!")
 
 
 # ── Status ───────────────────────────────────────────────────────────────────

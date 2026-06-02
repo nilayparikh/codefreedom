@@ -1,11 +1,12 @@
 # ── CodeFreedom GitHub Pages Publish Workflow ─────────────────────────────────
-# Publishes /docs to GitHub Pages via the official actions/deploy-pages action.
+# Converts /docs/*.md to HTML via Jekyll and publishes to GitHub Pages.
 #
-# Triggered on: push to main, or manual dispatch.
+# Triggered on: push to main (when docs/ change), or manual dispatch.
 #
-# Uses the standard GitHub Pages deployment flow:
-#   1. Upload docs/ + README.md as the pages artifact
-#   2. Deploy to github-pages environment
+# Base URL: https://nilayparikh.github.io/codefreedom/
+#   /              → docs/index.md
+#   /proxy         → docs/proxy.md
+#   /claude-code   → docs/claude-code.md
 # ────────────────────────────────────────────────────────────────────────────────
 
 name: Publish Docs (GitHub Pages)
@@ -15,7 +16,6 @@ on:
     branches: [main]
     paths:
       - "docs/**"
-      - "README.md"
   workflow_dispatch:
 
 permissions:
@@ -34,23 +34,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare pages artifact
-        run: |
-          mkdir -p _site
-
-          # Copy docs as-is (retain folder structure)
-          cp -r docs/* _site/
-
-          # Copy README.md as index
-          cp README.md _site/index.md
-
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      - name: Prepare pages artifact
+        run: |
+          rm -rf _site
+          mkdir -p _site
+
+          # Copy docs as-is (Jekyll renders .md → .html)
+          # docs/index.md → index.html (landing page)
+          cp -r docs/* _site/
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: _site/
+          destination: _site/_output
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site/
+          path: _site/_output/
 
   deploy:
     name: Deploy to GitHub Pages

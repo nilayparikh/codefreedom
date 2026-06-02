@@ -1,4 +1,4 @@
-"""Top-level CLI entry point — parses args and dispatches to subcommands.
+"""Top-level CLI entry point -- parses args and dispatches to subcommands.
 
 Entry point: codefreedom | cf
 """
@@ -74,10 +74,10 @@ def _init_codefreedom(
     elif profiles_src.exists():
         profiles_dst_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(profiles_src, profiles_dst)
-        print(f"[init] ✓ Created {profiles_dst}")
+        print(f"[init] [OK] Created {profiles_dst}")
         created_any = True
     else:
-        print(f"[init] ✖ Profiles example not found: {profiles_src}")
+        print(f"[init] [FAIL] Profiles example not found: {profiles_src}")
         print("       Make sure profiles.examples/claude-code-profiles.json exists.")
 
     # ── Schema ─────────────────────────────────────────────────────────────
@@ -87,10 +87,10 @@ def _init_codefreedom(
     elif schema_src.exists():
         profiles_dst_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(schema_src, schema_dst)
-        print(f"[init] ✓ Created {schema_dst}")
+        print(f"[init] [OK] Created {schema_dst}")
         created_any = True
     else:
-        print(f"[init] ✖ Schema example not found: {schema_src}")
+        print(f"[init] [FAIL] Schema example not found: {schema_src}")
         print(
             "       Make sure profiles.examples/claude-code-profiles.schema.json exists."
         )
@@ -129,16 +129,16 @@ def _init_codefreedom(
                 shutil.rmtree(dst_providers)
             shutil.copytree(src_providers, dst_providers, dirs_exist_ok=True)
 
-        print(f"[init] ✓ Created {proxy_dst}")
+        print(f"[init] [OK] Created {proxy_dst}")
         created_any = True
     else:
-        print(f"[init] ✖ Proxy examples not found: {proxy_src}")
+        print(f"[init] [FAIL] Proxy examples not found: {proxy_src}")
         print("       Make sure litellm.examples/ exists.")
 
     # ── Environment files (.env / .env.secrets) ────────────────────────────
     # Copy fully-commented templates from project root or bundled examples.
     # These are only created if the destination file doesn't already exist
-    # (never overwritten — user edits them manually).
+    # (never overwritten -- user edits them manually).
     env_src = project_root / ".env.example"
     secrets_src = project_root / ".env.secrets.example"
 
@@ -151,25 +151,25 @@ def _init_codefreedom(
     secrets_dst = cf_dir / ".env.secrets"
 
     if env_dst.exists():
-        print(f"[init] .env already exists: {env_dst} (skipping — edit it manually)")
+        print(f"[init] .env already exists: {env_dst} (skipping -- edit it manually)")
         skipped_any = True
     elif env_src.exists():
         cf_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(env_src, env_dst)
         print(
-            f"[init] ✓ Created {env_dst} (fully commented — uncomment variables you need)"
+            f"[init] [OK] Created {env_dst} (fully commented -- uncomment variables you need)"
         )
         created_any = True
     else:
-        print(f"[init] ✖ .env.example not found: {env_src}")
+        print(f"[init] [FAIL] .env.example not found: {env_src}")
 
-    # .env.secrets is optional — only copy if source exists and dest doesn't
+    # .env.secrets is optional -- only copy if source exists and dest doesn't
     if secrets_dst.exists():
         print(f"[init] .env.secrets already exists: {secrets_dst} (skipping)")
     elif secrets_src.exists():
         cf_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(secrets_src, secrets_dst)
-        print(f"[init] ✓ Created {secrets_dst} (fully commented — add your API keys)")
+        print(f"[init] [OK] Created {secrets_dst} (fully commented -- add your API keys)")
         created_any = True
 
     if created_any:
@@ -185,7 +185,7 @@ def _init_codefreedom(
         print("       Edit these files to customize your setup.")
     elif skipped_any:
         print()
-        print("[init] Nothing to do — all files already exist.")
+        print("[init] Nothing to do -- all files already exist.")
     else:
         print()
         print("[init] No source files found to copy.")
@@ -197,7 +197,7 @@ def main() -> None:
     """Top-level CLI entry point: codefreedom | cf."""
     parser = argparse.ArgumentParser(
         prog="codefreedom",
-        description="CodeFreedom — Claude Code launcher and LiteLLM proxy management.",
+        description="CodeFreedom -- Claude Code launcher and LiteLLM proxy management.",
     )
     parser.add_argument(
         "--init",
@@ -226,7 +226,7 @@ def main() -> None:
     claude_parser.add_argument(
         "--native-models",
         action="store_true",
-        help="Use native Anthropic models/auth (/login) — strips ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN",
+        help="Use native Anthropic models/auth (/login) -- strips ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN",
     )
     claude_parser.add_argument(
         "--profile",

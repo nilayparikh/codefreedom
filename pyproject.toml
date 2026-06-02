@@ -45,9 +45,9 @@ cf = "codefreedom.cli.main:main"
 Homepage = "https://github.com/nilayparikh/codefreedom"
 Repository = "https://github.com/nilayparikh/codefreedom"
 Documentation = "https://nilayparikh.github.io/codefreedom/"
-"Getting Started" = "https://nilayparikh.github.io/codefreedom/getting-started"
-"LiteLLM Proxy" = "https://nilayparikh.github.io/codefreedom/litellm"
-"Claude Code Launcher" = "https://nilayparikh.github.io/codefreedom/claude-code"
+"Getting Started" = "https://nilayparikh.github.io/codefreedom/"
+"Proxy Setup" = "https://nilayparikh.github.io/codefreedom/proxy"
+"Claude Code" = "https://nilayparikh.github.io/codefreedom/claude-code"
 
 [tool.setuptools.packages.find]
 where = ["src"]

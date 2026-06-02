@@ -1,3 +1,9 @@
+---
+title: Claude Code
+layout: default
+nav_order: 3
+---
+
 # Claude Code Launcher
 
 The `codefreedom claude` (or `cf cc`) command is the primary way to launch

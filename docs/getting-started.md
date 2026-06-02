@@ -2,18 +2,9 @@
 title: Getting Started
 layout: default
 nav_order: 1
-permalink: /
 ---
 
-# CodeFreedom
-
-**Claude Code launcher and LiteLLM proxy — AI-augmented coding, anywhere.**
-
-CodeFreedom gives you a single CLI tool (`codefreedom` / `cf`) that runs Claude Code natively or inside Docker with GPU passthrough, and manages a LiteLLM proxy for model routing to any provider.
-
----
-
-## Getting Started
+# Getting Started
 
 This guide walks you through installing and configuring CodeFreedom.
 
@@ -154,7 +145,7 @@ store_model_in_db: true
 store_prompts_in_spend_logs: true
 ```
 
-See [Proxy → Database](proxy.md#database-backends) for details.
+See [LiteLLM Proxy → Database](litellm.md#database-backends) for details.
 
 To connect codefreedom to an existing PostgreSQL on a shared Docker network,
 add this to `~/.codefreedom/proxy/docker-compose.yml`:
@@ -276,5 +267,5 @@ in the Configuration Guide.
 ## Next Steps
 
 - **[Configuration Guide](configuration.md)** — add OpenAI/Anthropic-compatible endpoints, cloud providers, model aliases
-- [Proxy Configuration](proxy.md) — providers, model aliases, database setup
+- [LiteLLM Proxy Configuration](litellm.md) — providers, model aliases, database setup
 - [Claude Code Launcher](claude-code.md) — profiles, Docker lifecycle, advanced usage

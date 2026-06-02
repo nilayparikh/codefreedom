@@ -95,7 +95,7 @@ codefreedom proxy --validate
 ```
 
 The proxy starts stateless — no database, no Prisma, just model routing.
-See [LiteLLM Proxy → Database](docs/litellm.md#database-backends) for PostgreSQL setup.
+See [Proxy → Database](docs/proxy.md#database-backends) for PostgreSQL setup.
 
 ### 2. Launch Claude Code
 
@@ -193,7 +193,7 @@ Model routing works out of the box.
 | **None** (default) | Dev/CI — stateless model routing, zero persistence |
 | **PostgreSQL**     | Admin UI, spend tracking, key management, teams    |
 
-See [LiteLLM Proxy → Database](docs/litellm.md#database-backends) for setup.
+See [Proxy → Database](docs/proxy.md#database-backends) for setup.
 
 ## Architecture
 
@@ -220,9 +220,9 @@ See [LiteLLM Proxy → Database](docs/litellm.md#database-backends) for setup.
 
 ## Documentation
 
-- [Getting Started](https://nilayparikh.github.io/codefreedom/getting-started) — detailed setup guide
-- [LiteLLM Proxy](https://nilayparikh.github.io/codefreedom/litellm) — configuration and provider setup
-- [Claude Code Launcher](https://nilayparikh.github.io/codefreedom/claude-code) — profiles, Docker, and advanced usage
+- [Getting Started](https://nilayparikh.github.io/codefreedom/) — installation and setup guide
+- [Proxy](https://nilayparikh.github.io/codefreedom/proxy) — LiteLLM configuration and provider setup
+- [Claude Code](https://nilayparikh.github.io/codefreedom/claude-code) — profiles, Docker, and advanced usage
 
 ## Requirements
 
