@@ -1,0 +1,32 @@
+# ── CodeFreedom Security Scan Workflow ───────────────────────────────────────
+# Scans the repository for secrets, misconfigurations, and vulnerabilities.
+# ────────────────────────────────────────────────────────────────────────────────
+
+name: Trivy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1" # Every Monday at 06:00 UTC
+
+jobs:
+  scan:
+    name: Full Repository Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          scan-type: fs
+          scan-ref: "."
+          format: table
+          exit-code: 1
+          ignore-unfixed: true

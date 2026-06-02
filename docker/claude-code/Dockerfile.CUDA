@@ -104,7 +104,31 @@ RUN set -eux; \
 # 6. Claude Code
 RUN npm install -g @anthropic-ai/claude-code
 
-# 7. Trivy security scanner
+# 7. Language Server binaries — prerequisites for Claude Code code intelligence plugins
+#     Activate each via: /plugin install <name>@claude-plugins-official
+#     Supported: Python (pyright-lsp), TypeScript/JS (typescript-lsp),
+#               Rust (rust-analyzer-lsp), C/C++ (clangd-lsp)
+RUN set -eux; \
+    # npm-based LSPs (architecture-independent)
+    npm install -g \
+        typescript-language-server \
+        pyright; \
+    # rust-analyzer — arch-aware binary
+    ARCH=$(uname -m); \
+    if [ "${ARCH}" = "aarch64" ]; then \
+        RUST_URL="https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-aarch64-unknown-linux-gnu.gz"; \
+    else \
+        RUST_URL="https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-unknown-linux-gnu.gz"; \
+    fi; \
+    curl -fsSL -o /tmp/rust-analyzer.gz "${RUST_URL}"; \
+    gunzip -c /tmp/rust-analyzer.gz > /usr/local/bin/rust-analyzer; \
+    chmod +x /usr/local/bin/rust-analyzer; \
+    # clangd — C/C++ LSP (via apt, arch-independent)
+    apt-get update; \
+    apt-get install -y --no-install-recommends clangd; \
+    rm -rf /tmp/* /var/lib/apt/lists/*
+
+# 8. Trivy security scanner
 RUN apt-get update && apt-get install -y --no-install-recommends wget gnupg \
     && wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null \
     && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" > /etc/apt/sources.list.d/trivy.list \
@@ -114,7 +138,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget gnupg \
 
 RUN trivy plugin install mcp
 
-# 8. Non-root user
+# 9. Non-root user
 ARG USERNAME=vscode
 ARG USER_UID=1000
 ARG USER_GID=1000
@@ -134,7 +158,7 @@ RUN set -eux; \
     chown "${USER_UID}:${USER_GID}" /workspace; \
     rm -rf /var/lib/apt/lists/*
 
-# 9. Environment
+# 10. Environment
 ENV CLAUDE_CODE_ATTRIBUTION_HEADER="0" \
     IS_SANDBOX="1" \
     CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL="1" \

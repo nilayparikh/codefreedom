@@ -1,8 +1,12 @@
-"""Claude Code Docker launcher -- runs Claude Code in ephemeral sandbox containers.
+"""Sandbox launcher -- runs code agents in ephemeral Docker containers with GPU passthrough.
 
-Provides the core execution engine for launching Claude Code through Docker
-with profile-based model routing. Each sandbox session gets a fresh container
-with a random name -- no more container-locking from shared reuse."""
+Pre-configured images (ghcr.io/nilayparikh/codefreedom):
+- CUDA (NVIDIA): CUDA-latest, CUDA-v0.1, CUDA-v0.1.0
+- ROCm (AMD): ROCm-latest, ROCm-v0.1, ROCm-v0.1.0
+- Ubuntu (General): latest, v0.1, v0.1.0
+
+Each sandbox session gets a fresh container with a random name -- no more
+container-locking from shared reuse."""
 
 from __future__ import annotations
 
@@ -163,7 +167,11 @@ def stop() -> int:
 
 
 def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
-    """Create ~/.codefreedom/sandbox/{profile}/.claude and seed .claude.json for sandbox isolation.
+    """Create ~/.codefreedom/sandbox/{profile}/.claude and a fresh .claude.json.
+
+    Does NOT seed from the host's ~/.claude.json -- the sandbox starts clean so
+    Claude Code inside the container populates it naturally with only the paths
+    that exist in the container (/workspace).
 
     Returns (claude_dir, claude_json_path) -- the .claude directory and the
     .claude.json file path inside the profile's sandbox directory.
@@ -175,21 +183,13 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
     claude_dir.mkdir(parents=True, exist_ok=True)
     eprint(f"[SANDBOX] Isolated .claude dir: {claude_dir}")
 
-    # ── Seed .claude.json from host if missing ─────────────────────────
+    # ── Fresh .claude.json (never copy from host) ──────────────────────
     sandbox_json = profile_dir / ".claude.json"
-    host_json = HOME_DIR / ".claude.json"
-    if not sandbox_json.exists() and host_json.exists():
-        shutil.copy2(host_json, sandbox_json)
-        eprint(
-            f"[SANDBOX] Seeded .claude.json from host ({host_json}) → ({sandbox_json})"
-        )
+    if not sandbox_json.exists():
+        sandbox_json.write_text("{}")
+        eprint(f"[SANDBOX] Created fresh .claude.json: {sandbox_json}")
     else:
-        sandbox_json.touch(exist_ok=True)
-        eprint(
-            f"[SANDBOX] Using existing .claude.json: {sandbox_json}"
-            if sandbox_json.exists()
-            else f"[SANDBOX] Created empty .claude.json: {sandbox_json}"
-        )
+        eprint(f"[SANDBOX] Using existing .claude.json: {sandbox_json}")
 
     return claude_dir, sandbox_json
 
@@ -197,7 +197,11 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
 # ── Execution ──────────────────────────────────────────────────────────────────
 
 
-def run_local(profile_env: Dict[str, str], claude_args: List[str]) -> int:
+def run_local(
+    profile_env: Dict[str, str],
+    claude_args: List[str],
+    dangerously_skip: bool = False,
+) -> int:
     """Run claude natively on the host. Returns exit code."""
     claude_bin = find_claude_binary()
     if not claude_bin:
@@ -214,7 +218,12 @@ def run_local(profile_env: Dict[str, str], claude_args: List[str]) -> int:
         if val:
             env[key] = val
 
-    cmd = [claude_bin, "--dangerously-skip-permissions"] + claude_args
+    # Local mode: no bypass by default — use --dangerously-skip-permissions
+    # to opt in for CI/non-interactive environments.
+    cmd = [claude_bin]
+    if dangerously_skip:
+        cmd.append("--dangerously-skip-permissions")
+    cmd.extend(claude_args)
 
     try:
         proc = subprocess.Popen(cmd, env=env)
@@ -286,20 +295,30 @@ def run_docker(
         f"{workspace_dir / '.claude'}:/workspace/.claude",
     ]
 
-    # ── Ensure image is pulled ────────────────────────────────────────────
-    eprint(f"[IMAGE] Pulling '{image}'...")
-    pull = subprocess.run(
-        ["docker", "pull", image],
+    # ── Ensure image is available ─────────────────────────────────────────
+    _inspect = subprocess.run(
+        ["docker", "image", "inspect", image],
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=10,
         check=False,
     )
-    if pull.returncode != 0:
-        eprint(f"[ERROR] Failed to pull image '{image}'.")
-        if pull.stderr:
-            eprint(f"   {pull.stderr.strip()}")
-        return 1
+    if _inspect.returncode != 0:
+        eprint(f"[IMAGE] Pulling '{image}'...")
+        pull = subprocess.run(
+            ["docker", "pull", image],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if pull.returncode != 0:
+            eprint(f"[ERROR] Failed to pull image '{image}'.")
+            if pull.stderr:
+                eprint(f"   {pull.stderr.strip()}")
+            return 1
+    else:
+        eprint(f"[IMAGE] Using cached image '{image}'")
 
     # ── Ensure workspace .claude dir exists ───────────────────────────────
     (workspace_dir / ".claude").mkdir(parents=True, exist_ok=True)

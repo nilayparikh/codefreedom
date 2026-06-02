@@ -1,0 +1,89 @@
+name: Bug Report
+description: File a bug report for CodeFreedom
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Your operating system
+      options:
+        - Ubuntu 24.04
+        - Ubuntu 22.04
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Windows (WSL2)
+        - Other Linux
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python Version
+      description: Output of `python3 --version`
+      placeholder: "Python 3.12.3"
+    validations:
+      required: true
+
+  - type: input
+    id: codefreedom-version
+    attributes:
+      label: CodeFreedom Version
+      description: Output of `pip show codefreedom` or version from source
+      placeholder: "0.0.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: subcommand
+    attributes:
+      label: Affected Subcommand
+      description: Which part of CodeFreedom has the bug?
+      options:
+        - codefreedom claude
+        - codefreedom proxy
+        - codefreedom --init
+        - Other / Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce the bug?
+      placeholder: |
+        1. Run '...'
+        2. Then '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Log Output
+      description: Please copy and paste any relevant log output
+      render: shell

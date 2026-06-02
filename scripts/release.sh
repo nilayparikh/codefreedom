@@ -118,6 +118,9 @@ fi
 CURRENT_VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
 echo "   Current: $CURRENT_VERSION → New: $VERSION"
 
+# __init__.py derives __version__ from importlib.metadata — no need to patch it.
+# Only pyproject.toml is the version source of truth.
+
 if $DRY_RUN; then
   echo "[DRY RUN] Would update pyproject.toml, commit, tag $TAG, and push."
 else

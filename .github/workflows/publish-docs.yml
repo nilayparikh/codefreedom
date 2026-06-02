@@ -1,21 +1,18 @@
-# ── CodeFreedom GitHub Pages Publish Workflow ─────────────────────────────────
-# Converts /docs/*.md to HTML via Jekyll and publishes to GitHub Pages.
-#
-# Triggered on: push to main (when docs/ change), or manual dispatch.
+# ── CodeFreedom Docs: MkDocs → GitHub Pages ──────────────────────────────────
+# Builds the MkDocs Material site and deploys to GitHub Pages.
 #
 # Base URL: https://nilayparikh.github.io/codefreedom/
-#   /              → docs/index.md
-#   /proxy         → docs/proxy.md
-#   /claude-code   → docs/claude-code.md
 # ────────────────────────────────────────────────────────────────────────────────
 
-name: Publish Docs (GitHub Pages)
+name: Deploy Docs
 
 on:
   push:
     branches: [main]
     paths:
       - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/publish-docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -28,43 +25,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build Pages
-    runs-on: ubuntu-24.04
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Prepare pages artifact
-        run: |
-          rm -rf _site
-          mkdir -p _site
-
-          # Copy docs as-is (Jekyll renders .md → .html)
-          # docs/index.md → index.html (landing page)
-          cp -r docs/* _site/
-
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          source: _site/
-          destination: _site/_output
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install 'mkdocs-material[imaging]' mkdocs-mermaid2-plugin
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Build
+        run: mkdocs build --strict
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site/_output/
+          path: site
 
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy
-        id: deployment
+      - name: Deploy to GitHub Pages
+        id: deploy
         uses: actions/deploy-pages@v4

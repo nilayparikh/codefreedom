@@ -1,0 +1,19 @@
+# CodeFreedom Code Owners
+
+- @nilayparikh
+
+# Documentation
+
+docs/ @nilayparikh
+
+# CLI source
+
+src/codefreedom/ @nilayparikh
+
+# CI/CD
+
+.github/ @nilayparikh
+
+# Tests
+
+tests/ @nilayparikh

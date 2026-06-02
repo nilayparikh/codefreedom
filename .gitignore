@@ -22,5 +22,8 @@ litellm/
 .DS_Store
 Thumbs.db
 
+# MkDocs build output
+site/
+
 # Claude Code
 .claude/

@@ -1,11 +1,11 @@
-"""Proxy subcommand -- manage the LiteLLM proxy.
+"""Proxy subcommand -- manage the LLM routing proxy (Docker or native).
 
 Usage:
-    codefreedom proxy --up         Start the LiteLLM proxy (native, default)
+    codefreedom proxy --up         Start the proxy (native, default)
     codefreedom proxy --up --docker  Start via Docker Compose
-    codefreedom proxy --down       Stop the LiteLLM proxy
+    codefreedom proxy --down       Stop the proxy
     codefreedom proxy --status     Show proxy status
-    codefreedom proxy --validate   Validate LiteLLM configuration
+    codefreedom proxy --validate   Validate configuration
 """
 
 from __future__ import annotations
@@ -110,7 +110,7 @@ def _start_native(args: argparse.Namespace) -> int:
         eprint("[ERROR] litellm package not installed.")
         eprint("   Install: pip install codefreedom[litellm]")
         eprint("   This installs litellm with proxy extras (websockets, etc.).")
-        eprint("   Or run without --native to use Docker Compose.")
+        eprint("   Or use --docker to run via Docker Compose instead.")
         return 1
 
     litellm_bin = shutil.which("litellm")
@@ -255,7 +255,9 @@ def _validate() -> int:
                         if api_key_ref.startswith("os.environ/"):
                             env_var = api_key_ref[len("os.environ/") :]
                             if not _env_is_set(env_var):
-                                eprint(f"    [WARN]  {name}: env var {env_var} is not set")
+                                eprint(
+                                    f"    [WARN]  {name}: env var {env_var} is not set"
+                                )
                             else:
                                 eprint(f"    [OK]  {name} (auth: {env_var} [OK])")
                         else:

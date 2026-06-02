@@ -1,7 +1,8 @@
-"""Profile management for Claude Code model selection and routing.
+"""Profile management for model selection and routing across code agents.
 
 Profiles are defined in claude-code-profiles.json. Each profile sets
 environment variables that control model selection, API endpoint, and auth.
+All profiles live in ~/.codefreedom/profiles/.
 """
 
 from __future__ import annotations
@@ -12,6 +13,9 @@ import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
+
+# Pre-compiled regex — mirrors env_loader._VAR_REF_RE
+_VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-(.*))?\}")
 
 
 def eprint(*args: Any, **kwargs: Any) -> None:
@@ -48,7 +52,13 @@ def resolve_env(env_def: Dict[str, str], context: Dict[str, str]) -> Dict[str, s
         def _sub(m: re.Match) -> str:
             varname = m.group(1)
             default = m.group(2)
-            resolved = context.get(varname) or os.environ.get(varname)
+            # Use `in` check — empty-string values are valid overrides
+            if varname in context:
+                resolved = context[varname]
+            elif varname in os.environ:
+                resolved = os.environ[varname]
+            else:
+                resolved = None
             if resolved is not None:
                 return resolved
             if default is not None:
@@ -56,7 +66,7 @@ def resolve_env(env_def: Dict[str, str], context: Dict[str, str]) -> Dict[str, s
             eprint(f"[WARN] env var ${{{varname}}} referenced but not set (empty)")
             return ""
 
-        result[key] = re.sub(r"\$\{(\w+)(?::-(.*?))?\}", _sub, raw_val)
+        result[key] = _VAR_REF_RE.sub(_sub, raw_val)
     return result
 
 
@@ -65,15 +75,20 @@ def load_profile_env(
     profiles_path: Path,
     base_env: Dict[str, str],
     mode: str | None = None,
+    profiles: Dict[str, Any] | None = None,
 ) -> Dict[str, str]:
     """Load a named profile's env vars, resolving ${VAR} references from base_env.
 
     If *mode* is provided ("sandbox" | "local"), mode-specific env overrides
     (profile.{mode}.env) are merged on top of the base env with inheritance.
 
+    If *profiles* is provided, it is used directly — avoids re-reading the
+    profiles file when the caller has already loaded it.
+
     Returns the merged env dict for the profile.
     """
-    profiles = load_profiles(profiles_path)
+    if profiles is None:
+        profiles = load_profiles(profiles_path)
 
     if profile_name not in profiles:
         eprint(f"[ERROR] Profile '{profile_name}' not found in {profiles_path}.")
@@ -147,12 +162,16 @@ def _merge_mode_env(
 def get_profile_sandbox_image(
     profile_name: str,
     profiles_path: Path,
+    profiles: Dict[str, Any] | None = None,
 ) -> str | None:
     """Get the sandbox image for a profile, respecting inheritance.
 
+    If *profiles* is provided, uses it directly to avoid re-reading the file.
+
     Returns None if no sandbox_image is set anywhere in the chain.
     """
-    profiles = load_profiles(profiles_path)
+    if profiles is None:
+        profiles = load_profiles(profiles_path)
 
     if profile_name not in profiles:
         return None

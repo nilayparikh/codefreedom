@@ -10,6 +10,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from codefreedom.env_loader import eprint
+
 _CODEFREEDOM_DIR = Path.home() / ".codefreedom"
 
 
@@ -54,7 +56,7 @@ def _init_codefreedom(
         print(f"[init] [OK] Created {profiles_dst}")
         created_any = True
     else:
-        print(f"[init] [FAIL] Bundled profiles example not found")
+        print("[init] [FAIL] Bundled profiles example not found")
         print("       Reinstall the package or file a bug report.")
 
     # ── Schema ─────────────────────────────────────────────────────────────
@@ -67,7 +69,7 @@ def _init_codefreedom(
         print(f"[init] [OK] Created {schema_dst}")
         created_any = True
     else:
-        print(f"[init] [FAIL] Bundled schema example not found")
+        print("[init] [FAIL] Bundled schema example not found")
         print("       Reinstall the package or file a bug report.")
 
     # ── Proxy configs ──────────────────────────────────────────────────────
@@ -103,7 +105,7 @@ def _init_codefreedom(
         print(f"[init] [OK] Created {proxy_dst}")
         created_any = True
     else:
-        print(f"[init] [FAIL] Bundled proxy examples not found")
+        print("[init] [FAIL] Bundled proxy examples not found")
         print("       Reinstall the package or file a bug report.")
 
     # ── Environment files (.env / .env.secrets) ────────────────────────────
@@ -124,7 +126,7 @@ def _init_codefreedom(
         )
         created_any = True
     else:
-        print(f"[init] [FAIL] Bundled .env.example not found")
+        print("[init] [FAIL] Bundled .env.example not found")
         print("       Reinstall the package or file a bug report.")
 
     # .env.secrets is optional
@@ -142,12 +144,12 @@ def _init_codefreedom(
         print()
         print("[init] CodeFreedom is initialized!")
         print(f"       Profiles: {profiles_dst_dir}")
-        print(f"         - claude-code.json")
-        print(f"         - claude-code-profiles.schema.json")
+        print("         - claude-code.json")
+        print("         - claude-code-profiles.schema.json")
         print(f"       Proxy:    {proxy_dst}")
         print(f"       Env:      {cf_dir}")
-        print(f"         - .env (fully commented)")
-        print(f"         - .env.secrets (fully commented)")
+        print("         - .env (fully commented)")
+        print("         - .env.secrets (fully commented)")
         print("       Edit these files to customize your setup.")
     elif skipped_any:
         print()
@@ -165,7 +167,7 @@ def main() -> None:
     """Top-level CLI entry point: codefreedom | cf."""
     parser = argparse.ArgumentParser(
         prog="codefreedom",
-        description="CodeFreedom -- Claude Code launcher and LiteLLM proxy management.",
+        description="CodeFreedom -- Single wrapper for all code agents. Simple LLM routing, sandboxing, profile management, and isolation. All config in ~/.codefreedom.",
     )
     parser.add_argument(
         "--init",
@@ -183,13 +185,13 @@ def main() -> None:
     claude_parser = subparsers.add_parser(
         "claude",
         aliases=["cc"],
-        help="Launch Claude Code with profile-based model routing",
-        description="Run Claude Code natively (default) or in a sandboxed Docker container.",
+        help="Launch code agent with profile-based model routing",
+        description="Run a code agent natively (default) or in a sandboxed Docker container.",
     )
     claude_parser.add_argument(
         "--sandbox",
         action="store_true",
-        help="Run Claude Code inside a sandboxed Docker container (default: native)",
+        help="Run inside a sandboxed Docker container (default: native)",
     )
     claude_parser.add_argument(
         "--native-models",
@@ -219,6 +221,11 @@ def main() -> None:
         help="List available profiles and exit",
     )
     claude_parser.add_argument(
+        "--dangerously-skip-permissions",
+        action="store_true",
+        help="Skip Claude Code permission prompts (use in CI/non-interactive environments)",
+    )
+    claude_parser.add_argument(
         "claude_args",
         nargs=argparse.REMAINDER,
         help="Arguments forwarded to the 'claude' CLI",
@@ -228,28 +235,28 @@ def main() -> None:
     proxy_parser = subparsers.add_parser(
         "proxy",
         aliases=["px"],
-        help="Manage the LiteLLM proxy (start, stop, validate, status)",
-        description="Manage the LiteLLM proxy lifecycle.",
+        help="Manage the LLM proxy (start, stop, validate, status)",
+        description="Manage the LLM proxy lifecycle (Docker or native).",
     )
     proxy_parser.add_argument(
         "--up",
         action="store_true",
-        help="Start the LiteLLM proxy (native by default; use --docker for Compose)",
+        help="Start the proxy (native by default; use --docker for Compose)",
     )
     proxy_parser.add_argument(
         "--down",
         action="store_true",
-        help="Stop the LiteLLM proxy",
+        help="Stop the proxy",
     )
     proxy_parser.add_argument(
         "--status",
         action="store_true",
-        help="Show LiteLLM proxy status",
+        help="Show proxy status",
     )
     proxy_parser.add_argument(
         "--validate",
         action="store_true",
-        help="Validate the LiteLLM configuration",
+        help="Validate the proxy configuration",
     )
     proxy_parser.add_argument(
         "--docker",
@@ -269,18 +276,51 @@ def main() -> None:
         help="Bind host for proxy (default: 0.0.0.0)",
     )
 
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
     # ── --init: bootstrap ~/.codefreedom/ ───────────────────────────────────
     if args.init:
         sys.exit(_init_codefreedom(force=args.force))
 
     if args.command in ("claude", "cc"):
+        # ── Rescue known flags swallowed by parse_known_args ────────────────
+        # When an unknown flag appears before a known flag (e.g.,
+        # `--resume session --sandbox`), parse_known_args puts ALL remaining
+        # args (including `--sandbox`) into the unknown list. Scan unknown for
+        # CodeFreedom flags that REMAINDER would have dropped.
+        _CLAUDE_BOOL_FLAGS = {
+            "--sandbox": "sandbox",
+            "--native-models": "native_models",
+            "--stop": "stop",
+            "--status": "status",
+            "--list-profiles": "list_profiles",
+            "--dangerously-skip-permissions": "dangerously_skip_permissions",
+        }
+        forwarded: list[str] = []
+        _unknown_iter = iter(unknown)
+        for arg in _unknown_iter:
+            if arg in _CLAUDE_BOOL_FLAGS:
+                setattr(args, _CLAUDE_BOOL_FLAGS[arg], True)
+            elif arg == "--profile":
+                try:
+                    args.profile = next(_unknown_iter)
+                except StopIteration:
+                    forwarded.append(arg)
+            else:
+                forwarded.append(arg)
+        # Prepend forwarded unknown args so they appear before positional
+        # claude_args in the final command line.
+        if args.claude_args is None:
+            args.claude_args = []
+        args.claude_args = forwarded + args.claude_args
         # Lazy import to keep CLI startup fast
         from codefreedom.cli.claude import run as claude_run
 
         sys.exit(claude_run(args))
     elif args.command in ("proxy", "px"):
+        if unknown:
+            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            sys.exit(2)
         from codefreedom.cli.proxy import run as proxy_run
 
         sys.exit(proxy_run(args))

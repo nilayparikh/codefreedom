@@ -5,22 +5,55 @@
 [![Integration Tests](https://github.com/nilayparikh/codefreedom/actions/workflows/integration-test.yml/badge.svg)](https://github.com/nilayparikh/codefreedom/actions/workflows/integration-test.yml)
 [![PyPI](https://img.shields.io/pypi/v/codefreedom.svg)](https://pypi.org/project/codefreedom/)
 
-**Claude Code launcher and LiteLLM proxy — AI-augmented coding, anywhere.**
+**Unified interface for all code agents. Simple LLM routing. Sandboxing just a click away.**
 
-CodeFreedom gives you a single CLI tool (`codefreedom` / `cf`) that:
+CodeFreedom solves three problems:
 
-1. **Runs Claude Code** natively or inside a Docker container with GPU passthrough, profile-based model routing, and multi-session support.
-2. **Manages a LiteLLM proxy** — stateless by default, with optional PostgreSQL for the Admin UI, spend tracking, and key management.
-3. **Routes to any provider** — local self-hosted models, cloud APIs (DeepSeek, Azure, NVIDIA, OpenCode Zen), or any OpenAI/Anthropic-compatible endpoint.
+1. **Model lock-in** — you want to switch models across providers without reconfiguring your code agent each time.
+2. **Environment chaos** — you want isolated, reproducible environments per project with GPU support.
+3. **Config sprawl** — you want profiles, proxy routing, and sandbox settings managed from one place (`~/.codefreedom`).
+
+It does this by orchestrating code agents through their **publicly supported interfaces** (environment variables, CLI flags, API endpoints). No patching, no reverse-engineering.
+
+### Supported Agents
+
+| Agent       | Status     | Subcommand           | Notes                                       |
+| ----------- | ---------- | -------------------- | ------------------------------------------- |
+| Claude Code | ✅ Ready   | `codefreedom claude` | Local + sandbox modes, full profile support |
+| Cursor      | 🚧 Roadmap | —                    | Coming — same profile + proxy pattern       |
+| Codex       | 🚧 Roadmap | —                    | Coming — same profile + proxy pattern       |
+
+The architecture is agent-agnostic: each agent gets a subcommand, profile, and routes through the same proxy. Claude Code is the first implementation.
+
+## Principles
+
+CodeFreedom integrates with code agents through their **publicly supported features only** — environment variables, CLI flags, config files, and API endpoints. No reverse-engineering, no patching, no vendor lock-in.
+
+- **Just configuration.** Profiles are environment variables. Proxy routing is standard LiteLLM config.
+- **Opt-in providers.** Set an API key to enable a provider. Leave it empty to disable. Nothing phones home by default.
+- **All config in one place.** `~/.codefreedom` is the single source of truth for profiles, proxy settings, and sandbox configuration.
+- **Trademarks belong to their owners.** See [NOTICE](NOTICE) for attributions.
+
+## Disclaimer
+
+**CodeFreedom is provided "as is" without warranty of any kind.** Use at your own risk.
+
+- **Supported methods only.** CodeFreedom integrates with code agents exclusively through their publicly documented interfaces — environment variables, CLI flags, config files, and API endpoints. It does **not** reverse-engineer, patch, modify, or tamper with any code agent. No binary patching, no MITM, no internal API abuse.
+- **Third-party responsibility.** CodeFreedom orchestrates upstream tools (LiteLLM, Claude Code, Docker, etc.) but does not control their behavior. You are responsible for evaluating the suitability, security, and terms of service of every upstream tool and provider you configure.
+- **Security.** The proxy handles API keys and tokens. Sandbox mode mounts host directories (`~/.ssh`, `~/.gitconfig`) into containers. Configure these according to your organization's security policies.
+- **No warranty.** This software is provided under the Apache 2.0 License without warranty or guarantee of any kind. The author is not liable for any damages arising from its use.
+- **Trademarks.** CodeFreedom is not affiliated with, endorsed by, or sponsored by Anthropic, Microsoft, Anysphere, OpenAI, BerriAI, Docker, or any other third-party mentioned in this project. All trademarks belong to their respective owners.
 
 ## Features
 
-| Feature              | codefreedom                                 |
-| -------------------- | ------------------------------------------- |
-| LiteLLM proxy        | ✅ Standalone, stateless proxy              |
-| Claude Code launcher | ✅ `codefreedom claude` CLI                 |
-| PostgreSQL           | ✅ Optional — connect any external Postgres |
-| pip installable      | ✅ `pip install codefreedom`                |
+| Feature             | codefreedom                                       |
+| ------------------- | ------------------------------------------------- |
+| LLM proxy           | ✅ Stateless model routing (Docker or native)     |
+| Code agent launcher | ✅ `codefreedom claude` CLI                       |
+| Sandboxing          | ✅ Pre-configured containers (CUDA, ROCm, Ubuntu) |
+| Profile management  | ✅ Model switching & isolation                    |
+| PostgreSQL          | ✅ Optional — Admin UI, spend tracking            |
+| pip installable     | ✅ `pip install codefreedom`                      |
 
 ## Quick Start
 
@@ -78,12 +111,9 @@ This creates:
             └── opencode-zen.yaml
 ```
 
-### 1. Start the LiteLLM Proxy
+### 1. Start the Proxy
 
 ```bash
-# Edit ~/.codefreedom/proxy/config/config.yaml to configure providers
-# Set LITELLM_MASTER_KEY in your environment
-
 # Start via Docker Compose
 codefreedom proxy --up --docker
 
@@ -97,18 +127,17 @@ codefreedom proxy --validate
 The proxy starts stateless — no database, no Prisma, just model routing.
 See [Proxy → Database](docs/proxy.md#database-backends) for PostgreSQL setup.
 
-### 2. Launch Claude Code
+### 2. Launch a Code Agent
 
 ```bash
 # Default: native mode with Flash model
 codefreedom claude
 
-# Short alias
-cf cc
+# Pick a different built-in profile (bare = minimal, no model aliases)
+codefreedom claude --profile bare
 
-# Pick a model profile
-codefreedom claude --profile pro
-codefreedom claude --profile ultra
+# Or use a custom profile you created in claude-code.json
+codefreedom claude --profile my-profile
 
 # Run in sandboxed Docker container
 codefreedom claude --sandbox
@@ -124,53 +153,40 @@ codefreedom claude --status
 codefreedom claude --stop
 ```
 
-### 3. Pass Arguments to Claude
+Short aliases: `cf cc` is equivalent to `codefreedom claude`.
+
+### 3. Pass Arguments Through
 
 ```bash
-cf cc -p "Explain this codebase"
-cf cc --resume "<session-id>"
-cf cc --profile pro --worktree feature-branch
+codefreedom claude -p "Explain this codebase"
+codefreedom claude --resume "<session-id>"
+codefreedom claude --profile my-profile --worktree feature-branch
 ```
+
+## Sandbox Containers
+
+Three pre-configured images (CUDA, ROCm, Ubuntu) on `ghcr.io/nilayparikh/codefreedom`.
+See [Sandbox Mode → Available Images](docs/claude-code/sandbox.md#available-images) for the full tag reference and Dockerfile examples.
 
 ## CLI Reference
 
-```
-codefreedom | cf
-│
-├── --init                    Initialize ~/.codefreedom/ with default profiles
-│   └── --force               Overwrite existing configs
-│
-├── claude | cc               Launch Claude Code
-│   ├── --profile NAME        Model profile (default: 'default')
-│   ├── --sandbox             Run in sandboxed Docker container
-│   ├── --native-models       Use native Anthropic /login auth (bypass proxy)
-│   ├── --stop                Stop the container
-│   ├── --status              Show container status
-│   └── --list-profiles       List available profiles
-│
-└── proxy | px                Manage LiteLLM proxy
-    ├── --up                  Start the proxy (default: native)
-    ├── --up --docker         Start via Docker Compose
-    ├── --down                Stop the proxy
-    ├── --status              Show proxy status
-    └── --validate            Validate LiteLLM config
-```
+See [Architecture → CLI Design](docs/architecture.md#cli-design) for the full command tree.
 
 ## Profiles
 
-Profiles control which model Claude Code uses and which API endpoint it routes through. Defined in `~/.codefreedom/profiles/claude-code.json`.
+Profiles control which model a code agent uses and which API endpoint it routes through. All profiles live in `~/.codefreedom/profiles/claude-code.json`.
 
-| Profile   | Model               | Description                                              |
-| --------- | ------------------- | -------------------------------------------------------- |
-| `default` | `CodeFreedom/Flash` | Base profile — routes through LiteLLM proxy              |
-| `bare`    | _(default)_         | Minimal — no model aliases, routes through LiteLLM proxy |
+| Profile   | Model               | Description                                      |
+| --------- | ------------------- | ------------------------------------------------ |
+| `default` | `CodeFreedom/Flash` | Base profile — routes through proxy              |
+| `bare`    | _(default)_         | Minimal — no model aliases, routes through proxy |
 
 Create custom profiles by editing `~/.codefreedom/profiles/claude-code.json`:
 
 ```json
 {
   "profiles": {
-    "my-custom": {
+    "my-profile": {
       "description": "Custom profile — override model and endpoint",
       "env": {
         "CLAUDE_MODEL": "CodeFreedom/Ultra",
@@ -195,41 +211,27 @@ Model routing works out of the box.
 
 See [Proxy → Database](docs/proxy.md#database-backends) for setup.
 
-## Architecture
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                    codefreedom CLI                        │
-│  codefreedom claude  |  codefreedom proxy                │
-└──────────┬───────────────────────┬───────────────────────┘
-           │                       │
-           ▼                       ▼
-   ┌───────────────┐     ┌─────────────────┐
-   │ Claude Code   │     │  LiteLLM Proxy  │
-   │  (Docker)     │────▶│   (Docker)      │
-   │  GPU passthru │     │   :4000          │
-   └───────────────┘     └────────┬────────┘
-                                  │
-                    ┌─────────────┼─────────────┐
-                    ▼             ▼             ▼
-              ┌──────────┐ ┌──────────┐ ┌──────────┐
-              │ DeepSeek │ │  Azure   │ │  DGX     │
-              │  (cloud) │ │ (cloud)  │ │ (local)  │
-              └──────────┘ └──────────┘ └──────────┘
-```
-
 ## Documentation
 
-- [Getting Started](https://nilayparikh.github.io/codefreedom/) — installation and setup guide
-- [Proxy](https://nilayparikh.github.io/codefreedom/proxy) — LiteLLM configuration and provider setup
-- [Claude Code](https://nilayparikh.github.io/codefreedom/claude-code) — profiles, Docker, and advanced usage
+- [Getting Started](docs/index.md) — Install, init, launch
+- [Environment](docs/environment.md) — `.env` chain, variable interpolation, workspace overrides
+- [Code Agents](docs/claude-code.md) — Profiles, sandbox mode, local mode
+- [Proxy](docs/proxy.md) — Provider setup, database, configuration
+- [Architecture](docs/architecture.md) — System design, data flow (Mermaid diagrams)
+- [VS Code](docs/vscode.md) — Proxy integration with VS Code extensions
+- [Troubleshooting](docs/troubleshooting.md) — Common issues and diagnostics
+- [License & Contributions](docs/license-contributions.md) — License, contributing guide
 
 ## Requirements
 
 - Python 3.10+
-- Docker (for Docker mode and LiteLLM proxy)
-- Node.js + `@anthropic-ai/claude-code` (for native/local mode only)
+- Docker — optional, for sandbox mode and Docker Compose proxy
+- Node.js + `@anthropic-ai/claude-code` (for local mode only)
 
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
+
+---
+
+_Claude Code is a trademark of Anthropic. VS Code is a trademark of Microsoft. Cursor is a trademark of Anysphere. Codex is a trademark of OpenAI. Other trademarks are property of their respective owners. See [NOTICE](NOTICE)._
