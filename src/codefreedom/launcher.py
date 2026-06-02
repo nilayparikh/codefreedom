@@ -2,7 +2,6 @@
 
 Provides the core execution engine for launching Claude Code through Docker
 with profile-based model routing."""
-"""
 
 from __future__ import annotations
 
