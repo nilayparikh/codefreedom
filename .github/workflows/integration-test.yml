@@ -2,18 +2,18 @@
 # Cross-platform integration tests for packaging, init, profiles, and CLI.
 #
 # Runs on: push to main, PRs, and manual dispatch.
-# Platforms: ubuntu-24.04, windows-2022, macos-14 (Apple Silicon), macos-13 (Intel)
+# Platforms: ubuntu-24.04, windows-2022, macos-14 (Apple Silicon)
 #
 # What this tests:
-#   ✓ Package builds and installs cleanly via pip
-#   ✓ `codefreedom --init` creates ~/.codefreedom/ with correct structure
-#   ✓ Profile JSON is valid and loadable
-#   ✓ Schema file is copied alongside profiles
-#   ✓ `codefreedom claude --list-profiles` works
-#   ✓ `codefreedom claude --profile bare --help` (or basic invocation) works
-#   ✓ `codefreedom proxy --validate` works with dummy config
-#   ✓ `cf` alias works
-#   ✓ All CLI entry points exit cleanly
+#   [OK] Package builds and installs cleanly via pip
+#   [OK] `codefreedom --init` creates ~/.codefreedom/ with correct structure
+#   [OK] Profile JSON is valid and loadable
+#   [OK] Schema file is copied alongside profiles
+#   [OK] `codefreedom claude --list-profiles` works
+#   [OK] `codefreedom claude --profile bare --help` (or basic invocation) works
+#   [OK] `codefreedom proxy --validate` works with dummy config
+#   [OK] `cf` alias works
+#   [OK] All CLI entry points exit cleanly
 #
 # Skipped (requires Docker / live models):
 #   - Docker sandbox mode
@@ -42,8 +42,7 @@ jobs:
         os:
           - ubuntu-24.04
           - windows-2022
-          - macos-14 # Apple Silicon
-          - macos-13 # Intel
+          - macos-14
         python-version:
           - "3.10"
           - "3.11"
@@ -115,42 +114,42 @@ jobs:
 
           # Check profiles
           test -f ~/.codefreedom/profiles/claude-code.json || { echo "MISSING: profiles/claude-code.json"; exit 1; }
-          echo "✓ profiles/claude-code.json exists"
+          echo "[OK] profiles/claude-code.json exists"
 
           # Check schema was copied
           test -f ~/.codefreedom/profiles/claude-code-profiles.schema.json || { echo "MISSING: profiles/claude-code-profiles.schema.json"; exit 1; }
-          echo "✓ profiles/claude-code-profiles.schema.json exists"
+          echo "[OK] profiles/claude-code-profiles.schema.json exists"
 
           # Check proxy configs
           test -f ~/.codefreedom/proxy/config/config.yaml || { echo "MISSING: proxy/config/config.yaml"; exit 1; }
-          echo "✓ proxy/config/config.yaml exists"
+          echo "[OK] proxy/config/config.yaml exists"
 
           test -f ~/.codefreedom/proxy/docker-compose.yaml || { echo "MISSING: proxy/docker-compose.yaml"; exit 1; }
-          echo "✓ proxy/docker-compose.yaml exists"
+          echo "[OK] proxy/docker-compose.yaml exists"
 
           # Verify provider dirs exist
           test -d ~/.codefreedom/proxy/config/providers || { echo "MISSING: proxy/config/providers/"; exit 1; }
-          echo "✓ proxy/config/providers/ exists"
+          echo "[OK] proxy/config/providers/ exists"
 
           # Verify .env and .env.secrets were created (fully commented templates)
           test -f ~/.codefreedom/.env || { echo "MISSING: .env"; exit 1; }
-          echo "✓ .env exists"
+          echo "[OK] .env exists"
           # Verify it's a commented template (should not have uncommented KEY=VALUE)
           if grep -q '^[A-Z]' ~/.codefreedom/.env 2>/dev/null; then
-            echo "⚠ .env has uncommented lines — expected fully commented template"
+            echo "[WARN] .env has uncommented lines — expected fully commented template"
           else
-            echo "✓ .env is fully commented"
+            echo "[OK] .env is fully commented"
           fi
 
           if test -f ~/.codefreedom/.env.secrets; then
-            echo "✓ .env.secrets exists"
+            echo "[OK] .env.secrets exists"
             if grep -q '^[A-Z]' ~/.codefreedom/.env.secrets 2>/dev/null; then
-              echo "⚠ .env.secrets has uncommented lines — expected fully commented template"
+              echo "[WARN] .env.secrets has uncommented lines — expected fully commented template"
             else
-              echo "✓ .env.secrets is fully commented"
+              echo "[OK] .env.secrets is fully commented"
             fi
           else
-            echo "⚠ .env.secrets not created (may be bundled but not found)"
+            echo "[WARN] .env.secrets not created (may be bundled but not found)"
           fi
 
           echo ""
@@ -168,9 +167,9 @@ jobs:
 
           for profile in default bare ultra pro air; do
             if echo "$OUTPUT" | grep -q "$profile"; then
-              echo "✓ Found profile: $profile"
+              echo "[OK] Found profile: $profile"
             else
-              echo "✖ MISSING profile: $profile"
+              echo "[FAIL] MISSING profile: $profile"
               exit 1
             fi
           done
@@ -193,7 +192,7 @@ jobs:
           assert 'CLAUDE_MODEL' in env
           assert 'ANTHROPIC_BASE_URL' in env
           assert 'ANTHROPIC_AUTH_TOKEN' in env
-          print('✓ Profile JSON is valid with expected keys')
+          print('[OK] Profile JSON is valid with expected keys')
           "
 
       # ── Schema validity ─────────────────────────────────────────────────
@@ -206,7 +205,7 @@ jobs:
           data = json.loads(p.read_text())
           assert '\$schema' in data, 'No \$schema key'
           assert data.get('title') == 'Claude Code Profiles', 'Unexpected title'
-          print('✓ Schema JSON is valid with expected fields')
+          print('[OK] Schema JSON is valid with expected fields')
           "
 
       # ── Proxy validate test ─────────────────────────────────────────────
@@ -240,11 +239,11 @@ jobs:
           #   - Some other error from missing proxy (expected)
           # The key is that profile loading worked and launcher was reached
           if echo "$OUTPUT" | grep -qi "profile"; then
-            echo "✓ Profile loading was triggered"
+            echo "[OK] Profile loading was triggered"
           elif echo "$OUTPUT" | grep -qi "claude"; then
-            echo "✓ Launcher was reached (claude not installed — expected)"
+            echo "[OK] Launcher was reached (claude not installed — expected)"
           else
-            echo "⚠ Could not verify profile loading from output, but CLI ran without crash"
+            echo "[WARN] Could not verify profile loading from output, but CLI ran without crash"
           fi
           echo ""
           echo "=== Bare profile test completed ==="
@@ -261,11 +260,11 @@ jobs:
 
           # Should fail with a clear error about unknown profile
           if echo "$OUTPUT" | grep -qi "not found"; then
-            echo "✓ Unknown profile correctly rejected"
+            echo "[OK] Unknown profile correctly rejected"
           elif [ "$RC" -ne 0 ]; then
-            echo "✓ Non-zero exit for unknown profile (RC=$RC)"
+            echo "[OK] Non-zero exit for unknown profile (RC=$RC)"
           else
-            echo "⚠ Unknown profile didn't produce expected error"
+            echo "[WARN] Unknown profile didn't produce expected error"
           fi
 
       # ── Error handling: missing profiles file ───────────────────────────
@@ -286,9 +285,9 @@ jobs:
 
           # Should report no profiles without crashing
           if echo "$OUTPUT" | grep -qi "no profiles"; then
-            echo "✓ Missing profiles file handled gracefully"
+            echo "[OK] Missing profiles file handled gracefully"
           elif [ "$RC" -eq 0 ]; then
-            echo "✓ Missing profiles file OK (RC=0)"
+            echo "[OK] Missing profiles file OK (RC=0)"
           else
-            echo "⚠ Unexpected behavior for missing profiles"
+            echo "[WARN] Unexpected behavior for missing profiles"
           fi
