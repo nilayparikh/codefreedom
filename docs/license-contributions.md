@@ -76,7 +76,7 @@ python -m pytest tests/ -v --tb=short
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Be respectful and inclusive.
+This project follows the [Contributor Covenant](https://github.com/nilayparikh/codefreedom/blob/main/CODE_OF_CONDUCT.md). Be respectful and inclusive.
 
 ## Questions?
 
