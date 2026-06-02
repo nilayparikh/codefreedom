@@ -15,7 +15,7 @@ keywords = ["claude-code", "litellm", "ai", "llm", "local-inference"]
 # ── Dependencies ────────────────────────────────────────────────────────────
 #   PyYAML         — YAML parsing (litellm config validation)
 #   types-PyYAML   — type stubs needed by litellm's config parser at runtime
-dependencies = ["PyYAML>=6.0", "types-PyYAML"]
+dependencies = ["PyYAML>=6.0.3", "types-PyYAML"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
