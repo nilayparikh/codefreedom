@@ -12,6 +12,9 @@ on:
   schedule:
     - cron: "0 6 * * 1" # Every Monday at 06:00 UTC
 
+permissions:
+  contents: read
+
 jobs:
   scan:
     name: Full Repository Scan
