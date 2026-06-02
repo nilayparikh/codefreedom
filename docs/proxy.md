@@ -1,21 +1,18 @@
----
-title: Proxy
-layout: default
-nav_order: 2
----
-
-# LiteLLM Proxy
+# LLM Proxy
 
 CodeFreedom runs a standalone LiteLLM proxy. By default, it runs **without a
 database** — pure stateless model routing with zero persistence. You can
 optionally connect a PostgreSQL database to unlock the Admin UI, spend
 tracking, key management, and prompt logging.
 
+> **Docker is optional.** The proxy can run natively (`codefreedom proxy --up`) or via Docker Compose (`codefreedom proxy --up --docker`). Docker is only required for sandbox mode and Docker Compose proxy.
+>
 > **Cloud-only user?** Skip local providers. **Local + cloud?** Enable both.
-> See the [Configuration Guide](configuration.md) for a complete walkthrough
-> of user profiles and how to disable providers you don't need.
+> Providers are opt-in — set an API key to enable, leave empty to disable.
 
 Configuration files are in `~/.codefreedom/proxy/` (initialized via `codefreedom --init`).
+
+Environment variables are loaded through the [env chain](environment.md) — `~/.codefreedom/.env`, workspace `.env`, and system environment.
 
 ## Quick Start
 
@@ -26,7 +23,7 @@ codefreedom --init
 # Start via Docker Compose
 codefreedom proxy --up --docker
 
-# Or start natively
+# Or start natively (no Docker needed)
 codefreedom proxy --up
 
 # Validate config
@@ -158,7 +155,37 @@ them as available models.
 
 ## Proxy Management
 
-### Via Docker Compose
+### Via CLI
+
+```bash
+# Start natively (no Docker needed)
+codefreedom proxy --up
+
+# Start via Docker Compose
+codefreedom proxy --up --docker
+
+# On a custom port
+codefreedom proxy --up --port 4001
+
+# Bind to localhost only (not exposed on the network)
+codefreedom proxy --up --host 127.0.0.1
+
+# Stop (Docker Compose mode only — does not stop a natively-started proxy)
+codefreedom proxy --down
+
+# Check status (Docker Compose mode only)
+codefreedom proxy --status
+
+# Validate config
+codefreedom proxy --validate
+```
+
+| Flag     | Default   | Description                               |
+| -------- | --------- | ----------------------------------------- |
+| `--port` | `4000`    | Port for the proxy                        |
+| `--host` | `0.0.0.0` | Bind address (`127.0.0.1` for local-only) |
+
+### Via Docker Compose (direct)
 
 ```bash
 # Start
@@ -172,18 +199,6 @@ docker compose logs -f litellm
 
 # Check status
 docker compose ps
-```
-
-### Via CLI
-
-```bash
-codefreedom proxy --up
-codefreedom proxy --down
-codefreedom proxy --status
-
-# Native Python mode (no Docker — requires litellm[proxy] extras)
-codefreedom proxy --up --native
-codefreedom proxy --validate
 ```
 
 > **Native mode on ARM64:** May require `pip install codefreedom[litellm]` for proxy extras. Docker Compose mode is recommended on ARM64/Apple Silicon.

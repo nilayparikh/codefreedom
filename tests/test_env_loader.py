@@ -61,44 +61,67 @@ class TestLoadDotenv:
 
 
 class TestLoadEnvChain:
-    """Integration tests for load_env_chain — layered .env → .env.secrets → system."""
+    """Integration tests for load_env_chain — layered home → workspace → system."""
 
-    def test_loads_env_file(self, tmp_path):
-        _write(tmp_path / ".env", "KEY=from_env\n")
+    @pytest.fixture(autouse=True)
+    def _redirect_home(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """Redirect Path.home() → tmp_path so ~/.codefreedom/.env tests are isolated."""
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    def test_home_env_loaded(self, tmp_path):
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_home\n")
         merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_env"
+        assert merged["KEY"] == "from_home"
 
-    def test_secrets_override_env(self, tmp_path):
-        _write(tmp_path / ".env", "KEY=from_env\n")
-        _write(tmp_path / ".env.secrets", "KEY=from_secrets\n")
+    def test_workspace_overrides_home(self, tmp_path):
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_home\n")
+        _write(tmp_path / ".env", "KEY=from_workspace\n")
+        merged = load_env_chain(tmp_path)
+        assert merged["KEY"] == "from_workspace"
+
+    def test_home_secrets_override_home_env(self, tmp_path):
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_env\n")
+        _write(tmp_path / ".codefreedom" / ".env.secrets", "KEY=from_secrets\n")
         merged = load_env_chain(tmp_path)
         assert merged["KEY"] == "from_secrets"
 
     def test_system_env_overrides_all(self, tmp_path):
-        _write(tmp_path / ".env", "KEY=from_env\n")
-        _write(tmp_path / ".env.secrets", "KEY=from_secrets\n")
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_home\n")
+        _write(tmp_path / ".env", "KEY=from_workspace\n")
         os.environ["KEY"] = "from_system"
         merged = load_env_chain(tmp_path)
         assert merged["KEY"] == "from_system"
         del os.environ["KEY"]
 
-    def test_missing_secrets_ok(self, tmp_path):
-        _write(tmp_path / ".env", "KEY=from_env\n")
+    def test_missing_home_env_uses_workspace(self, tmp_path):
+        _write(tmp_path / ".env", "KEY=from_workspace\n")
         merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_env"
+        assert merged["KEY"] == "from_workspace"
 
-    def test_missing_both_files_ok(self, tmp_path):
+    def test_missing_all_files_ok(self, tmp_path):
         os.environ["KEY"] = "from_system"
         merged = load_env_chain(tmp_path)
         assert merged["KEY"] == "from_system"
         del os.environ["KEY"]
 
     def test_secrets_adds_new_keys(self, tmp_path):
-        _write(tmp_path / ".env", "A=1\n")
-        _write(tmp_path / ".env.secrets", "B=2\n")
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env", "A=1\n")
+        _write(tmp_path / ".codefreedom" / ".env.secrets", "B=2\n")
         merged = load_env_chain(tmp_path)
         assert merged["A"] == "1"
         assert merged["B"] == "2"
+
+    def test_workspace_secrets_override_home(self, tmp_path):
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env.secrets", "KEY=from_home_secrets\n")
+        _write(tmp_path / ".env.secrets", "KEY=from_workspace_secrets\n")
+        merged = load_env_chain(tmp_path)
+        assert merged["KEY"] == "from_workspace_secrets"
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

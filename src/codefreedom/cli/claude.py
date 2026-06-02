@@ -1,7 +1,7 @@
-"""Claude Code subcommand — launch Claude Code with profile-based routing.
+"""Code agent subcommand — launch with profile-based routing and sandboxing.
 
 Usage:
-    codefreedom claude [--profile NAME] [--sandbox] [--stop|--status|--list-profiles] [claude-args...]
+    codefreedom claude [--profile NAME] [--sandbox] [--stop|--status|--list-profiles] [agent-args...]
     cf cc [same]
 """
 
@@ -16,6 +16,7 @@ from codefreedom.profiles import (
     get_profile_sandbox_image,
     list_profiles,
     load_profile_env,
+    load_profiles,
 )
 
 # Default location for profiles — ~/.codefreedom/profiles/claude-code.json
@@ -82,8 +83,13 @@ def run(args: argparse.Namespace) -> int:
     sandbox_image: str | None = None
     mode = "sandbox" if args.sandbox else "local"
     if profiles_path.exists():
-        profile_env = load_profile_env(profile_name, profiles_path, base_env, mode)
-        sandbox_image = get_profile_sandbox_image(profile_name, profiles_path)
+        profiles = load_profiles(profiles_path)
+        profile_env = load_profile_env(
+            profile_name, profiles_path, base_env, mode, profiles=profiles
+        )
+        sandbox_image = get_profile_sandbox_image(
+            profile_name, profiles_path, profiles=profiles
+        )
     elif profile_name != "default":
         eprint(
             f"[ERROR] Profile '{profile_name}' requested but no profiles file found."
@@ -107,12 +113,14 @@ def run(args: argparse.Namespace) -> int:
                 )
                 del profile_env[var]
 
+    dangerously_skip = getattr(args, "dangerously_skip_permissions", False)
+
     if args.sandbox:
         return run_docker(
             profile_env, args.claude_args, workspace_dir, profile_name, sandbox_image
         )
     else:
-        return run_local(profile_env, args.claude_args)
+        return run_local(profile_env, args.claude_args, dangerously_skip)
 
 
 def _resolve_profiles_path() -> Path:

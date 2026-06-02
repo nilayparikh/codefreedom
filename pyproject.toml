@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "codefreedom"
 version = "0.0.2"
-description = "CLI for running Claude Code through LiteLLM — local AI inference, anywhere"
+description = "Single wrapper for all code agents — simple LLM routing, sandboxing, profile management, and isolation. All config in ~/.codefreedom."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
@@ -35,7 +35,8 @@ classifiers = [
 [project.optional-dependencies]
 litellm = ["litellm[proxy]>=1.50", "prometheus-client>=0.20"]
 dev = ["mypy>=1.0", "ruff>=0.1", "pytest>=7.0", "types-PyYAML"]
-all = ["codefreedom[litellm,dev]"]
+docs = ["mkdocs-material[imaging]>=9.6", "mkdocs-mermaid2-plugin>=1.2"]
+all = ["codefreedom[litellm,dev,docs]"]
 
 [project.scripts]
 codefreedom = "codefreedom.cli.main:main"
@@ -45,9 +46,9 @@ cf = "codefreedom.cli.main:main"
 Homepage = "https://github.com/nilayparikh/codefreedom"
 Repository = "https://github.com/nilayparikh/codefreedom"
 Documentation = "https://nilayparikh.github.io/codefreedom/"
-"Getting Started" = "https://nilayparikh.github.io/codefreedom/"
-"Proxy Setup" = "https://nilayparikh.github.io/codefreedom/proxy"
-"Claude Code" = "https://nilayparikh.github.io/codefreedom/claude-code"
+"Quick Start" = "https://nilayparikh.github.io/codefreedom/quickstart/"
+"Proxy Setup" = "https://nilayparikh.github.io/codefreedom/proxy/"
+"Claude Code" = "https://nilayparikh.github.io/codefreedom/claude-code/"
 
 [tool.setuptools.packages.find]
 where = ["src"]
