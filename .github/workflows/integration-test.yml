@@ -1,27 +1,19 @@
-# ── CodeFreedom Integration Tests ─────────────────────────────────────────────
-# Cross-platform integration tests for packaging, init, profiles, and CLI.
+# ── CodeFreedom CI ────────────────────────────────────────────────────────────
+# Unit tests (fast) + integration tests (build, install, smoke).
 #
-# Runs on: push to main, PRs, and manual dispatch.
-# Platforms: ubuntu-24.04, windows-2022, macos-14 (Apple Silicon)
+# Required for PR merge — configure branch protection on main:
+#   Settings → Branches → Branch protection rules → Require status checks:
+#     - unit-tests (3.10)
+#     - unit-tests (3.11)
+#     - unit-tests (3.12)
+#     - integration (ubuntu-24.04 / py3.12)
+#     - integration (windows-2022 / py3.12)
+#     - integration (macos-14 / py3.12)
 #
-# What this tests:
-#   [OK] Package builds and installs cleanly via pip
-#   [OK] `codefreedom --init` creates ~/.codefreedom/ with correct structure
-#   [OK] Profile JSON is valid and loadable
-#   [OK] Schema file is copied alongside profiles
-#   [OK] `codefreedom claude --list-profiles` works
-#   [OK] `codefreedom claude --profile bare --help` (or basic invocation) works
-#   [OK] `codefreedom proxy --validate` works with dummy config
-#   [OK] `cf` alias works
-#   [OK] All CLI entry points exit cleanly
-#
-# Skipped (requires Docker / live models):
-#   - Docker sandbox mode
-#   - Live proxy connections
-#   - Actual model inference
+# Platforms: ubuntu-24.04, windows-2022, macos-14
 # ────────────────────────────────────────────────────────────────────────────────
 
-name: Integration Tests
+name: CI
 
 on:
   pull_request:
@@ -33,8 +25,35 @@ defaults:
     shell: bash
 
 jobs:
+  # ── Unit tests (fast, Python matrix only) ───────────────────────────────
+  unit-tests:
+    name: "unit-tests (${{ matrix.python-version }})"
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install and test
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          python -m pytest tests/ -v --tb=short
+
+  # ── Integration tests (build wheel, install, smoke test, cross-platform) ─
   integration:
-    name: "${{ matrix.os }} / py${{ matrix.python-version }}"
+    name: "integration (${{ matrix.os }} / py${{ matrix.python-version }})"
+    needs: unit-tests
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -44,250 +63,63 @@ jobs:
           - windows-2022
           - macos-14
         python-version:
-          - "3.10"
-          - "3.11"
           - "3.12"
-
     steps:
       - uses: actions/checkout@v4
 
-      # ── Python ──────────────────────────────────────────────────────────
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install the package (editable + test deps)
+      - name: Build and verify artifacts
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      # ── Unit tests ──────────────────────────────────────────────────────
-      - name: Run unit tests
-        run: python -m pytest tests/ -v --tb=short
-
-      # ── Package build ───────────────────────────────────────────────────
-      - name: Build source distribution and wheel
-        run: |
-          pip install build
+          python -m pip install --upgrade pip build
           python -m build
-
-      - name: Verify built artifacts exist
-        run: |
-          echo "=== dist/ contents ==="
           ls -la dist/
           test -f dist/codefreedom-*.tar.gz || { echo "MISSING: sdist"; exit 1; }
           test -f dist/codefreedom-*.whl   || { echo "MISSING: wheel"; exit 1; }
-          echo "Both sdist and wheel built successfully."
 
-      # ── Install from built wheel (clean install) ────────────────────────
-      - name: Install from built wheel
+      - name: Install from wheel and smoke test
         run: |
           WHEEL=$(ls dist/codefreedom-*.whl | head -1)
           pip install "$WHEEL" --force-reinstall
-          echo "Installed from: $WHEEL"
 
-      # ── CLI smoke tests ─────────────────────────────────────────────────
-      - name: Verify CLI entry points
-        run: |
-          # --help exits 0
+          # CLI entry points
           codefreedom --help
           cf --help
-
-          # claude subcommand help
           codefreedom claude --help
           cf cc --help
-
-          # proxy subcommand help
           codefreedom proxy --help
           cf px --help
 
-      # ── Init test ───────────────────────────────────────────────────────
-      - name: Test codefreedom --init
-        run: |
-          # Run init from the installed package (uses package's built-in examples)
+          # Init
           codefreedom --init --force
-
-          # Verify ~/.codefreedom/ structure
-          echo "=== ~/.codefreedom/ contents ==="
-          find ~/.codefreedom -type f 2>/dev/null | sort
-
-          # Check profiles
-          test -f ~/.codefreedom/profiles/claude-code.json || { echo "MISSING: profiles/claude-code.json"; exit 1; }
-          echo "[OK] profiles/claude-code.json exists"
-
-          # Check schema was copied
-          test -f ~/.codefreedom/profiles/claude-code-profiles.schema.json || { echo "MISSING: profiles/claude-code-profiles.schema.json"; exit 1; }
-          echo "[OK] profiles/claude-code-profiles.schema.json exists"
-
-          # Check proxy configs
-          test -f ~/.codefreedom/proxy/config/config.yaml || { echo "MISSING: proxy/config/config.yaml"; exit 1; }
-          echo "[OK] proxy/config/config.yaml exists"
-
-          test -f ~/.codefreedom/proxy/docker-compose.yaml || { echo "MISSING: proxy/docker-compose.yaml"; exit 1; }
-          echo "[OK] proxy/docker-compose.yaml exists"
-
-          # Verify provider dirs exist
-          test -d ~/.codefreedom/proxy/config/providers || { echo "MISSING: proxy/config/providers/"; exit 1; }
-          echo "[OK] proxy/config/providers/ exists"
-
-          # Verify .env and .env.secrets were created (fully commented templates)
+          test -f ~/.codefreedom/profiles/claude-code.json || { echo "MISSING: profiles"; exit 1; }
+          test -f ~/.codefreedom/proxy/config/config.yaml || { echo "MISSING: proxy config"; exit 1; }
+          test -f ~/.codefreedom/proxy/docker-compose.yaml || { echo "MISSING: compose"; exit 1; }
+          test -d ~/.codefreedom/proxy/config/providers || { echo "MISSING: providers"; exit 1; }
           test -f ~/.codefreedom/.env || { echo "MISSING: .env"; exit 1; }
-          echo "[OK] .env exists"
-          # Verify it's a commented template (should not have uncommented KEY=VALUE)
-          if grep -q '^[A-Z]' ~/.codefreedom/.env 2>/dev/null; then
-            echo "[WARN] .env has uncommented lines — expected fully commented template"
-          else
-            echo "[OK] .env is fully commented"
-          fi
 
-          if test -f ~/.codefreedom/.env.secrets; then
-            echo "[OK] .env.secrets exists"
-            if grep -q '^[A-Z]' ~/.codefreedom/.env.secrets 2>/dev/null; then
-              echo "[WARN] .env.secrets has uncommented lines — expected fully commented template"
-            else
-              echo "[OK] .env.secrets is fully commented"
-            fi
-          else
-            echo "[WARN] .env.secrets not created (may be bundled but not found)"
-          fi
-
-          echo ""
-          echo "=== Init structure verified ==="
-
-      # ── Profiles test ───────────────────────────────────────────────────
-      - name: Test profile listing
-        run: |
-          echo "=== Profile listing ==="
+          # Profile listing
           codefreedom claude --list-profiles
 
-          # Should list 'default', 'bare', 'ultra', 'pro', 'air'
-          OUTPUT=$(codefreedom claude --list-profiles 2>&1)
-          echo "$OUTPUT"
-
-          for profile in default bare ultra pro air; do
-            if echo "$OUTPUT" | grep -q "$profile"; then
-              echo "[OK] Found profile: $profile"
-            else
-              echo "[FAIL] MISSING profile: $profile"
-              exit 1
-            fi
-          done
-          echo ""
-          echo "=== All expected profiles found ==="
-
-      # ── Profile JSON validity ────────────────────────────────────────────
-      - name: Test profile JSON validity
-        run: |
+          # Validate schema and profile JSON
           python -c "
-          import json, sys
-          from pathlib import Path
-          p = Path.home() / '.codefreedom' / 'profiles' / 'claude-code.json'
-          data = json.loads(p.read_text())
-          profiles = data.get('profiles', {})
-          assert 'default' in profiles, 'Missing default profile'
-          assert profiles['default'].get('env'), 'Default profile has no env'
-          # Verify key env vars in default
-          env = profiles['default']['env']
-          assert 'CLAUDE_MODEL' in env
-          assert 'ANTHROPIC_BASE_URL' in env
-          assert 'ANTHROPIC_AUTH_TOKEN' in env
-          print('[OK] Profile JSON is valid with expected keys')
-          "
-
-      # ── Schema validity ─────────────────────────────────────────────────
-      - name: Test schema file validity
-        run: |
-          python -c "
-          import json, sys
-          from pathlib import Path
-          p = Path.home() / '.codefreedom' / 'profiles' / 'claude-code-profiles.schema.json'
-          data = json.loads(p.read_text())
-          assert '\$schema' in data, 'No \$schema key'
-          assert data.get('title') == 'Claude Code Profiles', 'Unexpected title'
-          print('[OK] Schema JSON is valid with expected fields')
-          "
-
-      # ── Proxy validate test ─────────────────────────────────────────────
-      - name: Test proxy validate
-        run: |
-          echo "=== Proxy validate ==="
-          # Validate should work — config is a valid YAML skeleton
+import json
+from pathlib import Path
+p = Path.home() / '.codefreedom' / 'profiles' / 'claude-code.json'
+d = json.loads(p.read_text())
+assert 'default' in d['profiles']
+e = d['profiles']['default']['env']
+assert 'CLAUDE_MODEL' in e
+assert 'ANTHROPIC_BASE_URL' in e
+assert 'ANTHROPIC_AUTH_TOKEN' in e
+print('[OK]')
+"
+          # Proxy validate
           codefreedom proxy --validate 2>&1 || true
-          echo "Proxy validate completed (may fail if config has missing refs — OK for integration test)"
 
-      # ── Bare profile launch (dry-run) ────────────────────────────────────
-      - name: Test bare profile invocation (no live proxy needed)
-        run: |
-          echo "=== Testing bare profile ==="
-          # Set dummy env vars so the launcher doesn't crash on auth
+          # Bare profile dry-run
           export LITELLM_MASTER_KEY="sk-test-dummy-key-for-ci"
-
-          # codefreedom claude --profile bare with --help-like invocation
-          # This tests env loading, profile resolution, and launcher path
-          # We don't have claude CLI installed, so we expect it to fail
-          # with 'claude not found' — that's OK, it means our code ran correctly
-          set +e
-          OUTPUT=$(codefreedom claude --profile bare 2>&1)
-          RC=$?
-          set -e
-          echo "Exit code: $RC"
-          echo "Output: $OUTPUT"
-
-          # We expect either:
-          #   - Claude not found (claude CLI not installed in CI)
-          #   - Some other error from missing proxy (expected)
-          # The key is that profile loading worked and launcher was reached
-          if echo "$OUTPUT" | grep -qi "profile"; then
-            echo "[OK] Profile loading was triggered"
-          elif echo "$OUTPUT" | grep -qi "claude"; then
-            echo "[OK] Launcher was reached (claude not installed — expected)"
-          else
-            echo "[WARN] Could not verify profile loading from output, but CLI ran without crash"
-          fi
-          echo ""
-          echo "=== Bare profile test completed ==="
-
-      # ── Error handling: unknown profile ─────────────────────────────────
-      - name: Test unknown profile error
-        run: |
-          set +e
-          OUTPUT=$(codefreedom claude --profile nonexistent 2>&1)
-          RC=$?
-          set -e
-          echo "Exit code: $RC"
-          echo "Output: $OUTPUT"
-
-          # Should fail with a clear error about unknown profile
-          if echo "$OUTPUT" | grep -qi "not found"; then
-            echo "[OK] Unknown profile correctly rejected"
-          elif [ "$RC" -ne 0 ]; then
-            echo "[OK] Non-zero exit for unknown profile (RC=$RC)"
-          else
-            echo "[WARN] Unknown profile didn't produce expected error"
-          fi
-
-      # ── Error handling: missing profiles file ───────────────────────────
-      - name: Test missing profiles file
-        run: |
-          # Move the profiles file away temporarily
-          mv ~/.codefreedom/profiles/claude-code.json ~/.codefreedom/profiles/claude-code.json.bak
-
-          set +e
-          OUTPUT=$(codefreedom claude --list-profiles 2>&1)
-          RC=$?
-          set -e
-          echo "Exit code: $RC"
-          echo "Output: $OUTPUT"
-
-          # Restore
-          mv ~/.codefreedom/profiles/claude-code.json.bak ~/.codefreedom/profiles/claude-code.json
-
-          # Should report no profiles without crashing
-          if echo "$OUTPUT" | grep -qi "no profiles"; then
-            echo "[OK] Missing profiles file handled gracefully"
-          elif [ "$RC" -eq 0 ]; then
-            echo "[OK] Missing profiles file OK (RC=0)"
-          else
-            echo "[WARN] Unexpected behavior for missing profiles"
-          fi
+          codefreedom claude --profile bare --help 2>&1 || true

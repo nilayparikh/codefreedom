@@ -83,9 +83,10 @@ Use `--native-models` if you want to bypass the proxy and use native Anthropic
 
 ### Sandbox Mode (`--sandbox`)
 
-Runs Claude Code inside a persistent Docker container with GPU passthrough,
-network isolation, profile-isolated `~/.codefreedom/{profile}/.claude` state,
-and full model routing through LiteLLM.
+Runs Claude Code inside an ephemeral Docker container with GPU passthrough and
+profile-isolated `~/.codefreedom/{profile}/.claude` state. Each session gets a
+fresh container with a random name (`codefreedom-XXXX`) — cleaned up automatically
+on exit or Ctrl+C. No more container locking from shared reuse.
 
 ```bash
 codefreedom claude --sandbox
@@ -95,60 +96,25 @@ codefreedom claude --sandbox --profile default
 
 **Container lifecycle:**
 
-| Event                                 | Behavior                                                                                   |
-| ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| First invocation                      | Pulls image from GHCR, creates container with `sleep infinity`, then `docker exec` into it |
-| Subsequent invocations                | Reuses the running container — just `docker exec` a new Claude session                     |
-| `Ctrl+C` in a session                 | Kills only that Claude process — container and other sessions continue                     |
-| `/exit` in Claude                     | Exits that session only — container stays alive                                            |
-| Last session exits                    | Container keeps running (shows `Reusing running container` next time)                      |
-| `codefreedom claude --stop`           | Stops and removes the container                                                            |
-| `docker restart claude-dev-workspace` | Resets container state, config dirs preserved                                              |
+| Event                  | Behavior                                                              |
+| ---------------------- | --------------------------------------------------------------------- |
+| `codefreedom claude`   | Creates a fresh `codefreedom-XXXX` container, execs Claude, cleans up |
+| `Ctrl+C` or `/exit`    | Container is stopped and removed automatically                        |
+| `codefreedom --stop`   | Stops and removes ALL `codefreedom-*` sandbox containers              |
+| `codefreedom --status` | Lists all `codefreedom-*` containers (running or stopped)             |
 
-**Why persistent container?**
-
-The old pattern (`docker run --rm`) created a fresh container every time and
-cleaned it up on exit. This meant:
-
-- `Ctrl+C` or `/exit` **killed the container** — any other sessions attached to it died too
-- No concurrent sessions — each terminal had to wait for the other to finish
-- Container startup overhead on every invocation
-
-The persistent pattern uses `docker run -d ... sleep infinity` to keep the
-container alive, and each invocation attaches via `docker exec -it`. Multiple
-terminals can each run `codefreedom claude` simultaneously, and `Ctrl+C` only
-affects that session.
-
-### Sandbox Mode
-
-Runs Claude Code inside a persistent Docker container with GPU passthrough,
-profile-isolated `~/.codefreedom/{profile}/.claude` state, and multi-session support.
-
-```bash
-codefreedom claude --sandbox
-```
-
-**The sandbox has its own isolated `.claude` directory** — conversation history,
-settings, and session state are stored in `~/.codefreedom/{profile}/.claude`
-so each profile stays completely separate from your host's `~/.claude` and
-from other profiles.
-
-**Requirements:**
-
-```bash
-docker --version
-```
+Container isolation is per-profile: `~/.codefreedom/{profile}/.claude` persists
+across sessions but each launch gets a clean container environment.
 
 **Trade-offs vs native mode:**
 
-| Aspect                           | Sandbox Mode                      | Native Mode           |
-| -------------------------------- | --------------------------------- | --------------------- |
-| Isolation                        | Full container sandbox            | Host environment      |
-| GPU passthrough                  | Automatic (`--gpus all`)          | Requires manual setup |
-| Concurrent sessions              | Yes (multi-exec)                  | Host-dependent        |
-| `.claude` state isolation        | ✅ per-profile                    | ❌ shared host dir    |
-| `--dangerously-skip-permissions` | Safe (container boundaries)       | Requires trust        |
-| Startup time                     | ~2s (exec into running container) | ~0.5s (direct)        |
+| Aspect                           | Sandbox Mode                | Native Mode           |
+| -------------------------------- | --------------------------- | --------------------- |
+| Isolation                        | Full container sandbox      | Host environment      |
+| GPU passthrough                  | Automatic (`--gpus all`)    | Requires manual setup |
+| `.claude` state isolation        | ✅ per-profile              | ❌ shared host dir    |
+| `--dangerously-skip-permissions` | Safe (container boundaries) | Requires trust        |
+| Cleanup                          | Auto (container removed)    | N/A                   |
 
 ### Native Models Mode
 
