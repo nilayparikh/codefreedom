@@ -89,7 +89,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: docker/claude-code/
           file: docker/claude-code/Dockerfile.CUDA
@@ -155,7 +155,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: docker/claude-code/
           file: docker/claude-code/Dockerfile.ROCm
@@ -221,7 +221,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: docker/claude-code/
           file: docker/claude-code/Dockerfile.Ubuntu
