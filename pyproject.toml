@@ -35,7 +35,7 @@ classifiers = [
 [project.optional-dependencies]
 litellm = ["litellm[proxy]>=1.50", "prometheus-client>=0.20"]
 dev = ["mypy>=1.0", "ruff>=0.1", "pytest>=7.0", "types-PyYAML"]
-docs = ["mkdocs-material[imaging]>=9.6", "mkdocs-mermaid2-plugin>=1.2"]
+docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2"]
 all = ["codefreedom[litellm,dev,docs]"]
 
 [project.scripts]
