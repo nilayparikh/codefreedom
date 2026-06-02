@@ -33,7 +33,7 @@ classifiers = [
 #                     Not needed for Docker Compose mode.
 #   dev             — Development extras (type checking, linting)
 [project.optional-dependencies]
-litellm = ["litellm[proxy]>=1.50", "prometheus-client>=0.20"]
+litellm = ["litellm[proxy]>=1.50", "prometheus-client>=0.25.0"]
 dev = ["mypy>=1.0", "ruff>=0.1", "pytest>=7.0", "types-PyYAML"]
 docs = ["mkdocs-material[imaging]>=9.6", "mkdocs-mermaid2-plugin>=1.2"]
 all = ["codefreedom[litellm,dev,docs]"]
