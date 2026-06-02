@@ -17,12 +17,6 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
-  pull_request:
-    branches: [main]
-    paths:
-      - "docker/claude-code/**"
-      - ".github/workflows/publish-docker.yml"
-      - "pyproject.toml"
   workflow_dispatch:
 
 env:

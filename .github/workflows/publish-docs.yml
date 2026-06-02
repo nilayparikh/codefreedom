@@ -1,0 +1,65 @@
+# ── CodeFreedom GitHub Pages Publish Workflow ─────────────────────────────────
+# Publishes /docs to GitHub Pages via the official actions/deploy-pages action.
+#
+# Triggered on: push to main, or manual dispatch.
+#
+# Uses the standard GitHub Pages deployment flow:
+#   1. Upload docs/ + README.md as the pages artifact
+#   2. Deploy to github-pages environment
+# ────────────────────────────────────────────────────────────────────────────────
+
+name: Publish Docs (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Pages
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare pages artifact
+        run: |
+          mkdir -p _site
+
+          # Copy docs as-is (retain folder structure)
+          cp -r docs/* _site/
+
+          # Copy README.md as index
+          cp README.md _site/index.md
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site/
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

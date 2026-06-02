@@ -13,18 +13,14 @@ CodeFreedom gives you a single CLI tool (`codefreedom` / `cf`) that:
 2. **Manages a LiteLLM proxy** — stateless by default, with optional PostgreSQL for the Admin UI, spend tracking, and key management.
 3. **Routes to any provider** — local self-hosted models, cloud APIs (DeepSeek, Azure, NVIDIA, OpenCode Zen), or any OpenAI/Anthropic-compatible endpoint.
 
-## Why CodeFreedom?
+## Features
 
-CodeFreedom extracts the **LiteLLM proxy** and **Claude Code launcher** from the [`.init`](https://github.com/nilayparikh/spark-init) stack into a standalone, portable tool. Where `.init` is a full Docker Compose stack with PostgreSQL, observability, and llama.cpp backends, CodeFreedom is the lightweight companion you can install anywhere and use with any LiteLLM-compatible backend.
-
-| Feature              | `.init`                 | `codefreedom`                             |
-| -------------------- | ----------------------- | ----------------------------------------- |
-| LiteLLM proxy        | ✅ (part of full stack) | ✅ (standalone, stateless)                |
-| Claude Code launcher | ✅ (`claude-code.py`)   | ✅ (`codefreedom claude`)                 |
-| PostgreSQL           | ✅ (bundled)            | ✅ (optional — connect external Postgres) |
-| llama.cpp backends   | ✅ (bundled)            | ❌ (use .init for local inference)        |
-| Observability        | ✅ (Grafana/Mimir/Loki) | ❌ (use .init)                            |
-| pip installable      | ❌                      | ✅                                        |
+| Feature              | codefreedom                                 |
+| -------------------- | ------------------------------------------- |
+| LiteLLM proxy        | ✅ Standalone, stateless proxy              |
+| Claude Code launcher | ✅ `codefreedom claude` CLI                 |
+| PostgreSQL           | ✅ Optional — connect any external Postgres |
+| pip installable      | ✅ `pip install codefreedom`                |
 
 ## Quick Start
 
@@ -166,13 +162,25 @@ Profiles control which model Claude Code uses and which API endpoint it routes t
 
 | Profile   | Model               | Description                                              |
 | --------- | ------------------- | -------------------------------------------------------- |
-| `default` | `CodeFreedom/Flash` | Base profile — routes through local LiteLLM proxy        |
-| `ultra`   | `CodeFreedom/Ultra` | Architecture, planning, complex reasoning                |
-| `pro`     | `CodeFreedom/Pro`   | Bounded implementation, precise code writing             |
-| `air`     | `CodeFreedom/Air`   | Mechanical scanning, large-file reading                  |
+| `default` | `CodeFreedom/Flash` | Base profile — routes through LiteLLM proxy              |
 | `bare`    | _(default)_         | Minimal — no model aliases, routes through LiteLLM proxy |
 
-Create custom profiles by editing `~/.codefreedom/profiles/claude-code.json`.
+Create custom profiles by editing `~/.codefreedom/profiles/claude-code.json`:
+
+```json
+{
+  "profiles": {
+    "my-custom": {
+      "description": "Custom profile — override model and endpoint",
+      "env": {
+        "CLAUDE_MODEL": "CodeFreedom/Ultra",
+        "ANTHROPIC_BASE_URL": "http://localhost:4000"
+      }
+    }
+  }
+}
+```
+
 A JSON Schema is provided at `~/.codefreedom/profiles/claude-code-profiles.schema.json`.
 
 ## Database (Optional)
@@ -212,15 +220,14 @@ See [LiteLLM Proxy → Database](docs/litellm.md#database-backends) for setup.
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md) — detailed setup guide
-- [LiteLLM Proxy](docs/litellm.md) — configuration and provider setup
-- [Claude Code Launcher](docs/claude-code.md) — profiles, Docker, and advanced usage
+- [Getting Started](https://nilayparikh.github.io/codefreedom/getting-started) — detailed setup guide
+- [LiteLLM Proxy](https://nilayparikh.github.io/codefreedom/litellm) — configuration and provider setup
+- [Claude Code Launcher](https://nilayparikh.github.io/codefreedom/claude-code) — profiles, Docker, and advanced usage
 
 ## Requirements
 
 - Python 3.10+
 - Docker (for Docker mode and LiteLLM proxy)
-- NVIDIA Container Toolkit (for GPU passthrough)
 - Node.js + `@anthropic-ai/claude-code` (for native/local mode only)
 
 ## License

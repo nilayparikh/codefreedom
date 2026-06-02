@@ -5,8 +5,6 @@
 # This is intentionally minimal — codefreedom is a CLI-first tool.
 # The LiteLLM proxy is the only service managed by docker compose.
 # Claude Code runs through the `codefreedom claude` or `cf cc` CLI.
-#
-# For the full stack (PostgreSQL, llama.cpp, observability), use .init.
 # ──────────────────────────────────────────────────────────────────────────────
 
 include:

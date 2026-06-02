@@ -1,7 +1,7 @@
 """Claude Code Docker launcher — runs Claude Code in a persistent container.
 
-Migrated from .init's claude-code.py. Provides the core execution engine
-for launching Claude Code through Docker with profile-based model routing.
+Provides the core execution engine for launching Claude Code through Docker
+with profile-based model routing."""
 """
 
 from __future__ import annotations

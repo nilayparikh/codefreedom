@@ -4,12 +4,11 @@ This guide walks you through installing and configuring CodeFreedom.
 
 ## Prerequisites
 
-| Dependency               | Required For                | Installation                                               |
-| ------------------------ | --------------------------- | ---------------------------------------------------------- |
-| Python 3.10+             | CLI                         | `python3 --version`                                        |
-| Docker                   | Docker mode + LiteLLM proxy | [docs.docker.com](https://docs.docker.com/engine/install/) |
-| NVIDIA Container Toolkit | GPU passthrough             | `nvidia-ctk runtime configure --runtime=docker`            |
-| Node.js + `claude` CLI   | Native/local mode           | `npm install -g @anthropic-ai/claude-code`                 |
+| Dependency             | Required For                | Installation                                               |
+| ---------------------- | --------------------------- | ---------------------------------------------------------- |
+| Python 3.10+           | CLI                         | `python3 --version`                                        |
+| Docker                 | Docker mode + LiteLLM proxy | [docs.docker.com](https://docs.docker.com/engine/install/) |
+| Node.js + `claude` CLI | Native/local mode           | `npm install -g @anthropic-ai/claude-code`                 |
 
 ## Installation
 
@@ -142,15 +141,14 @@ store_prompts_in_spend_logs: true
 
 See [LiteLLM Proxy → Database](litellm.md#database-backends) for details.
 
-If using `.init`'s PostgreSQL, ensure both projects share the same Docker network:
+To connect codefreedom to an existing PostgreSQL on a shared Docker network,
+add this to `~/.codefreedom/proxy/docker-compose.yml`:
 
 ```bash
-# The .init stack creates an 'init_default' network.
-# To connect codefreedom to it, add this to ~/.codefreedom/proxy/docker-compose.yml:
 networks:
   default:
     external: true
-    name: init_default
+    name: your_shared_network
 ```
 
 ## Launching Claude Code
