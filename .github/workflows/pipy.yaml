@@ -11,12 +11,13 @@ name: Publish to PyPI
 
 on:
   push:
+    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write   # Required for OIDC trusted publishing
+  id-token: write # Required for OIDC trusted publishing
 
 jobs:
   test:

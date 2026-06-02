@@ -76,25 +76,6 @@ codefreedom proxy --up --docker
 The Prisma migration runs automatically on first start — LiteLLM creates the
 schema in your PostgreSQL database.
 
-**Connecting to .init's PostgreSQL:**
-
-If you have the `.init` stack running, its PostgreSQL is available on the
-`init_default` Docker network. Add the network config to
-`~/.codefreedom/proxy/docker-compose.yml`:
-
-```yaml
-networks:
-  default:
-    external: true
-    name: init_default
-```
-
-Then set `DATABASE_URL` to point to the `postgres` container:
-
-```bash
-export DATABASE_URL="postgresql://litellm_interface:${INTERFACE_DB_PASSWORD}@postgres:5432/litellm_interface"
-```
-
 ## Provider Configuration
 
 Provider definitions live in `~/.codefreedom/proxy/config/providers/`. Each YAML file
@@ -251,5 +232,5 @@ Key settings in `config.yaml`:
 Prometheus metrics are exposed at `/metrics/`. Set `LITELLM_REQUIRE_AUTH_METRICS=true`
 to require authentication for the metrics endpoint.
 
-If you're using `.init`'s observability stack, Alloy can scrape these metrics
-by pointing to `http://litellm-codefreedom:4000/metrics/`.
+These metrics can be scraped by Prometheus or any OpenTelemetry-compatible
+collector (e.g., Alloy) by pointing to `http://litellm-codefreedom:4000/metrics/`.

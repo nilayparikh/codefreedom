@@ -173,5 +173,7 @@ class TestInitCodefreedom:
         profiles_dst = cf_dir / "profiles" / "claude-code.json"
         proxy_dst = cf_dir / "proxy"
 
-        assert str(profiles_dst).endswith(".codefreedom/profiles/claude-code.json")
-        assert str(proxy_dst).endswith(".codefreedom/proxy")
+        assert profiles_dst.as_posix().endswith(
+            ".codefreedom/profiles/claude-code.json"
+        )
+        assert proxy_dst.as_posix().endswith(".codefreedom/proxy")

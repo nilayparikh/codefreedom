@@ -4,8 +4,8 @@ The `codefreedom claude` (or `cf cc`) command is the primary way to launch
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) with
 profile-based model routing through your LiteLLM proxy.
 
-> This replaces `claude-code.py` and `claude-code.sh` from the `.init` stack.
-> `claude-code.sh` is no longer supported — use `codefreedom claude` instead.
+> `codefreedom claude` is the modern CLI for launching Claude Code with
+> profile-based model routing. It supersedes standalone shell scripts.
 
 ## Quick Reference
 
@@ -45,12 +45,11 @@ codefreedom claude --profile pro --worktree feature-x
 
 ## Dependencies
 
-| Dependency                 | Required For                    | Notes                                           |
-| -------------------------- | ------------------------------- | ----------------------------------------------- |
-| `docker`                   | Docker mode                     | Standard install                                |
-| `claude` CLI               | Native/local mode               | `npm install -g @anthropic-ai/claude-code`      |
-| `jq`                       | `--profile` / `--list-profiles` | `apt install jq` or `brew install jq`           |
-| `NVIDIA Container Toolkit` | GPU passthrough                 | `nvidia-ctk runtime configure --runtime=docker` |
+| Dependency   | Required For                    | Notes                                      |
+| ------------ | ------------------------------- | ------------------------------------------ |
+| `docker`     | Docker mode                     | Standard install                           |
+| `claude` CLI | Native/local mode               | `npm install -g @anthropic-ai/claude-code` |
+| `jq`         | `--profile` / `--list-profiles` | `apt install jq` or `brew install jq`      |
 
 The Docker image is pulled from GHCR automatically — no local build needed for normal usage.
 
@@ -183,20 +182,30 @@ profile env     (mode-specific overrides from profiles)
 script defaults (fallback values in codefreedom)
 ```
 
-2. **Profile inheritance:** Most profiles inherit from `default`. The inheritance rules are:
+2. **Profile inheritance:** Custom profiles inherit from `default` automatically.
 
-| Profile               | Inheritance             | Effect                                                                                                                           |
-| --------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `default`             | Standalone              | Loads its own env vars directly                                                                                                  |
-| `bare`                | Standalone              | Loads only its minimal env vars — **no model aliases, no sandbox settings, no preferences**. Still routes through LiteLLM proxy. |
-| `ultra`, `pro`, `air` | Inherits from `default` | Loads `default` env vars first, then overlays profile-specific overrides                                                         |
+| Profile   | Inheritance | Effect                                                                                                                 |
+| --------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `default` | Standalone  | Loads its own env vars directly                                                                                        |
+| `bare`    | Standalone  | Loads only minimal env vars — **no model aliases, no sandbox settings, no preferences**. Still routes through LiteLLM. |
 
-This means `ultra`, `pro`, and `air` only need to specify what's different
-(`CLAUDE_MODEL`). Everything else — sandbox settings, model aliases, IDE
-suppression flags — comes from `default`.
+3. **In sandbox mode, each profile gets an isolated `~/.codefreedom/{profile}/.claude` directory.**
+   In native mode, profiles use the host's `~/.claude` directly.
 
-3. **Custom profiles** also inherit from `default` automatically. Create a
-   profile with only the vars you want to override:
+4. Profiles are resolved on the **host side** before Docker exec — no
+   container rebuild needed.
+
+### Built-in Profiles
+
+| Profile   | Model               | Inheritance          | Description                                              |
+| --------- | ------------------- | -------------------- | -------------------------------------------------------- |
+| `default` | `CodeFreedom/Flash` | Standalone (base)    | General purpose — routes through LiteLLM proxy           |
+| `bare`    | _(default)_         | Standalone (minimal) | Minimal — no model aliases, routes through LiteLLM proxy |
+
+### Creating Custom Profiles
+
+Custom profiles automatically inherit from `default`. Create a profile with
+only the vars you want to override:
 
 ```json
 {
@@ -211,26 +220,6 @@ suppression flags — comes from `default`.
   }
 }
 ```
-
-4. **In sandbox mode, each profile gets an isolated `~/.codefreedom/{profile}/.claude` directory.**
-   In native mode, profiles use the host's `~/.claude` directly.
-   This means:
-   - Sandbox: conversation history, settings, and session state are **isolated per profile**
-   - Sandbox: `~/.codefreedom/` houses all sandbox state, separate from your host `~/.claude`
-   - Native: `~/.claude` on the host is shared across profiles (traditional behavior)
-
-5. Profiles are resolved on the **host side** before Docker exec — no
-   container rebuild needed.
-
-### Built-in Profiles
-
-| Profile   | Model               | Inheritance             | Best For                                                |
-| --------- | ------------------- | ----------------------- | ------------------------------------------------------- |
-| `default` | `CodeFreedom/Flash` | Standalone (base)       | General purpose, discovery, scanning                    |
-| `ultra`   | `CodeFreedom/Ultra` | Inherits from `default` | Architecture, planning, complex reasoning               |
-| `pro`     | `CodeFreedom/Pro`   | Inherits from `default` | Bounded implementation, precise code writing            |
-| `air`     | `CodeFreedom/Air`   | Inherits from `default` | Mechanical scanning, large-file reading                 |
-| `bare`    | _(default)_         | Standalone (minimal)    | Minimal mode — no aliases, routes through LiteLLM proxy |
 
 ### Multi-Endpoint Profiles
 
@@ -259,22 +248,3 @@ and `ANTHROPIC_AUTH_TOKEN`:
   }
 }
 ```
-
-## Migrating from .init
-
-If you previously used `.init`'s `claude-code.py` or `claude-code.sh`:
-
-| Old (.init)                        | New (codefreedom)                    |
-| ---------------------------------- | ------------------------------------ |
-| `./claude-code.py`                 | `codefreedom claude`                 |
-| `./claude-code.sh`                 | `codefreedom claude`                 |
-| `./claude-code.py --profile pro`   | `codefreedom claude --profile pro`   |
-| `./claude-code.py --local`         | `codefreedom claude --sandbox`       |
-| `./claude-code.py --native`        | `codefreedom claude --native-models` |
-| `./claude-code.py --stop`          | `codefreedom claude --stop`          |
-| `./claude-code.py --status`        | `codefreedom claude --status`        |
-| `./claude-code.py --list-profiles` | `codefreedom claude --list-profiles` |
-
-The profiles file is at `~/.codefreedom/profiles/claude-code.json` (initialized
-via `codefreedom --init`). Copy your custom profiles from `.init`'s root
-`claude-code-profiles.json` into `~/.codefreedom/profiles/claude-code.json`.
