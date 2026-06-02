@@ -133,7 +133,9 @@ def _init_codefreedom(
     elif secrets_src.exists():
         cf_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(secrets_src, secrets_dst)
-        print(f"[init] [OK] Created {secrets_dst} (fully commented -- add your API keys)")
+        print(
+            f"[init] [OK] Created {secrets_dst} (fully commented -- add your API keys)"
+        )
         created_any = True
 
     if created_any:
@@ -152,7 +154,9 @@ def _init_codefreedom(
         print("[init] Nothing to do -- all files already exist.")
     else:
         print()
-        print("[init] No source files found to copy. Reinstall the package or file a bug report.")
+        print(
+            "[init] No source files found to copy. Reinstall the package or file a bug report."
+        )
 
     return 0
 
