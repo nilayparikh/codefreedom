@@ -106,17 +106,17 @@ jobs:
 
           # Validate schema and profile JSON
           python -c "
-import json
-from pathlib import Path
-p = Path.home() / '.codefreedom' / 'profiles' / 'claude-code.json'
-d = json.loads(p.read_text())
-assert 'default' in d['profiles']
-e = d['profiles']['default']['env']
-assert 'CLAUDE_MODEL' in e
-assert 'ANTHROPIC_BASE_URL' in e
-assert 'ANTHROPIC_AUTH_TOKEN' in e
-print('[OK]')
-"
+          import json
+          from pathlib import Path
+          p = Path.home() / '.codefreedom' / 'profiles' / 'claude-code.json'
+          d = json.loads(p.read_text())
+          assert 'default' in d['profiles']
+          e = d['profiles']['default']['env']
+          assert 'CLAUDE_MODEL' in e
+          assert 'ANTHROPIC_BASE_URL' in e
+          assert 'ANTHROPIC_AUTH_TOKEN' in e
+          print('[OK]')
+          "
           # Proxy validate
           codefreedom proxy --validate 2>&1 || true
 
