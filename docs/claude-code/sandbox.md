@@ -57,7 +57,7 @@ The resolved image is: `{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}`.
 
 **Method 2: Profile `sandbox_image`** (per-profile)
 
-Set `sandbox_image` in the profile to override for that profile only. Profile values take precedence over environment variables. See [Profile System → Sandbox Image per Profile](claude-code.md#sandbox-image-per-profile).
+Set `sandbox_image` in the profile to override for that profile only. Profile values take precedence over environment variables. See [Profile System → Sandbox Image per Profile](../claude-code.md#sandbox-image-per-profile).
 
 ## GPU Requirements
 
