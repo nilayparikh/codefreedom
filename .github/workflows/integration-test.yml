@@ -125,8 +125,8 @@ jobs:
           test -f ~/.codefreedom/proxy/config/config.yaml || { echo "MISSING: proxy/config/config.yaml"; exit 1; }
           echo "✓ proxy/config/config.yaml exists"
 
-          test -f ~/.codefreedom/proxy/docker-compose.yml || { echo "MISSING: proxy/docker-compose.yml"; exit 1; }
-          echo "✓ proxy/docker-compose.yml exists"
+          test -f ~/.codefreedom/proxy/docker-compose.yaml || { echo "MISSING: proxy/docker-compose.yaml"; exit 1; }
+          echo "✓ proxy/docker-compose.yaml exists"
 
           # Verify provider dirs exist
           test -d ~/.codefreedom/proxy/config/providers || { echo "MISSING: proxy/config/providers/"; exit 1; }

@@ -1,50 +1,59 @@
-"""Tests for --init CLI command — bootstraps ~/.codefreedom/ from examples."""
+"""Tests for --init CLI command — bootstraps ~/.codefreedom/ from bundled examples."""
 
 import json
 from pathlib import Path
+from unittest import mock
 
 from codefreedom.cli.main import _init_codefreedom
+
+
+def _setup_bundled_examples(root: Path) -> Path:
+    """Create a fake bundled examples directory at root/examples/ for testing."""
+    examples = root / "examples"
+
+    # Profiles
+    profiles_dir = examples / "profiles"
+    profiles_dir.mkdir(parents=True)
+    (profiles_dir / "claude-code-profiles.json").write_text(
+        json.dumps({"profiles": {"default": {"description": "test", "env": {}}}})
+    )
+    (profiles_dir / "claude-code-profiles.schema.json").write_text(
+        json.dumps({"$schema": "http://json-schema.org/draft-07/schema#"})
+    )
+
+    # Proxy
+    proxy_dir = examples / "proxy"
+    proxy_dir.mkdir(parents=True)
+    (proxy_dir / "config.yaml").write_text("# test config")
+    (proxy_dir / "docker-compose.yaml").write_text("version: '3'")
+    providers_dir = proxy_dir / "providers"
+    providers_dir.mkdir(parents=True)
+    (providers_dir / "test.yaml").write_text("# test provider")
+
+    # Env templates
+    (examples / ".env.example").write_text(
+        "# LITELLM_PORT=4000\n# LITELLM_LOG_LEVEL=INFO\n"
+    )
+    (examples / ".env.secrets.example").write_text(
+        "# LITELLM_MASTER_KEY=sk-change-me\n"
+    )
+
+    return examples
 
 
 class TestInitCodefreedom:
     """Tests for _init_codefreedom."""
 
     def test_creates_profiles_and_proxy(self, tmp_path):
-        """When neither exists, init creates profiles, schema, proxy, and env files."""
-        proj_root = tmp_path / "project"
+        """When nothing exists, init creates profiles, schema, proxy, and env files."""
         cf_dir = tmp_path / ".codefreedom"
+        examples = _setup_bundled_examples(tmp_path)
 
-        # Set up fake project root with examples
-        profiles_src = proj_root / "profiles.examples" / "claude-code-profiles.json"
-        profiles_src.parent.mkdir(parents=True)
-        profiles_src.write_text(
-            json.dumps({"profiles": {"default": {"description": "test", "env": {}}}})
-        )
+        with mock.patch(
+            "codefreedom.cli.main._find_bundled_examples", return_value=examples
+        ):
+            result = _init_codefreedom(force=False, cf_dir=cf_dir)
 
-        schema_src = (
-            proj_root / "profiles.examples" / "claude-code-profiles.schema.json"
-        )
-        schema_src.write_text(
-            json.dumps({"$schema": "http://json-schema.org/draft-07/schema#"})
-        )
-
-        proxy_src = proj_root / "litellm.examples"
-        proxy_src.mkdir(parents=True)
-        (proxy_src / "config.yaml").write_text("# test config")
-        (proxy_src / "docker-compose.yml").write_text("version: '3'")
-        providers_src = proxy_src / "providers"
-        providers_src.mkdir(parents=True)
-        (providers_src / "test.yaml").write_text("# test provider")
-
-        # Set up env example files (fully commented)
-        (proj_root / ".env.example").write_text(
-            "# LITELLM_PORT=4000\n# LITELLM_LOG_LEVEL=INFO\n"
-        )
-        (proj_root / ".env.secrets.example").write_text(
-            "# LITELLM_MASTER_KEY=sk-change-me\n"
-        )
-
-        result = _init_codefreedom(force=False, project_root=proj_root, cf_dir=cf_dir)
         assert result == 0
 
         # Verify profiles were created
@@ -63,28 +72,25 @@ class TestInitCodefreedom:
         # Verify proxy was created with correct nested structure
         proxy_dst = cf_dir / "proxy"
         assert proxy_dst.exists()
-        assert (proxy_dst / "docker-compose.yml").exists()
+        assert (proxy_dst / "docker-compose.yaml").exists()
         assert (proxy_dst / "config" / "config.yaml").exists()
         assert (proxy_dst / "config" / "providers" / "test.yaml").exists()
 
         # Verify .env was created (commented template)
         env_dst = cf_dir / ".env"
         assert env_dst.exists()
-        env_content = env_dst.read_text()
-        assert "# LITELLM_PORT=4000" in env_content
+        assert "# LITELLM_PORT=4000" in env_dst.read_text()
 
         # Verify .env.secrets was created (commented template)
         secrets_dst = cf_dir / ".env.secrets"
         assert secrets_dst.exists()
-        secrets_content = secrets_dst.read_text()
-        assert "# LITELLM_MASTER_KEY=sk-change-me" in secrets_content
+        assert "# LITELLM_MASTER_KEY=sk-change-me" in secrets_dst.read_text()
 
     def test_init_skips_when_exists_and_no_force(self, tmp_path):
         """When files exist and force=False, init does nothing (including env files)."""
-        proj_root = tmp_path / "project"
         cf_dir = tmp_path / ".codefreedom"
 
-        # Pre-create destination files
+        # Pre-create destination files with existing content
         profiles_dst = cf_dir / "profiles" / "claude-code.json"
         profiles_dst.parent.mkdir(parents=True)
         profiles_dst.write_text("existing content")
@@ -93,26 +99,27 @@ class TestInitCodefreedom:
         proxy_config = proxy_dst / "config"
         proxy_config.mkdir(parents=True)
         (proxy_config / "config.yaml").write_text("existing")
-        (proxy_dst / "docker-compose.yml").write_text("existing compose")
+        (proxy_dst / "docker-compose.yaml").write_text("existing compose")
 
-        # Pre-create env files (should NOT be overwritten)
         (cf_dir / ".env").write_text("existing env")
         (cf_dir / ".env.secrets").write_text("existing secrets")
 
-        # Setup source examples (different content)
-        profiles_src = proj_root / "profiles.examples" / "claude-code-profiles.json"
-        profiles_src.parent.mkdir(parents=True)
-        profiles_src.write_text(json.dumps({"profiles": {"default": {"env": {}}}}))
+        # Setup source examples with different content
+        examples = _setup_bundled_examples(tmp_path)
+        # Override with newer content so we can verify it was NOT copied
+        (examples / "profiles" / "claude-code-profiles.json").write_text(
+            json.dumps({"profiles": {"default": {"env": {}}}})
+        )
+        (examples / "proxy" / "config.yaml").write_text("new content")
+        (examples / "proxy" / "docker-compose.yaml").write_text("new compose")
+        (examples / ".env.example").write_text("new env")
+        (examples / ".env.secrets.example").write_text("new secrets")
 
-        proxy_src = proj_root / "litellm.examples"
-        proxy_src.mkdir(parents=True)
-        (proxy_src / "config.yaml").write_text("new content")
-        (proxy_src / "docker-compose.yml").write_text("new compose")
+        with mock.patch(
+            "codefreedom.cli.main._find_bundled_examples", return_value=examples
+        ):
+            result = _init_codefreedom(force=False, cf_dir=cf_dir)
 
-        (proj_root / ".env.example").write_text("new env")
-        (proj_root / ".env.secrets.example").write_text("new secrets")
-
-        result = _init_codefreedom(force=False, project_root=proj_root, cf_dir=cf_dir)
         assert result == 0
         # Content should NOT have changed
         assert profiles_dst.read_text() == "existing content"
@@ -122,7 +129,6 @@ class TestInitCodefreedom:
 
     def test_init_force_overwrites(self, tmp_path):
         """With force=True, init overwrites existing files."""
-        proj_root = tmp_path / "project"
         cf_dir = tmp_path / ".codefreedom"
 
         # Pre-create destination with old content
@@ -133,42 +139,46 @@ class TestInitCodefreedom:
         proxy_config = proxy_dst / "config"
         proxy_config.mkdir(parents=True)
         (proxy_config / "config.yaml").write_text("old proxy")
-        (proxy_dst / "docker-compose.yml").write_text("old compose")
+        (proxy_dst / "docker-compose.yaml").write_text("old compose")
 
-        # Setup source examples
+        # Setup source examples with new content
+        examples = _setup_bundled_examples(tmp_path)
         new_content = json.dumps(
             {"profiles": {"test": {"description": "new", "env": {"KEY": "val"}}}}
         )
-        profiles_src = proj_root / "profiles.examples" / "claude-code-profiles.json"
-        profiles_src.parent.mkdir(parents=True)
-        profiles_src.write_text(new_content)
+        (examples / "profiles" / "claude-code-profiles.json").write_text(new_content)
+        (examples / "proxy" / "config.yaml").write_text("new proxy")
+        (examples / "proxy" / "docker-compose.yaml").write_text("new compose")
 
-        proxy_src = proj_root / "litellm.examples"
-        proxy_src.mkdir(parents=True)
-        (proxy_src / "config.yaml").write_text("new proxy")
-        (proxy_src / "docker-compose.yml").write_text("new compose")
+        with mock.patch(
+            "codefreedom.cli.main._find_bundled_examples", return_value=examples
+        ):
+            result = _init_codefreedom(force=True, cf_dir=cf_dir)
 
-        result = _init_codefreedom(force=True, project_root=proj_root, cf_dir=cf_dir)
         assert result == 0
         assert profiles_dst.read_text() == new_content
         assert (proxy_dst / "config" / "config.yaml").read_text() == "new proxy"
-        assert (proxy_dst / "docker-compose.yml").read_text() == "new compose"
+        assert (proxy_dst / "docker-compose.yaml").read_text() == "new compose"
 
     def test_init_missing_examples_graceful(self, tmp_path):
-        """When examples don't exist, init reports errors but returns 0."""
-        proj_root = tmp_path / "project"  # empty, no examples
+        """When bundled examples don't exist, init reports errors but returns 0."""
         cf_dir = tmp_path / ".codefreedom"
+        empty_examples = tmp_path / "empty_examples"
+        empty_examples.mkdir()
 
-        result = _init_codefreedom(force=False, project_root=proj_root, cf_dir=cf_dir)
+        with mock.patch(
+            "codefreedom.cli.main._find_bundled_examples", return_value=empty_examples
+        ):
+            result = _init_codefreedom(force=False, cf_dir=cf_dir)
+
         # Returns 0 even when no examples found (not a fatal error)
         assert result == 0
 
     def test_init_paths_are_correct(self):
-        """Verify that --init computes correct source/destination paths."""
+        """Verify that --init computes correct destination paths."""
         from pathlib import Path as P
 
         cf_dir = P("/test/.codefreedom")
-        proj = P("/test/project")
 
         profiles_dst = cf_dir / "profiles" / "claude-code.json"
         proxy_dst = cf_dir / "proxy"

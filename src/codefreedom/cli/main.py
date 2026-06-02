@@ -13,11 +13,6 @@ from pathlib import Path
 _CODEFREEDOM_DIR = Path.home() / ".codefreedom"
 
 
-def _find_project_root() -> Path:
-    """Find the project root directory (where profiles.examples/ and litellm.examples/ live)."""
-    return Path(__file__).resolve().parent.parent.parent.parent
-
-
 def _find_bundled_examples() -> Path:
     """Find the bundled examples directory inside the installed package."""
     return Path(__file__).resolve().parent.parent / "examples"
@@ -25,38 +20,20 @@ def _find_bundled_examples() -> Path:
 
 def _init_codefreedom(
     force: bool = False,
-    project_root: Path | None = None,
     cf_dir: Path | None = None,
 ) -> int:
     """Initialize ~/.codefreedom/ with default profiles and proxy configs.
 
-    Copies from the project's examples directories (profiles.examples/
-    and litellm.examples/) or from the bundled package examples into
-    ~/.codefreedom/.
-
-    Args:
-        force: Overwrite existing files.
-        project_root: Override the project root (for testing).
-        cf_dir: Override the ~/.codefreedom directory (for testing).
+    Copies from the bundled package examples into ~/.codefreedom/.
     """
-    if project_root is None:
-        project_root = _find_project_root()
+
     if cf_dir is None:
         cf_dir = _CODEFREEDOM_DIR
 
     bundled = _find_bundled_examples()
 
-    profiles_src = project_root / "profiles.examples" / "claude-code-profiles.json"
-    schema_src = project_root / "profiles.examples" / "claude-code-profiles.schema.json"
-    proxy_src = project_root / "litellm.examples"
-
-    # Fall back to bundled examples if project-root sources don't exist
-    if not profiles_src.exists():
-        profiles_src = bundled / "profiles" / "claude-code-profiles.json"
-    if not schema_src.exists():
-        schema_src = bundled / "profiles" / "claude-code-profiles.schema.json"
-    if not proxy_src.exists():
-        proxy_src = bundled / "proxy"
+    profiles_src = bundled / "profiles"
+    proxy_src = bundled / "proxy"
 
     profiles_dst_dir = cf_dir / "profiles"
     profiles_dst = profiles_dst_dir / "claude-code.json"
@@ -71,31 +48,29 @@ def _init_codefreedom(
         print(f"[init] Profiles already exist: {profiles_dst}")
         print("       Use --init --force to overwrite.")
         skipped_any = True
-    elif profiles_src.exists():
+    elif (profiles_src / "claude-code-profiles.json").exists():
         profiles_dst_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(profiles_src, profiles_dst)
+        shutil.copy2(profiles_src / "claude-code-profiles.json", profiles_dst)
         print(f"[init] [OK] Created {profiles_dst}")
         created_any = True
     else:
-        print(f"[init] [FAIL] Profiles example not found: {profiles_src}")
-        print("       Make sure profiles.examples/claude-code-profiles.json exists.")
+        print(f"[init] [FAIL] Bundled profiles example not found")
+        print("       Reinstall the package or file a bug report.")
 
     # ── Schema ─────────────────────────────────────────────────────────────
     if not force and schema_dst.exists():
         print(f"[init] Schema already exists: {schema_dst}")
         skipped_any = True
-    elif schema_src.exists():
+    elif (profiles_src / "claude-code-profiles.schema.json").exists():
         profiles_dst_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(schema_src, schema_dst)
+        shutil.copy2(profiles_src / "claude-code-profiles.schema.json", schema_dst)
         print(f"[init] [OK] Created {schema_dst}")
         created_any = True
     else:
-        print(f"[init] [FAIL] Schema example not found: {schema_src}")
-        print(
-            "       Make sure profiles.examples/claude-code-profiles.schema.json exists."
-        )
+        print(f"[init] [FAIL] Bundled schema example not found")
+        print("       Reinstall the package or file a bug report.")
 
-    # ── Proxy configs (litellm) ─────────────────────────────────────────────
+    # ── Proxy configs ──────────────────────────────────────────────────────
     if not force and proxy_dst.exists():
         print(f"[init] Proxy configs already exist: {proxy_dst}")
         print("       Use --init --force to overwrite.")
@@ -104,10 +79,6 @@ def _init_codefreedom(
         if proxy_dst.exists() and force:
             shutil.rmtree(proxy_dst)
 
-        # Source layout (litellm.examples/ or bundled proxy/):
-        #   config.yaml          → proxy/config/config.yaml
-        #   docker-compose.yml   → proxy/docker-compose.yml
-        #   providers/           → proxy/config/providers/
         proxy_config_dir = proxy_dst / "config"
         proxy_config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -116,10 +87,10 @@ def _init_codefreedom(
         if src_config.exists():
             shutil.copy2(src_config, proxy_config_dir / "config.yaml")
 
-        # Copy docker-compose.yml to proxy root
-        src_compose = proxy_src / "docker-compose.yml"
+        # Copy docker-compose.yaml to proxy root
+        src_compose = proxy_src / "docker-compose.yaml"
         if src_compose.exists():
-            shutil.copy2(src_compose, proxy_dst / "docker-compose.yml")
+            shutil.copy2(src_compose, proxy_dst / "docker-compose.yaml")
 
         # Copy providers into config/providers/
         src_providers = proxy_src / "providers"
@@ -132,20 +103,12 @@ def _init_codefreedom(
         print(f"[init] [OK] Created {proxy_dst}")
         created_any = True
     else:
-        print(f"[init] [FAIL] Proxy examples not found: {proxy_src}")
-        print("       Make sure litellm.examples/ exists.")
+        print(f"[init] [FAIL] Bundled proxy examples not found")
+        print("       Reinstall the package or file a bug report.")
 
     # ── Environment files (.env / .env.secrets) ────────────────────────────
-    # Copy fully-commented templates from project root or bundled examples.
-    # These are only created if the destination file doesn't already exist
-    # (never overwritten -- user edits them manually).
-    env_src = project_root / ".env.example"
-    secrets_src = project_root / ".env.secrets.example"
-
-    if not env_src.exists():
-        env_src = bundled / ".env.example"
-    if not secrets_src.exists():
-        secrets_src = bundled / ".env.secrets.example"
+    env_src = bundled / ".env.example"
+    secrets_src = bundled / ".env.secrets.example"
 
     env_dst = cf_dir / ".env"
     secrets_dst = cf_dir / ".env.secrets"
@@ -161,9 +124,10 @@ def _init_codefreedom(
         )
         created_any = True
     else:
-        print(f"[init] [FAIL] .env.example not found: {env_src}")
+        print(f"[init] [FAIL] Bundled .env.example not found")
+        print("       Reinstall the package or file a bug report.")
 
-    # .env.secrets is optional -- only copy if source exists and dest doesn't
+    # .env.secrets is optional
     if secrets_dst.exists():
         print(f"[init] .env.secrets already exists: {secrets_dst} (skipping)")
     elif secrets_src.exists():
@@ -188,7 +152,7 @@ def _init_codefreedom(
         print("[init] Nothing to do -- all files already exist.")
     else:
         print()
-        print("[init] No source files found to copy.")
+        print("[init] No source files found to copy. Reinstall the package or file a bug report.")
 
     return 0
 

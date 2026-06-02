@@ -46,7 +46,7 @@ codefreedom --init
 #   ~/.codefreedom/profiles/claude-code-profiles.schema.json
 #   ~/.codefreedom/proxy/config/config.yaml
 #   ~/.codefreedom/proxy/config/providers/*.yaml
-#   ~/.codefreedom/proxy/docker-compose.yml
+#   ~/.codefreedom/proxy/docker-compose.yaml
 ```
 
 Edit these files to customize your setup:

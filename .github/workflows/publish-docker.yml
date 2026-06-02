@@ -14,9 +14,6 @@
 name: Publish Docker Images
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
 
 env:

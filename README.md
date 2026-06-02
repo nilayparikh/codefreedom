@@ -65,7 +65,7 @@ This creates:
 │   ├── claude-code.json                  # Profile definitions
 │   └── claude-code-profiles.schema.json  # JSON Schema for validation
 └── proxy/
-    ├── docker-compose.yml                # Docker Compose for LiteLLM
+    ├── docker-compose.yaml                # Docker Compose for LiteLLM
     └── config/
         ├── config.yaml                   # LiteLLM proxy configuration
         └── providers/                    # Provider-specific configs

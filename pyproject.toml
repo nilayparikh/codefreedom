@@ -57,7 +57,6 @@ codefreedom = [
     "examples/.env.example",
     "examples/.env.secrets.example",
     "examples/profiles/*.json",
-    "examples/proxy/*.yml",
     "examples/proxy/*.yaml",
     "examples/proxy/providers/*.yaml",
 ]

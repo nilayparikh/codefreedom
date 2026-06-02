@@ -66,7 +66,7 @@ This populates:
 │   ├── claude-code.json                  # Profile definitions
 │   └── claude-code-profiles.schema.json  # JSON Schema
 └── proxy/
-    ├── docker-compose.yml                # Docker Compose for LiteLLM
+    ├── docker-compose.yaml                # Docker Compose for LiteLLM
     └── config/
         ├── config.yaml                   # LiteLLM configuration
         └── providers/                    # Provider-specific configs
@@ -157,7 +157,7 @@ store_prompts_in_spend_logs: true
 See [Proxy → Database](proxy.md#database-backends) for details.
 
 To connect codefreedom to an existing PostgreSQL on a shared Docker network,
-add this to `~/.codefreedom/proxy/docker-compose.yml`:
+add this to `~/.codefreedom/proxy/docker-compose.yaml`:
 
 ```bash
 networks:

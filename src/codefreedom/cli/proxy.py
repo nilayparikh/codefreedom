@@ -26,7 +26,7 @@ _CODEFREEDOM_DIR = Path.home() / ".codefreedom"
 
 def _find_compose_file() -> Optional[Path]:
     """Find the LiteLLM docker-compose file in ~/.codefreedom/proxy/."""
-    candidate = _CODEFREEDOM_DIR / "proxy" / "docker-compose.yml"
+    candidate = _CODEFREEDOM_DIR / "proxy" / "docker-compose.yaml"
     if candidate.exists():
         return candidate
     return None
@@ -76,7 +76,7 @@ def _start_compose() -> int:
     """Start LiteLLM via docker compose."""
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yml")
+        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
         eprint("   Run: codefreedom --init")
         return 1
 
@@ -162,7 +162,7 @@ def _stop() -> int:
     """Stop the LiteLLM proxy."""
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yml")
+        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
         eprint("   Run: codefreedom --init")
         return 1
 
@@ -184,7 +184,7 @@ def _status() -> int:
     """Show LiteLLM proxy status."""
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yml")
+        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
         eprint("   Run: codefreedom --init")
         return 1
 

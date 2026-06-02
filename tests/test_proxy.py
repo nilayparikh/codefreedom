@@ -25,7 +25,7 @@ class TestFindComposeFile:
     """Tests for _find_compose_file — only ~/.codefreedom/proxy/."""
 
     def test_finds_in_codefreedom_dir(self, monkeypatch, tmp_path):
-        compose = tmp_path / "proxy" / "docker-compose.yml"
+        compose = tmp_path / "proxy" / "docker-compose.yaml"
         compose.parent.mkdir(parents=True)
         compose.write_text("")
         monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
