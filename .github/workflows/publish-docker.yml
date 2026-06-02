@@ -104,7 +104,7 @@ jobs:
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.GHCR_REPO }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -170,7 +170,7 @@ jobs:
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.GHCR_REPO }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -236,7 +236,7 @@ jobs:
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.GHCR_REPO }}
           subject-digest: ${{ steps.build.outputs.digest }}
