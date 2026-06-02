@@ -48,17 +48,30 @@ Repository = "https://github.com/nilayparikh/codefreedom"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.pylint.main]
-# Tests don't need docstrings on every method, and pytest is used implicitly
-ignored-modules = ["tests.*"]
+[tool.setuptools.package-data]
+codefreedom = [
+    "examples/.env.example",
+    "examples/.env.secrets.example",
+    "examples/profiles/*.json",
+    "examples/proxy/*.yml",
+    "examples/proxy/*.yaml",
+    "examples/proxy/providers/*.yaml",
+]
 
-[tool.pylint."messages control"]
+# ── Pylint ───────────────────────────────────────────────────────────────────
+[tool.pylint.messages_control]
 disable = [
+    "C0103",                                  # invalid-name — too strict for project naming conventions
+    "C0301",                                  # allow long lines for better readability in some cases
     "missing-function-docstring",             # tests don't need per-method docstrings
     "missing-class-docstring",                # test classes are self-documenting
     "unused-import",                          # pytest fixture imports look unused
     "use-implicit-booleaness-not-comparison", # assert == {} is clearer in tests
 ]
+
+[tool.pylint.main]
+# Tests don't need docstrings on every method, and pytest is used implicitly
+ignored-modules = ["tests.*"]
 
 [tool.mypy]
 ignore_missing_imports = true

@@ -64,8 +64,12 @@ def load_profile_env(
     profile_name: str,
     profiles_path: Path,
     base_env: Dict[str, str],
+    mode: str | None = None,
 ) -> Dict[str, str]:
     """Load a named profile's env vars, resolving ${VAR} references from base_env.
+
+    If *mode* is provided ("sandbox" | "local"), mode-specific env overrides
+    (profile.{mode}.env) are merged on top of the base env with inheritance.
 
     Returns the merged env dict for the profile.
     """
@@ -93,6 +97,10 @@ def load_profile_env(
         overrides = resolve_env(env_def, {**base_env, **merged})
         merged.update(overrides)
 
+    # Apply mode-specific overrides (sandbox or local)
+    if mode is not None:
+        _merge_mode_env(merged, profile_def, profiles, profile_name, mode, base_env)
+
     # Log what was loaded (masking sensitive values)
     for key in sorted(merged.keys()):
         val = merged[key]
@@ -109,6 +117,63 @@ def load_profile_env(
     return merged
 
 
+def _merge_mode_env(
+    merged: Dict[str, str],
+    profile_def: dict,
+    profiles: dict,
+    profile_name: str,
+    mode: str,
+    base_env: Dict[str, str],
+) -> None:
+    """Merge {mode}.env overrides on top of *merged* with inheritance."""
+    mode_env_def = profile_def.get(mode, {}).get("env", {})
+
+    if profile_name in ("default", "bare"):
+        # Standalone: only this profile's mode env
+        if mode_env_def:
+            eprint(f"[PROFILE] Applying '{mode}' overrides for '{profile_name}'...")
+            merged.update(resolve_env(mode_env_def, {**base_env, **merged}))
+    else:
+        # Inherited: default's mode env first, then profile's overrides
+        default_mode_env = profiles.get("default", {}).get(mode, {}).get("env", {})
+        if default_mode_env:
+            eprint(f"[PROFILE] Applying '{mode}' overrides from 'default'...")
+            merged.update(resolve_env(default_mode_env, {**base_env, **merged}))
+        if mode_env_def:
+            eprint(f"[PROFILE] Applying '{mode}' overrides for '{profile_name}'...")
+            merged.update(resolve_env(mode_env_def, {**base_env, **merged}))
+
+
+def get_profile_sandbox_image(
+    profile_name: str,
+    profiles_path: Path,
+) -> str | None:
+    """Get the sandbox image for a profile, respecting inheritance.
+
+    Returns None if no sandbox_image is set anywhere in the chain.
+    """
+    profiles = load_profiles(profiles_path)
+
+    if profile_name not in profiles:
+        return None
+
+    profile_def = profiles[profile_name]
+    sandbox = profile_def.get("sandbox_image")
+
+    if sandbox:
+        return sandbox
+
+    # Inheritance: if not set on this profile, fall back to default
+    if profile_name not in ("default", "bare"):
+        default_def = profiles.get("default", {})
+        sandbox = default_def.get("sandbox_image")
+        if sandbox:
+            eprint(f"[PROFILE] '{profile_name}' inherits sandbox_image from 'default'")
+            return sandbox
+
+    return None
+
+
 def list_profiles(profiles_path: Path) -> List[Dict[str, Any]]:
     """Return a list of profile metadata for display."""
     if not profiles_path.exists():
@@ -120,11 +185,15 @@ def list_profiles(profiles_path: Path) -> List[Dict[str, Any]]:
     for name in sorted(profiles.keys()):
         info = profiles[name]
         env_keys = list(info.get("env", {}).keys())
+        sandbox_keys = list(info.get("sandbox", {}).get("env", {}).keys())
+        local_keys = list(info.get("local", {}).get("env", {}).keys())
         result.append(
             {
                 "name": name,
                 "description": info.get("description", "No description"),
                 "env_keys": env_keys,
+                "sandbox_env_keys": sandbox_keys,
+                "local_env_keys": local_keys,
                 "standalone": name in ("default", "bare"),
             }
         )

@@ -29,7 +29,7 @@ is done manually by editing YAML and env files.
 | **Self-hosted OpenAI-compatible endpoint**    | [Adding an OpenAI-compatible endpoint](#adding-an-openai-compatible-endpoint)       |
 | **Self-hosted Anthropic-compatible endpoint** | [Adding an Anthropic-compatible endpoint](#adding-an-anthropic-compatible-endpoint) |
 | **Hybrid cloud + self-hosted**                | Combine the sections above                                                          |
-| **Anthropic API directly** (no proxy)         | Use `codefreedom claude --profile bare`                                             |
+| **Anthropic API directly** (no proxy)         | Use `codefreedom claude --native-models` or `codefreedom claude --profile bare`     |
 
 Every provider is **opt-in**. If you don't configure it, it stays disabled.
 
@@ -38,13 +38,34 @@ Every provider is **opt-in**. If you don't configure it, it stays disabled.
 ## Quick Start: copy the example files
 
 ```bash
-# From the codefreedom project root:
-cp .env.example .env
-cp .env.secrets.example .env.secrets
+# Initialize ~/.codefreedom/ with default configs
+codefreedom --init
+
+# This creates:
+#   ~/.codefreedom/profiles/claude-code.json
+#   ~/.codefreedom/profiles/claude-code-profiles.schema.json
+#   ~/.codefreedom/proxy/config/config.yaml
+#   ~/.codefreedom/proxy/config/providers/*.yaml
+#   ~/.codefreedom/proxy/docker-compose.yml
 ```
 
-- **`.env`** — non-secret settings: database URL, provider URLs, model aliases, LiteLLM flags
-- **`.env.secrets`** — secret API keys (NEVER commit this file)
+Edit these files to customize your setup:
+
+```bash
+vim ~/.codefreedom/proxy/config/config.yaml          # Main proxy config
+vim ~/.codefreedom/proxy/config/providers/deepseek.yaml  # Provider configs
+```
+
+For runtime env vars, create `.env` and `.env.secrets` in your workspace:
+
+```bash
+# .env — non-secret settings
+ANTHROPIC_BASE_URL="http://localhost:4000"
+LITELLM_MASTER_KEY="sk-your-proxy-key"
+
+# .env.secrets — API keys (NEVER commit)
+DEEPSEEK_API_KEY="sk-your-key"
+```
 
 ### Env load order
 

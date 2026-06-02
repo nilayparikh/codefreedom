@@ -8,7 +8,7 @@
 #
 # Base: ubuntu:26.04 (multi-arch)
 #   • Minimal Ubuntu 26.04 + Python 3 + Node.js + Claude Code + dev tools
-#   • For AI inference, use the CUDA, ROCm, or Intel variants instead
+#   • For AI inference, use the CUDA or ROCm variants instead
 #
 # Build:
 #   docker build --build-arg CODEFREEDOM_VERSION=v0.1.0 \

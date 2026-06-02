@@ -1,0 +1,98 @@
+# ── CodeFreedom PyPI Publish Workflow ─────────────────────────────────────────
+# Builds and publishes the Python package to PyPI.
+#
+# Triggered on: version tags (v*), or manual dispatch.
+#
+# Uses PyPI Trusted Publishing (OIDC) — no API tokens needed.
+# Project must be configured on PyPI: https://pypi.org/manage/project/codefreedom/settings/publishing/
+# ────────────────────────────────────────────────────────────────────────────────
+
+name: Publish to PyPI
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # Required for OIDC trusted publishing
+
+jobs:
+  test:
+    name: "Test on ${{ matrix.os }} / py${{ matrix.python-version }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04]
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install and test
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          python -m pytest tests/ -v
+
+  build:
+    name: Build distribution
+    needs: test
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Verify artifacts
+        run: |
+          ls -la dist/
+          test -f dist/codefreedom-*.tar.gz || { echo "MISSING: sdist"; exit 1; }
+          test -f dist/codefreedom-*.whl   || { echo "MISSING: wheel"; exit 1; }
+          echo "✓ Artifacts built successfully"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/codefreedom/
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true

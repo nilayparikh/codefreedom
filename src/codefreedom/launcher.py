@@ -24,6 +24,7 @@ IMAGE_TAG = os.environ.get("CLAUDE_CODE_IMAGE_TAG", "latest")
 TARGET_IMAGE = f"{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}"
 
 HOME_DIR = Path.home()
+CODEFREEDOM_DIR = HOME_DIR / ".codefreedom"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ def status() -> int:
         eprint("[STATUS] Docker command timed out. Is Docker running?")
         return 1
     except FileNotFoundError:
-        eprint("[ERROR] Docker not found. Install Docker or use --local.")
+        eprint("[ERROR] Docker not found. Install Docker or use --sandbox.")
         return 1
 
 
@@ -181,6 +182,41 @@ def stop() -> int:
         return 1
 
 
+# ── Sandbox Directory Setup ────────────────────────────────────────────────────
+
+
+def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
+    """Create ~/.codefreedom/sandbox/{profile}/.claude and seed .claude.json for sandbox isolation.
+
+    Returns (claude_dir, claude_json_path) — the .claude directory and the
+    .claude.json file path inside the profile's sandbox directory.
+    """
+    profile_dir = CODEFREEDOM_DIR / "sandbox" / profile_name
+    profile_dir.mkdir(parents=True, exist_ok=True)
+
+    claude_dir = profile_dir / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    eprint(f"[SANDBOX] Isolated .claude dir: {claude_dir}")
+
+    # ── Seed .claude.json from host if missing ─────────────────────────
+    sandbox_json = profile_dir / ".claude.json"
+    host_json = HOME_DIR / ".claude.json"
+    if not sandbox_json.exists() and host_json.exists():
+        shutil.copy2(host_json, sandbox_json)
+        eprint(
+            f"[SANDBOX] Seeded .claude.json from host ({host_json}) → ({sandbox_json})"
+        )
+    else:
+        sandbox_json.touch(exist_ok=True)
+        eprint(
+            f"[SANDBOX] Using existing .claude.json: {sandbox_json}"
+            if sandbox_json.exists()
+            else f"[SANDBOX] Created empty .claude.json: {sandbox_json}"
+        )
+
+    return claude_dir, sandbox_json
+
+
 # ── Execution ──────────────────────────────────────────────────────────────────
 
 
@@ -220,9 +256,13 @@ def run_docker(
     profile_env: Dict[str, str],
     claude_args: List[str],
     workspace_dir: Path,
+    profile_name: str,
+    sandbox_image: str | None = None,
 ) -> int:
     """Run claude inside a persistent Docker container. Returns exit code."""
-    # Build env flags
+    # Resolve the image to use: profile override → TARGET_IMAGE constant
+    image = sandbox_image or TARGET_IMAGE
+    eprint(f"[IMAGE] Using sandbox image: {image}")
     env_flags: List[str] = []
     for key in sorted(profile_env.keys()):
         val = profile_env[key]
@@ -234,6 +274,9 @@ def run_docker(
 
     uid = os.getuid()
     gid = os.getgid()
+
+    # ── Ensure isolated sandbox .claude dir exists for this profile ───────
+    sandbox_claude_dir, sandbox_claude_json = ensure_codefreedom_dir(profile_name)
 
     base_opts = [
         "--gpus",
@@ -252,40 +295,31 @@ def run_docker(
         "-v",
         f"{HOME_DIR / '.ssh'}:/root/.ssh:ro",
         "-v",
-        f"{HOME_DIR / '.claude'}:/home/claude",
+        f"{sandbox_claude_dir}:/home/{HOME_DIR.name}/.claude",
+        "-v",
+        f"{sandbox_claude_json}:/home/{HOME_DIR.name}/.claude.json",
         "-e",
-        "HOME=/home/claude",
+        f"HOME=/home/{HOME_DIR.name}",
         "-v",
         f"{workspace_dir / '.claude'}:/workspace/.claude",
     ]
 
     # ── Step A: Ensure image is pulled ─────────────────────────────────────
-    eprint(f"[IMAGE] Ensuring '{TARGET_IMAGE}' is available...")
+    eprint(f"[IMAGE] Ensuring '{image}' is available...")
     pull = subprocess.run(
-        ["docker", "pull", TARGET_IMAGE],
+        ["docker", "pull", image],
         capture_output=True,
         text=True,
         timeout=120,
         check=False,
     )
     if pull.returncode != 0:
-        fallback = f"{REGISTRY}/{IMAGE_NAME}:latest"
-        eprint(f"[IMAGE] Tag '{IMAGE_TAG}' not found. Falling back to '{fallback}'...")
-        pull = subprocess.run(
-            ["docker", "pull", fallback],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-        if pull.returncode != 0:
-            eprint("[ERROR] Failed to pull image.")
-            if pull.stderr:
-                eprint(f"   {pull.stderr.strip()}")
-            return 1
+        eprint(f"[ERROR] Failed to pull image '{image}'.")
+        if pull.stderr:
+            eprint(f"   {pull.stderr.strip()}")
+        return 1
 
-    # ── Step B: Ensure config dirs exist ───────────────────────────────────
-    (HOME_DIR / ".claude").mkdir(parents=True, exist_ok=True)
+    # ── Step B: Ensure workspace .claude dir exists ────────────────────────
     (workspace_dir / ".claude").mkdir(parents=True, exist_ok=True)
 
     # ── Step C: Start persistent container if not running ──────────────────
@@ -319,7 +353,7 @@ def run_docker(
             ["docker", "run", "-d", "--name", CONTAINER_NAME]
             + base_opts
             + env_flags
-            + [TARGET_IMAGE, "sleep", "infinity"],
+            + [image, "sleep", "infinity"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -339,7 +373,7 @@ def run_docker(
 
     exec_cmd = (
         ["docker", "exec", "-it"]
-        + ["-u", f"{uid}:{gid}", "-e", "HOME=/home/claude"]
+        + ["-u", f"{uid}:{gid}", "-e", f"HOME=/home/{HOME_DIR.name}"]
         + env_flags
         + [CONTAINER_NAME, "claude", "--dangerously-skip-permissions"]
         + claude_args

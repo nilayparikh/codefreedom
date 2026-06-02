@@ -1,11 +1,11 @@
-"""Proxy subcommand — manage the LiteLLM proxy via Docker Compose.
+"""Proxy subcommand — manage the LiteLLM proxy.
 
 Usage:
-    codefreedom proxy --up         Start the LiteLLM proxy
+    codefreedom proxy --up         Start the LiteLLM proxy (native, default)
+    codefreedom proxy --up --docker  Start via Docker Compose
     codefreedom proxy --down       Stop the LiteLLM proxy
     codefreedom proxy --status     Show proxy status
     codefreedom proxy --validate   Validate LiteLLM configuration
-    cf px --up --native            Run litellm directly (no Docker)
 """
 
 from __future__ import annotations
@@ -21,30 +21,22 @@ from codefreedom.env_loader import eprint
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 
-_PACKAGE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+_CODEFREEDOM_DIR = Path.home() / ".codefreedom"
 
 
 def _find_compose_file() -> Optional[Path]:
-    """Find the LiteLLM docker-compose file."""
-    candidates = [
-        _PACKAGE_DIR / "litellm" / "docker-compose.litellm.yml",
-        Path.cwd() / "litellm" / "docker-compose.litellm.yml",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
+    """Find the LiteLLM docker-compose file in ~/.codefreedom/proxy/."""
+    candidate = _CODEFREEDOM_DIR / "proxy" / "docker-compose.yml"
+    if candidate.exists():
+        return candidate
     return None
 
 
 def _find_config_file() -> Optional[Path]:
-    """Find the LiteLLM config.yaml."""
-    candidates = [
-        _PACKAGE_DIR / "litellm" / "config" / "config.yaml",
-        Path.cwd() / "litellm" / "config" / "config.yaml",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
+    """Find the LiteLLM config.yaml in ~/.codefreedom/proxy/config/."""
+    candidate = _CODEFREEDOM_DIR / "proxy" / "config" / "config.yaml"
+    if candidate.exists():
+        return candidate
     return None
 
 
@@ -73,19 +65,19 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _start(args: argparse.Namespace) -> int:
-    """Start the LiteLLM proxy."""
-    if args.native:
-        return _start_native(args)
-    else:
+    """Start the LiteLLM proxy. Defaults to native; --docker uses Compose."""
+    if args.docker:
         return _start_compose()
+    else:
+        return _start_native(args)
 
 
 def _start_compose() -> int:
     """Start LiteLLM via docker compose."""
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find litellm/docker-compose.litellm.yml")
-        eprint("   Run from the codefreedom project root.")
+        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yml")
+        eprint("   Run: codefreedom --init")
         return 1
 
     eprint(f"[proxy] Starting LiteLLM via Docker Compose ({compose_file})...")
@@ -129,7 +121,8 @@ def _start_native(args: argparse.Namespace) -> int:
 
     config_file = _find_config_file()
     if not config_file:
-        eprint("[ERROR] Could not find litellm/config/config.yaml")
+        eprint("[ERROR] Could not find ~/.codefreedom/proxy/config/config.yaml")
+        eprint("   Run: codefreedom --init")
         return 1
 
     port = args.port or 4000
@@ -169,7 +162,8 @@ def _stop() -> int:
     """Stop the LiteLLM proxy."""
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find litellm/docker-compose.litellm.yml")
+        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yml")
+        eprint("   Run: codefreedom --init")
         return 1
 
     eprint("[proxy] Stopping LiteLLM proxy...")
@@ -190,7 +184,8 @@ def _status() -> int:
     """Show LiteLLM proxy status."""
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find litellm/docker-compose.litellm.yml")
+        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yml")
+        eprint("   Run: codefreedom --init")
         return 1
 
     result = subprocess.run(
@@ -208,7 +203,8 @@ def _validate() -> int:
     """Validate the LiteLLM configuration."""
     config_file = _find_config_file()
     if not config_file:
-        eprint("[ERROR] Could not find litellm/config/config.yaml")
+        eprint("[ERROR] Could not find ~/.codefreedom/proxy/config/config.yaml")
+        eprint("   Run: codefreedom --init")
         return 1
 
     errors: List[str] = []

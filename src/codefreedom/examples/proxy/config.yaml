@@ -1,0 +1,112 @@
+# ── LiteLLM Example Configuration ─────────────────────────────────────────────
+# This is the example config for codefreedom. Copy it to start:
+#
+#   cp -r litellm.examples/config litellm/
+#
+# Then customize litellm/config/config.yaml and providers/ for your setup.
+# ──────────────────────────────────────────────────────────────────────────────
+# Key concepts:
+#   model_group_alias  → maps CodeFreedom/ names to specific provider models
+#   drop_params: true   → strips unsupported params before forwarding
+#   callbacks: prometheus → exposes LiteLLM metrics at /metrics/
+#
+# Provider fragments live under providers/. Each YAML file defines model_list
+# entries for a specific provider. YAML anchors do NOT span files.
+# ──────────────────────────────────────────────────────────────────────────────
+# ── DISABLING PROVIDERS ─────────────────────────────────────────────────────
+# Comment out any include line below to disable that provider entirely.
+# Cloud-only users: comment out providers/local.yaml
+# Local-only users: comment out all cloud providers, keep only local.yaml
+# ──────────────────────────────────────────────────────────────────────────────
+
+include:
+  # ── Cloud providers ─────────────────────────────────────────────────────
+  # Enabled by default — set the API key in .env.secrets to activate.
+  # Leave the key empty and LiteLLM skips the provider automatically.
+  - providers/deepseek.yaml
+  - providers/azure-foundry.yaml
+  - providers/nvidia.yaml
+  - providers/opencode-zen.yaml
+
+  # ── Compatible endpoints (bring your own) ────────────────────────────────
+  # These providers let you connect any OpenAI or Anthropic-compatible API.
+  # They're included in litellm.examples/providers/ — just uncomment below.
+  #   - providers/openai-compatible.yaml       # any /v1/chat/completions endpoint
+  #   - providers/anthropic-compatible.yaml    # any /v1/messages endpoint
+
+  # ── Local self-hosted ────────────────────────────────────────────────────
+  - providers/local.yaml
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# General Settings
+# ═══════════════════════════════════════════════════════════════════════════════
+general_settings:
+  # ── Database ─────────────────────────────────────────────────────────────
+  # No database_url set = stateless proxy (no Prisma, no persistence).
+  # Model routing and master-key auth work without a database.
+  #
+  # To enable DB features (Admin UI, spend tracking, key management):
+  #   1. Set DATABASE_URL in .env (PostgreSQL only)
+  #   2. Uncomment the lines below:
+  #
+  # database_url: os.environ/DATABASE_URL     # ← uncomment for PostgreSQL
+  # store_model_in_db: true                    # ← uncomment for PostgreSQL
+  # store_prompts_in_spend_logs: true          # ← uncomment for PostgreSQL
+
+  store_model_in_db: false
+  store_prompts_in_spend_logs: false
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Router Settings
+# ═══════════════════════════════════════════════════════════════════════════════
+router_settings:
+  num_retries: os.environ/LITELLM_NUM_RETRIES
+  retry_after: os.environ/LITELLM_RETRY_AFTER
+  allowed_fails: 3
+
+  # ── Model Group Aliases ──────────────────────────────────────────────────
+  # These CodeFreedom/ names are what Claude Code profiles reference.
+  # Change the env vars in .env to point aliases to different providers.
+  #
+  # Example: route Pro to a local model instead of DeepSeek:
+  #   LITELLM_MODEL_ALIAS_PRO="DGX/Qwen3.6-27B"
+  # ──────────────────────────────────────────────────────────────────────────
+  model_group_alias:
+    "CodeFreedom/Ultra": os.environ/LITELLM_MODEL_ALIAS_ULTRA
+    "CodeFreedom/Pro": os.environ/LITELLM_MODEL_ALIAS_PRO
+    "CodeFreedom/Flash": os.environ/LITELLM_MODEL_ALIAS_FLASH
+    "CodeFreedom/Air": os.environ/LITELLM_MODEL_ALIAS_AIR
+
+  # ── Context Window Fallbacks ─────────────────────────────────────────────
+  # If a local model can't fit the context, fall back to cloud.
+  context_window_fallbacks:
+    - "DGX/Qwen3.6-27B": [os.environ/LITELLM_MODEL_ALIAS_ULTRA]
+    - "DGX/Qwen3.6-35B-a3b": [os.environ/LITELLM_MODEL_ALIAS_FLASH]
+
+  # ── Retry Policy ─────────────────────────────────────────────────────────
+  retry_policy:
+    AuthenticationErrorRetries: 0 # never retry bad credentials
+    TimeoutErrorRetries: os.environ/LITELLM_TIMEOUT_ERROR_RETRIES
+    RateLimitErrorRetries: os.environ/LITELLM_RATE_LIMIT_ERROR_RETRIES
+    ContentPolicyViolationErrorRetries: 0 # never retry content violations
+    InternalServerErrorRetries: os.environ/LITELLM_INTERNAL_ERROR_RETRIES
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LiteLLM Settings
+# ═══════════════════════════════════════════════════════════════════════════════
+litellm_settings:
+  always_include_stream_usage: os.environ/LITELLM_STREAM_USAGE
+  drop_params: os.environ/LITELLM_DROP_PARAMS
+  redact_user_api_key_info: os.environ/LITELLM_REDACT_USER_API_KEY
+  turn_off_message_logging: os.environ/LITELLM_TURN_OFF_MSG_LOGGING
+  json_logs: os.environ/LITELLM_JSON_LOGS
+
+  # Translate Anthropic /v1/messages format to OpenAI for non-Anthropic backends
+  use_chat_completions_url_for_anthropic_messages: true
+
+  # Expose Prometheus metrics at /metrics/
+  callbacks:
+    - prometheus
+
+  # Require auth for the /metrics/ endpoint (set to true for production)
+  require_auth_for_metrics_endpoint: os.environ/LITELLM_REQUIRE_AUTH_METRICS
