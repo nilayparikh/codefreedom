@@ -1,11 +1,13 @@
-"""Claude Code Docker launcher -- runs Claude Code in a persistent container.
+"""Claude Code Docker launcher -- runs Claude Code in ephemeral sandbox containers.
 
 Provides the core execution engine for launching Claude Code through Docker
-with profile-based model routing."""
+with profile-based model routing. Each sandbox session gets a fresh container
+with a random name -- no more container-locking from shared reuse."""
 
 from __future__ import annotations
 
 import os
+import secrets
 import shutil
 import signal
 import subprocess
@@ -16,7 +18,6 @@ from codefreedom.env_loader import eprint
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-CONTAINER_NAME = os.environ.get("CLAUDE_CODE_CONTAINER_NAME", "claude-dev-workspace")
 REGISTRY = os.environ.get("CLAUDE_CODE_REGISTRY", "ghcr.io/nilayparikh")
 IMAGE_NAME = os.environ.get("CLAUDE_CODE_IMAGE_NAME", "claude-code")
 IMAGE_TAG = os.environ.get("CLAUDE_CODE_IMAGE_TAG", "latest")
@@ -24,6 +25,14 @@ TARGET_IMAGE = f"{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}"
 
 HOME_DIR = Path.home()
 CODEFREEDOM_DIR = HOME_DIR / ".codefreedom"
+
+_CONTAINER_PREFIX = "codefreedom-"
+
+
+def _generate_container_name() -> str:
+    """Generate a random container name: codefreedom-XXXX (4 alphanumeric chars)."""
+    suffix = secrets.token_hex(2)  # 4 hex chars
+    return f"{_CONTAINER_PREFIX}{suffix}"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -68,110 +77,79 @@ def _forward_signal(
 
 
 def status() -> int:
-    """Show persistent container status. Returns exit code."""
+    """Show all codefreedom sandbox containers. Returns exit code."""
     try:
-        running = subprocess.run(
-            ["docker", "ps", "-q", "-f", f"name=^{CONTAINER_NAME}$"],
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                f"name={_CONTAINER_PREFIX}",
+                "--format",
+                "{{.Names}}\t{{.Status}}\t{{.CreatedAt}}",
+            ],
             capture_output=True,
             text=True,
             timeout=10,
             check=False,
         )
-        exists = subprocess.run(
-            ["docker", "ps", "-aq", "-f", f"name=^{CONTAINER_NAME}$"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
 
-        if running.stdout.strip():
-            info = subprocess.run(
-                [
-                    "docker",
-                    "ps",
-                    "--filter",
-                    f"name=^{CONTAINER_NAME}$",
-                    "--format",
-                    "{{.Status}}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-            status_line = info.stdout.strip() if info.returncode == 0 else "running"
-
-            sessions = subprocess.run(
-                ["docker", "top", CONTAINER_NAME, "-eo", "comm"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-            session_count = (
-                sessions.stdout.count("claude") if sessions.returncode == 0 else "?"
-            )
-
-            eprint(f"[STATUS] Container '{CONTAINER_NAME}' is running.")
-            eprint(f"   Status: {status_line}")
-            eprint(f"   Active Claude sessions: {session_count}")
-            eprint("\n   Attach a new session:  codefreedom claude")
-            eprint("   Stop the container:    codefreedom claude --stop")
-        elif exists.stdout.strip():
-            eprint(f"[STATUS] Container '{CONTAINER_NAME}' exists but is stopped.")
-            eprint("   Restart it:  codefreedom claude")
-            eprint("   Remove it:   codefreedom claude --stop")
+        containers = [l for l in result.stdout.strip().split("\n") if l]
+        if containers:
+            eprint(f"[STATUS] {len(containers)} codefreedom sandbox container(s):")
+            for line in containers:
+                name, status_line, _created = line.split("\t", 2)
+                marker = "[RUNNING]" if "Up " in status_line else "[STOPPED]"
+                eprint(f"   {marker} {name}  ({status_line})")
+            eprint("\n   Stop all:  codefreedom claude --stop")
         else:
-            eprint(f"[STATUS] No container named '{CONTAINER_NAME}'.")
-            eprint("   Create one:  codefreedom claude")
+            eprint("[STATUS] No codefreedom sandbox containers found.")
         return 0
     except subprocess.TimeoutExpired:
         eprint("[STATUS] Docker command timed out. Is Docker running?")
         return 1
     except FileNotFoundError:
-        eprint("[ERROR] Docker not found. Install Docker or use --sandbox.")
+        eprint("[ERROR] Docker not found.")
         return 1
 
 
 def stop() -> int:
-    """Stop and remove the persistent container. Returns exit code."""
+    """Stop and remove all codefreedom sandbox containers. Returns exit code."""
     try:
-        running = subprocess.run(
-            ["docker", "ps", "-q", "-f", f"name=^{CONTAINER_NAME}$"],
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "-aq",
+                "--filter",
+                f"name={_CONTAINER_PREFIX}",
+            ],
             capture_output=True,
             text=True,
             timeout=10,
             check=False,
         )
-        if running.stdout.strip():
-            eprint(f"[CLEAN] Stopping container '{CONTAINER_NAME}'...")
-            subprocess.run(
-                ["docker", "stop", CONTAINER_NAME],
-                capture_output=True,
-                timeout=30,
-                check=False,
-            )
-            eprint("   [OK] Container stopped.")
 
-        exists = subprocess.run(
-            ["docker", "ps", "-aq", "-f", f"name=^{CONTAINER_NAME}$"],
+        ids = [c for c in result.stdout.strip().split("\n") if c]
+        if not ids:
+            eprint("[CLEAN] No codefreedom sandbox containers to remove.")
+            return 0
+
+        eprint(f"[CLEAN] Stopping {len(ids)} container(s)...")
+        subprocess.run(
+            ["docker", "stop"] + ids,
             capture_output=True,
-            text=True,
-            timeout=10,
+            timeout=30,
             check=False,
         )
-        if exists.stdout.strip():
-            eprint("[CLEAN] Removing container...")
-            subprocess.run(
-                ["docker", "rm", "-f", CONTAINER_NAME],
-                capture_output=True,
-                timeout=30,
-                check=False,
-            )
-            eprint("   [OK] Container removed.")
-        else:
-            eprint("[CLEAN] No container to remove.")
+        subprocess.run(
+            ["docker", "rm", "-f"] + ids,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        eprint("   [OK] All sandbox containers removed.")
         return 0
     except subprocess.TimeoutExpired:
         eprint("[ERROR] Docker command timed out.")
@@ -258,10 +236,15 @@ def run_docker(
     profile_name: str,
     sandbox_image: str | None = None,
 ) -> int:
-    """Run claude inside a persistent Docker container. Returns exit code."""
-    # Resolve the image to use: profile override → TARGET_IMAGE constant
+    """Run claude inside an ephemeral Docker container. Each session gets a fresh
+    container with a random name -- cleaned up on exit (including Ctrl+C)."""
+
     image = sandbox_image or TARGET_IMAGE
+    container_name = _generate_container_name()
+
     eprint(f"[IMAGE] Using sandbox image: {image}")
+    eprint(f"[CONTAINER] Name: {container_name}")
+
     env_flags: List[str] = []
     for key in sorted(profile_env.keys()):
         val = profile_env[key]
@@ -303,8 +286,8 @@ def run_docker(
         f"{workspace_dir / '.claude'}:/workspace/.claude",
     ]
 
-    # ── Step A: Ensure image is pulled ─────────────────────────────────────
-    eprint(f"[IMAGE] Ensuring '{image}' is available...")
+    # ── Ensure image is pulled ────────────────────────────────────────────
+    eprint(f"[IMAGE] Pulling '{image}'...")
     pull = subprocess.run(
         ["docker", "pull", image],
         capture_output=True,
@@ -318,71 +301,64 @@ def run_docker(
             eprint(f"   {pull.stderr.strip()}")
         return 1
 
-    # ── Step B: Ensure workspace .claude dir exists ────────────────────────
+    # ── Ensure workspace .claude dir exists ───────────────────────────────
     (workspace_dir / ".claude").mkdir(parents=True, exist_ok=True)
 
-    # ── Step C: Start persistent container if not running ──────────────────
-    running = subprocess.run(
-        ["docker", "ps", "-q", "-f", f"name=^{CONTAINER_NAME}$"],
+    # ── Start ephemeral container ─────────────────────────────────────────
+    eprint(f"[RUN] Creating ephemeral container '{container_name}'...")
+    create = subprocess.run(
+        ["docker", "run", "-d", "--rm", "--name", container_name]
+        + base_opts
+        + env_flags
+        + [image, "sleep", "infinity"],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=60,
         check=False,
     )
+    if create.returncode != 0:
+        eprint("[ERROR] Failed to start container.")
+        if create.stderr:
+            eprint(f"   {create.stderr.strip()}")
+        return 1
+    eprint("   [OK] Container started.")
 
-    if not running.stdout.strip():
-        stale = subprocess.run(
-            ["docker", "ps", "-aq", "-f", f"name=^{CONTAINER_NAME}$"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        if stale.stdout.strip():
-            eprint(f"[CLEAN] Removing stale container '{CONTAINER_NAME}'...")
-            subprocess.run(
-                ["docker", "rm", "-f", CONTAINER_NAME],
-                capture_output=True,
-                timeout=30,
-                check=False,
-            )
-
-        eprint(f"[RUN] Starting persistent container '{CONTAINER_NAME}'...")
-        create = subprocess.run(
-            ["docker", "run", "-d", "--name", CONTAINER_NAME]
-            + base_opts
-            + env_flags
-            + [image, "sleep", "infinity"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False,
-        )
-        if create.returncode != 0:
-            eprint("[ERROR] Failed to start container.")
-            if create.stderr:
-                eprint(f"   {create.stderr.strip()}")
-            return 1
-        eprint("   [OK] Container started (background).")
-    else:
-        eprint(f"[RUN] Reusing running container '{CONTAINER_NAME}'.")
-
-    # ── Step D: Exec claude into the container ─────────────────────────────
+    # ── Exec claude into the container ────────────────────────────────────
     eprint("[EXEC] Attaching Claude Code session...")
 
     exec_cmd = (
         ["docker", "exec", "-it"]
         + ["-u", f"{uid}:{gid}", "-e", f"HOME=/home/{HOME_DIR.name}"]
         + env_flags
-        + [CONTAINER_NAME, "claude", "--dangerously-skip-permissions"]
+        + [container_name, "claude", "--dangerously-skip-permissions"]
         + claude_args
     )
 
+    exit_code = 1
     try:
         proc = subprocess.Popen(exec_cmd)
         signal.signal(signal.SIGINT, lambda s, f: _forward_signal(proc, s, f))
         signal.signal(signal.SIGTERM, lambda s, f: _forward_signal(proc, s, f))
         proc.wait()
-        return proc.returncode
+        exit_code = proc.returncode
     except KeyboardInterrupt:
-        return 130
+        exit_code = 130
+    finally:
+        # ── Clean up the ephemeral container ──────────────────────────
+        eprint(f"[CLEAN] Stopping container '{container_name}'...")
+        subprocess.run(
+            ["docker", "stop", container_name],
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+        # --rm flag handles auto-removal; force-remove as fallback
+        subprocess.run(
+            ["docker", "rm", "-f", container_name],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        eprint("   [OK] Container cleaned up.")
+
+    return exit_code
