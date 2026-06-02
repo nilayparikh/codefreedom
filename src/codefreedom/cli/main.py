@@ -131,13 +131,11 @@ def _init_codefreedom(
 
     # .env.secrets is optional
     if secrets_dst.exists():
-        print(f"[init] .env.secrets already exists: {secrets_dst} (skipping)")
+        print("[init] .env.secrets already exists (skipping)")
     elif secrets_src.exists():
         cf_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(secrets_src, secrets_dst)
-        print(
-            f"[init] [OK] Created {secrets_dst} (fully commented -- add your API keys)"
-        )
+        print("[init] [OK] Created .env.secrets (fully commented -- add your API keys)")
         created_any = True
 
     if created_any:
