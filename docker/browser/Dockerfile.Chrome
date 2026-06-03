@@ -1,0 +1,237 @@
+# ── CodeFreedom Chrome Browser Image (Hardened) ──────────────────────────────
+# Ultra-hardened Chrome + Xvfb for undetectable headed browsing.
+# Coding agents connect via CDP at port 9222 to browse the web.
+#
+# Anti-bot hardening:
+#   • Google Chrome Stable (retail build) — not Ubuntu chromium snap
+#   • Xvfb at 1920x1080x24 — realistic full-HD canvas fingerprint
+#   • PulseAudio — prevents AudioContext fingerprinting failures
+#   • Rich font inventory (MS Core Fonts + CJK + emoji) — matches desktop
+#   • REMOVED --no-sandbox — Chrome runs unprivileged via --cap-add=SYS_ADMIN
+#   • REMOVED --disable-gpu — WebGL hardware strings evaluate accurately
+#   • dumb-init as PID 1 — clean process management
+#
+# @platform  Ubuntu
+# @version   v0.1.0
+# @arch      linux/amd64 (Google Chrome), linux/arm64 (Chromium snapshots)
+#
+# Base: ubuntu:26.04 (multi-arch)
+#
+# Build:
+#   docker build --build-arg CODEFREEDOM_VERSION=v0.1.0 \
+#     -t codefreedom:Chrome-v0.1.0 \
+#     -f docker/browser/Dockerfile.Chrome docker/browser/
+#
+# Run (stealth mode — must use --ipc=host + --cap-add=SYS_ADMIN):
+#   docker run -d --name codefreedom-chrome \
+#     --network host \
+#     --ipc=host \
+#     --cap-add=SYS_ADMIN \
+#     --init \
+#     -v ~/.codefreedom/sandbox/tools/chrome:/data/chrome \
+#     codefreedom:Chrome-latest
+#
+# Connect: chrome devtools://devtools/bundled/inspector.html?ws=127.0.0.1:9222
+# ────────────────────────────────────────────────────────────────────────────────
+
+ARG CODEFREEDOM_VERSION=v0.1.0
+
+# 1. Ubuntu 26.04 (multi-arch: arm64 + amd64)
+FROM ubuntu:26.04
+
+ARG CODEFREEDOM_VERSION
+
+LABEL org.opencontainers.image.title="CodeFreedom - Chrome Browser (Hardened)" \
+      org.opencontainers.image.description="Ultra-hardened Chrome + Xvfb for undetectable headed browsing. Anti-bot stealth: retail Chrome, PulseAudio, rich fonts, no --no-sandbox." \
+      org.opencontainers.image.version="${CODEFREEDOM_VERSION}" \
+      org.opencontainers.image.vendor="nilayparikh" \
+      org.opencontainers.image.authors="Nilay Parikh" \
+      com.codefreedom.platform="Chrome" \
+      com.codefreedom.arch="linux/arm64,linux/amd64"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 2. Core prerequisites
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    gpg \
+    wget \
+    unzip \
+    python3 \
+    dumb-init \
+    && rm -rf /var/lib/apt/lists/*
+
+# 3. System deps + display server + audio + fonts (architecture-independent)
+#     Rich font inventory (MS Core Fonts, CJK, emoji) is critical for matching
+#     consumer desktop fingerprint — anti-bots inspect font lists closely.
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    xvfb \
+    dbus \
+    dbus-x11 \
+    xauth \
+    x11-apps \
+    upower \
+    pulseaudio \
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    fonts-dejavu-core \
+    ttf-mscorefonts-installer \
+    fonts-nanum \
+    fonts-ipafont-gothic \
+    libnss3 \
+    libatk1.0-0t64 \
+    libatk-bridge2.0-0t64 \
+    libcups2t64 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2t64 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. Browser binary — architecture-aware
+#     amd64 → Google Chrome stable from Google repo (retail build)
+#     arm64 → Chromium from Playwright CDN (Ubuntu's chromium-browser is a snap
+#             shim on 26.04 that breaks in Docker)
+#     Using retail Chrome on amd64 is critical — anti-bot systems flag
+#     Ubuntu chromium builds as headless Linux daemons.
+RUN set -eux; \
+    ARCH=$(uname -m); \
+    if [ "${ARCH}" = "aarch64" ]; then \
+        CHROMIUM_REV=$(curl -fsSL "https://raw.githubusercontent.com/microsoft/playwright/main/packages/playwright-core/browsers.json" \
+          | python3 -c "import sys,json; print([b['revision'] for b in json.load(sys.stdin)['browsers'] if b['name']=='chromium'][0])"); \
+        curl -fsSL "https://playwright.azureedge.net/builds/chromium/${CHROMIUM_REV}/chromium-linux-arm64.zip" -o /tmp/chrome.zip; \
+        mkdir -p /opt/chrome; \
+        unzip /tmp/chrome.zip -d /opt/chrome; \
+        ln -sf $(find /opt/chrome -name 'chrome' -type f | head -1) /usr/local/bin/chrome; \
+        rm -rf /tmp/chrome.zip; \
+    else \
+        curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub \
+          | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg; \
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+          > /etc/apt/sources.list.d/google-chrome.list; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends google-chrome-stable; \
+        rm -rf /var/lib/apt/lists/*; \
+        ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chrome; \
+    fi
+
+# 5. Chrome wrapper — an advanced multi-tier stealth executable
+#     Starts DBus, PulseAudio (virtual audio), Xvfb (1080p), then Chrome with
+#     zero automation-identifying flags.
+#     REMOVED: --no-sandbox  — instantly flagged by modern WAF systems
+#     REMOVED: --disable-gpu — WebGL must evaluate realistic hardware strings
+RUN printf '#!/bin/bash\n\
+set -e\n\
+\n\
+CHROME_DATA="${CHROME_DATA_DIR:-/data/chrome}"\n\
+mkdir -p "${CHROME_DATA}"\n\
+\n\
+# Initialize DBus system daemon (required by Chrome)\n\
+if ! pgrep -x dbus-daemon > /dev/null 2>&1; then\n\
+  mkdir -p /run/dbus\n\
+  dbus-daemon --system --fork\n\
+  sleep 0.5\n\
+fi\n\
+\n\
+# Start DBus session bus for the vscode user — Chrome queries the session bus\n\
+# for notifications, power state, MIME handlers, etc.  Without this, Chrome\n\
+# floods stderr with "Failed to connect to the bus" every few seconds.\n\
+DBUS_SESSION_FILE="/tmp/.dbus-session-addr"\n\
+if [ ! -f "${DBUS_SESSION_FILE}" ]; then\n\
+  sudo -u vscode bash -c '\''\n\
+    SOCK="/tmp/dbus-session-$$"\n\
+    dbus-daemon --session --address="unix:path=${SOCK}" --fork\n\
+    echo "unix:path=${SOCK}" > /tmp/.dbus-session-addr\n\
+  '\''\n\
+fi\n\
+DBUS_SESSION_BUS_ADDRESS=$(cat "${DBUS_SESSION_FILE}")\n\
+\n\
+# Boot virtual audio server (prevents AudioContext fingerprinting failures)\n\
+if ! pgrep -x pulseaudio > /dev/null 2>&1; then\n\
+  sudo -u vscode pulseaudio --daemonize --system=false --exit-idle-time=-1 || true\n\
+fi\n\
+\n\
+# Boot Xvfb high-fidelity display context (1920x1080 desktop canvas)\n\
+XVFB_DISPLAY="${DISPLAY:-:99}"\n\
+XVFB_SCREEN="${XVFB_SCREEN:-1920x1080x24}"\n\
+if ! pgrep -x Xvfb > /dev/null 2>&1; then\n\
+  Xvfb "${XVFB_DISPLAY}" -screen 0 "${XVFB_SCREEN}" -ac -nolisten tcp +extension RANDR &\n\
+  sleep 1.5\n\
+fi\n\
+\n\
+# Execute Chrome as non-root user (required for sandbox & PulseAudio)\n\
+# DBUS_SESSION_BUS_ADDRESS must be forwarded so Chrome finds the session bus.\n\
+exec sudo -u vscode \\\n\
+  DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS}" \\\n\
+  CHROME_DEBUG_PORT="${CHROME_DEBUG_PORT:-9222}" \\\n\
+  CHROME_DATA_DIR="${CHROME_DATA_DIR:-/data/chrome}" \\\n\
+  DISPLAY="${DISPLAY:-:99}" \\\n\
+/usr/local/bin/chrome \\\n\
+  --remote-debugging-address=0.0.0.0 \\\n\
+  --remote-debugging-port="${CHROME_DEBUG_PORT:-9222}" \\\n\
+  --window-size=1920,1080 \\\n\
+  --user-data-dir="${CHROME_DATA}" \\\n\
+  --disable-blink-features=AutomationControlled \\\n\
+  --disable-features=ChromeWhatsNewUI,WebRtcHideLocalIpsWithMdns,IsolateOrigins,site-per-process,GCM,PushMessaging \\\n\
+  --no-first-run \\\n\
+  --no-default-browser-check \\\n\
+  --disable-sync \\\n\
+  --disable-background-networking \\\n\
+  --disable-crash-reporter \\\n\
+  --disable-component-update \\\n\
+  --password-store=basic \\\n\
+  --use-mock-keychain \\\n\
+  --lang=en-US \\\n\
+  --start-maximized \\\n\
+  --disable-dev-shm-usage\n\
+' > /usr/local/bin/chrome-wrapper \
+    && chmod +x /usr/local/bin/chrome-wrapper
+
+# 6. Healthcheck — verifies Chrome CDP endpoint is responding
+RUN printf '#!/bin/sh\n\
+curl -sf http://127.0.0.1:${CHROME_DEBUG_PORT:-9222}/json/version > /dev/null 2>&1\n\
+' > /usr/local/bin/chrome-healthcheck && chmod +x /usr/local/bin/chrome-healthcheck
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+  CMD /usr/local/bin/chrome-healthcheck
+
+# 7. Non-root user (optional — wrapper runs for now as root for dbus/pulse/Xvfb)
+#     The --cap-add=SYS_ADMIN runtime flag enables Chrome's built-in sandbox.
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN set -eux; \
+    group_name="$(getent group "${USER_GID}" | cut -d: -f1 || true)"; \
+    if [ -z "${group_name}" ]; then \
+        group_name="${USERNAME}"; \
+        groupadd --gid "${USER_GID}" "${group_name}"; \
+    fi; \
+    useradd --non-unique --uid "${USER_UID}" --gid "${group_name}" -m -s /bin/bash "${USERNAME}"; \
+    mkdir -p /data/chrome /run/dbus /etc/sudoers.d; \
+    chown -R "${USER_UID}:${USER_GID}" /data/chrome; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends sudo; \
+    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}"; \
+    chmod 0440 "/etc/sudoers.d/${USERNAME}"; \
+    rm -rf /var/lib/apt/lists/*
+
+# 8. Environment
+ENV DISPLAY=:99 \
+    CHROME_DEBUG_PORT=9222 \
+    CHROME_DATA_DIR=/data/chrome \
+    HOME="/home/${USERNAME}"
+
+# 9. Volumes
+VOLUME ["/data/chrome"]
+
+# 10. Default command — runs as root (dbus/pulse/Xvfb require system access)
+WORKDIR /data
+CMD ["/usr/local/bin/chrome-wrapper"]

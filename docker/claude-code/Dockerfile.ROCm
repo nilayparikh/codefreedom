@@ -46,6 +46,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zoxide \
     sd \
     unzip \
+    bubblewrap \
+    socat \
     openssh-client \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s $(which fdfind) /usr/local/bin/fd
@@ -88,7 +90,9 @@ RUN set -eux; \
     rm -rf /tmp/* /var/lib/apt/lists/*
 
 # 6. Claude Code
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code \
+    && npm config set cache /tmp/.npm --global \
+    && npm cache clean --force
 
 # 7. Language Server binaries — prerequisites for Claude Code code intelligence plugins
 #     Activate each via: /plugin install <name>@claude-plugins-official
@@ -149,3 +153,7 @@ ENV CLAUDE_CODE_ATTRIBUTION_HEADER="0" \
     HOME="/home/${USERNAME}"
 
 WORKDIR /workspace
+
+# 11. Fix npm cache for any-user access — /tmp/.npm is world-writable so
+#     npx/npm work when the container runs with a different UID at runtime.
+RUN rm -rf /tmp/.npm && mkdir -p /tmp/.npm && chmod 1777 /tmp/.npm

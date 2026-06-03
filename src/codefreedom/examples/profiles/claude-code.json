@@ -1,5 +1,5 @@
 {
-  "$schema": "claude-code-profiles.schema.json",
+  "$schema": "claude-code.schema.json",
   "description": "Claude Code profiles for codefreedom — each profile sets model selection, API endpoint, and auth explicitly.",
   "notes": [
     "In sandbox mode (--sandbox), each profile gets its own isolated ~/.codefreedom/{profile}/.claude directory.",

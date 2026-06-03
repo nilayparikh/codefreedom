@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "chrome.schema.json",
+  "title": "Chrome Tool Profile",
+  "description": "Schema for chrome.json — configures the Chrome browser container image, ports, data directory, and environment.",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Description of the profile"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Usage notes"
+    },
+    "chrome": {
+      "type": "object",
+      "description": "Chrome browser container settings",
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "Docker image tag (e.g. codefreedom:Chrome-local or ghcr.io/nilayparikh/codefreedom:Chrome-latest)"
+        },
+        "container_name": {
+          "type": "string",
+          "description": "Docker container name"
+        },
+        "port": {
+          "type": "integer",
+          "description": "CDP debug port",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "data_dir": {
+          "type": "string",
+          "description": "Host path for persistent Chrome profile data (~ is expanded to $HOME)"
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables forwarded to the container",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "chrome"
+  ]
+}

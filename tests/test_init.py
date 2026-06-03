@@ -14,11 +14,32 @@ def _setup_bundled_examples(root: Path) -> Path:
     # Profiles
     profiles_dir = examples / "profiles"
     profiles_dir.mkdir(parents=True)
-    (profiles_dir / "claude-code-profiles.json").write_text(
+    (profiles_dir / "claude-code.json").write_text(
         json.dumps({"profiles": {"default": {"description": "test", "env": {}}}})
     )
-    (profiles_dir / "claude-code-profiles.schema.json").write_text(
+    (profiles_dir / "claude-code.schema.json").write_text(
         json.dumps({"$schema": "http://json-schema.org/draft-07/schema#"})
+    )
+
+    # Tool profiles + schemas (tools-*.json, * .schema.json)
+    (profiles_dir / "tools-chrome.json").write_text(
+        json.dumps(
+            {
+                "chrome": {
+                    "image": "codefreedom:Chrome-local",
+                    "container_name": "codefreedom-chrome",
+                    "port": 9222,
+                }
+            }
+        )
+    )
+    (profiles_dir / "chrome.schema.json").write_text(
+        json.dumps(
+            {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "title": "Chrome Tool Profile",
+            }
+        )
     )
 
     # Proxy
@@ -64,10 +85,20 @@ class TestInitCodefreedom:
         assert content["profiles"]["default"]["description"] == "test"
 
         # Verify schema was created
-        schema_dst = cf_dir / "profiles" / "claude-code-profiles.schema.json"
+        schema_dst = cf_dir / "profiles" / "claude-code.schema.json"
         assert schema_dst.exists()
         schema_content = json.loads(schema_dst.read_text())
         assert "$schema" in schema_content
+
+        # Verify tool profile (chrome.json from tools-chrome.json)
+        tool_dst = cf_dir / "profiles" / "chrome.json"
+        assert tool_dst.exists()
+        tool_content = json.loads(tool_dst.read_text())
+        assert "chrome" in tool_content
+
+        # Verify tool schema (chrome.schema.json)
+        tool_schema_dst = cf_dir / "profiles" / "chrome.schema.json"
+        assert tool_schema_dst.exists()
 
         # Verify proxy was created with correct nested structure
         proxy_dst = cf_dir / "proxy"
@@ -107,7 +138,7 @@ class TestInitCodefreedom:
         # Setup source examples with different content
         examples = _setup_bundled_examples(tmp_path)
         # Override with newer content so we can verify it was NOT copied
-        (examples / "profiles" / "claude-code-profiles.json").write_text(
+        (examples / "profiles" / "claude-code.json").write_text(
             json.dumps({"profiles": {"default": {"env": {}}}})
         )
         (examples / "proxy" / "config.yaml").write_text("new content")
@@ -146,7 +177,7 @@ class TestInitCodefreedom:
         new_content = json.dumps(
             {"profiles": {"test": {"description": "new", "env": {"KEY": "val"}}}}
         )
-        (examples / "profiles" / "claude-code-profiles.json").write_text(new_content)
+        (examples / "profiles" / "claude-code.json").write_text(new_content)
         (examples / "proxy" / "config.yaml").write_text("new proxy")
         (examples / "proxy" / "docker-compose.yaml").write_text("new compose")
 
