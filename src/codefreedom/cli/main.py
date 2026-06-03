@@ -17,6 +17,16 @@ def main() -> None:
         prog="codefreedom",
         description="CodeFreedom -- Single wrapper for all code agents. Simple LLM routing, sandboxing, profile management, and isolation. All config in ~/.codefreedom.",
     )
+    parser.add_argument(
+        "--init",
+        action="store_true",
+        help="Initialize all profiles, proxy configs, and env files in ~/.codefreedom/",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing files when used with --init",
+    )
     subparsers = parser.add_subparsers(dest="command", title="commands")
 
     # ── claude subcommand ──────────────────────────────────────────────────
@@ -200,6 +210,36 @@ def main() -> None:
     )
 
     args, unknown = parser.parse_known_args()
+
+    # ── Top-level --init ────────────────────────────────────────────────────
+    if args.init:
+        from pathlib import Path
+
+        from codefreedom.cli.claude import init_claude
+        from codefreedom.cli.proxy import init_proxy
+
+        reset = args.force
+        code = 0
+
+        code |= init_claude(reset=reset)
+        code |= init_proxy(reset=reset)
+
+        # Legacy shared .env (placeholder for backward compatibility)
+        env_path = Path.home() / ".codefreedom" / ".env"
+        if not reset and env_path.exists():
+            print(f"[init] [SKIP] Already exists: {env_path}")
+        else:
+            env_path.parent.mkdir(parents=True, exist_ok=True)
+            env_path.write_text(
+                "# CodeFreedom — Legacy shared environment\n"
+                "# Prefer component-specific .env files (.env.claude, .env.proxy, etc.)\n"
+            )
+            print(f"[init] [OK]   Created {env_path}")
+
+        print()
+        print("[init] Done.")
+        print("       Docs: https://nilayparikh.github.io/codefreedom/")
+        sys.exit(code)
 
     if args.command in ("claude", "cc"):
         # ── claude init action ─────────────────────────────────────────────
