@@ -26,11 +26,11 @@ _CODEFREEDOM_DIR = Path.home() / ".codefreedom"
 # ── Non-disclaimer banner ────────────────────────────────────────────────────
 
 _NOTICE = """\
-─── Notice ─────────────────────────────────────────────
+--- Notice ----------------------------------------------------------
 CodeFreedom is experimental software. Some features may
 interact with third-party services and components.
 CodeFreedom is not responsible for third-party behavior.
-────────────────────────────────────────────────────────"""
+---------------------------------------------------------------------"""
 
 
 def _find_bundled_examples() -> Path:

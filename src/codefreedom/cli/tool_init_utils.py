@@ -49,11 +49,11 @@ TOOL_INFO: Dict[str, dict] = {
 # ── Disclaimers ──────────────────────────────────────────────────────────────
 
 _NON_DISCLAIMER = """\
-─── Notice ─────────────────────────────────────────────
+--- Notice ----------------------------------------------------------
 CodeFreedom is experimental software. Some features may
 interact with third-party services and components.
 CodeFreedom is not responsible for third-party behavior.
-────────────────────────────────────────────────────────"""
+---------------------------------------------------------------------"""
 
 
 def _print_tool_notice(tool_name: str) -> None:
