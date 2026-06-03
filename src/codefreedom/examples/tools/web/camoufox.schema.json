@@ -22,7 +22,7 @@
       "properties": {
         "image": {
           "type": "string",
-          "description": "Docker image tag (e.g. codefreedom:camoufox or ghcr.io/nilayparikh/codefreedom:camoufox-latest)"
+          "description": "Docker image tag (e.g. codefreedom:camoufox or docker.io/nilayparikh/codefreedom:camoufox-latest)"
         },
         "container_name": {
           "type": "string",

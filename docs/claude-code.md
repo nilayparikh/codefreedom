@@ -31,7 +31,7 @@ Both modes support `--profile` for model switching and `--native-models` to bypa
 
 ## Sandbox Images
 
-Three pre-configured images (CUDA, ROCm, Ubuntu) on `ghcr.io/nilayparikh/codefreedom`.
+Three pre-configured images (CUDA, ROCm, Ubuntu) on `docker.io/nilayparikh/codefreedom`. (Also available on `ghcr.io/nilayparikh/codefreedom` as a mirror.)
 See [Sandbox Mode → Available Images](claude-code/sandbox.md#available-images) for the full tag reference and Dockerfile examples.
 
 ## Profile System
@@ -115,16 +115,20 @@ Profile values support `${VAR}` references, resolved from the [environment chain
 
 The `:-default` syntax provides a fallback if the variable is not set.
 
-### Sandbox Image per Profile
+### Sandbox Images per Profile
 
-Set a custom sandbox image for a profile:
+Set custom sandbox images for a profile — these are GPU-specific Docker image references:
 
 ```json
 {
   "profiles": {
     "gpu-work": {
       "description": "CUDA sandbox for GPU workloads",
-      "sandbox_image": "ghcr.io/nilayparikh/codefreedom:cuda-latest",
+      "sandbox_images": {
+        "default": "docker.io/nilayparikh/codefreedom:latest",
+        "cuda": "docker.io/nilayparikh/codefreedom:cuda-latest",
+        "rocm": "docker.io/nilayparikh/codefreedom:rocm-latest"
+      },
       "env": {
         "CLAUDE_MODEL": "CodeFreedom/Pro"
       }
@@ -133,7 +137,7 @@ Set a custom sandbox image for a profile:
 }
 ```
 
-If `sandbox_image` is not set on the profile, it inherits from `default`. If neither sets it, the image falls back to environment variables (`CLAUDE_CODE_REGISTRY`, `CLAUDE_CODE_IMAGE_NAME`, `CLAUDE_CODE_IMAGE_TAG`).
+Child profiles inherit `sandbox_images` from `default` and can override individual entries. If `--cuda` or `--rocm` is passed, the matching key is used; otherwise `default` is used. Falls back to environment variables (`CLAUDE_CODE_REGISTRY`, `CLAUDE_CODE_IMAGE_NAME`, `CLAUDE_CODE_IMAGE_TAG`).
 
 ### Listing Profiles
 

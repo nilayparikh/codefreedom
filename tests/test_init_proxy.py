@@ -10,9 +10,10 @@ def _setup_bundled_proxy_examples(root: Path) -> Path:
     """Create a fake bundled examples/proxy/ directory for testing."""
     examples = root / "examples"
     proxy_dir = examples / "proxy"
-    providers_dir = proxy_dir / "providers"
+    config_dir = proxy_dir / "config"
+    providers_dir = config_dir / "providers"
     providers_dir.mkdir(parents=True)
-    (proxy_dir / "config.yaml").write_text("# test config")
+    (config_dir / "config.yaml").write_text("# test config")
     (proxy_dir / "docker-compose.yaml").write_text("version: '3'")
     (providers_dir / "test.yaml").write_text("# test provider")
     (proxy_dir / ".env.proxy.example").write_text("# PROXY_VAR=test\n")
@@ -59,7 +60,7 @@ class TestInitProxy:
         (cf_dir / ".env.proxy").write_text("existing env")
 
         examples = _setup_bundled_proxy_examples(tmp_path)
-        (examples / "proxy" / "config.yaml").write_text("new content")
+        (examples / "proxy" / "config" / "config.yaml").write_text("new content")
 
         with mock.patch(
             "codefreedom.cli.proxy._find_bundled_examples", return_value=examples
@@ -81,7 +82,7 @@ class TestInitProxy:
         (proxy_config / "config.yaml").write_text("old")
 
         examples = _setup_bundled_proxy_examples(tmp_path)
-        (examples / "proxy" / "config.yaml").write_text("new proxy")
+        (examples / "proxy" / "config" / "config.yaml").write_text("new proxy")
 
         with mock.patch(
             "codefreedom.cli.proxy._find_bundled_examples", return_value=examples

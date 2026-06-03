@@ -1,11 +1,8 @@
 """Tests for proxy CLI — path resolution, validation, compose discovery."""
 
 import argparse
-import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 import yaml
 
 from codefreedom.cli.proxy import (
@@ -14,7 +11,6 @@ from codefreedom.cli.proxy import (
     _validate,
     _validate_basic,
     _env_is_set,
-    _print_validation_result,
     run,
 )
 
@@ -146,10 +142,8 @@ class TestRun:
 
     def test_no_action_shows_help(self):
         args = argparse.Namespace(
-            up=False,
-            down=False,
-            status=False,
-            validate=False,
+            action="invalid",
+            reset=False,
             docker=False,
             port=4000,
             host="0.0.0.0",
@@ -157,12 +151,10 @@ class TestRun:
         result = run(args)
         assert result == 1
 
-    def test_up_docker_compose_not_found(self, monkeypatch):
+    def test_start_docker_compose_not_found(self, monkeypatch):
         args = argparse.Namespace(
-            up=True,
-            down=False,
-            status=False,
-            validate=False,
+            action="start",
+            reset=False,
             docker=True,
             port=4000,
             host="0.0.0.0",
@@ -171,12 +163,10 @@ class TestRun:
         result = run(args)
         assert result == 1  # docker compose file not found
 
-    def test_up_native_config_not_found(self, monkeypatch):
+    def test_start_native_config_not_found(self, monkeypatch):
         args = argparse.Namespace(
-            up=True,
-            down=False,
-            status=False,
-            validate=False,
+            action="start",
+            reset=False,
             docker=False,
             port=4000,
             host="0.0.0.0",

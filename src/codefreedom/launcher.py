@@ -1,6 +1,6 @@
 """Sandbox launcher -- runs code agents in ephemeral Docker containers with GPU passthrough.
 
-Pre-configured images (ghcr.io/nilayparikh/codefreedom):
+Pre-configured images (docker.io/nilayparikh/codefreedom — also available on ghcr.io/nilayparikh/codefreedom as a mirror):
 - CUDA (NVIDIA): cuda-latest, cuda-v0.1, cuda-v0.1.0
 - ROCm (AMD): rocm-latest, rocm-v0.1, rocm-v0.1.0
 - Ubuntu (General): latest, v0.1, v0.1.0
@@ -22,8 +22,8 @@ from codefreedom.env_loader import eprint
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-REGISTRY = os.environ.get("CLAUDE_CODE_REGISTRY", "ghcr.io/nilayparikh")
-IMAGE_NAME = os.environ.get("CLAUDE_CODE_IMAGE_NAME", "claude-code")
+REGISTRY = os.environ.get("CLAUDE_CODE_REGISTRY", "docker.io/nilayparikh")
+IMAGE_NAME = os.environ.get("CLAUDE_CODE_IMAGE_NAME", "codefreedom")
 IMAGE_TAG = os.environ.get("CLAUDE_CODE_IMAGE_TAG", "latest")
 TARGET_IMAGE = f"{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}"
 
@@ -249,12 +249,34 @@ def run_docker(
     claude_args: List[str],
     workspace_dir: Path,
     profile_name: str,
-    sandbox_image: str | None = None,
+    gpu_type: str | None = None,
+    sandbox_images: Dict[str, str] | None = None,
 ) -> int:
     """Run claude inside an ephemeral Docker container. Each session gets a fresh
-    container with a random name -- cleaned up on exit (including Ctrl+C)."""
+    container with a random name -- cleaned up on exit (including Ctrl+C).
 
-    image = sandbox_image or TARGET_IMAGE
+    If *gpu_type* is set (\"cuda\" or \"rocm\"), *sandbox_images* is consulted
+    for a matching image reference, falling back to the standard tag naming
+    convention (``docker.io/nilayparikh/codefreedom:{gpu_type}-latest``).
+    Otherwise ``sandbox_images[\"default\"]`` (or ``TARGET_IMAGE``) is used.
+    """
+
+    sandbox_images = sandbox_images or {}
+
+    # ── Resolve image based on GPU type ────────────────────────────────────
+    if gpu_type:
+        # Check profile's sandbox_images mapping first
+        if gpu_type in sandbox_images:
+            image = sandbox_images[gpu_type]
+        else:
+            # Fall back to standard tag convention
+            registry = REGISTRY
+            name = IMAGE_NAME
+            image = f"{registry}/{name}:{gpu_type}-latest"
+        eprint(f"[GPU] Selected '{gpu_type}' sandbox image: {image}")
+    else:
+        image = sandbox_images.get("default") or TARGET_IMAGE
+
     container_name = _generate_container_name()
 
     eprint(f"[IMAGE] Using sandbox image: {image}")

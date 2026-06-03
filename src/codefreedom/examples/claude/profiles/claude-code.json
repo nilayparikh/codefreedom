@@ -6,7 +6,7 @@
     "'default' is the base profile — 'ultra', 'pro', and 'air' inherit from it.",
     "'bare' is standalone: minimal profile with no model aliases, sandbox settings, or preferences — but still routes through LiteLLM proxy.",
     "Only '--native-models' forces native Anthropic /login auth (by stripping ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN).",
-    "sandbox_image is inherited from 'default' unless the child profile explicitly overrides it.",
+    "sandbox_images maps GPU type to Docker image references. Keys: default, cuda, rocm (used by --cuda / --rocm flags).",
     "ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN must be set explicitly per profile.",
     "Secrets (~/.env.secrets) are loaded but profiles define their own auth explicitly.",
     "Use sandbox.env to declare env vars that should only be forwarded in --sandbox mode (e.g., GITHUB_PERSONAL_ACCESS_TOKEN).",
@@ -15,7 +15,11 @@
   "profiles": {
     "default": {
       "description": "Base profile — routes through local LiteLLM proxy. Other profiles inherit from this.",
-      "sandbox_image": "ghcr.io/nilayparikh/codefreedom:latest",
+      "sandbox_images": {
+        "default": "docker.io/nilayparikh/codefreedom:latest",
+        "cuda": "docker.io/nilayparikh/codefreedom:cuda-latest",
+        "rocm": "docker.io/nilayparikh/codefreedom:rocm-latest"
+      },
       "env": {
         "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
         "CLAUDE_MODEL": "CodeFreedom/Flash",

@@ -1,23 +1,24 @@
 """Proxy subcommand -- manage the LLM routing proxy (Docker or native).
 
 Usage:
-    codefreedom proxy init [--reset]  Initialize proxy configs
-    codefreedom proxy --up            Start the proxy (native, default)
-    codefreedom proxy --up --docker   Start via Docker Compose
-    codefreedom proxy --down          Stop the proxy
-    codefreedom proxy --status        Show proxy status
-    codefreedom proxy --validate      Validate configuration
+    codefreedom proxy init [--reset]   Initialize proxy configs
+    codefreedom proxy start            Start the proxy (native, default)
+    codefreedom proxy start --docker   Start via Docker Compose
+    codefreedom proxy stop             Stop the proxy
+    codefreedom proxy status           Show proxy status
+    codefreedom proxy validate         Validate configuration
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from codefreedom.env_loader import eprint
+from codefreedom.env_loader import eprint, load_dotenv
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 
@@ -27,9 +28,8 @@ _CODEFREEDOM_DIR = Path.home() / ".codefreedom"
 
 _NOTICE = """\
 --- Notice ----------------------------------------------------------
-CodeFreedom is experimental software. Some features may
-interact with third-party services and components.
-CodeFreedom is not responsible for third-party behavior.
+CodeFreedom is provided \"as is\", without warranty of any kind.
+See the Apache 2.0 License for details.
 ---------------------------------------------------------------------"""
 
 
@@ -67,7 +67,7 @@ def init_proxy(reset: bool = False) -> int:
 
     # ── config.yaml ────────────────────────────────────────────────────
     _copy_file(
-        proxy_src / "config.yaml",
+        proxy_src / "config" / "config.yaml",
         proxy_dst / "config" / "config.yaml",
     )
 
@@ -78,7 +78,7 @@ def init_proxy(reset: bool = False) -> int:
     )
 
     # ── Providers ──────────────────────────────────────────────────────
-    providers_src = proxy_src / "providers"
+    providers_src = proxy_src / "config" / "providers"
     providers_dst = proxy_dst / "config" / "providers"
     if providers_src.exists():
         for provider_file in sorted(providers_src.glob("*.yaml")):
@@ -128,19 +128,42 @@ def _find_config_file() -> Optional[Path]:
 def run(args: argparse.Namespace) -> int:
     """Execute the proxy subcommand. Returns exit code."""
 
-    if args.up:
+    action = args.action or "status"
+
+    if action == "start":
         return _start(args)
-    elif args.down:
+    elif action == "stop":
         return _stop()
-    elif args.status:
+    elif action == "status":
         return _status()
-    elif args.validate:
+    elif action == "validate":
         return _validate()
+    elif action == "init":
+        return init_proxy(reset=args.reset)
     else:
         eprint(
-            "[proxy] No action specified. Use --up, --down, --status, or --validate."
+            "[proxy] No action specified."
+            " Use start, stop, status, validate, or init."
         )
         return 1
+
+
+def _load_proxy_env_files() -> Dict[str, str]:
+    """Load proxy-specific env files: .env.proxy and .env.proxy.secrets.
+
+    Returns a merged dict (secrets override config).
+    """
+    merged: Dict[str, str] = {}
+    for env_path in [
+        _CODEFREEDOM_DIR / ".env.proxy",
+        _CODEFREEDOM_DIR / ".env.proxy.secrets",
+    ]:
+        if env_path.exists():
+            merged.update(load_dotenv(env_path))
+            eprint(f"[proxy] Loaded env from {env_path}")
+        else:
+            eprint(f"[proxy] Env file not found (skipping): {env_path}")
+    return merged
 
 
 # ── Start ────────────────────────────────────────────────────────────────────
@@ -163,6 +186,14 @@ def _start_compose() -> int:
         return 1
 
     eprint(f"[proxy] Starting LiteLLM via Docker Compose ({compose_file})...")
+
+    # Load proxy env files and merge with system env.
+    # Proxy env files override system env so docker compose sees
+    # configured values even when system env has empty-string vars
+    # (e.g. MICROSOFT_FOUNDRY_API_BASE="" in shell).
+    proxy_file_env = _load_proxy_env_files()
+    merged_env = {**os.environ, **proxy_file_env}
+
     result = subprocess.run(
         [
             "docker",
@@ -174,6 +205,7 @@ def _start_compose() -> int:
             "up",
             "-d",
         ],
+        env=merged_env,
         capture_output=False,
         check=False,
     )
@@ -223,8 +255,14 @@ def _start_native(args: argparse.Namespace) -> int:
         host,
     ]
 
+    # Load proxy env files and merge with system env.
+    # Proxy env files override system env so the litellm process sees
+    # configured values even when system env has empty-string vars.
+    proxy_file_env = _load_proxy_env_files()
+    merged_env = {**os.environ, **proxy_file_env}
+
     try:
-        proc = subprocess.Popen(cmd)
+        proc = subprocess.Popen(cmd, env=merged_env)
         eprint(f"[proxy] [OK] Proxy starting (PID: {proc.pid})")
         eprint("[proxy]   Press Ctrl+C to stop.")
         proc.wait()

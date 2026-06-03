@@ -50,10 +50,14 @@ TOOL_INFO: Dict[str, dict] = {
 
 _NON_DISCLAIMER = """\
 --- Notice ----------------------------------------------------------
-CodeFreedom is experimental software. Some features may
-interact with third-party services and components.
-CodeFreedom is not responsible for third-party behavior.
+CodeFreedom is provided \"as is\", without warranty of any kind.
+See the Apache 2.0 License for details.
 ---------------------------------------------------------------------"""
+
+_THIRD_PARTY_NOTICE = (
+    "CodeFreedom is not responsible"
+    " for their behavior, security, or privacy practices."
+)
 
 
 def _print_tool_notice(tool_name: str) -> None:
@@ -69,8 +73,7 @@ def _print_tool_notice(tool_name: str) -> None:
     for component, vendor in components:
         print(f"  • {component} ({vendor})")
     print()
-    print("CodeFreedom is not responsible for the behavior,")
-    print("security, or privacy practices of these components.")
+    print(_THIRD_PARTY_NOTICE)
     print("────────────────────────────────────────────────────────")
 
 
@@ -101,8 +104,7 @@ def prompt_acceptance(tool_name: str) -> bool:
         print(f"  • {component} — {vendor}")
     print()
     print("By continuing, you acknowledge that this tool uses")
-    print("third-party components. CodeFreedom is not responsible")
-    print("for their behavior, security, or privacy practices.")
+    print("third-party components. " + _THIRD_PARTY_NOTICE)
     print()
     print("Documentation: " + info["docs_url"])
     print()

@@ -27,7 +27,7 @@ graph TD
         SANDBOX --> PROFILES
     end
 
-    subgraph "Sandbox Images<br/>(ghcr.io/nilayparikh/codefreedom)"
+    subgraph "Sandbox Images<br/>(docker.io/nilayparikh/codefreedom)"
         SANDBOX --> IMG_CUDA["CUDA<br/>NVIDIA GPUs"]
         SANDBOX --> IMG_ROCM["ROCm<br/>AMD GPUs"]
         SANDBOX --> IMG_UBUNTU["Ubuntu<br/>General purpose"]

@@ -94,7 +94,7 @@ Then either use an existing profile or add your profile to `~/.codefreedom/profi
 **Checklist:**
 
 1. Is Docker running? `docker info`
-2. Is the image pulled? `docker pull ghcr.io/nilayparikh/codefreedom:latest`
+2. Is the image pulled? `docker pull docker.io/nilayparikh/codefreedom:latest`
 3. Check Docker logs for GPU driver issues
 
 ### GPU Passthrough Errors

@@ -165,7 +165,7 @@ codefreedom claude --profile my-profile --worktree feature-branch
 
 ## Sandbox Containers
 
-Three pre-configured images (CUDA, ROCm, Ubuntu) on `ghcr.io/nilayparikh/codefreedom`.
+Three pre-configured images (CUDA, ROCm, Ubuntu) on `docker.io/nilayparikh/codefreedom`. (Also available on `ghcr.io/nilayparikh/codefreedom` as a mirror.)
 See [Sandbox Mode → Available Images](docs/claude-code/sandbox.md#available-images) for the full tag reference and Dockerfile examples.
 
 ## CLI Reference

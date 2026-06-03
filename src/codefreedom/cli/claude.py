@@ -15,7 +15,7 @@ from pathlib import Path
 from codefreedom.env_loader import eprint, load_env_chain
 from codefreedom.launcher import run_docker, run_local, status, stop
 from codefreedom.profiles import (
-    get_profile_sandbox_image,
+    get_profile_sandbox_images,
     list_profiles,
     load_profile_env,
     load_profiles,
@@ -36,9 +36,8 @@ DEFAULT_PROFILES_FILE = _os.environ.get(
 
 _NOTICE = """\
 --- Notice ----------------------------------------------------------
-CodeFreedom is experimental software. Some features may
-interact with third-party services and components.
-CodeFreedom is not responsible for third-party behavior.
+CodeFreedom is provided \"as is\", without warranty of any kind.
+See the Apache 2.0 License for details.
 ---------------------------------------------------------------------"""
 
 
@@ -154,19 +153,26 @@ def run(args: argparse.Namespace) -> int:
     eprint("[ENV] Loading configuration...")
     base_env = load_env_chain(workspace_dir)
 
+    # ── GPU type from --cuda / --rocm flags ────────────────────────────────
+    gpu_type: str | None = None
+    if getattr(args, "gpu_cuda", False):
+        gpu_type = "cuda"
+    elif getattr(args, "gpu_rocm", False):
+        gpu_type = "rocm"
+
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
     profiles_path = _resolve_profiles_path()
 
     profile_env: dict = {}
-    sandbox_image: str | None = None
+    sandbox_images: dict[str, str] = {}
     mode = "sandbox" if args.sandbox else "local"
     if profiles_path.exists():
         profiles_dict = load_profiles(profiles_path)
         profile_env = load_profile_env(
             profile_name, profiles_path, base_env, mode, profiles=profiles_dict
         )
-        sandbox_image = get_profile_sandbox_image(
+        sandbox_images = get_profile_sandbox_images(
             profile_name, profiles_path, profiles=profiles_dict
         )
     elif profile_name != "default":
@@ -196,7 +202,12 @@ def run(args: argparse.Namespace) -> int:
 
     if args.sandbox:
         return run_docker(
-            profile_env, args.claude_args, workspace_dir, profile_name, sandbox_image
+            profile_env,
+            args.claude_args,
+            workspace_dir,
+            profile_name,
+            gpu_type=gpu_type,
+            sandbox_images=sandbox_images,
         )
     else:
         return run_local(profile_env, args.claude_args, dangerously_skip)

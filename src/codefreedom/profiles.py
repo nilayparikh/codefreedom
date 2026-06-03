@@ -159,38 +159,35 @@ def _merge_mode_env(
             merged.update(resolve_env(mode_env_def, {**base_env, **merged}))
 
 
-def get_profile_sandbox_image(
+def get_profile_sandbox_images(
     profile_name: str,
     profiles_path: Path,
     profiles: Dict[str, Any] | None = None,
-) -> str | None:
-    """Get the sandbox image for a profile, respecting inheritance.
+) -> Dict[str, str]:
+    """Get the sandbox_images mapping for a profile, respecting inheritance.
 
-    If *profiles* is provided, uses it directly to avoid re-reading the file.
-
-    Returns None if no sandbox_image is set anywhere in the chain.
+    Returns a dict mapping image type (\"default\", \"cuda\", \"rocm\") to image
+    references.  Child profiles inherit from 'default' and can override
+    individual entries. Returns an empty dict if nothing is configured.
     """
     if profiles is None:
         profiles = load_profiles(profiles_path)
 
     if profile_name not in profiles:
-        return None
+        return {}
 
     profile_def = profiles[profile_name]
-    sandbox = profile_def.get("sandbox_image")
+    images = profile_def.get("sandbox_images", {})
 
-    if sandbox:
-        return sandbox
-
-    # Inheritance: if not set on this profile, fall back to default
+    # Inheritance: merge default's sandbox_images, then profile overrides
     if profile_name not in ("default", "bare"):
         default_def = profiles.get("default", {})
-        sandbox = default_def.get("sandbox_image")
-        if sandbox:
-            eprint(f"[PROFILE] '{profile_name}' inherits sandbox_image from 'default'")
-            return sandbox
+        default_images = default_def.get("sandbox_images", {})
+        merged = dict(default_images)
+        merged.update(images)
+        return merged
 
-    return None
+    return dict(images)
 
 
 def list_profiles(profiles_path: Path) -> List[Dict[str, Any]]:

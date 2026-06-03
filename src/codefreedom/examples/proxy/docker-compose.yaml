@@ -86,7 +86,7 @@ services:
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       # Microsoft Foundry (Azure) — leave API_KEY empty to disable
-      MICROSOFT_FOUNDRY_API_BASE: ${MICROSOFT_FOUNDRY_API_BASE:-}
+      MICROSOFT_FOUNDRY_API_BASE: ${MICROSOFT_FOUNDRY_API_BASE:-https://ergox-ca-resource.services.ai.azure.com/openai/v1}
       MICROSOFT_FOUNDRY_API_KEY: ${MICROSOFT_FOUNDRY_API_KEY:-}
       # NVIDIA AI Endpoints — leave API_KEY empty to disable
       NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
@@ -111,10 +111,8 @@ services:
       # Leave LOCAL_M_API_KEY / LOCAL_S_API_KEY empty to disable local models.
       LOCAL_M_BASE_URL: ${LOCAL_M_BASE_URL:-http://host.docker.internal:8000/v1}
       LOCAL_M_API_KEY: ${LOCAL_M_API_KEY:-sk-dummy}
-      LOCAL_M_SERVING_MODEL: ${LOCAL_M_MODEL:-openai/qwen3.6_27b}
       LOCAL_S_BASE_URL: ${LOCAL_S_BASE_URL:-http://host.docker.internal:8001/v1}
       LOCAL_S_API_KEY: ${LOCAL_S_API_KEY:-sk-dummy}
-      LOCAL_S_SERVING_MODEL: ${LOCAL_S_MODEL:-openai/qwen3.6_35b_a3b}
 
     networks:
       - codefreedom
