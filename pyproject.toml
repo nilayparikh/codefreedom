@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codefreedom"
-version = "0.0.3"
+version = "0.0.4"
 description = "Single wrapper for all code agents — simple LLM routing, sandboxing, profile management, and isolation. All config in ~/.codefreedom."
 readme = "README.md"
 license = { text = "Apache-2.0" }
