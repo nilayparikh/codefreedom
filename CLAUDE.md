@@ -221,6 +221,17 @@ When an unknown flag appears **before** a known flag, `parse_known_args` puts AL
 
 Sandbox mode **always** passes this to Claude CLI inside the container. Local mode only passes it if the user explicitly requests it.
 
+### Unicode in output strings breaks Windows CI
+
+Windows terminal defaults to cp1252 encoding, which cannot encode Unicode box-drawing characters (`─`, `◆`, `★`, etc.). Any `print()` or string that uses these characters will cause a `UnicodeEncodeError` on Windows.
+
+**Always use plain ASCII in user-facing strings** — replace `───` with `---`, `◆` with `*`, etc.
+Affected files: `src/codefreedom/cli/claude.py`, `proxy.py`, `tool_init_utils.py` (the `_NOTICE`/`_NON_DISCLAIMER` variables).
+
+### Top-level `--init` and `--force` must stay in sync with CI
+
+The integration test (`.github/workflows/integration-test.yml`) runs `codefreedom --init --force` to bootstrap all config files. If you rename or remove these top-level flags, update the test too. The handler lives in `src/codefreedom/cli/main.py` before subcommand dispatch.
+
 ## What to Include vs Exclude
 
 ### Include in CLAUDE.md
