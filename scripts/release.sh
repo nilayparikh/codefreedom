@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # ── CodeFreedom Release Script ─────────────────────────────────────────────────
 # Two modes:
-#   --version  — bump version in pyproject.toml (any branch, no push/tag)
-#   --tag      — full release: bump, tag v* and push (main branch only)
+#   --version  — update version in pyproject.toml and commit (any branch)
+#   --tag      — verify version files match, then tag v* and push (main only)
+#
+# Typical workflow:
+#   1. ./scripts/release.sh --version 0.2.0   # bump files on any branch
+#   2. ./scripts/release.sh --tag 0.2.0       # verify + tag + push from main
 #
 # Tag push triggers:
 #   • PyPI publish      (.github/workflows/pipy.yaml)
@@ -19,12 +23,13 @@ Usage: ./scripts/release.sh --version <semver> [--dry-run]
        ./scripts/release.sh --tag <semver> [--dry-run] [--force]
 
 Modes:
-  --version <semver>   Bump version in pyproject.toml and commit.
+  --version <semver>   Update version in pyproject.toml and commit.
                        Works on any branch — use this to set a pre-release
                        version on feature branches for testing.
 
-  --tag <semver>       Full release: bump version, tag v<semver>, push.
-                       Only allowed on 'main' branch with clean working tree.
+  --tag <semver>       Tag current HEAD as v<semver> and push to origin.
+                       Verifies pyproject.toml already contains <semver>
+                       before tagging. Only allowed on 'main' branch.
 
 Options:
   --dry-run   Preview changes without committing or pushing.
@@ -32,10 +37,10 @@ Options:
   --help      Show this message.
 
 Examples:
-  ./scripts/release.sh --version 0.2.0-beta          # bump on any branch
-  ./scripts/release.sh --tag 0.1.1                    # full release
-  ./scripts/release.sh --tag 0.2.0 --dry-run          # preview a release
-  ./scripts/release.sh --tag 0.1.1 --force             # overwrite existing tag
+  ./scripts/release.sh --version 0.2.0                # bump pyproject.toml + commit (any branch)
+  ./scripts/release.sh --tag 0.2.0                    # verify version, tag, push (main only)
+  ./scripts/release.sh --tag 0.2.0 --dry-run          # preview tagging
+  ./scripts/release.sh --tag 0.2.0 --force            # overwrite existing tag
 EOF
   exit 0
 }
@@ -87,7 +92,7 @@ fi
 
 TAG="v${VERSION}"
 
-# ── Mode: --version (bump only, any branch) ─────────────────────────────
+# ── Mode: --version (update files + commit, any branch) ─────────────────
 if [[ "$MODE" == "version" ]]; then
   if $FORCE; then
     echo "⚠️  --force is ignored in --version mode (no tagging involved)."
@@ -103,26 +108,34 @@ if [[ "$MODE" == "version" ]]; then
   echo "   Current: $CURRENT_VERSION → New: $VERSION"
 
   if $DRY_RUN; then
-    echo "[DRY RUN] Would update pyproject.toml and commit."
-  else
-    # Update pyproject.toml in-place (macOS + Linux compatible)
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      sed -i '' "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+    if [[ "$CURRENT_VERSION" == "$VERSION" ]]; then
+      echo "[DRY RUN] Version already at $VERSION — nothing to commit."
     else
-      sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+      echo "[DRY RUN] Would update pyproject.toml and commit."
     fi
+  else
+    if [[ "$CURRENT_VERSION" == "$VERSION" ]]; then
+      echo "   Version already at $VERSION — nothing to do."
+    else
+      # Update pyproject.toml in-place (macOS + Linux compatible)
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+      else
+        sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+      fi
 
-    git add pyproject.toml
-    git commit -m "release: bump to ${VERSION}"
+      git add pyproject.toml
+      git commit -m "release: bump to ${VERSION}"
 
-    echo ""
-    echo "✅ Version bumped to $VERSION and committed on $(git rev-parse --abbrev-ref HEAD)."
-    echo "   Run ./scripts/release.sh --tag $VERSION when ready to publish."
+      echo ""
+      echo "✅ Version bumped to $VERSION and committed on $(git rev-parse --abbrev-ref HEAD)."
+      echo "   Run ./scripts/release.sh --tag $VERSION when ready to publish."
+    fi
   fi
   exit 0
 fi
 
-# ── Mode: --tag (full release, main branch only) ───────────────────────
+# ── Mode: --tag (verify files, then tag + push from main) ──────────────
 # ── Ensure we're on main ─────────────────────────────────────────────────
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [[ "$BRANCH" != "main" ]]; then
@@ -141,6 +154,25 @@ fi
 echo "⬇️  Pulling latest main..."
 git pull origin main
 
+# ── Verify pyproject.toml version matches requested tag ────────────────
+echo "🔍 Verifying version files match $VERSION ..."
+
+if ! grep -q "^version = " pyproject.toml; then
+  echo "❌ Error: 'version = ' line not found in pyproject.toml"
+  exit 1
+fi
+
+FILE_VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+
+if [[ "$FILE_VERSION" != "$VERSION" ]]; then
+  echo "❌ Error: pyproject.toml has version $FILE_VERSION, but tag wants $VERSION."
+  echo "   Run './scripts/release.sh --version $VERSION' first to bump files,"
+  echo "   then commit and push before tagging."
+  exit 1
+fi
+
+echo "   pyproject.toml: $FILE_VERSION ✓"
+
 # ── Check if tag already exists ──────────────────────────────────────────
 if git rev-parse "$TAG" >/dev/null 2>&1; then
   if $FORCE; then
@@ -157,34 +189,11 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
   fi
 fi
 
-# ── Update version in pyproject.toml ─────────────────────────────────────
-echo "📝 Updating pyproject.toml version → $VERSION"
-if ! grep -q "^version = " pyproject.toml; then
-  echo "❌ Error: 'version = ' line not found in pyproject.toml"
-  exit 1
-fi
-
-CURRENT_VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-echo "   Current: $CURRENT_VERSION → New: $VERSION"
-
-# __init__.py derives __version__ from importlib.metadata — no need to patch it.
-# Only pyproject.toml is the version source of truth.
-
 if $DRY_RUN; then
-  echo "[DRY RUN] Would update pyproject.toml, commit, tag $TAG, and push."
+  echo "[DRY RUN] Would tag HEAD as $TAG and push."
 else
-  # Update pyproject.toml in-place (macOS + Linux compatible)
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
-  else
-    sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
-  fi
-
-  # Commit
-  git add pyproject.toml
-  git commit -m "release: bump to ${VERSION}"
-
   # Tag
+  echo "🏷️  Tagging HEAD as $TAG ..."
   git tag -a "$TAG" -m "Release ${TAG}"
 
   # Push commit + tag

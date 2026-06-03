@@ -9,11 +9,21 @@
 #   cuda-v0.1.0, cuda-latest         → NVIDIA GPUs (arm64 + amd64)
 #   rocm-v0.1.0, rocm-latest         → AMD GPUs (amd64)
 #   v0.1.0, latest                   → Common Ubuntu base (arm64 + amd64)
+#   chrome-v0.1.0, chrome-latest     → Chrome browser (arm64 + amd64)
+#   camoufox-v0.1.0, camoufox-latest → Camoufox browser (arm64 + amd64)
 # ────────────────────────────────────────────────────────────────────────────────
 
 name: Publish Docker Images
 
 on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "docker/camoufox/**"
+      - "docker/chrome/**"
+      - "docker/claude-code/**"
   workflow_dispatch:
 
 env:
@@ -54,6 +64,7 @@ jobs:
       rocm: ${{ steps.detect.outputs.rocm }}
       ubuntu: ${{ steps.detect.outputs.ubuntu }}
       chrome: ${{ steps.detect.outputs.chrome }}
+      camoufox: ${{ steps.detect.outputs.camoufox }}
     steps:
       - uses: actions/checkout@v6
 
@@ -61,19 +72,21 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # Manual trigger — build everything
-            echo "cuda=true"  >> "${GITHUB_OUTPUT}"
-            echo "rocm=true"  >> "${GITHUB_OUTPUT}"
-            echo "ubuntu=true" >> "${GITHUB_OUTPUT}"
-            echo "chrome=true" >> "${GITHUB_OUTPUT}"
+            echo "cuda=true"     >> "${GITHUB_OUTPUT}"
+            echo "rocm=true"     >> "${GITHUB_OUTPUT}"
+            echo "ubuntu=true"   >> "${GITHUB_OUTPUT}"
+            echo "chrome=true"   >> "${GITHUB_OUTPUT}"
+            echo "camoufox=true" >> "${GITHUB_OUTPUT}"
           else
             # Check each Dockerfile with git diff
             CHANGED=$(git diff --name-only "${{ github.base_ref || 'HEAD~1' }}" HEAD)
-            for image in cuda rocm ubuntu chrome; do
+            for image in cuda rocm ubuntu chrome camoufox; do
               case "$image" in
-                cuda)   pat="docker/claude-code/Dockerfile.CUDA" ;;
-                rocm)   pat="docker/claude-code/Dockerfile.ROCm" ;;
-                ubuntu) pat="docker/claude-code/Dockerfile.Ubuntu" ;;
-                chrome) pat="docker/chrome/Dockerfile.Chrome" ;;
+                cuda)      pat="docker/claude-code/Dockerfile.CUDA" ;;
+                rocm)      pat="docker/claude-code/Dockerfile.ROCm" ;;
+                ubuntu)    pat="docker/claude-code/Dockerfile.Ubuntu" ;;
+                chrome)    pat="docker/chrome/Dockerfile.Chrome" ;;
+                camoufox)  pat="docker/camoufox/Dockerfile.Camoufox" ;;
               esac
               if echo "$CHANGED" | grep -q "$pat"; then
                 echo "${image}=true" >> "${GITHUB_OUTPUT}"
@@ -355,10 +368,86 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
+  # ── Build Camoufox (MCP Web Automation Browser) ────────────────────────
+  build-camoufox:
+    needs: [version, changes]
+    if: ${{ needs.changes.outputs.camoufox == 'true' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64,amd64
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.DOCKER_HUB_REPO }}
+            ${{ env.GHCR_REPO }}
+          tags: |
+            type=raw,value=camoufox-v${{ needs.version.outputs.version }}
+            type=raw,value=camoufox-v${{ needs.version.outputs.major_minor }}
+            type=raw,value=camoufox-latest
+          labels: |
+            org.opencontainers.image.title=CodeFreedom - Camoufox Browser (MCP)
+            org.opencontainers.image.description=Web automation with Camoufox (Firefox fork) + Xvfb + PyAutoGUI + MCP server
+            org.opencontainers.image.version=v${{ needs.version.outputs.version }}
+            com.codefreedom.platform=Camoufox
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: docker/camoufox/
+          file: docker/camoufox/Dockerfile.Camoufox
+          platforms: linux/arm64,linux/amd64
+          build-args: |
+            CODEFREEDOM_VERSION=v${{ needs.version.outputs.version }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=Camoufox
+          cache-to: type=gha,mode=max,scope=Camoufox
+
+      - name: Generate artifact attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.GHCR_REPO }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
   # ── Summary ────────────────────────────────────────────────────────────
   summary:
     needs:
-      [version, changes, build-cuda, build-rocm, build-ubuntu, build-chrome]
+      [
+        version,
+        changes,
+        build-cuda,
+        build-rocm,
+        build-ubuntu,
+        build-chrome,
+        build-camoufox,
+      ]
     if: always()
     runs-on: ubuntu-24.04
     steps:
@@ -373,8 +462,10 @@ jobs:
           echo "| AMD ROCm | \`rocm-v${V}\`, \`rocm-latest\` |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Ubuntu (general) | \`v${V}\`, \`latest\` |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Chrome (browser) | \`chrome-v${V}\`, \`chrome-latest\` |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Camoufox (MCP browser) | \`camoufox-v${V}\`, \`camoufox-latest\` |" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
           echo "**Registries:** \`docker.io/nilayparikh/codefreedom\` · \`ghcr.io/nilayparikh/codefreedom\`" >> "${GITHUB_STEP_SUMMARY}"
           echo '```' >> "${GITHUB_STEP_SUMMARY}"
           echo "docker pull nilayparikh/codefreedom:chrome-v${V}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "docker pull nilayparikh/codefreedom:camoufox-v${V}" >> "${GITHUB_STEP_SUMMARY}"
           echo '```' >> "${GITHUB_STEP_SUMMARY}"
