@@ -77,9 +77,10 @@ jobs:
             echo "ubuntu=true"   >> "${GITHUB_OUTPUT}"
             echo "chrome=true"   >> "${GITHUB_OUTPUT}"
             echo "camoufox=true" >> "${GITHUB_OUTPUT}"
-          else
-            # Check each Dockerfile with git diff
-            CHANGED=$(git diff --name-only "${{ github.base_ref || 'HEAD~1' }}" HEAD)
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # PR — diff against base branch
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}" HEAD)
             for image in cuda rocm ubuntu chrome camoufox; do
               case "$image" in
                 cuda)      pat="docker/claude-code/Dockerfile.CUDA" ;;
@@ -94,6 +95,33 @@ jobs:
                 echo "${image}=false" >> "${GITHUB_OUTPUT}"
               fi
             done
+          else
+            # Push — use previous commit SHA from event payload
+            BEFORE="${{ github.event.before }}"
+            if [[ -z "$BEFORE" || "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+              # No previous commit (first push or tag) — build everything
+              echo "cuda=true"     >> "${GITHUB_OUTPUT}"
+              echo "rocm=true"     >> "${GITHUB_OUTPUT}"
+              echo "ubuntu=true"   >> "${GITHUB_OUTPUT}"
+              echo "chrome=true"   >> "${GITHUB_OUTPUT}"
+              echo "camoufox=true" >> "${GITHUB_OUTPUT}"
+            else
+              CHANGED=$(git diff --name-only "$BEFORE" HEAD)
+              for image in cuda rocm ubuntu chrome camoufox; do
+                case "$image" in
+                  cuda)      pat="docker/claude-code/Dockerfile.CUDA" ;;
+                  rocm)      pat="docker/claude-code/Dockerfile.ROCm" ;;
+                  ubuntu)    pat="docker/claude-code/Dockerfile.Ubuntu" ;;
+                  chrome)    pat="docker/chrome/Dockerfile.Chrome" ;;
+                  camoufox)  pat="docker/camoufox/Dockerfile.Camoufox" ;;
+                esac
+                if echo "$CHANGED" | grep -q "$pat"; then
+                  echo "${image}=true" >> "${GITHUB_OUTPUT}"
+                else
+                  echo "${image}=false" >> "${GITHUB_OUTPUT}"
+                fi
+              done
+            fi
           fi
 
   # ── Build CUDA (NVIDIA GPUs) ───────────────────────────────────────────
