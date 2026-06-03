@@ -2,12 +2,14 @@
 
 Usage:
     codefreedom claude [--profile NAME] [--sandbox] [--stop|--status|--list-profiles] [agent-args...]
+    codefreedom claude init [--reset]
     cf cc [same]
 """
 
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 from codefreedom.env_loader import eprint, load_env_chain
@@ -29,6 +31,83 @@ DEFAULT_PROFILES_FILE = _os.environ.get(
     "CODEFREEDOM_PROFILES_FILE",
     str(_CODEFREEDOM_DIR / "profiles" / "claude-code.json"),
 )
+
+# ── Non-disclaimer banner ──────────────────────────────────────────────────
+
+_NOTICE = """\
+--- Notice ----------------------------------------------------------
+CodeFreedom is experimental software. Some features may
+interact with third-party services and components.
+CodeFreedom is not responsible for third-party behavior.
+---------------------------------------------------------------------"""
+
+
+def _find_bundled_examples() -> Path:
+    """Find the bundled examples directory inside the installed package."""
+    return Path(__file__).resolve().parent.parent / "examples"
+
+
+def init_claude(reset: bool = False) -> int:
+    """Initialize Claude Code profiles and .env.claude from bundled examples.
+
+    Delta-aware: skips files that already exist unless --reset is passed.
+    Always prints what was copied/skipped, a doc link, and the non-disclaimer.
+    """
+    bundled = _find_bundled_examples()
+    claude_src = bundled / "claude"
+    profiles_src = claude_src / "profiles"
+
+    cf_dir = _CODEFREEDOM_DIR
+    profiles_dst_dir = cf_dir / "profiles"
+
+    created: list[str] = []
+    skipped: list[str] = []
+
+    def _copy(src: Path, dst: Path) -> None:
+        """Copy src → dst with delta logic."""
+        if not reset and dst.exists():
+            skipped.append(str(dst))
+            print(f"[claude init] [SKIP] Already exists: {dst}")
+        elif src.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            created.append(str(dst))
+            print(f"[claude init] [OK]   Created {dst}")
+        else:
+            print(f"[claude init] [FAIL] Source not found: {src}")
+
+    # ── Profiles ───────────────────────────────────────────────────────
+    _copy(
+        profiles_src / "claude-code.json",
+        profiles_dst_dir / "claude-code.json",
+    )
+    _copy(
+        profiles_src / "claude-code.schema.json",
+        profiles_dst_dir / "claude-code.schema.json",
+    )
+
+    # ── Env files ───────────────────────────────────────────────────────
+    _copy(
+        claude_src / ".env.claude.example",
+        cf_dir / ".env.claude",
+    )
+    _copy(
+        claude_src / ".env.claude.secrets.example",
+        cf_dir / ".env.claude.secrets",
+    )
+
+    # ── Summary ─────────────────────────────────────────────────────────
+    print()
+    if created:
+        print(f"[claude init] Done — {len(created)} created, {len(skipped)} skipped.")
+    else:
+        print(f"[claude init] Nothing to do — {len(skipped)} files already exist.")
+        print("              Use --reset to overwrite all files.")
+    print(
+        "              Configure: https://nilayparikh.github.io/codefreedom/claude-code/local/"
+    )
+    print(_NOTICE)
+    return 0
 
 
 def run(args: argparse.Namespace) -> int:

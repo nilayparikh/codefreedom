@@ -8,7 +8,8 @@ CodeFreedom is a CLI tool that provides a unified interface for code agents with
 graph TD
     CLI["<b>codefreedom CLI</b><br/>cf / codefreedom"]
 
-    CLI -->|"codefreedom --init"| INIT["Initialize ~/.codefreedom/<br/>profiles + proxy configs"]
+    CLI -->|"codefreedom claude init"| INIT_C["Init Claude profiles + .env.claude"]
+    CLI -->|"codefreedom proxy init"| INIT_P["Init proxy configs + .env.proxy"]
     CLI -->|"codefreedom claude"| CLAUDE["Code Agent Launcher"]
     CLI -->|"codefreedom proxy"| PROXY["LLM Proxy"]
 
@@ -56,29 +57,41 @@ The CLI uses a subcommand structure:
 
 ```
 codefreedom / cf
-├── --init              # Bootstrap ~/.codefreedom/
 ├── claude (cc)         # Launch code agent
+│   ├── init            # Initialize Claude profiles + .env.claude (--reset to overwrite)
 │   ├── --profile       # Model profile
 │   ├── --sandbox       # Docker container
 │   ├── --native-models # Bypass proxy
 │   ├── --stop          # Stop containers
 │   ├── --status        # Container status
 │   └── --list-profiles # List profiles
-└── proxy (px)          # Manage LLM proxy
-    ├── --up            # Start proxy (native)
-    ├── --up --docker   # Start via Docker Compose
-    ├── --down          # Stop proxy
-    ├── --status        # Proxy status
-    └── --validate      # Validate config
+├── proxy (px)          # Manage LLM proxy
+│   ├── init            # Initialize proxy configs + .env.proxy (--reset to overwrite)
+│   ├── --up            # Start proxy (native)
+│   ├── --up --docker   # Start via Docker Compose
+│   ├── --down          # Stop proxy
+│   ├── --status        # Proxy status
+│   └── --validate      # Validate config
+└── tools               # Manage auxiliary tools
+    ├── chrome          # Chrome browser (Xvfb + CDP)
+    │   └── init|start|stop|status|url
+    └── web             # Camoufox stealth browser (MCP)
+        └── init|start|stop|status
 ```
 
 ## Configuration Flow
 
 ```mermaid
 flowchart LR
-    subgraph "Environment Loading"
-        ENV[".env file"]
-        SECRETS[".env.secrets file"]
+    subgraph "Environment Loading (9 layers)"
+        C_ENV[".env.claude"]
+        C_SEC[".env.claude.secrets"]
+        P_ENV[".env.proxy"]
+        P_SEC[".env.proxy.secrets"]
+        LEG_ENV[".env legacy"]
+        LEG_SEC[".env.secrets legacy"]
+        WS_ENV["workspace/.env"]
+        WS_SEC["workspace/.env.secrets"]
         SYS["System env vars"]
     end
 
@@ -93,8 +106,14 @@ flowchart LR
         CLAUDE_EXEC["Launch Claude Code<br/>with merged env"]
     end
 
-    ENV --> MERGED
-    SECRETS --> MERGED
+    C_ENV --> MERGED
+    C_SEC --> MERGED
+    P_ENV --> MERGED
+    P_SEC --> MERGED
+    LEG_ENV --> MERGED
+    LEG_SEC --> MERGED
+    WS_ENV --> MERGED
+    WS_SEC --> MERGED
     SYS --> MERGED
     PROF --> DEFAULT --> MERGED
     PROF --> CUSTOM --> MERGED

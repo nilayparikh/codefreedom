@@ -6,8 +6,8 @@
 # Triggered on: push to main, version tags (v*), or manual dispatch.
 #
 # Tag scheme:
-#   CUDA-v0.1.0, CUDA-latest         → NVIDIA GPUs (arm64 + amd64)
-#   ROCm-v0.1.0, ROCm-latest         → AMD GPUs (amd64)
+#   cuda-v0.1.0, cuda-latest         → NVIDIA GPUs (arm64 + amd64)
+#   rocm-v0.1.0, rocm-latest         → AMD GPUs (amd64)
 #   v0.1.0, latest                   → Common Ubuntu base (arm64 + amd64)
 # ────────────────────────────────────────────────────────────────────────────────
 
@@ -44,9 +44,49 @@ jobs:
           echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
           echo "📦 Version: v${VERSION}"
 
+  # ── Detect which Dockerfiles changed ─────────────────────────────────────
+  # On workflow_dispatch (manual trigger), all images are built.
+  # On push/PR, only images whose Dockerfile changed are built.
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      cuda: ${{ steps.detect.outputs.cuda }}
+      rocm: ${{ steps.detect.outputs.rocm }}
+      ubuntu: ${{ steps.detect.outputs.ubuntu }}
+      chrome: ${{ steps.detect.outputs.chrome }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: detect
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Manual trigger — build everything
+            echo "cuda=true"  >> "${GITHUB_OUTPUT}"
+            echo "rocm=true"  >> "${GITHUB_OUTPUT}"
+            echo "ubuntu=true" >> "${GITHUB_OUTPUT}"
+            echo "chrome=true" >> "${GITHUB_OUTPUT}"
+          else
+            # Check each Dockerfile with git diff
+            CHANGED=$(git diff --name-only "${{ github.base_ref || 'HEAD~1' }}" HEAD)
+            for image in cuda rocm ubuntu chrome; do
+              case "$image" in
+                cuda)   pat="docker/claude-code/Dockerfile.CUDA" ;;
+                rocm)   pat="docker/claude-code/Dockerfile.ROCm" ;;
+                ubuntu) pat="docker/claude-code/Dockerfile.Ubuntu" ;;
+                chrome) pat="docker/chrome/Dockerfile.Chrome" ;;
+              esac
+              if echo "$CHANGED" | grep -q "$pat"; then
+                echo "${image}=true" >> "${GITHUB_OUTPUT}"
+              else
+                echo "${image}=false" >> "${GITHUB_OUTPUT}"
+              fi
+            done
+          fi
+
   # ── Build CUDA (NVIDIA GPUs) ───────────────────────────────────────────
   build-cuda:
-    needs: [version]
+    needs: [version, changes]
+    if: ${{ needs.changes.outputs.cuda == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -78,9 +118,9 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=CUDA-v${{ needs.version.outputs.version }}
-            type=raw,value=CUDA-v${{ needs.version.outputs.major_minor }}
-            type=raw,value=CUDA-latest
+            type=raw,value=cuda-v${{ needs.version.outputs.version }}
+            type=raw,value=cuda-v${{ needs.version.outputs.major_minor }}
+            type=raw,value=cuda-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Claude Code (CUDA)
             org.opencontainers.image.description=NVIDIA CUDA — all NVIDIA GPUs (DGX GB200, H100, A100, L40S, RTX)
@@ -99,6 +139,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=CUDA
           cache-to: type=gha,mode=max,scope=CUDA
 
@@ -112,7 +153,8 @@ jobs:
 
   # ── Build ROCm (AMD GPUs) ──────────────────────────────────────────────
   build-rocm:
-    needs: [version]
+    needs: [version, changes]
+    if: ${{ needs.changes.outputs.rocm == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -144,9 +186,9 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=ROCm-v${{ needs.version.outputs.version }}
-            type=raw,value=ROCm-v${{ needs.version.outputs.major_minor }}
-            type=raw,value=ROCm-latest
+            type=raw,value=rocm-v${{ needs.version.outputs.version }}
+            type=raw,value=rocm-v${{ needs.version.outputs.major_minor }}
+            type=raw,value=rocm-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Claude Code (ROCm)
             org.opencontainers.image.description=AMD ROCm — Instinct MI300X, MI250X, Radeon PRO
@@ -165,6 +207,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=ROCm
           cache-to: type=gha,mode=max,scope=ROCm
 
@@ -178,7 +221,8 @@ jobs:
 
   # ── Build Ubuntu (general-purpose, no PyTorch) ──────────────────────────
   build-ubuntu:
-    needs: [version]
+    needs: [version, changes]
+    if: ${{ needs.changes.outputs.ubuntu == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -231,6 +275,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=Ubuntu
           cache-to: type=gha,mode=max,scope=Ubuntu
 
@@ -244,25 +289,26 @@ jobs:
 
   # ── Build Chrome (Browser) ─────────────────────────────────────────────
   build-chrome:
-    needs: [version]
+    needs: [version, changes]
+    if: ${{ needs.changes.outputs.chrome == 'true' }}
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64,amd64
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -276,9 +322,9 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=Chrome-v${{ needs.version.outputs.version }}
-            type=raw,value=Chrome-v${{ needs.version.outputs.major_minor }}
-            type=raw,value=Chrome-latest
+            type=raw,value=chrome-v${{ needs.version.outputs.version }}
+            type=raw,value=chrome-v${{ needs.version.outputs.major_minor }}
+            type=raw,value=chrome-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Chrome Browser
             org.opencontainers.image.description=Chrome + Xvfb for undetectable headed browsing via CDP port 9222
@@ -287,22 +333,23 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
-          context: docker/browser/
-          file: docker/browser/Dockerfile.Chrome
+          context: docker/chrome/
+          file: docker/chrome/Dockerfile.Chrome
           platforms: linux/arm64,linux/amd64
           build-args: |
             CODEFREEDOM_VERSION=v${{ needs.version.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=Chrome
           cache-to: type=gha,mode=max,scope=Chrome
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.GHCR_REPO }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -310,7 +357,8 @@ jobs:
 
   # ── Summary ────────────────────────────────────────────────────────────
   summary:
-    needs: [version, build-cuda, build-rocm, build-ubuntu, build-chrome]
+    needs:
+      [version, changes, build-cuda, build-rocm, build-ubuntu, build-chrome]
     if: always()
     runs-on: ubuntu-24.04
     steps:
@@ -321,12 +369,12 @@ jobs:
           echo "" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Platform | Tag |" >> "${GITHUB_STEP_SUMMARY}"
           echo "|----------|-----|" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| NVIDIA CUDA | \`CUDA-v${V}\`, \`CUDA-latest\` |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| AMD ROCm | \`ROCm-v${V}\`, \`ROCm-latest\` |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| NVIDIA CUDA | \`cuda-v${V}\`, \`cuda-latest\` |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| AMD ROCm | \`rocm-v${V}\`, \`rocm-latest\` |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Ubuntu (general) | \`v${V}\`, \`latest\` |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Chrome (browser) | \`Chrome-v${V}\`, \`Chrome-latest\` |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Chrome (browser) | \`chrome-v${V}\`, \`chrome-latest\` |" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
           echo "**Registries:** \`docker.io/nilayparikh/codefreedom\` · \`ghcr.io/nilayparikh/codefreedom\`" >> "${GITHUB_STEP_SUMMARY}"
           echo '```' >> "${GITHUB_STEP_SUMMARY}"
-          echo "docker pull nilayparikh/codefreedom:Chrome-v${V}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "docker pull nilayparikh/codefreedom:chrome-v${V}" >> "${GITHUB_STEP_SUMMARY}"
           echo '```' >> "${GITHUB_STEP_SUMMARY}"

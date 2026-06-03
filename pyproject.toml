@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codefreedom"
-version = "0.0.4"
+version = "0.0.5"
 description = "Single wrapper for all code agents — simple LLM routing, sandboxing, profile management, and isolation. All config in ~/.codefreedom."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -36,7 +36,9 @@ classifiers = [
 litellm = ["litellm[proxy]>=1.50", "prometheus-client>=0.25.0"]
 dev = ["mypy>=1.0", "ruff>=0.1", "pytest>=7.0", "types-PyYAML"]
 docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2"]
-all = ["codefreedom[litellm,dev,docs]"]
+camoufox = ["beautifulsoup4>=4.14.3"]
+ci = ["codefreedom[litellm,dev,docs,camoufox]"]
+all = ["codefreedom[litellm,dev,camoufox]"]
 
 [project.scripts]
 codefreedom = "codefreedom.cli.main:main"
@@ -55,11 +57,16 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 codefreedom = [
-    "examples/.env.example",
-    "examples/.env.secrets.example",
-    "examples/profiles/*.json",
-    "examples/proxy/*.yaml",
+    "examples/claude/.env.claude.example",
+    "examples/claude/.env.claude.secrets.example",
+    "examples/claude/profiles/*.json",
+    "examples/proxy/.env.proxy.example",
+    "examples/proxy/.env.proxy.secrets.example",
+    "examples/proxy/config.yaml",
+    "examples/proxy/docker-compose.yaml",
     "examples/proxy/providers/*.yaml",
+    "examples/tools/chrome/*.json",
+    "examples/tools/web/*.json",
 ]
 
 # ── Pylint ───────────────────────────────────────────────────────────────────

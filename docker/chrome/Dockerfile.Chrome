@@ -19,8 +19,8 @@
 #
 # Build:
 #   docker build --build-arg CODEFREEDOM_VERSION=v0.1.0 \
-#     -t codefreedom:Chrome-v0.1.0 \
-#     -f docker/browser/Dockerfile.Chrome docker/browser/
+#     -t codefreedom:chrome-v0.1.0 \
+#     -f docker/chrome/Dockerfile.Chrome docker/chrome/
 #
 # Run (stealth mode — must use --ipc=host + --cap-add=SYS_ADMIN):
 #   docker run -d --name codefreedom-chrome \
@@ -29,7 +29,7 @@
 #     --cap-add=SYS_ADMIN \
 #     --init \
 #     -v ~/.codefreedom/sandbox/tools/chrome:/data/chrome \
-#     codefreedom:Chrome-latest
+#     codefreedom:chrome-latest
 #
 # Connect: chrome devtools://devtools/bundled/inspector.html?ws=127.0.0.1:9222
 # ────────────────────────────────────────────────────────────────────────────────
@@ -41,8 +41,8 @@ FROM ubuntu:26.04
 
 ARG CODEFREEDOM_VERSION
 
-LABEL org.opencontainers.image.title="CodeFreedom - Chrome Browser (Hardened)" \
-      org.opencontainers.image.description="Ultra-hardened Chrome + Xvfb for undetectable headed browsing. Anti-bot stealth: retail Chrome, PulseAudio, rich fonts, no --no-sandbox." \
+LABEL org.opencontainers.image.title="CodeFreedom - Chrome Browser" \
+      org.opencontainers.image.description="Google Chrome + Xvfb for headed browser automation via CDP port 9222. Retail Chrome build with full display, audio, and font support." \
       org.opencontainers.image.version="${CODEFREEDOM_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
@@ -63,8 +63,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. System deps + display server + audio + fonts (architecture-independent)
-#     Rich font inventory (MS Core Fonts, CJK, emoji) is critical for matching
-#     consumer desktop fingerprint — anti-bots inspect font lists closely.
+#     Includes a broad set of fonts (MS Core Fonts, CJK, emoji) so web pages
+#     render correctly across different locales and content types.
 RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections \
     && apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
@@ -99,8 +99,9 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
 #     amd64 → Google Chrome stable from Google repo (retail build)
 #     arm64 → Chromium from Playwright CDN (Ubuntu's chromium-browser is a snap
 #             shim on 26.04 that breaks in Docker)
-#     Using retail Chrome on amd64 is critical — anti-bot systems flag
-#     Ubuntu chromium builds as headless Linux daemons.
+#     Using retail Chrome on amd64 ensures compatibility with standard web
+#     platform features, whereas Ubuntu's chromium-browser is a snap shim
+#     (unusable in Docker).
 RUN set -eux; \
     ARCH=$(uname -m); \
     if [ "${ARCH}" = "aarch64" ]; then \
@@ -122,11 +123,12 @@ RUN set -eux; \
         ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chrome; \
     fi
 
-# 5. Chrome wrapper — an advanced multi-tier stealth executable
-#     Starts DBus, PulseAudio (virtual audio), Xvfb (1080p), then Chrome with
-#     zero automation-identifying flags.
-#     REMOVED: --no-sandbox  — instantly flagged by modern WAF systems
-#     REMOVED: --disable-gpu — WebGL must evaluate realistic hardware strings
+# 5. Chrome wrapper — starts DBus, PulseAudio (virtual audio), Xvfb (1080p),
+#     then launches Chrome with flags for reliable automation.
+#     Notable choices:
+#       --no-sandbox is intentionally omitted — Chrome runs unprivileged
+#       --disable-gpu is intentionally omitted — WebGL should report
+#       accurate hardware strings for sites that depend on them
 RUN printf '#!/bin/bash\n\
 set -e\n\
 \n\

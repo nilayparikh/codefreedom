@@ -11,7 +11,7 @@
 #
 # Build:
 #   docker build --build-arg CODEFREEDOM_VERSION=v0.1.0 \
-#     -t codefreedom:ROCm-v0.1.0 \
+#     -t codefreedom:rocm-v0.1.0 \
 #     -f docker/claude-code/Dockerfile.ROCm docker/claude-code/
 # ────────────────────────────────────────────────────────────────────────────────
 

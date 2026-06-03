@@ -3,14 +3,14 @@
   "description": "Chrome browser tool profile for codefreedom — configures container image, ports, data directory, and environment.",
   "notes": [
     "The 'chrome' block defines all settings for 'codefreedom tools chrome'.",
-    "'image' is the Docker image to use — change to 'ghcr.io/nilayparikh/codefreedom:Chrome-latest' for published builds.",
+    "'image' is the Docker image to use — change to 'ghcr.io/nilayparikh/codefreedom:chrome-latest' for published builds.",
     "'container_name' is the Docker container name (persistent, restart unless-stopped).",
     "'port' is the CDP debug port exposed to the host.",
     "'data_dir' is the host path mounted to /data/chrome inside the container.",
     "'env' are environment variables forwarded to the container."
   ],
   "chrome": {
-    "image": "codefreedom:Chrome-local",
+    "image": "ghcr.io/nilayparikh/codefreedom:chrome-latest",
     "container_name": "codefreedom-chrome",
     "port": 9222,
     "data_dir": "~/.codefreedom/sandbox/tools/chrome",

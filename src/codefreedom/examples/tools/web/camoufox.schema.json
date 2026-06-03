@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "camoufox.schema.json",
+  "title": "Camoufox Web Search Tool Profile",
+  "description": "Schema for camoufox.json — configures the Camoufox container image, ports, data directory, and environment.",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Description of the profile"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Usage notes"
+    },
+    "camoufox": {
+      "type": "object",
+      "description": "Camoufox browser container settings",
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "Docker image tag (e.g. codefreedom:camoufox or ghcr.io/nilayparikh/codefreedom:camoufox-latest)"
+        },
+        "container_name": {
+          "type": "string",
+          "description": "Docker container name"
+        },
+        "port": {
+          "type": "integer",
+          "description": "Host port to map to container port 8420"
+        },
+        "data_dir": {
+          "type": "string",
+          "description": "Host data directory (mounted to /userdata)"
+        },
+        "env": {
+          "type": "object",
+          "description": "Extra environment variables"
+        }
+      }
+    }
+  }
+}

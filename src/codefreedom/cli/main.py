@@ -6,189 +6,9 @@ Entry point: codefreedom | cf
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
-from pathlib import Path
 
 from codefreedom.env_loader import eprint
-
-_CODEFREEDOM_DIR = Path.home() / ".codefreedom"
-
-
-def _find_bundled_examples() -> Path:
-    """Find the bundled examples directory inside the installed package."""
-    return Path(__file__).resolve().parent.parent / "examples"
-
-
-def _init_codefreedom(
-    force: bool = False,
-    cf_dir: Path | None = None,
-) -> int:
-    """Initialize ~/.codefreedom/ with default profiles and proxy configs.
-
-    Copies from the bundled package examples into ~/.codefreedom/.
-    """
-
-    if cf_dir is None:
-        cf_dir = _CODEFREEDOM_DIR
-
-    bundled = _find_bundled_examples()
-
-    profiles_src = bundled / "profiles"
-    proxy_src = bundled / "proxy"
-
-    profiles_dst_dir = cf_dir / "profiles"
-    profiles_dst = profiles_dst_dir / "claude-code.json"
-    schema_dst = profiles_dst_dir / "claude-code.schema.json"
-    proxy_dst = cf_dir / "proxy"
-
-    created_any = False
-    skipped_any = False
-
-    # ── Profiles ───────────────────────────────────────────────────────────
-    if not force and profiles_dst.exists():
-        print(f"[init] Profiles already exist: {profiles_dst}")
-        print("       Use --init --force to overwrite.")
-        skipped_any = True
-    elif (profiles_src / "claude-code.json").exists():
-        profiles_dst_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(profiles_src / "claude-code.json", profiles_dst)
-        print(f"[init] [OK] Created {profiles_dst}")
-        created_any = True
-    else:
-        print("[init] [FAIL] Bundled profiles example not found")
-        print("       Reinstall the package or file a bug report.")
-
-    # ── Claude Code schema ─────────────────────────────────────────────────
-    if not force and schema_dst.exists():
-        print(f"[init] Schema already exists: {schema_dst}")
-        skipped_any = True
-    elif (profiles_src / "claude-code.schema.json").exists():
-        profiles_dst_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(profiles_src / "claude-code.schema.json", schema_dst)
-        print(f"[init] [OK] Created {schema_dst}")
-        created_any = True
-    else:
-        print("[init] [FAIL] Bundled schema example not found")
-        print("       Reinstall the package or file a bug report.")
-
-    # ── Tool profiles (chrome.json, etc.) ──────────────────────────────────
-    for tool_src in sorted(profiles_src.glob("tools-*.json")):
-        tool_name = tool_src.stem.replace("tools-", "")  # e.g. "chrome"
-        tool_dst = profiles_dst_dir / f"{tool_name}.json"
-        if not force and tool_dst.exists():
-            print(f"[init] Tool profile already exists: {tool_dst}")
-            skipped_any = True
-        else:
-            profiles_dst_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(tool_src, tool_dst)
-            print(f"[init] [OK] Created tool profile: {tool_dst}")
-            created_any = True
-
-    # ── Tool schemas (chrome.schema.json, etc.) ────────────────────────────
-    for schema_src in sorted(profiles_src.glob("*.schema.json")):
-        schema_name = schema_src.name  # e.g. "chrome.schema.json"
-        if schema_name == "claude-code.schema.json":
-            continue  # already copied above
-        schema_dst_file = profiles_dst_dir / schema_name
-        if not force and schema_dst_file.exists():
-            print(f"[init] Schema already exists: {schema_dst_file}")
-            skipped_any = True
-        else:
-            profiles_dst_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(schema_src, schema_dst_file)
-            print(f"[init] [OK] Created schema: {schema_dst_file}")
-            created_any = True
-
-    # ── Proxy configs ──────────────────────────────────────────────────────
-    if not force and proxy_dst.exists():
-        print(f"[init] Proxy configs already exist: {proxy_dst}")
-        print("       Use --init --force to overwrite.")
-        skipped_any = True
-    elif proxy_src.exists():
-        if proxy_dst.exists() and force:
-            shutil.rmtree(proxy_dst)
-
-        proxy_config_dir = proxy_dst / "config"
-        proxy_config_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy config.yaml into config/ subdirectory
-        src_config = proxy_src / "config.yaml"
-        if src_config.exists():
-            shutil.copy2(src_config, proxy_config_dir / "config.yaml")
-
-        # Copy docker-compose.yaml to proxy root
-        src_compose = proxy_src / "docker-compose.yaml"
-        if src_compose.exists():
-            shutil.copy2(src_compose, proxy_dst / "docker-compose.yaml")
-
-        # Copy providers into config/providers/
-        src_providers = proxy_src / "providers"
-        if src_providers.exists():
-            dst_providers = proxy_config_dir / "providers"
-            if dst_providers.exists() and force:
-                shutil.rmtree(dst_providers)
-            shutil.copytree(src_providers, dst_providers, dirs_exist_ok=True)
-
-        print(f"[init] [OK] Created {proxy_dst}")
-        created_any = True
-    else:
-        print("[init] [FAIL] Bundled proxy examples not found")
-        print("       Reinstall the package or file a bug report.")
-
-    # ── Environment files (.env / .env.secrets) ────────────────────────────
-    env_src = bundled / ".env.example"
-    secrets_src = bundled / ".env.secrets.example"
-
-    env_dst = cf_dir / ".env"
-    secrets_dst = cf_dir / ".env.secrets"
-
-    if env_dst.exists():
-        print(f"[init] .env already exists: {env_dst} (skipping -- edit it manually)")
-        skipped_any = True
-    elif env_src.exists():
-        cf_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(env_src, env_dst)
-        print(
-            f"[init] [OK] Created {env_dst} (fully commented -- uncomment variables you need)"
-        )
-        created_any = True
-    else:
-        print("[init] [FAIL] Bundled .env.example not found")
-        print("       Reinstall the package or file a bug report.")
-
-    # .env.secrets is optional
-    if secrets_dst.exists():
-        print("[init] .env.secrets already exists (skipping)")
-    elif secrets_src.exists():
-        cf_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(secrets_src, secrets_dst)
-        print("[init] [OK] Created .env.secrets (fully commented -- add your API keys)")
-        created_any = True
-
-    if created_any:
-        print()
-        print("[init] CodeFreedom is initialized!")
-        print(f"       Profiles: {profiles_dst_dir}")
-        print("         - claude-code.json")
-        print("         - claude-code.schema.json")
-        print("         - chrome.json (tool)")
-        print("         - chrome.schema.json (tool)")
-        print(f"       Proxy:    {proxy_dst}")
-        print(f"       Env:      {cf_dir}")
-        print("         - .env (fully commented)")
-        print("         - .env.secrets (fully commented)")
-        print("       Edit these files to customize your setup.")
-    elif skipped_any:
-        print()
-        print("[init] Nothing to do -- all files already exist.")
-    else:
-        print()
-        print(
-            "[init] No source files found to copy. Reinstall the package or file a bug report."
-        )
-
-    return 0
 
 
 def main() -> None:
@@ -200,12 +20,12 @@ def main() -> None:
     parser.add_argument(
         "--init",
         action="store_true",
-        help="Initialize ~/.codefreedom/ with default profiles and proxy configs",
+        help="Initialize all profiles, proxy configs, and env files in ~/.codefreedom/",
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Force overwrite existing configs (use with --init)",
+        help="Overwrite existing files when used with --init",
     )
     subparsers = parser.add_subparsers(dest="command", title="commands")
 
@@ -259,6 +79,19 @@ def main() -> None:
         help="Arguments forwarded to the 'claude' CLI",
     )
 
+    # ── claude init subcommand ────────────────────────────────────────────
+    claude_actions = claude_parser.add_subparsers(dest="claude_action")
+    claude_init_parser = claude_actions.add_parser(
+        "init",
+        help="Initialize Claude Code profiles and environment",
+        description="Copy bundled Claude Code profiles and .env.claude to ~/.codefreedom/. Use --reset to overwrite existing files.",
+    )
+    claude_init_parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Overwrite all existing config files (default: skip existing)",
+    )
+
     # ── tools subcommand ──────────────────────────────────────────────────
     tools_parser = subparsers.add_parser(
         "tools",
@@ -277,14 +110,45 @@ def main() -> None:
         "action",
         nargs="?",
         default="status",
-        choices=["start", "stop", "status", "url"],
-        help="Action to perform (default: status)",
+        choices=["start", "stop", "status", "url", "init"],
+        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/.",
+    )
+    chrome_parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Overwrite existing tool config (use with 'init')",
     )
     chrome_parser.add_argument(
         "--port",
         type=int,
         default=9222,
         help="CDP debug port (default: 9222)",
+    )
+
+    # ── web / camoufox tool ─────────────────────────────────────────────
+    web_parser = tools_subparsers.add_parser(
+        "web",
+        aliases=["camoufox"],
+        help="Camoufox stealth browser for web search and scraping (MCP)",
+        description="Start/stop/manage a Camoufox browser container for stealth web search and scraping. The container runs an MCP-only server on port 8420 with web_search and web_fetch tools.",
+    )
+    web_parser.add_argument(
+        "action",
+        nargs="?",
+        default="status",
+        choices=["start", "stop", "status", "init"],
+        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/.",
+    )
+    web_parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Overwrite existing tool config (use with 'init')",
+    )
+    web_parser.add_argument(
+        "--port",
+        type=int,
+        default=8420,
+        help="MCP server port (default: 8420)",
     )
 
     # ── proxy subcommand ───────────────────────────────────────────────────
@@ -332,18 +196,59 @@ def main() -> None:
         help="Bind host for proxy (default: 0.0.0.0)",
     )
 
+    # ── proxy init subcommand ─────────────────────────────────────────────
+    proxy_actions = proxy_parser.add_subparsers(dest="proxy_action")
+    proxy_init_parser = proxy_actions.add_parser(
+        "init",
+        help="Initialize proxy configs and environment",
+        description="Copy bundled proxy configs and .env.proxy to ~/.codefreedom/. Use --reset to overwrite existing files.",
+    )
+    proxy_init_parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Overwrite all existing config files (default: skip existing)",
+    )
+
     args, unknown = parser.parse_known_args()
 
-    # ── --init: bootstrap ~/.codefreedom/ ───────────────────────────────────
+    # ── Top-level --init ────────────────────────────────────────────────────
     if args.init:
-        sys.exit(_init_codefreedom(force=args.force))
+        from pathlib import Path
+
+        from codefreedom.cli.claude import init_claude
+        from codefreedom.cli.proxy import init_proxy
+
+        reset = args.force
+        code = 0
+
+        code |= init_claude(reset=reset)
+        code |= init_proxy(reset=reset)
+
+        # Legacy shared .env (placeholder for backward compatibility)
+        env_path = Path.home() / ".codefreedom" / ".env"
+        if not reset and env_path.exists():
+            print(f"[init] [SKIP] Already exists: {env_path}")
+        else:
+            env_path.parent.mkdir(parents=True, exist_ok=True)
+            env_path.write_text(
+                "# CodeFreedom — Legacy shared environment\n"
+                "# Prefer component-specific .env files (.env.claude, .env.proxy, etc.)\n"
+            )
+            print(f"[init] [OK]   Created {env_path}")
+
+        print()
+        print("[init] Done.")
+        print("       Docs: https://nilayparikh.github.io/codefreedom/")
+        sys.exit(code)
 
     if args.command in ("claude", "cc"):
+        # ── claude init action ─────────────────────────────────────────────
+        if getattr(args, "claude_action", None) == "init":
+            from codefreedom.cli.claude import init_claude
+
+            sys.exit(init_claude(reset=args.reset))
+
         # ── Rescue known flags swallowed by parse_known_args ────────────────
-        # When an unknown flag appears before a known flag (e.g.,
-        # `--resume session --sandbox`), parse_known_args puts ALL remaining
-        # args (including `--sandbox`) into the unknown list. Scan unknown for
-        # CodeFreedom flags that REMAINDER would have dropped.
         _CLAUDE_BOOL_FLAGS = {
             "--sandbox": "sandbox",
             "--native-models": "native_models",
@@ -364,16 +269,19 @@ def main() -> None:
                     forwarded.append(arg)
             else:
                 forwarded.append(arg)
-        # Prepend forwarded unknown args so they appear before positional
-        # claude_args in the final command line.
         if args.claude_args is None:
             args.claude_args = []
         args.claude_args = forwarded + args.claude_args
-        # Lazy import to keep CLI startup fast
         from codefreedom.cli.claude import run as claude_run
 
         sys.exit(claude_run(args))
     elif args.command in ("proxy", "px"):
+        # ── proxy init action ──────────────────────────────────────────────
+        if getattr(args, "proxy_action", None) == "init":
+            from codefreedom.cli.proxy import init_proxy
+
+            sys.exit(init_proxy(reset=args.reset))
+
         if unknown:
             eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
             sys.exit(2)
@@ -382,18 +290,39 @@ def main() -> None:
         sys.exit(proxy_run(args))
     elif args.command == "tools":
         if args.tool == "chrome":
+            if getattr(args, "action", None) == "init":
+                if unknown:
+                    eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+                    sys.exit(2)
+                from codefreedom.cli.chrome import init_tool
+
+                sys.exit(init_tool(reset=args.reset))
             if unknown:
                 eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
                 sys.exit(2)
             from codefreedom.cli.chrome import run as chrome_run
 
             sys.exit(chrome_run(args))
+        elif args.tool in ("web", "camoufox"):
+            if getattr(args, "action", None) == "init":
+                if unknown:
+                    eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+                    sys.exit(2)
+                from codefreedom.cli.web import init_tool
+
+                sys.exit(init_tool(reset=args.reset))
+            if unknown:
+                eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+                sys.exit(2)
+            from codefreedom.cli.web import run as web_run
+
+            sys.exit(web_run(args))
         elif args.tool is None:
             tools_parser.print_help()
             sys.exit(0)
         else:
             eprint(f"[ERROR] Unknown tool: {args.tool}")
-            eprint("   Available tools: chrome")
+            eprint("   Available tools: chrome, web (camoufox)")
             sys.exit(1)
     else:
         parser.print_help()

@@ -13,7 +13,7 @@
 #
 # Build:
 #   docker build --build-arg CODEFREEDOM_VERSION=v0.1.0 \
-#     -t codefreedom:CUDA-v0.1.0 \
+#     -t codefreedom:cuda-v0.1.0 \
 #     -f docker/claude-code/Dockerfile.CUDA docker/claude-code/
 # ────────────────────────────────────────────────────────────────────────────────
 
