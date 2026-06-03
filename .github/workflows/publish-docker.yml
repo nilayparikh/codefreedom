@@ -1,9 +1,9 @@
 # ── CodeFreedom Docker Publish Workflow ────────────────────────────────────────
-# Builds and publishes multi-platform Docker images to:
-#   • Docker Hub:    docker.io/nilayparikh/codefreedom
-#   • GitHub CR:     ghcr.io/nilayparikh/codefreedom
+# Builds and publishes ALL multi-platform Docker images.
+# Each image also has its own individual workflow (docker-{image}.yml)
+# triggered only by changes to its specific Dockerfile.
 #
-# Triggered on: push to main, version tags (v*), or manual dispatch.
+# This workflow is for broad pushes, version tags, and manual "build all" dispatch.
 #
 # Tag scheme:
 #   cuda-v0.1.0, cuda-latest         → NVIDIA GPUs (arm64 + amd64)
@@ -19,11 +19,6 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
-  pull_request:
-    paths:
-      - "docker/camoufox/**"
-      - "docker/chrome/**"
-      - "docker/claude-code/**"
   workflow_dispatch:
 
 env:
@@ -37,14 +32,16 @@ permissions:
   id-token: write
 
 jobs:
-  # ── Extract version from pyproject.toml ──────────────────────────────────
-  version:
+  # ── Build CUDA (NVIDIA GPUs) ───────────────────────────────────────────
+  build-cuda:
     runs-on: ubuntu-24.04
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      major_minor: ${{ steps.version.outputs.major_minor }}
     steps:
       - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64,amd64
+      - uses: docker/setup-buildx-action@v4
+
       - name: Extract version
         id: version
         run: |
@@ -53,88 +50,6 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
           echo "📦 Version: v${VERSION}"
-
-  # ── Detect which Dockerfiles changed ─────────────────────────────────────
-  # On workflow_dispatch (manual trigger), all images are built.
-  # On push/PR, only images whose Dockerfile changed are built.
-  changes:
-    runs-on: ubuntu-24.04
-    outputs:
-      cuda: ${{ steps.detect.outputs.cuda }}
-      rocm: ${{ steps.detect.outputs.rocm }}
-      ubuntu: ${{ steps.detect.outputs.ubuntu }}
-      chrome: ${{ steps.detect.outputs.chrome }}
-      camoufox: ${{ steps.detect.outputs.camoufox }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - id: detect
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # Manual trigger — build everything
-            echo "cuda=true"     >> "${GITHUB_OUTPUT}"
-            echo "rocm=true"     >> "${GITHUB_OUTPUT}"
-            echo "ubuntu=true"   >> "${GITHUB_OUTPUT}"
-            echo "chrome=true"   >> "${GITHUB_OUTPUT}"
-            echo "camoufox=true" >> "${GITHUB_OUTPUT}"
-          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # PR — diff against base branch
-            git fetch origin "${{ github.base_ref }}" --depth=1
-            CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}" HEAD)
-            for image in cuda rocm ubuntu chrome camoufox; do
-              case "$image" in
-                cuda)      pat="docker/claude-code/Dockerfile.CUDA" ;;
-                rocm)      pat="docker/claude-code/Dockerfile.ROCm" ;;
-                ubuntu)    pat="docker/claude-code/Dockerfile.Ubuntu" ;;
-                chrome)    pat="docker/chrome/Dockerfile.Chrome" ;;
-                camoufox)  pat="docker/camoufox/Dockerfile.Camoufox" ;;
-              esac
-              if echo "$CHANGED" | grep -q "$pat"; then
-                echo "${image}=true" >> "${GITHUB_OUTPUT}"
-              else
-                echo "${image}=false" >> "${GITHUB_OUTPUT}"
-              fi
-            done
-          else
-            # Push — use previous commit SHA from event payload
-            BEFORE="${{ github.event.before }}"
-            if [[ -z "$BEFORE" || "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
-              # No previous commit (first push or tag) — build everything
-              echo "cuda=true"     >> "${GITHUB_OUTPUT}"
-              echo "rocm=true"     >> "${GITHUB_OUTPUT}"
-              echo "ubuntu=true"   >> "${GITHUB_OUTPUT}"
-              echo "chrome=true"   >> "${GITHUB_OUTPUT}"
-              echo "camoufox=true" >> "${GITHUB_OUTPUT}"
-            else
-              CHANGED=$(git diff --name-only "$BEFORE" HEAD)
-              for image in cuda rocm ubuntu chrome camoufox; do
-                case "$image" in
-                  cuda)      pat="docker/claude-code/Dockerfile.CUDA" ;;
-                  rocm)      pat="docker/claude-code/Dockerfile.ROCm" ;;
-                  ubuntu)    pat="docker/claude-code/Dockerfile.Ubuntu" ;;
-                  chrome)    pat="docker/chrome/Dockerfile.Chrome" ;;
-                  camoufox)  pat="docker/camoufox/Dockerfile.Camoufox" ;;
-                esac
-                if echo "$CHANGED" | grep -q "$pat"; then
-                  echo "${image}=true" >> "${GITHUB_OUTPUT}"
-                else
-                  echo "${image}=false" >> "${GITHUB_OUTPUT}"
-                fi
-              done
-            fi
-          fi
-
-  # ── Build CUDA (NVIDIA GPUs) ───────────────────────────────────────────
-  build-cuda:
-    needs: [version, changes]
-    if: ${{ needs.changes.outputs.cuda == 'true' }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-      - uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm64,amd64
-      - uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
@@ -159,13 +74,13 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=cuda-v${{ needs.version.outputs.version }}
-            type=raw,value=cuda-v${{ needs.version.outputs.major_minor }}
+            type=raw,value=cuda-v${{ steps.version.outputs.version }}
+            type=raw,value=cuda-v${{ steps.version.outputs.major_minor }}
             type=raw,value=cuda-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Claude Code (CUDA)
             org.opencontainers.image.description=NVIDIA CUDA — all NVIDIA GPUs (DGX GB200, H100, A100, L40S, RTX)
-            org.opencontainers.image.version=v${{ needs.version.outputs.version }}
+            org.opencontainers.image.version=v${{ steps.version.outputs.version }}
             com.codefreedom.platform=CUDA
 
       - name: Build and push
@@ -176,7 +91,7 @@ jobs:
           file: docker/claude-code/Dockerfile.CUDA
           platforms: linux/arm64,linux/amd64
           build-args: |
-            CODEFREEDOM_VERSION=v${{ needs.version.outputs.version }}
+            CODEFREEDOM_VERSION=v${{ steps.version.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -194,8 +109,6 @@ jobs:
 
   # ── Build ROCm (AMD GPUs) ──────────────────────────────────────────────
   build-rocm:
-    needs: [version, changes]
-    if: ${{ needs.changes.outputs.rocm == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -203,6 +116,15 @@ jobs:
         with:
           platforms: arm64,amd64
       - uses: docker/setup-buildx-action@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
+          echo "📦 Version: v${VERSION}"
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
@@ -227,13 +149,13 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=rocm-v${{ needs.version.outputs.version }}
-            type=raw,value=rocm-v${{ needs.version.outputs.major_minor }}
+            type=raw,value=rocm-v${{ steps.version.outputs.version }}
+            type=raw,value=rocm-v${{ steps.version.outputs.major_minor }}
             type=raw,value=rocm-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Claude Code (ROCm)
             org.opencontainers.image.description=AMD ROCm — Instinct MI300X, MI250X, Radeon PRO
-            org.opencontainers.image.version=v${{ needs.version.outputs.version }}
+            org.opencontainers.image.version=v${{ steps.version.outputs.version }}
             com.codefreedom.platform=ROCm
 
       - name: Build and push
@@ -244,7 +166,7 @@ jobs:
           file: docker/claude-code/Dockerfile.ROCm
           platforms: linux/amd64
           build-args: |
-            CODEFREEDOM_VERSION=v${{ needs.version.outputs.version }}
+            CODEFREEDOM_VERSION=v${{ steps.version.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -262,8 +184,6 @@ jobs:
 
   # ── Build Ubuntu (general-purpose, no PyTorch) ──────────────────────────
   build-ubuntu:
-    needs: [version, changes]
-    if: ${{ needs.changes.outputs.ubuntu == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -271,6 +191,15 @@ jobs:
         with:
           platforms: arm64,amd64
       - uses: docker/setup-buildx-action@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
+          echo "📦 Version: v${VERSION}"
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
@@ -295,13 +224,13 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=v${{ needs.version.outputs.version }}
-            type=raw,value=v${{ needs.version.outputs.major_minor }}
+            type=raw,value=v${{ steps.version.outputs.version }}
+            type=raw,value=v${{ steps.version.outputs.major_minor }}
             type=raw,value=latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Claude Code (Ubuntu)
             org.opencontainers.image.description=Ubuntu base — Claude Code + dev tools, no PyTorch
-            org.opencontainers.image.version=v${{ needs.version.outputs.version }}
+            org.opencontainers.image.version=v${{ steps.version.outputs.version }}
             com.codefreedom.platform=Ubuntu
 
       - name: Build and push
@@ -312,7 +241,7 @@ jobs:
           file: docker/claude-code/Dockerfile.Ubuntu
           platforms: linux/arm64,linux/amd64
           build-args: |
-            CODEFREEDOM_VERSION=v${{ needs.version.outputs.version }}
+            CODEFREEDOM_VERSION=v${{ steps.version.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -330,8 +259,6 @@ jobs:
 
   # ── Build Chrome (Browser) ─────────────────────────────────────────────
   build-chrome:
-    needs: [version, changes]
-    if: ${{ needs.changes.outputs.chrome == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -339,6 +266,15 @@ jobs:
         with:
           platforms: arm64,amd64
       - uses: docker/setup-buildx-action@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
+          echo "📦 Version: v${VERSION}"
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
@@ -363,13 +299,13 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=chrome-v${{ needs.version.outputs.version }}
-            type=raw,value=chrome-v${{ needs.version.outputs.major_minor }}
+            type=raw,value=chrome-v${{ steps.version.outputs.version }}
+            type=raw,value=chrome-v${{ steps.version.outputs.major_minor }}
             type=raw,value=chrome-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Chrome Browser
             org.opencontainers.image.description=Chrome + Xvfb for undetectable headed browsing via CDP port 9222
-            org.opencontainers.image.version=v${{ needs.version.outputs.version }}
+            org.opencontainers.image.version=v${{ steps.version.outputs.version }}
             com.codefreedom.platform=Chrome
 
       - name: Build and push
@@ -380,7 +316,7 @@ jobs:
           file: docker/chrome/Dockerfile.Chrome
           platforms: linux/arm64,linux/amd64
           build-args: |
-            CODEFREEDOM_VERSION=v${{ needs.version.outputs.version }}
+            CODEFREEDOM_VERSION=v${{ steps.version.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -398,8 +334,6 @@ jobs:
 
   # ── Build Camoufox (MCP Web Automation Browser) ────────────────────────
   build-camoufox:
-    needs: [version, changes]
-    if: ${{ needs.changes.outputs.camoufox == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -407,6 +341,15 @@ jobs:
         with:
           platforms: arm64,amd64
       - uses: docker/setup-buildx-action@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
+          echo "📦 Version: v${VERSION}"
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
@@ -431,13 +374,13 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=camoufox-v${{ needs.version.outputs.version }}
-            type=raw,value=camoufox-v${{ needs.version.outputs.major_minor }}
+            type=raw,value=camoufox-v${{ steps.version.outputs.version }}
+            type=raw,value=camoufox-v${{ steps.version.outputs.major_minor }}
             type=raw,value=camoufox-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Camoufox Browser (MCP)
             org.opencontainers.image.description=Web automation with Camoufox (Firefox fork) + Xvfb + PyAutoGUI + MCP server
-            org.opencontainers.image.version=v${{ needs.version.outputs.version }}
+            org.opencontainers.image.version=v${{ steps.version.outputs.version }}
             com.codefreedom.platform=Camoufox
 
       - name: Build and push
@@ -448,7 +391,7 @@ jobs:
           file: docker/camoufox/Dockerfile.Camoufox
           platforms: linux/arm64,linux/amd64
           build-args: |
-            CODEFREEDOM_VERSION=v${{ needs.version.outputs.version }}
+            CODEFREEDOM_VERSION=v${{ steps.version.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -466,22 +409,22 @@ jobs:
 
   # ── Summary ────────────────────────────────────────────────────────────
   summary:
-    needs:
-      [
-        version,
-        changes,
-        build-cuda,
-        build-rocm,
-        build-ubuntu,
-        build-chrome,
-        build-camoufox,
-      ]
+    needs: [build-cuda, build-rocm, build-ubuntu, build-chrome, build-camoufox]
     if: always()
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "📦 Version: v${VERSION}"
+
       - name: Print summary
         run: |
-          V="${{ needs.version.outputs.version }}"
+          V="${{ steps.version.outputs.version }}"
           echo "### 🐳 Published CodeFreedom Images" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Platform | Tag |" >> "${GITHUB_STEP_SUMMARY}"

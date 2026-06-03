@@ -56,6 +56,9 @@ general_settings:
   store_model_in_db: false
   store_prompts_in_spend_logs: false
 
+  # ── Forward Client Headers ───────────────────────────────────────────────
+  forward_client_headers_to_llm_api: true
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Router Settings
 # ═══════════════════════════════════════════════════════════════════════════════
