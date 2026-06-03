@@ -39,7 +39,7 @@ def _init_codefreedom(
 
     profiles_dst_dir = cf_dir / "profiles"
     profiles_dst = profiles_dst_dir / "claude-code.json"
-    schema_dst = profiles_dst_dir / "claude-code-profiles.schema.json"
+    schema_dst = profiles_dst_dir / "claude-code.schema.json"
     proxy_dst = cf_dir / "proxy"
 
     created_any = False
@@ -50,27 +50,55 @@ def _init_codefreedom(
         print(f"[init] Profiles already exist: {profiles_dst}")
         print("       Use --init --force to overwrite.")
         skipped_any = True
-    elif (profiles_src / "claude-code-profiles.json").exists():
+    elif (profiles_src / "claude-code.json").exists():
         profiles_dst_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(profiles_src / "claude-code-profiles.json", profiles_dst)
+        shutil.copy2(profiles_src / "claude-code.json", profiles_dst)
         print(f"[init] [OK] Created {profiles_dst}")
         created_any = True
     else:
         print("[init] [FAIL] Bundled profiles example not found")
         print("       Reinstall the package or file a bug report.")
 
-    # ── Schema ─────────────────────────────────────────────────────────────
+    # ── Claude Code schema ─────────────────────────────────────────────────
     if not force and schema_dst.exists():
         print(f"[init] Schema already exists: {schema_dst}")
         skipped_any = True
-    elif (profiles_src / "claude-code-profiles.schema.json").exists():
+    elif (profiles_src / "claude-code.schema.json").exists():
         profiles_dst_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(profiles_src / "claude-code-profiles.schema.json", schema_dst)
+        shutil.copy2(profiles_src / "claude-code.schema.json", schema_dst)
         print(f"[init] [OK] Created {schema_dst}")
         created_any = True
     else:
         print("[init] [FAIL] Bundled schema example not found")
         print("       Reinstall the package or file a bug report.")
+
+    # ── Tool profiles (chrome.json, etc.) ──────────────────────────────────
+    for tool_src in sorted(profiles_src.glob("tools-*.json")):
+        tool_name = tool_src.stem.replace("tools-", "")  # e.g. "chrome"
+        tool_dst = profiles_dst_dir / f"{tool_name}.json"
+        if not force and tool_dst.exists():
+            print(f"[init] Tool profile already exists: {tool_dst}")
+            skipped_any = True
+        else:
+            profiles_dst_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(tool_src, tool_dst)
+            print(f"[init] [OK] Created tool profile: {tool_dst}")
+            created_any = True
+
+    # ── Tool schemas (chrome.schema.json, etc.) ────────────────────────────
+    for schema_src in sorted(profiles_src.glob("*.schema.json")):
+        schema_name = schema_src.name  # e.g. "chrome.schema.json"
+        if schema_name == "claude-code.schema.json":
+            continue  # already copied above
+        schema_dst_file = profiles_dst_dir / schema_name
+        if not force and schema_dst_file.exists():
+            print(f"[init] Schema already exists: {schema_dst_file}")
+            skipped_any = True
+        else:
+            profiles_dst_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(schema_src, schema_dst_file)
+            print(f"[init] [OK] Created schema: {schema_dst_file}")
+            created_any = True
 
     # ── Proxy configs ──────────────────────────────────────────────────────
     if not force and proxy_dst.exists():
@@ -143,7 +171,9 @@ def _init_codefreedom(
         print("[init] CodeFreedom is initialized!")
         print(f"       Profiles: {profiles_dst_dir}")
         print("         - claude-code.json")
-        print("         - claude-code-profiles.schema.json")
+        print("         - claude-code.schema.json")
+        print("         - chrome.json (tool)")
+        print("         - chrome.schema.json (tool)")
         print(f"       Proxy:    {proxy_dst}")
         print(f"       Env:      {cf_dir}")
         print("         - .env (fully commented)")
@@ -227,6 +257,34 @@ def main() -> None:
         "claude_args",
         nargs=argparse.REMAINDER,
         help="Arguments forwarded to the 'claude' CLI",
+    )
+
+    # ── tools subcommand ──────────────────────────────────────────────────
+    tools_parser = subparsers.add_parser(
+        "tools",
+        help="Manage auxiliary tools (chrome browser, etc.)",
+        description="Manage auxiliary tools used by coding agents (Chrome browser with Xvfb, etc.).",
+    )
+    tools_subparsers = tools_parser.add_subparsers(dest="tool", title="tools")
+
+    # ── chrome tool ─────────────────────────────────────────────────────
+    chrome_parser = tools_subparsers.add_parser(
+        "chrome",
+        help="Chrome browser with Xvfb for undetectable headed browsing",
+        description="Start/stop/manage a Chrome browser container with virtual display (Xvfb) for undetectable web browsing. Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222.",
+    )
+    chrome_parser.add_argument(
+        "action",
+        nargs="?",
+        default="status",
+        choices=["start", "stop", "status", "url"],
+        help="Action to perform (default: status)",
+    )
+    chrome_parser.add_argument(
+        "--port",
+        type=int,
+        default=9222,
+        help="CDP debug port (default: 9222)",
     )
 
     # ── proxy subcommand ───────────────────────────────────────────────────
@@ -322,6 +380,21 @@ def main() -> None:
         from codefreedom.cli.proxy import run as proxy_run
 
         sys.exit(proxy_run(args))
+    elif args.command == "tools":
+        if args.tool == "chrome":
+            if unknown:
+                eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+                sys.exit(2)
+            from codefreedom.cli.chrome import run as chrome_run
+
+            sys.exit(chrome_run(args))
+        elif args.tool is None:
+            tools_parser.print_help()
+            sys.exit(0)
+        else:
+            eprint(f"[ERROR] Unknown tool: {args.tool}")
+            eprint("   Available tools: chrome")
+            sys.exit(1)
     else:
         parser.print_help()
         sys.exit(0)
