@@ -322,7 +322,7 @@ def status(settings: dict) -> int:
     if _container_is_running(container_name):
         eprint(f"[WEB] Container '{container_name}' is running.")
         eprint(f"[WEB] MCP endpoint: http://127.0.0.1:{port}/mcp")
-        eprint(f"[WEB] Tools: web_search, web_fetch")
+        eprint("[WEB] Tools: web_search, web_fetch")
         return 0
 
     if _container_exists(container_name):
@@ -330,7 +330,7 @@ def status(settings: dict) -> int:
         return 1
 
     eprint("[WEB] No Camoufox container found.")
-    eprint(f"   Start with: codefreedom tools web start")
+    eprint("   Start with: codefreedom tools web start")
     return 1
 
 

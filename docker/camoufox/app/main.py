@@ -141,9 +141,11 @@ async def dispatch_action(cmd: dict) -> dict:
             elif w:
                 new_w_int = int(w)
                 new_w, new_h = new_w_int, int(orig_h * new_w_int / orig_w)
-            else:
+            elif h is not None:
                 new_h_int = int(h)
                 new_h, new_w = new_h_int, int(orig_w * new_h_int / orig_h)
+            else:
+                new_w, new_h = orig_w, orig_h
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
             buf = io.BytesIO()
             img.save(buf, format="PNG")
@@ -219,7 +221,7 @@ mcp_http_app = mcp.http_app(transport="streamable-http")
 from starlette.responses import JSONResponse
 
 
-async def _oauth_metadata(request):
+async def _oauth_metadata(_request):
     return JSONResponse({"issuer": None}, status_code=200)
 
 

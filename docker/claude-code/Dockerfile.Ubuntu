@@ -11,21 +11,21 @@
 #   • For AI inference, use the CUDA or ROCm variants instead
 #
 # Build:
-#   docker build --build-arg CODEFREEDOM_VERSION=v0.1.0 \
+#   docker build --build-arg IMAGE_VERSION=0.1.0 \
 #     -t codefreedom:ubuntu-v0.1.0 \
 #     -f docker/claude-code/Dockerfile.Ubuntu docker/claude-code/
 # ────────────────────────────────────────────────────────────────────────────────
 
-ARG CODEFREEDOM_VERSION=v0.1.0
+ARG IMAGE_VERSION=0.1.0
 
 # 1. Ubuntu 26.04 (multi-arch: arm64 + amd64)
 FROM ubuntu:26.04
 
-ARG CODEFREEDOM_VERSION
+ARG IMAGE_VERSION
 
 LABEL org.opencontainers.image.title="CodeFreedom - Claude Code (Ubuntu)" \
       org.opencontainers.image.description="Claude Code dev container — common Ubuntu base, no PyTorch. Use CUDA/ROCm/Intel variants for AI." \
-      org.opencontainers.image.version="${CODEFREEDOM_VERSION}" \
+      org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
       com.codefreedom.platform="Ubuntu" \

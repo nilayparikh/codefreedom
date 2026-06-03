@@ -217,7 +217,7 @@ async def web_search(query: str) -> str:
     brave_result = await _search_one("brave", query)
     bing_result = await _search_one("bing", query)
 
-    output = {
+    output: dict[str, Any] = {
         "query": query,
         "results": [],
         "ai_summaries": [],

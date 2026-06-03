@@ -12,7 +12,6 @@ name: Docker Camoufox
 on:
   push:
     branches: [main]
-    tags: ["v*"]
     paths: ["docker/camoufox/Dockerfile.Camoufox"]
   pull_request:
     paths: ["docker/camoufox/Dockerfile.Camoufox"]
@@ -41,7 +40,7 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/camoufox/Dockerfile.Camoufox | head -1 | sed 's/.*=\(.*\)/\1/')
           MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
@@ -87,7 +86,7 @@ jobs:
           file: docker/camoufox/Dockerfile.Camoufox
           platforms: linux/arm64,linux/amd64
           build-args: |
-            CODEFREEDOM_VERSION=v${{ steps.version.outputs.version }}
+            IMAGE_VERSION=${{ steps.version.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

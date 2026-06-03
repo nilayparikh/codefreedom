@@ -162,12 +162,12 @@ def run(args: argparse.Namespace) -> int:
     sandbox_image: str | None = None
     mode = "sandbox" if args.sandbox else "local"
     if profiles_path.exists():
-        profiles = load_profiles(profiles_path)
+        profiles_dict = load_profiles(profiles_path)
         profile_env = load_profile_env(
-            profile_name, profiles_path, base_env, mode, profiles=profiles
+            profile_name, profiles_path, base_env, mode, profiles=profiles_dict
         )
         sandbox_image = get_profile_sandbox_image(
-            profile_name, profiles_path, profiles=profiles
+            profile_name, profiles_path, profiles=profiles_dict
         )
     elif profile_name != "default":
         eprint(

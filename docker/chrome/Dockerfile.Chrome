@@ -15,10 +15,10 @@
 # @version   v0.1.0
 # @arch      linux/amd64 (Google Chrome), linux/arm64 (Chromium snapshots)
 #
-# Base: ubuntu:26.04 (multi-arch)
+# Base: ubuntu:24.04 LTS (multi-arch)
 #
 # Build:
-#   docker build --build-arg CODEFREEDOM_VERSION=v0.1.0 \
+#   docker build --build-arg IMAGE_VERSION=0.1.0 \
 #     -t codefreedom:chrome-v0.1.0 \
 #     -f docker/chrome/Dockerfile.Chrome docker/chrome/
 #
@@ -34,22 +34,25 @@
 # Connect: chrome devtools://devtools/bundled/inspector.html?ws=127.0.0.1:9222
 # ────────────────────────────────────────────────────────────────────────────────
 
-ARG CODEFREEDOM_VERSION=v0.1.0
+ARG IMAGE_VERSION=0.1.0
 
-# 1. Ubuntu 26.04 (multi-arch: arm64 + amd64)
-FROM ubuntu:26.04
+# 1. Ubuntu 24.04 LTS (multi-arch: arm64 + amd64)
+FROM ubuntu:24.04
 
-ARG CODEFREEDOM_VERSION
+ARG IMAGE_VERSION
 
 LABEL org.opencontainers.image.title="CodeFreedom - Chrome Browser" \
       org.opencontainers.image.description="Google Chrome + Xvfb for headed browser automation via CDP port 9222. Retail Chrome build with full display, audio, and font support." \
-      org.opencontainers.image.version="${CODEFREEDOM_VERSION}" \
+      org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
       com.codefreedom.platform="Chrome" \
       com.codefreedom.arch="linux/arm64,linux/amd64"
 
 ENV DEBIAN_FRONTEND=noninteractive
+
+# Patch known vulnerabilities in base image
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 # 2. Core prerequisites
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -98,7 +101,7 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
 # 4. Browser binary — architecture-aware
 #     amd64 → Google Chrome stable from Google repo (retail build)
 #     arm64 → Chromium from Playwright CDN (Ubuntu's chromium-browser is a snap
-#             shim on 26.04 that breaks in Docker)
+#             shim on 24.04 that breaks in Docker)
 #     Using retail Chrome on amd64 ensures compatibility with standard web
 #     platform features, whereas Ubuntu's chromium-browser is a snap shim
 #     (unusable in Docker).
