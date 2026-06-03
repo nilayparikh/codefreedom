@@ -107,7 +107,9 @@ RUN groupadd -g 1000 browser && useradd -u 1000 -g 1000 -m browser
 RUN mkdir -p /app /userdata && chown -R browser:browser /app /userdata
 
 # Allow browser user to write GeoIP db into camoufox package dir
-RUN chown -R browser:browser /usr/local/lib/python3.12/site-packages/camoufox/
+# Use Python to find the actual path (avoids hardcoding Python version)
+RUN CAMOUFOX_DIR=$(python -c "import camoufox; print(camoufox.__path__[0])") && \
+    chown -R browser:browser "$CAMOUFOX_DIR"
 
 # Switch to non-root user for camoufox fetch + extensions
 USER browser
