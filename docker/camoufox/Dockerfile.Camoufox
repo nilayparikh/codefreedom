@@ -1,0 +1,143 @@
+# ── CodeFreedom Camoufox Browser Image (Stealth, MCP-only) ──────────────
+# Camoufox (custom Firefox fork) + Xvfb + PyAutoGUI + MCP server.
+# Zero CDP exposure — passes Cloudflare, CreepJS, BrowserScan, Pixelscan.
+#
+# Two input modes:
+#   • Playwright (DOM-level) — CSS selectors, fast & convenient
+#   • PyAutoGUI (OS-level)  — real mouse/keyboard events, undetectable
+#
+# Ports:
+#   8420 — MCP Streamable HTTP server (web_search + web_fetch only)
+#
+# Anti-bot stealth:
+#   • Camoufox = Firefox fork with no CDP (Chrome's tell-tale protocol)
+#   • Xvfb at 1920x1080x24 — headed mode, not headless
+#   • PyAutoGUI — real OS-level input, browser can't tell it's automated
+#   • browserforge — real fingerprints, no spoofing inconsistencies
+#   • Persistent fingerprint stored in /userdata
+#
+# @platform  Ubuntu
+# @version   v0.1.0
+# @arch      linux/arm64, linux/amd64
+#
+# Build:
+#   docker build \
+#     -t codefreedom:Camoufox-local \
+#     -f docker/camoufox/Dockerfile.Camoufox docker/camoufox/
+#
+# Run:
+#   docker run -d --name codefreedom-camoufox \
+#     -p 8420:8420 \
+#     -p 5900:5900 \
+#     -v ~/.codefreedom/sandbox/tools/camoufox:/userdata \
+#     codefreedom:Camoufox-local
+#
+# ──────────────────────────────────────────────────────────────────────────
+
+ARG CODEFREEDOM_VERSION=v0.1.0
+
+FROM python:3.12-slim-bookworm
+
+ARG CODEFREEDOM_VERSION
+
+LABEL org.opencontainers.image.title="CodeFreedom - Camoufox Browser (Stealth)" \
+      org.opencontainers.image.description="Stealth browser automation with Camoufox (Firefox fork) + Xvfb + PyAutoGUI + noVNC + MCP. Zero CDP exposure — passes Cloudflare, CreepJS, BrowserScan, Pixelscan, and all major bot detectors." \
+      org.opencontainers.image.version="${CODEFREEDOM_VERSION}" \
+      org.opencontainers.image.vendor="nilayparikh" \
+      org.opencontainers.image.authors="Nilay Parikh" \
+      com.codefreedom.platform="Camoufox" \
+      com.codefreedom.arch="linux/arm64,linux/amd64"
+
+# Patch known vulnerabilities in base image
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Timezone - override with -e TZ=Your/Timezone
+ENV TZ=UTC
+
+# Install tzdata for proper timezone support
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Base utils
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget curl gnupg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# X11 and display
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xvfb xauth dbus dbus-x11 x11-xserver-utils xcvt \
+    && rm -rf /var/lib/apt/lists/*
+
+# VNC intentionally excluded — MCP-only mode, no VNC viewer needed
+
+# Window manager (title bars + resize handles for popup windows)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openbox \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create /tmp/.X11-unix to suppress X11 socket permission warning
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+
+# Create minimal Openbox menu to suppress menu file warning
+RUN mkdir -p /var/lib/openbox && echo '<?xml version="1.0" encoding="UTF-8"?><openbox_menu></openbox_menu>' > /var/lib/openbox/debian-menu.xml
+
+# noVNC auto-connect redirect — removed, MCP-only mode
+
+# Firefox/Camoufox dependencies - install firefox-esr to pull correct GTK deps
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends firefox-esr fonts-liberation \
+    && apt-get remove -y --purge firefox-esr \
+    && rm -rf /var/lib/apt/lists/*
+
+# UI automation tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xdotool scrot python3-tk python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages (system-level, needs root)
+RUN pip install --no-cache-dir "camoufox[geoip]" pyautogui fastapi uvicorn fastmcp Pillow pyyaml beautifulsoup4 requests
+
+# Create non-root user and directories
+RUN groupadd -g 1000 browser && useradd -u 1000 -g 1000 -m browser
+RUN mkdir -p /app /userdata /loaders && chown -R browser:browser /app /userdata /loaders
+
+# Allow browser user to write GeoIP db into camoufox package dir
+RUN chown -R browser:browser /usr/local/lib/python3.12/site-packages/camoufox/
+
+# Switch to non-root user for camoufox fetch + extensions
+USER browser
+
+# Download Camoufox browser (writes to ~/.cache/camoufox + GeoIP db)
+RUN python -m camoufox fetch
+
+# Copy scripts and install extensions (writes to ~/.cache/camoufox)
+COPY --chown=browser:browser scripts/ /scripts/
+RUN python /scripts/install_extensions.py
+
+# Copy app
+COPY --chown=browser:browser app/ /app/
+
+# Set working directory
+WORKDIR /app
+
+# Install gosu for privilege dropping in entrypoint
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gosu \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy entrypoint (runs as root, drops to target user)
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
+
+# Environment variables
+ENV XVFB_RESOLUTION=1920x1080
+ENV XVFB_DEPTH=24
+
+# Expose ports (VNC and HTTP API + MCP)
+EXPOSE 5900 8420
+
+ENTRYPOINT ["/entrypoint.sh"]

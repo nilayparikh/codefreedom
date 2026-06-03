@@ -1,8 +1,8 @@
 """Sandbox launcher -- runs code agents in ephemeral Docker containers with GPU passthrough.
 
 Pre-configured images (ghcr.io/nilayparikh/codefreedom):
-- CUDA (NVIDIA): CUDA-latest, CUDA-v0.1, CUDA-v0.1.0
-- ROCm (AMD): ROCm-latest, ROCm-v0.1, ROCm-v0.1.0
+- CUDA (NVIDIA): cuda-latest, cuda-v0.1, cuda-v0.1.0
+- ROCm (AMD): rocm-latest, rocm-v0.1, rocm-v0.1.0
 - Ubuntu (General): latest, v0.1, v0.1.0
 
 Each sandbox session gets a fresh container with a random name -- no more
@@ -173,6 +173,8 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
     Claude Code inside the container populates it naturally with only the paths
     that exist in the container (/workspace).
 
+    Also ensures the shared tools cache directory exists for all sandbox sessions.
+
     Returns (claude_dir, claude_json_path) -- the .claude directory and the
     .claude.json file path inside the profile's sandbox directory.
     """
@@ -190,6 +192,10 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
         eprint(f"[SANDBOX] Created fresh .claude.json: {sandbox_json}")
     else:
         eprint(f"[SANDBOX] Using existing .claude.json: {sandbox_json}")
+
+    # ── Shared tools cache (used by Chrome DevTools MCP, etc.) ─────
+    tools_cache = CODEFREEDOM_DIR / "sandbox" / "tools" / ".cache"
+    tools_cache.mkdir(parents=True, exist_ok=True)
 
     return claude_dir, sandbox_json
 
@@ -293,6 +299,8 @@ def run_docker(
         f"HOME=/home/{HOME_DIR.name}",
         "-v",
         f"{workspace_dir / '.claude'}:/workspace/.claude",
+        "-v",
+        f"{CODEFREEDOM_DIR / 'sandbox' / 'tools' / '.cache'}:/home/{HOME_DIR.name}/.cache",
     ]
 
     # ── Ensure image is available ─────────────────────────────────────────

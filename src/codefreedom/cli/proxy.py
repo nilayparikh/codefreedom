@@ -247,6 +247,9 @@ def _validate() -> int:
                 try:
                     with open(provider_file, encoding="utf-8") as f:
                         provider_config = yaml.safe_load(f)
+                    if provider_config is None:
+                        eprint(f"    [SKIP]  (empty/commented out)")
+                        continue
                     models = provider_config.get("model_list", [])
                     for m in models:
                         name = m.get("model_name", "?")

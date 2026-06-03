@@ -124,7 +124,7 @@ Set a custom sandbox image for a profile:
   "profiles": {
     "gpu-work": {
       "description": "CUDA sandbox for GPU workloads",
-      "sandbox_image": "ghcr.io/nilayparikh/codefreedom:CUDA-latest",
+      "sandbox_image": "ghcr.io/nilayparikh/codefreedom:cuda-latest",
       "env": {
         "CLAUDE_MODEL": "CodeFreedom/Pro"
       }

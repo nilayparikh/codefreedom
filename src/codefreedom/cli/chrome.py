@@ -22,7 +22,7 @@ from codefreedom.env_loader import eprint
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
-_DEFAULT_IMAGE = "codefreedom:Chrome-local"
+_DEFAULT_IMAGE = "codefreedom:chrome"
 _DEFAULT_CONTAINER_NAME = "codefreedom-tools-chrome"
 _DEFAULT_PORT = 9222
 _DEFAULT_DATA_DIR = "~/.codefreedom/sandbox/tools/chrome"
@@ -159,7 +159,7 @@ def _ensure_image(image: str) -> bool:
     eprint("")
     eprint("  Tips:")
     eprint(
-        "    • Build locally:  docker build -t codefreedom:Chrome-local -f docker/browser/Dockerfile.Chrome docker/browser/"
+        "    • Build locally:  docker build -t codefreedom:chrome -f docker/chrome/Dockerfile.Chrome docker/chrome/"
     )
     eprint("    • Set 'image' in ~/.codefreedom/profiles/chrome.json to your local tag")
     eprint("    • Wait for CI to publish the image to ghcr.io")
@@ -194,6 +194,10 @@ def start(settings: dict) -> int:
     # Resolve & create data directory
     resolved_data = _resolve_data_dir(data_dir)
     eprint(f"[CHROME] Using data dir: {resolved_data}")
+
+    # Ensure shared tools cache directory exists (used by Chrome DevTools MCP, etc.)
+    tools_cache = Path.home() / ".codefreedom" / "sandbox" / "tools" / ".cache"
+    tools_cache.mkdir(parents=True, exist_ok=True)
 
     # Remove existing container if stopped
     if _container_exists(container_name):
@@ -236,6 +240,8 @@ def start(settings: dict) -> int:
             "unless-stopped",
             "-v",
             f"{resolved_data}:/data/chrome",
+            "-v",
+            f"{tools_cache}:/home/vscode/.cache",
             *env_flags,
             image,
         ],

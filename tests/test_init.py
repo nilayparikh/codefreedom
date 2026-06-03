@@ -26,7 +26,7 @@ def _setup_bundled_examples(root: Path) -> Path:
         json.dumps(
             {
                 "chrome": {
-                    "image": "codefreedom:Chrome-local",
+                    "image": "codefreedom:chrome",
                     "container_name": "codefreedom-chrome",
                     "port": 9222,
                 }

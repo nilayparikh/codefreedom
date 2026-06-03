@@ -22,7 +22,7 @@
       "properties": {
         "image": {
           "type": "string",
-          "description": "Docker image tag (e.g. codefreedom:Chrome-local or ghcr.io/nilayparikh/codefreedom:Chrome-latest)"
+          "description": "Docker image tag (e.g. codefreedom:chrome or ghcr.io/nilayparikh/codefreedom:chrome-latest)"
         },
         "container_name": {
           "type": "string",

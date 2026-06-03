@@ -25,14 +25,14 @@ Three pre-configured images on `ghcr.io/nilayparikh/codefreedom`:
 
 | Image      | Description                          | Tags                                      |
 | ---------- | ------------------------------------ | ----------------------------------------- |
-| **CUDA**   | NVIDIA CUDA + PyTorch (AI workloads) | `CUDA-latest`, `CUDA-v0.1`, `CUDA-v0.1.0` |
-| **ROCm**   | AMD ROCm + PyTorch (AI workloads)    | `ROCm-latest`, `ROCm-v0.1`, `ROCm-v0.1.0` |
+| **CUDA**   | NVIDIA CUDA + PyTorch (AI workloads) | `cuda-latest`, `cuda-v0.1`, `cuda-v0.1.0` |
+| **ROCm**   | AMD ROCm + PyTorch (AI workloads)    | `rocm-latest`, `rocm-v0.1`, `rocm-v0.1.0` |
 | **Ubuntu** | General-purpose (no AI frameworks)   | `latest`, `v0.1`, `v0.1.0`                |
 
 All images include Claude Code, Node.js, Python, Git, and essential dev tools. Use them as base images and extend per your needs:
 
 ```dockerfile
-FROM ghcr.io/nilayparikh/codefreedom:CUDA-latest
+FROM ghcr.io/nilayparikh/codefreedom:cuda-latest
 RUN pip install your-custom-package
 ```
 
@@ -41,7 +41,7 @@ RUN pip install your-custom-package
 **Method 1: Environment variables** (applies to all profiles)
 
 ```bash
-export CLAUDE_CODE_IMAGE_TAG=CUDA-latest
+export CLAUDE_CODE_IMAGE_TAG=cuda-latest
 codefreedom claude --sandbox
 ```
 

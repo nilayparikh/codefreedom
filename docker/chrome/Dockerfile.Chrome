@@ -19,8 +19,8 @@
 #
 # Build:
 #   docker build --build-arg CODEFREEDOM_VERSION=v0.1.0 \
-#     -t codefreedom:Chrome-v0.1.0 \
-#     -f docker/browser/Dockerfile.Chrome docker/browser/
+#     -t codefreedom:chrome-v0.1.0 \
+#     -f docker/chrome/Dockerfile.Chrome docker/chrome/
 #
 # Run (stealth mode — must use --ipc=host + --cap-add=SYS_ADMIN):
 #   docker run -d --name codefreedom-chrome \
@@ -29,7 +29,7 @@
 #     --cap-add=SYS_ADMIN \
 #     --init \
 #     -v ~/.codefreedom/sandbox/tools/chrome:/data/chrome \
-#     codefreedom:Chrome-latest
+#     codefreedom:chrome-latest
 #
 # Connect: chrome devtools://devtools/bundled/inspector.html?ws=127.0.0.1:9222
 # ────────────────────────────────────────────────────────────────────────────────

@@ -27,3 +27,5 @@ site/
 
 # Claude Code
 .claude/
+
+# Camoufox tool — tracked for release builds
