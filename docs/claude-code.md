@@ -165,4 +165,4 @@ Override the default profile file location:
 export CODEFREEDOM_PROFILES_FILE="/path/to/custom/profiles.json"
 ```
 
-A JSON Schema is provided at `~/.codefreedom/profiles/claude-code-profiles.schema.json` for editor validation.
+A JSON Schema is provided at `~/.codefreedom/profiles/claude-code.schema.json` for editor validation.

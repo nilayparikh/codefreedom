@@ -11,7 +11,7 @@ TARGET_GID="${PGID:-$TARGET_UID}"
 
 # Fix ownership of writable dirs (runs as root)
 _fix_perms() {
-    for dir in /userdata /loaders; do
+    for dir in /userdata; do
         [ -d "$dir" ] || continue
         if [ "$(stat -c '%u:%g' "$dir" 2>/dev/null)" = "$TARGET_UID:$TARGET_GID" ]; then
             continue

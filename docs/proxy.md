@@ -10,15 +10,15 @@ tracking, key management, and prompt logging.
 > **Cloud-only user?** Skip local providers. **Local + cloud?** Enable both.
 > Providers are opt-in — set an API key to enable, leave empty to disable.
 
-Configuration files are in `~/.codefreedom/proxy/` (initialized via `codefreedom --init`).
+Configuration files are in `~/.codefreedom/proxy/` (initialized via `codefreedom proxy init`).
 
-Environment variables are loaded through the [env chain](environment.md) — `~/.codefreedom/.env`, workspace `.env`, and system environment.
+Environment variables are loaded through the [env chain](environment.md) — `~/.codefreedom/.env.proxy`, `.env.claude`, workspace `.env`, and system environment.
 
 ## Quick Start
 
 ```bash
 # Initialize configs
-codefreedom --init
+codefreedom proxy init
 
 # Start via Docker Compose
 codefreedom proxy --up --docker

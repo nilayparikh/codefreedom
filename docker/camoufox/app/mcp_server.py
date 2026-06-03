@@ -15,16 +15,12 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Coroutine
 from urllib.parse import quote_plus
 
 from bs4 import BeautifulSoup
 from fastmcp import FastMCP
-from fastmcp.tools import ToolResult
-from fastmcp.utilities.types import Image
 from logger import get_logger
-from mcp.types import TextContent
 
 log = get_logger(__name__)
 
@@ -90,11 +86,17 @@ def _parse_brave(html: str) -> tuple[list[dict], dict | None]:
             continue
         title_el = s.select_one(".title.search-snippet-title")
         desc_el = s.select_one(".generic-snippet .content")
-        results.append({
-            "title": title_el.get_text(strip=True) if title_el else a.get_text(strip=True),
-            "url": href,
-            "snippet": desc_el.get_text(strip=True) if desc_el else "",
-        })
+        results.append(
+            {
+                "title": (
+                    title_el.get_text(strip=True)
+                    if title_el
+                    else a.get_text(strip=True)
+                ),
+                "url": href,
+                "snippet": desc_el.get_text(strip=True) if desc_el else "",
+            }
+        )
     # AI summary
     ai_el = soup.select_one(".chatllm-content")
     ai = None
@@ -121,11 +123,13 @@ def _parse_bing(html: str) -> tuple[list[dict], dict | None]:
         if not href.startswith("http"):
             continue
         p = el.select_one(".b_caption p, .b_lineclamp2")
-        results.append({
-            "title": a.get_text(strip=True),
-            "url": href,
-            "snippet": p.get_text(strip=True) if p else "",
-        })
+        results.append(
+            {
+                "title": a.get_text(strip=True),
+                "url": href,
+                "snippet": p.get_text(strip=True) if p else "",
+            }
+        )
     # AI summary
     ai = None
     for sel in [".b_ans", ".rai_content"]:
@@ -150,22 +154,33 @@ PARSERS = {"brave": _parse_brave, "bing": _parse_bing}
 
 async def _search_one(engine: str, query: str) -> dict:
     url = ENGINE_URLS[engine].format(q=quote_plus(query))
-    resp = await _call("run_script", steps=[
-        {"action": "goto", "url": url, "wait_until": "domcontentloaded"},
-        {"action": "sleep", "duration": 2},
-        {"action": "get_html", "output_id": "html"},
-    ], name=f"search_{engine}")
+    resp = await _call(
+        "run_script",
+        steps=[
+            {"action": "goto", "url": url, "wait_until": "domcontentloaded"},
+            {"action": "sleep", "duration": 2},
+            {"action": "get_html", "output_id": "html"},
+        ],
+        name=f"search_{engine}",
+    )
     if not resp.get("success"):
-        return {"engine": engine, "results": [], "ai_summary": None,
-                "error": resp.get("error", "failed")}
+        return {
+            "engine": engine,
+            "results": [],
+            "ai_summary": None,
+            "error": resp.get("error", "failed"),
+        }
     html = resp.get("data", {}).get("outputs", {}).get("html", {}).get("html", "")
     if not html:
-        return {"engine": engine, "results": [], "ai_summary": None,
-                "error": "no html"}
+        return {"engine": engine, "results": [], "ai_summary": None, "error": "no html"}
     parser = PARSERS.get(engine)
     if not parser:
-        return {"engine": engine, "results": [], "ai_summary": None,
-                "error": "no parser"}
+        return {
+            "engine": engine,
+            "results": [],
+            "ai_summary": None,
+            "error": "no parser",
+        }
     results, ai = parser(html)
     return {"engine": engine, "results": results, "ai_summary": ai}
 
@@ -198,18 +213,9 @@ async def web_search(query: str) -> str:
     # Delete cookies for fresh fingerprint on first search of session
     await _call("delete_cookies")
 
-    # Search engines in parallel
-    loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        brave_future = pool.submit(
-            lambda: asyncio.run(_search_one("brave", query))
-        )
-        bing_future = pool.submit(
-            lambda: asyncio.run(_search_one("bing", query))
-        )
-        # Wait for both
-        brave_result = brave_future.result()
-        bing_result = bing_future.result()
+    # Search engines sequentially (can't parallelize through asyncio.Lock)
+    brave_result = await _search_one("brave", query)
+    bing_result = await _search_one("bing", query)
 
     output = {
         "query": query,
@@ -252,7 +258,7 @@ async def web_fetch(
         {"action": "wait_for_network_idle", "timeout": 15},
         {"action": "get_text", "output_id": "text"},
         {"action": "get_html", "output_id": "html"},
-        {"action": "eval_js", "expression": "document.title", "output_id": "title"},
+        {"action": "eval", "expression": "document.title", "output_id": "title"},
     ]
     if include_screenshot:
         steps.append(

@@ -1,11 +1,12 @@
 """Proxy subcommand -- manage the LLM routing proxy (Docker or native).
 
 Usage:
-    codefreedom proxy --up         Start the proxy (native, default)
-    codefreedom proxy --up --docker  Start via Docker Compose
-    codefreedom proxy --down       Stop the proxy
-    codefreedom proxy --status     Show proxy status
-    codefreedom proxy --validate   Validate configuration
+    codefreedom proxy init [--reset]  Initialize proxy configs
+    codefreedom proxy --up            Start the proxy (native, default)
+    codefreedom proxy --up --docker   Start via Docker Compose
+    codefreedom proxy --down          Stop the proxy
+    codefreedom proxy --status        Show proxy status
+    codefreedom proxy --validate      Validate configuration
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -22,6 +22,88 @@ from codefreedom.env_loader import eprint
 # ── Path resolution ──────────────────────────────────────────────────────────
 
 _CODEFREEDOM_DIR = Path.home() / ".codefreedom"
+
+# ── Non-disclaimer banner ────────────────────────────────────────────────────
+
+_NOTICE = """\
+─── Notice ─────────────────────────────────────────────
+CodeFreedom is experimental software. Some features may
+interact with third-party services and components.
+CodeFreedom is not responsible for third-party behavior.
+────────────────────────────────────────────────────────"""
+
+
+def _find_bundled_examples() -> Path:
+    """Find the bundled examples directory inside the installed package."""
+    return Path(__file__).resolve().parent.parent / "examples"
+
+
+def init_proxy(reset: bool = False) -> int:
+    """Initialize proxy configs and .env.proxy from bundled examples.
+
+    Delta-aware: skips files that already exist unless --reset is passed.
+    Always prints what was copied/skipped, a doc link, and the non-disclaimer.
+    """
+    bundled = _find_bundled_examples()
+    proxy_src = bundled / "proxy"
+
+    cf_dir = _CODEFREEDOM_DIR
+    proxy_dst = cf_dir / "proxy"
+
+    created: list[str] = []
+    skipped: list[str] = []
+
+    def _copy_file(src: Path, dst: Path) -> None:
+        if not reset and dst.exists():
+            skipped.append(str(dst))
+            print(f"[proxy init] [SKIP] Already exists: {dst}")
+        elif src.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            created.append(str(dst))
+            print(f"[proxy init] [OK]   Created {dst}")
+        else:
+            print(f"[proxy init] [FAIL] Source not found: {src}")
+
+    # ── config.yaml ────────────────────────────────────────────────────
+    _copy_file(
+        proxy_src / "config.yaml",
+        proxy_dst / "config" / "config.yaml",
+    )
+
+    # ── docker-compose.yaml ────────────────────────────────────────────
+    _copy_file(
+        proxy_src / "docker-compose.yaml",
+        proxy_dst / "docker-compose.yaml",
+    )
+
+    # ── Providers ──────────────────────────────────────────────────────
+    providers_src = proxy_src / "providers"
+    providers_dst = proxy_dst / "config" / "providers"
+    if providers_src.exists():
+        for provider_file in sorted(providers_src.glob("*.yaml")):
+            _copy_file(provider_file, providers_dst / provider_file.name)
+
+    # ── Env files ──────────────────────────────────────────────────────
+    _copy_file(
+        proxy_src / ".env.proxy.example",
+        cf_dir / ".env.proxy",
+    )
+    _copy_file(
+        proxy_src / ".env.proxy.secrets.example",
+        cf_dir / ".env.proxy.secrets",
+    )
+
+    # ── Summary ────────────────────────────────────────────────────────
+    print()
+    if created:
+        print(f"[proxy init] Done — {len(created)} created, {len(skipped)} skipped.")
+    else:
+        print(f"[proxy init] Nothing to do — {len(skipped)} files already exist.")
+        print("              Use --reset to overwrite all files.")
+    print("              Configure: https://nilayparikh.github.io/codefreedom/proxy/")
+    print(_NOTICE)
+    return 0
 
 
 def _find_compose_file() -> Optional[Path]:
@@ -248,7 +330,7 @@ def _validate() -> int:
                     with open(provider_file, encoding="utf-8") as f:
                         provider_config = yaml.safe_load(f)
                     if provider_config is None:
-                        eprint(f"    [SKIP]  (empty/commented out)")
+                        eprint("    [SKIP]  (empty/commented out)")
                         continue
                     models = provider_config.get("model_list", [])
                     for m in models:

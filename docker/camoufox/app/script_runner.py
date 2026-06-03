@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
@@ -84,7 +85,7 @@ async def run_script(
         log.info("  [%d/%d] %s", i + 1, len(steps), action)
 
         try:
-            result = await dispatch_fn(step)
+            result = await asyncio.wait_for(dispatch_fn(step), timeout=25)
         except Exception as e:
             result = {"success": False, "error": str(e)}
 

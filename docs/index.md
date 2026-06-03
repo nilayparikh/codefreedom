@@ -43,10 +43,14 @@ cf --help
 ## Initialize
 
 ```bash
-codefreedom --init
+# Claude Code profiles + environment
+codefreedom claude init
+
+# Proxy configs + environment
+codefreedom proxy init
 ```
 
-This creates `~/.codefreedom/` with default profiles, proxy configs, and provider definitions.
+This creates `~/.codefreedom/` with profiles, proxy configs, and component-specific `.env` files.
 
 ## Start the Proxy
 

@@ -1,0 +1,19 @@
+{
+  "$schema": "camoufox.schema.json",
+  "description": "Camoufox web search tool profile for codefreedom — configures container image, ports, and data directory.",
+  "notes": [
+    "The 'camoufox' block defines all settings for 'codefreedom tools web'.",
+    "'image' is the Docker image to use — change to 'ghcr.io/nilayparikh/codefreedom:camoufox-latest' for published builds.",
+    "'container_name' is the Docker container name (persistent, restart unless-stopped).",
+    "'port' is the host port that maps to container port 8420 (MCP server).",
+    "'data_dir' is the host path mounted to /userdata inside the container.",
+    "'env' are environment variables forwarded to the container."
+  ],
+  "camoufox": {
+    "image": "codefreedom:camoufox",
+    "container_name": "codefreedom-camoufox",
+    "port": 8420,
+    "data_dir": "~/.codefreedom/sandbox/tools/camoufox",
+    "env": {}
+  }
+}

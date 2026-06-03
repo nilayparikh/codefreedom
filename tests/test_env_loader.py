@@ -123,6 +123,41 @@ class TestLoadEnvChain:
         merged = load_env_chain(tmp_path)
         assert merged["KEY"] == "from_workspace_secrets"
 
+    def test_component_env_loaded(self, tmp_path):
+        """Component-specific .env.claude and .env.proxy are loaded."""
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env.claude", "CLAUDE_VAR=claude_val\n")
+        _write(tmp_path / ".codefreedom" / ".env.proxy", "PROXY_VAR=proxy_val\n")
+        merged = load_env_chain(tmp_path)
+        assert merged["CLAUDE_VAR"] == "claude_val"
+        assert merged["PROXY_VAR"] == "proxy_val"
+
+    def test_component_secrets_override_component_env(self, tmp_path):
+        """Component-specific secrets override component-specific env."""
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env.proxy", "API_KEY=from_env\n")
+        _write(
+            tmp_path / ".codefreedom" / ".env.proxy.secrets",
+            "API_KEY=from_secret\n",
+        )
+        merged = load_env_chain(tmp_path)
+        assert merged["API_KEY"] == "from_secret"
+
+    def test_legacy_env_overrides_component_env(self, tmp_path):
+        """Legacy ~/.codefreedom/.env overrides component-specific env files."""
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env.claude", "KEY=from_claude\n")
+        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_legacy\n")
+        merged = load_env_chain(tmp_path)
+        assert merged["KEY"] == "from_legacy"
+
+    def test_missing_component_files_ok(self, tmp_path):
+        """Missing component-specific env files are skipped gracefully."""
+        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
+        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_home\n")
+        merged = load_env_chain(tmp_path)
+        assert merged["KEY"] == "from_home"
+
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 

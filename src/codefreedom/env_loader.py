@@ -2,21 +2,26 @@
 
 Two locations, each with the same 3-step cascade, then system env on top:
 
-  Location 1: ~/.codefreedom/      (primary — created by ``codefreedom --init``)
+  Location 1: ~/.codefreedom/      (primary — created by init commands)
   Location 2: {workspace_dir}/     (per-project overrides — optional)
 
-Within each location the 3-step cascade is:
+Within ~/.codefreedom, component-specific files are loaded first,
+then the legacy shared files:
 
-    {location}/.env          → defaults, model aliases, proxy settings
-    {location}/.env.secrets  → API keys, passwords (skips if missing, overrides .env)
-    system environment       → machine-level overrides (highest precedence)
+    .env.claude / .env.claude.secrets    — Claude Code agent config
+    .env.proxy  / .env.proxy.secrets     — LiteLLM proxy config
+    .env / .env.secrets                  — legacy shared config
 
 Full resolution order (later sources override earlier):
-  1. ~/.codefreedom/.env
-  2. ~/.codefreedom/.env.secrets          (skips if missing)
-  3. {workspace_dir}/.env                 (skips if missing)
-  4. {workspace_dir}/.env.secrets         (skips if missing)
-  5. os.environ / exported vars           (always wins)
+  1. ~/.codefreedom/.env.claude           (skip if missing)
+  2. ~/.codefreedom/.env.claude.secrets   (skip if missing)
+  3. ~/.codefreedom/.env.proxy            (skip if missing)
+  4. ~/.codefreedom/.env.proxy.secrets    (skip if missing)
+  5. ~/.codefreedom/.env                  (warn if missing — legacy)
+  6. ~/.codefreedom/.env.secrets          (skip if missing — legacy)
+  7. {workspace_dir}/.env                 (skip if missing)
+  8. {workspace_dir}/.env.secrets         (skip if missing)
+  9. os.environ / exported vars           (always wins)
 """
 
 from __future__ import annotations
@@ -95,11 +100,15 @@ def load_env_chain(workspace_dir: Path) -> Dict[str, str]:
     """Load env vars in precedence order: home → workspace → system env.
 
     Resolution order (later sources override earlier):
-      1. ~/.codefreedom/.env              (home config — primary location)
-      2. ~/.codefreedom/.env.secrets      (home secrets — skips if missing)
-      3. workspace_dir/.env               (project-local overrides — skips if missing)
-      4. workspace_dir/.env.secrets       (project-local secrets — skips if missing)
-      5. process environment              (highest precedence — machine-level overrides)
+      1. ~/.codefreedom/.env.claude           (skip if missing)
+      2. ~/.codefreedom/.env.claude.secrets   (skip if missing)
+      3. ~/.codefreedom/.env.proxy            (skip if missing)
+      4. ~/.codefreedom/.env.proxy.secrets    (skip if missing)
+      5. ~/.codefreedom/.env                  (warn if missing — legacy)
+      6. ~/.codefreedom/.env.secrets          (skip if missing — legacy)
+      7. workspace_dir/.env                   (project-local — skip if missing)
+      8. workspace_dir/.env.secrets           (project-local secrets — skip)
+      9. process environment                  (highest precedence)
 
     Returns a merged dict. Later sources override earlier ones.
     """
@@ -107,6 +116,10 @@ def load_env_chain(workspace_dir: Path) -> Dict[str, str]:
     merged: Dict[str, str] = {}
 
     env_sources = [
+        (codefreedom_dir / ".env.claude", "claude config", True),
+        (codefreedom_dir / ".env.claude.secrets", "claude secrets", True),
+        (codefreedom_dir / ".env.proxy", "proxy config", True),
+        (codefreedom_dir / ".env.proxy.secrets", "proxy secrets", True),
         (codefreedom_dir / ".env", "config", False),
         (codefreedom_dir / ".env.secrets", "secrets", True),
         (workspace_dir / ".env", "workspace config", True),

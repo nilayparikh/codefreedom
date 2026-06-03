@@ -23,7 +23,7 @@ Or use Docker Compose mode instead: `codefreedom proxy --up --docker`.
 
 ```
 [ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml
-   Run: codefreedom --init
+   Run: codefreedom proxy init
 ```
 
 **Cause:** Proxy configs were not initialized.
@@ -31,8 +31,8 @@ Or use Docker Compose mode instead: `codefreedom proxy --up --docker`.
 **Fix:**
 
 ```bash
-codefreedom --init
-# Or overwrite existing: codefreedom --init --force
+codefreedom proxy init
+# Or overwrite existing: codefreedom proxy init --reset
 ```
 
 ### Port Already in Use

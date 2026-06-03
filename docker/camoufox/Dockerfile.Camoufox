@@ -1,20 +1,21 @@
-# ── CodeFreedom Camoufox Browser Image (Stealth, MCP-only) ──────────────
-# Camoufox (custom Firefox fork) + Xvfb + PyAutoGUI + MCP server.
-# Zero CDP exposure — passes Cloudflare, CreepJS, BrowserScan, Pixelscan.
+# ── CodeFreedom Camoufox Browser Image (MCP-only) ───────────────────────
+# Camoufox (Firefox fork) + Xvfb + PyAutoGUI + MCP server for reliable
+# web automation and data access via standard browser APIs.
 #
 # Two input modes:
 #   • Playwright (DOM-level) — CSS selectors, fast & convenient
-#   • PyAutoGUI (OS-level)  — real mouse/keyboard events, undetectable
+#   • PyAutoGUI (OS-level)  — mouse/keyboard events for complex interactions
 #
-# Ports:
-#   8420 — MCP Streamable HTTP server (web_search + web_fetch only)
+# Port:
+#   8420 — MCP Streamable HTTP server (web_search + web_fetch tools)
 #
-# Anti-bot stealth:
-#   • Camoufox = Firefox fork with no CDP (Chrome's tell-tale protocol)
-#   • Xvfb at 1920x1080x24 — headed mode, not headless
-#   • PyAutoGUI — real OS-level input, browser can't tell it's automated
-#   • browserforge — real fingerprints, no spoofing inconsistencies
-#   • Persistent fingerprint stored in /userdata
+# Design highlights:
+#   • Camoufox = Firefox fork without Chrome DevTools Protocol (CDP),
+#     meaning the browser presents a standard Firefox profile to websites
+#   • Xvfb at 1920x1080x24 — headed mode with a real display buffer
+#   • PyAutoGUI — OS-level input emulation for interactive workflows
+#   • browserforge — generates consistent browser profiles
+#   • Persistent profile stored in /userdata for session continuity
 #
 # @platform  Ubuntu
 # @version   v0.1.0
@@ -40,8 +41,8 @@ FROM python:3.12-slim-bookworm
 
 ARG CODEFREEDOM_VERSION
 
-LABEL org.opencontainers.image.title="CodeFreedom - Camoufox Browser (Stealth)" \
-      org.opencontainers.image.description="Stealth browser automation with Camoufox (Firefox fork) + Xvfb + PyAutoGUI + noVNC + MCP. Zero CDP exposure — passes Cloudflare, CreepJS, BrowserScan, Pixelscan, and all major bot detectors." \
+LABEL org.opencontainers.image.title="CodeFreedom - Camoufox Browser (MCP)" \
+      org.opencontainers.image.description="Web automation with Camoufox (Firefox fork) + Xvfb + PyAutoGUI + MCP server for reliable browser-based data access." \
       org.opencontainers.image.version="${CODEFREEDOM_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
@@ -103,7 +104,7 @@ RUN pip install --no-cache-dir "camoufox[geoip]" pyautogui fastapi uvicorn fastm
 
 # Create non-root user and directories
 RUN groupadd -g 1000 browser && useradd -u 1000 -g 1000 -m browser
-RUN mkdir -p /app /userdata /loaders && chown -R browser:browser /app /userdata /loaders
+RUN mkdir -p /app /userdata && chown -R browser:browser /app /userdata
 
 # Allow browser user to write GeoIP db into camoufox package dir
 RUN chown -R browser:browser /usr/local/lib/python3.12/site-packages/camoufox/
@@ -114,12 +115,11 @@ USER browser
 # Download Camoufox browser (writes to ~/.cache/camoufox + GeoIP db)
 RUN python -m camoufox fetch
 
-# Copy scripts and install extensions (writes to ~/.cache/camoufox)
-COPY --chown=browser:browser scripts/ /scripts/
-RUN python /scripts/install_extensions.py
-
-# Copy app
+# Copy app code
 COPY --chown=browser:browser app/ /app/
+
+# Install browser extensions (writes to ~/.cache/camoufox)
+RUN python /app/install_extensions.py
 
 # Set working directory
 WORKDIR /app

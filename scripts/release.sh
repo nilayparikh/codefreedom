@@ -1,36 +1,41 @@
 #!/usr/bin/env bash
 # ── CodeFreedom Release Script ─────────────────────────────────────────────────
-# Creates a version tag and pushes it to trigger:
+# Two modes:
+#   --version  — bump version in pyproject.toml (any branch, no push/tag)
+#   --tag      — full release: bump, tag v* and push (main branch only)
+#
+# Tag push triggers:
 #   • PyPI publish      (.github/workflows/pipy.yaml)
 #   • Docker publish    (.github/workflows/publish-docker.yml)
 #   • Docs publish      (.github/workflows/publish-docs.yml)
 #
-# Usage:
-#   ./scripts/release.sh 0.1.1              # Set version and tag v0.1.1
-#   ./scripts/release.sh 0.1.1 --dry-run    # Preview without pushing
-#   ./scripts/release.sh 0.2.0 --force      # Overwrite existing tag
-#
-# The script updates pyproject.toml version, commits, tags, and pushes.
-# All three publish workflows trigger on: tags: ["v*"]
 # ────────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 # ── Help ──────────────────────────────────────────────────────────────────
 usage() {
   cat <<'EOF'
-Usage: ./scripts/release.sh <version> [--dry-run] [--force]
+Usage: ./scripts/release.sh --version <semver> [--dry-run]
+       ./scripts/release.sh --tag <semver> [--dry-run] [--force]
 
-  <version>   Semantic version (e.g., 0.1.1). A "v" prefix is added automatically.
+Modes:
+  --version <semver>   Bump version in pyproject.toml and commit.
+                       Works on any branch — use this to set a pre-release
+                       version on feature branches for testing.
+
+  --tag <semver>       Full release: bump version, tag v<semver>, push.
+                       Only allowed on 'main' branch with clean working tree.
 
 Options:
-  --dry-run   Preview changes without pushing.
-  --force     Overwrite an existing tag (uses --force on git tag).
+  --dry-run   Preview changes without committing or pushing.
+  --force     Overwrite an existing tag (only with --tag).
   --help      Show this message.
 
 Examples:
-  ./scripts/release.sh 0.1.1
-  ./scripts/release.sh 0.2.0 --dry-run
-  ./scripts/release.sh 0.1.1 --force
+  ./scripts/release.sh --version 0.2.0-beta          # bump on any branch
+  ./scripts/release.sh --tag 0.1.1                    # full release
+  ./scripts/release.sh --tag 0.2.0 --dry-run          # preview a release
+  ./scripts/release.sh --tag 0.1.1 --force             # overwrite existing tag
 EOF
   exit 0
 }
@@ -38,6 +43,7 @@ EOF
 # ── Parse arguments ─────────────────────────────────────────────────────
 DRY_RUN=false
 FORCE=false
+MODE=""
 VERSION=""
 
 while [[ $# -gt 0 ]]; do
@@ -45,24 +51,31 @@ while [[ $# -gt 0 ]]; do
     --help|-h) usage ;;
     --dry-run) DRY_RUN=true; shift ;;
     --force)   FORCE=true; shift ;;
-    -*)
-      echo "❌ Unknown option: $1"
-      usage
+    --version)
+      if [[ -n "$MODE" ]]; then echo "❌ Error: specify only one mode (--version or --tag)."; exit 1; fi
+      MODE="version"
+      shift
+      if [[ $# -eq 0 || "$1" == -* ]]; then echo "❌ Error: --version requires a version argument."; exit 1; fi
+      VERSION="$1"
+      shift
+      ;;
+    --tag)
+      if [[ -n "$MODE" ]]; then echo "❌ Error: specify only one mode (--version or --tag)."; exit 1; fi
+      MODE="tag"
+      shift
+      if [[ $# -eq 0 || "$1" == -* ]]; then echo "❌ Error: --tag requires a version argument."; exit 1; fi
+      VERSION="$1"
+      shift
       ;;
     *)
-      if [[ -z "$VERSION" ]]; then
-        VERSION="$1"
-        shift
-      else
-        echo "❌ Unexpected argument: $1"
-        usage
-      fi
+      echo "❌ Unknown option: $1"
+      usage
       ;;
   esac
 done
 
-if [[ -z "$VERSION" ]]; then
-  echo "❌ Error: version is required."
+if [[ -z "$MODE" ]]; then
+  echo "❌ Error: specify --version <semver> or --tag <semver>."
   usage
 fi
 
@@ -74,10 +87,46 @@ fi
 
 TAG="v${VERSION}"
 
+# ── Mode: --version (bump only, any branch) ─────────────────────────────
+if [[ "$MODE" == "version" ]]; then
+  if $FORCE; then
+    echo "⚠️  --force is ignored in --version mode (no tagging involved)."
+  fi
+
+  echo "📝 Updating pyproject.toml version → $VERSION"
+  if ! grep -q "^version = " pyproject.toml; then
+    echo "❌ Error: 'version = ' line not found in pyproject.toml"
+    exit 1
+  fi
+
+  CURRENT_VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+  echo "   Current: $CURRENT_VERSION → New: $VERSION"
+
+  if $DRY_RUN; then
+    echo "[DRY RUN] Would update pyproject.toml and commit."
+  else
+    # Update pyproject.toml in-place (macOS + Linux compatible)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      sed -i '' "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+    else
+      sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+    fi
+
+    git add pyproject.toml
+    git commit -m "release: bump to ${VERSION}"
+
+    echo ""
+    echo "✅ Version bumped to $VERSION and committed on $(git rev-parse --abbrev-ref HEAD)."
+    echo "   Run ./scripts/release.sh --tag $VERSION when ready to publish."
+  fi
+  exit 0
+fi
+
+# ── Mode: --tag (full release, main branch only) ───────────────────────
 # ── Ensure we're on main ─────────────────────────────────────────────────
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [[ "$BRANCH" != "main" ]]; then
-  echo "❌ Error: must be on 'main' branch. Current branch: $BRANCH"
+  echo "❌ Error: --tag requires 'main' branch. Current branch: $BRANCH"
   exit 1
 fi
 

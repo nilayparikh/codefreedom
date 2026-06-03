@@ -44,9 +44,49 @@ jobs:
           echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
           echo "📦 Version: v${VERSION}"
 
+  # ── Detect which Dockerfiles changed ─────────────────────────────────────
+  # On workflow_dispatch (manual trigger), all images are built.
+  # On push/PR, only images whose Dockerfile changed are built.
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      cuda: ${{ steps.detect.outputs.cuda }}
+      rocm: ${{ steps.detect.outputs.rocm }}
+      ubuntu: ${{ steps.detect.outputs.ubuntu }}
+      chrome: ${{ steps.detect.outputs.chrome }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: detect
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Manual trigger — build everything
+            echo "cuda=true"  >> "${GITHUB_OUTPUT}"
+            echo "rocm=true"  >> "${GITHUB_OUTPUT}"
+            echo "ubuntu=true" >> "${GITHUB_OUTPUT}"
+            echo "chrome=true" >> "${GITHUB_OUTPUT}"
+          else
+            # Check each Dockerfile with git diff
+            CHANGED=$(git diff --name-only "${{ github.base_ref || 'HEAD~1' }}" HEAD)
+            for image in cuda rocm ubuntu chrome; do
+              case "$image" in
+                cuda)   pat="docker/claude-code/Dockerfile.CUDA" ;;
+                rocm)   pat="docker/claude-code/Dockerfile.ROCm" ;;
+                ubuntu) pat="docker/claude-code/Dockerfile.Ubuntu" ;;
+                chrome) pat="docker/chrome/Dockerfile.Chrome" ;;
+              esac
+              if echo "$CHANGED" | grep -q "$pat"; then
+                echo "${image}=true" >> "${GITHUB_OUTPUT}"
+              else
+                echo "${image}=false" >> "${GITHUB_OUTPUT}"
+              fi
+            done
+          fi
+
   # ── Build CUDA (NVIDIA GPUs) ───────────────────────────────────────────
   build-cuda:
-    needs: [version]
+    needs: [version, changes]
+    if: ${{ needs.changes.outputs.cuda == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -113,7 +153,8 @@ jobs:
 
   # ── Build ROCm (AMD GPUs) ──────────────────────────────────────────────
   build-rocm:
-    needs: [version]
+    needs: [version, changes]
+    if: ${{ needs.changes.outputs.rocm == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -180,7 +221,8 @@ jobs:
 
   # ── Build Ubuntu (general-purpose, no PyTorch) ──────────────────────────
   build-ubuntu:
-    needs: [version]
+    needs: [version, changes]
+    if: ${{ needs.changes.outputs.ubuntu == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -247,7 +289,8 @@ jobs:
 
   # ── Build Chrome (Browser) ─────────────────────────────────────────────
   build-chrome:
-    needs: [version]
+    needs: [version, changes]
+    if: ${{ needs.changes.outputs.chrome == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -314,7 +357,8 @@ jobs:
 
   # ── Summary ────────────────────────────────────────────────────────────
   summary:
-    needs: [version, build-cuda, build-rocm, build-ubuntu, build-chrome]
+    needs:
+      [version, changes, build-cuda, build-rocm, build-ubuntu, build-chrome]
     if: always()
     runs-on: ubuntu-24.04
     steps:
