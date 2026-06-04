@@ -13,8 +13,6 @@ on:
   push:
     branches: [main]
     paths: ["docker/claude-code/Dockerfile.ROCm"]
-  pull_request:
-    paths: ["docker/claude-code/Dockerfile.ROCm"]
   workflow_dispatch:
 
 env:

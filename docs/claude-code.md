@@ -16,6 +16,7 @@ codefreedom claude --list-profiles    # List available profiles
 codefreedom claude --stop       # Stop sandbox containers
 codefreedom claude --status     # Show container status
 codefreedom claude -p "question"  # One-shot prompt
+codefreedom claude --run-as-me   # Run sandbox as host user (with --sandbox)
 ```
 
 Short aliases: `cf cc` is equivalent to `codefreedom claude`.
@@ -31,7 +32,7 @@ Both modes support `--profile` for model switching and `--native-models` to bypa
 
 ## Sandbox Images
 
-Three pre-configured images (CUDA, ROCm, Ubuntu) on `ghcr.io/nilayparikh/codefreedom`.
+Three pre-configured images (CUDA, ROCm, Ubuntu) on `docker.io/nilayparikh/codefreedom`. (Also available on `ghcr.io/nilayparikh/codefreedom` as a mirror.)
 See [Sandbox Mode → Available Images](claude-code/sandbox.md#available-images) for the full tag reference and Dockerfile examples.
 
 ## Profile System
@@ -43,7 +44,7 @@ Profiles control which model a code agent uses by setting environment variables.
 | Profile   | Model               | Description                            |
 | --------- | ------------------- | -------------------------------------- |
 | `default` | `CodeFreedom/Flash` | General purpose — routes through proxy |
-| `bare`    | _(default)_         | Minimal — no model aliases             |
+| `bare`    | _(default)_         | Minimal — routes through proxy, no model aliases or extra settings |
 
 Custom profiles such as `pro` or `ultra` are not bundled by default — create them in the profiles file. The model aliases (`CodeFreedom/Flash`, `CodeFreedom/Pro`, `CodeFreedom/Ultra`) are defined in the [proxy configuration](proxy.md#model-aliases), not in profiles.
 
@@ -115,16 +116,20 @@ Profile values support `${VAR}` references, resolved from the [environment chain
 
 The `:-default` syntax provides a fallback if the variable is not set.
 
-### Sandbox Image per Profile
+### Sandbox Images per Profile
 
-Set a custom sandbox image for a profile:
+Set custom sandbox images for a profile — these are GPU-specific Docker image references:
 
 ```json
 {
   "profiles": {
     "gpu-work": {
       "description": "CUDA sandbox for GPU workloads",
-      "sandbox_image": "ghcr.io/nilayparikh/codefreedom:cuda-latest",
+      "sandbox_images": {
+        "default": "docker.io/nilayparikh/codefreedom:latest",
+        "cuda": "docker.io/nilayparikh/codefreedom:cuda-latest",
+        "rocm": "docker.io/nilayparikh/codefreedom:rocm-latest"
+      },
       "env": {
         "CLAUDE_MODEL": "CodeFreedom/Pro"
       }
@@ -133,7 +138,7 @@ Set a custom sandbox image for a profile:
 }
 ```
 
-If `sandbox_image` is not set on the profile, it inherits from `default`. If neither sets it, the image falls back to environment variables (`CLAUDE_CODE_REGISTRY`, `CLAUDE_CODE_IMAGE_NAME`, `CLAUDE_CODE_IMAGE_TAG`).
+Child profiles inherit `sandbox_images` from `default` and can override individual entries. If `--cuda` or `--rocm` is passed, the matching key is used; otherwise `default` is used. Falls back to environment variables (`CLAUDE_CODE_REGISTRY`, `CLAUDE_CODE_IMAGE_NAME`, `CLAUDE_CODE_IMAGE_TAG`).
 
 ### Listing Profiles
 

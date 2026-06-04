@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from codefreedom.profiles import (
+    ProfileError,
     load_profiles,
     load_profile_env,
     resolve_env,
@@ -24,18 +25,18 @@ class TestLoadProfiles:
         assert "test" in profiles
 
     def test_missing_file(self, tmp_path):
-        with pytest.raises(SystemExit):
+        with pytest.raises(ProfileError):
             load_profiles(tmp_path / "nonexistent.json")
 
     def test_invalid_json(self, tmp_path):
         path = tmp_path / "bad.json"
         path.write_text("not json")
-        with pytest.raises(SystemExit):
+        with pytest.raises(ProfileError):
             load_profiles(path)
 
     def test_no_profiles_key(self, tmp_path):
         path = _write_profiles(tmp_path, {})
-        with pytest.raises(SystemExit):
+        with pytest.raises(ProfileError):
             load_profiles(path)
 
 
@@ -107,7 +108,7 @@ class TestLoadProfileEnv:
 
     def test_unknown_profile_exits(self, tmp_path):
         path = _write_profiles(tmp_path, {"profiles": {"default": {"env": {}}}})
-        with pytest.raises(SystemExit):
+        with pytest.raises(ProfileError):
             load_profile_env("nope", path, {})
 
 

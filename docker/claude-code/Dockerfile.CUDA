@@ -142,8 +142,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget gnupg \
 
 RUN trivy plugin install mcp
 
-# 9. Non-root user
-ARG USERNAME=vscode
+# 9. Non-root user — codefreedom (uid 1000) owns /workspace inside the container.
+#    At runtime, the launcher may override this with --run-as-me to match the
+#    host user's uid/gid for seamless file permission compatibility.
+ARG USERNAME=codefreedom
 ARG USER_UID=1000
 ARG USER_GID=1000
 

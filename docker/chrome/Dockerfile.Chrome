@@ -139,8 +139,12 @@ CHROME_DATA="${CHROME_DATA_DIR:-/data/chrome}"\n\
 mkdir -p "${CHROME_DATA}"\n\
 \n\
 # Initialize DBus system daemon (required by Chrome)\n\
+# Clean stale pid file from a previous container run (docker restart or\n\
+# --restart unless-stopped) — the pid file persists across restarts but\n\
+# the daemon process does not.\n\
 if ! pgrep -x dbus-daemon > /dev/null 2>&1; then\n\
   mkdir -p /run/dbus\n\
+  rm -f /run/dbus/pid\n\
   dbus-daemon --system --fork\n\
   sleep 0.5\n\
 fi\n\
@@ -148,14 +152,15 @@ fi\n\
 # Start DBus session bus for the vscode user — Chrome queries the session bus\n\
 # for notifications, power state, MIME handlers, etc.  Without this, Chrome\n\
 # floods stderr with "Failed to connect to the bus" every few seconds.\n\
+# Always recreate on container start — stale state from previous runs (docker\n\
+# restart / --restart unless-stopped) would point to a dead daemon.\n\
 DBUS_SESSION_FILE="/tmp/.dbus-session-addr"\n\
-if [ ! -f "${DBUS_SESSION_FILE}" ]; then\n\
-  sudo -u vscode bash -c '\''\n\
-    SOCK="/tmp/dbus-session-$$"\n\
-    dbus-daemon --session --address="unix:path=${SOCK}" --fork\n\
-    echo "unix:path=${SOCK}" > /tmp/.dbus-session-addr\n\
-  '\''\n\
-fi\n\
+rm -f "${DBUS_SESSION_FILE}"\n\
+sudo -u vscode bash -c '\''\n\
+  SOCK="/tmp/dbus-session-$$"\n\
+  dbus-daemon --session --address="unix:path=${SOCK}" --fork\n\
+  echo "unix:path=${SOCK}" > /tmp/.dbus-session-addr\n\
+'\''\n\
 DBUS_SESSION_BUS_ADDRESS=$(cat "${DBUS_SESSION_FILE}")\n\
 \n\
 # Boot virtual audio server (prevents AudioContext fingerprinting failures)\n\

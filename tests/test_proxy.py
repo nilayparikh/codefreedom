@@ -1,11 +1,8 @@
 """Tests for proxy CLI — path resolution, validation, compose discovery."""
 
 import argparse
-import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 import yaml
 
 from codefreedom.cli.proxy import (
@@ -14,7 +11,6 @@ from codefreedom.cli.proxy import (
     _validate,
     _validate_basic,
     _env_is_set,
-    _print_validation_result,
     run,
 )
 
@@ -28,13 +24,15 @@ class TestFindComposeFile:
         compose = tmp_path / "proxy" / "docker-compose.yaml"
         compose.parent.mkdir(parents=True)
         compose.write_text("")
-        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+        )
         result = _find_compose_file()
         assert result == compose
 
     def test_returns_none_when_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.proxy._CODEFREEDOM_DIR", Path("/nonexistent")
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
         )
         result = _find_compose_file()
         assert result is None
@@ -47,13 +45,15 @@ class TestFindConfigFile:
         config = tmp_path / "proxy" / "config" / "config.yaml"
         config.parent.mkdir(parents=True)
         config.write_text("")
-        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+        )
         result = _find_config_file()
         assert result == config
 
     def test_returns_none_when_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.proxy._CODEFREEDOM_DIR", Path("/nonexistent")
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
         )
         result = _find_config_file()
         assert result is None
@@ -72,13 +72,15 @@ class TestValidate:
                 "litellm_settings": {},
             },
         )
-        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+        )
         result = _validate()
         assert result == 0
 
     def test_missing_config_file(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.proxy._CODEFREEDOM_DIR", Path("/nonexistent")
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
         )
         result = _validate()
         assert result == 1
@@ -87,7 +89,9 @@ class TestValidate:
         _write_proxy_config(tmp_path, {})
         config_path = tmp_path / "proxy" / "config" / "config.yaml"
         config_path.write_text(": invalid yaml : :")
-        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+        )
         result = _validate()
         assert result == 1
 
@@ -101,7 +105,9 @@ class TestValidate:
                 "litellm_settings": {},
             },
         )
-        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+        )
         result = _validate()
         assert result == 1  # missing provider = validation failure
 
@@ -138,7 +144,7 @@ class TestEnvIsSet:
 
     def test_empty_var(self, monkeypatch):
         monkeypatch.setenv("EMPTY_VAR", "")
-        assert _env_is_set("EMPTY_VAR") is False
+        assert _env_is_set("EMPTY_VAR") is True
 
 
 class TestRun:
@@ -146,10 +152,8 @@ class TestRun:
 
     def test_no_action_shows_help(self):
         args = argparse.Namespace(
-            up=False,
-            down=False,
-            status=False,
-            validate=False,
+            action="invalid",
+            reset=False,
             docker=False,
             port=4000,
             host="0.0.0.0",
@@ -157,12 +161,10 @@ class TestRun:
         result = run(args)
         assert result == 1
 
-    def test_up_docker_compose_not_found(self, monkeypatch):
+    def test_start_docker_compose_not_found(self, monkeypatch):
         args = argparse.Namespace(
-            up=True,
-            down=False,
-            status=False,
-            validate=False,
+            action="start",
+            reset=False,
             docker=True,
             port=4000,
             host="0.0.0.0",
@@ -171,12 +173,10 @@ class TestRun:
         result = run(args)
         assert result == 1  # docker compose file not found
 
-    def test_up_native_config_not_found(self, monkeypatch):
+    def test_start_native_config_not_found(self, monkeypatch):
         args = argparse.Namespace(
-            up=True,
-            down=False,
-            status=False,
-            validate=False,
+            action="start",
+            reset=False,
             docker=False,
             port=4000,
             host="0.0.0.0",

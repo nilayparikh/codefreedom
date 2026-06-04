@@ -4,13 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codefreedom"
-version = "0.0.5"
-description = "Single wrapper for all code agents — simple LLM routing, sandboxing, profile management, and isolation. All config in ~/.codefreedom."
+version = "0.0.6"
+description = "Unified CLI for code agents — LLM proxy routing, Docker sandboxing, profile management, and browser tools. All config in ~/.codefreedom."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 authors = [{ name = "Nilay Parikh", email = "nilay.parikh@gmail.com" }]
-keywords = ["claude-code", "litellm", "ai", "llm", "local-inference"]
+keywords = [
+    "claude-code",
+    "litellm",
+    "ai",
+    "llm",
+    "local-inference",
+    "sandbox",
+    "proxy",
+    "profiles",
+    "docker",
+    "browser-automation",
+]
 
 # ── Dependencies ────────────────────────────────────────────────────────────
 #   PyYAML         — YAML parsing (litellm config validation)
@@ -29,7 +40,7 @@ classifiers = [
 
 # ── Optional Dependencies ───────────────────────────────────────────────────
 #   litellm[proxy]  — LiteLLM proxy with all extras (websockets, gunicorn, etc.)
-#                     Required for: codefreedom proxy --up --native
+#                     Required for: codefreedom proxy start (native mode)
 #                     Not needed for Docker Compose mode.
 #   dev             — Development extras (type checking, linting)
 [project.optional-dependencies]
@@ -62,9 +73,9 @@ codefreedom = [
     "examples/claude/profiles/*.json",
     "examples/proxy/.env.proxy.example",
     "examples/proxy/.env.proxy.secrets.example",
-    "examples/proxy/config.yaml",
+    "examples/proxy/config/config.yaml",
     "examples/proxy/docker-compose.yaml",
-    "examples/proxy/providers/*.yaml",
+    "examples/proxy/config/providers/*.yaml",
     "examples/tools/chrome/*.json",
     "examples/tools/web/*.json",
 ]

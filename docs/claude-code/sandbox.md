@@ -21,7 +21,7 @@ codefreedom claude --sandbox --native-models
 
 ## Available Images
 
-Three pre-configured images on `ghcr.io/nilayparikh/codefreedom`:
+Three pre-configured images on `docker.io/nilayparikh/codefreedom` (also available on `ghcr.io/nilayparikh/codefreedom` as a mirror):
 
 | Image      | Description                          | Tags                                      |
 | ---------- | ------------------------------------ | ----------------------------------------- |
@@ -32,7 +32,7 @@ Three pre-configured images on `ghcr.io/nilayparikh/codefreedom`:
 All images include Claude Code, Node.js, Python, Git, and essential dev tools. Use them as base images and extend per your needs:
 
 ```dockerfile
-FROM ghcr.io/nilayparikh/codefreedom:cuda-latest
+FROM docker.io/nilayparikh/codefreedom:cuda-latest
 RUN pip install your-custom-package
 ```
 
@@ -47,17 +47,17 @@ codefreedom claude --sandbox
 
 Three variables control the full image reference:
 
-| Variable                 | Default               | Purpose            |
-| ------------------------ | --------------------- | ------------------ |
-| `CLAUDE_CODE_REGISTRY`   | `ghcr.io/nilayparikh` | Container registry |
-| `CLAUDE_CODE_IMAGE_NAME` | `claude-code`         | Image name         |
-| `CLAUDE_CODE_IMAGE_TAG`  | `latest`              | Image tag          |
+| Variable                 | Default                 | Purpose            |
+| ------------------------ | ----------------------- | ------------------ |
+| `CLAUDE_CODE_REGISTRY`   | `docker.io/nilayparikh` | Container registry |
+| `CLAUDE_CODE_IMAGE_NAME` | `codefreedom`           | Image name         |
+| `CLAUDE_CODE_IMAGE_TAG`  | `latest`                | Image tag          |
 
 The resolved image is: `{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}`.
 
-**Method 2: Profile `sandbox_image`** (per-profile)
+**Method 2: Profile `sandbox_images`** (GPU-aware per-profile)
 
-Set `sandbox_image` in the profile to override for that profile only. Profile values take precedence over environment variables. See [Profile System → Sandbox Image per Profile](../claude-code.md#sandbox-image-per-profile).
+Set `sandbox_images` (a dict with `default`, `cuda`, and/or `rocm` keys) in the profile. Child profiles inherit from `default` and can override individual entries. When `--cuda` or `--rocm` is passed, the matching key is selected; otherwise `default` is used. See [Profile System → Sandbox Images per Profile](../claude-code.md#sandbox-images-per-profile).
 
 ## GPU Requirements
 

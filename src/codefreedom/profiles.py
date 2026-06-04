@@ -18,6 +18,10 @@ from typing import Any, Dict, List
 _VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-(.*))?\}")
 
 
+class ProfileError(Exception):
+    """Raised when a profile cannot be loaded or is invalid."""
+
+
 def eprint(*args: Any, **kwargs: Any) -> None:
     """Print to stderr."""
     print(*args, file=sys.stderr, **kwargs)
@@ -27,19 +31,19 @@ def load_profiles(profiles_path: Path) -> Dict[str, Any]:
     """Load and validate the profiles JSON file."""
     if not profiles_path.exists():
         eprint(f"[ERROR] Profiles file not found: {profiles_path}")
-        sys.exit(1)
+        raise ProfileError(f"Profiles file not found: {profiles_path}")
 
     try:
         with open(profiles_path, encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
         eprint(f"[ERROR] Invalid JSON in {profiles_path}: {e}")
-        sys.exit(1)
+        raise ProfileError(f"Invalid JSON in {profiles_path}: {e}") from e
 
     profiles = data.get("profiles", {})
     if not profiles:
         eprint("[ERROR] No profiles defined in profiles file.")
-        sys.exit(1)
+        raise ProfileError("No profiles defined in profiles file.")
 
     return profiles
 
@@ -96,7 +100,7 @@ def load_profile_env(
         for name, info in profiles.items():
             desc = info.get("description", "No description")
             eprint(f"     - {name}: {desc}")
-        sys.exit(1)
+        raise ProfileError(f"Profile '{profile_name}' not found.")
 
     profile_def = profiles[profile_name]
     env_def = profile_def.get("env", {})
@@ -159,38 +163,68 @@ def _merge_mode_env(
             merged.update(resolve_env(mode_env_def, {**base_env, **merged}))
 
 
-def get_profile_sandbox_image(
+def get_profile_sandbox_images(
     profile_name: str,
     profiles_path: Path,
     profiles: Dict[str, Any] | None = None,
-) -> str | None:
-    """Get the sandbox image for a profile, respecting inheritance.
+) -> Dict[str, str]:
+    """Get the sandbox_images mapping for a profile, respecting inheritance.
 
-    If *profiles* is provided, uses it directly to avoid re-reading the file.
-
-    Returns None if no sandbox_image is set anywhere in the chain.
+    Returns a dict mapping image type (\"default\", \"cuda\", \"rocm\") to image
+    references.  Child profiles inherit from 'default' and can override
+    individual entries. Returns an empty dict if nothing is configured.
     """
     if profiles is None:
         profiles = load_profiles(profiles_path)
 
     if profile_name not in profiles:
-        return None
+        return {}
 
     profile_def = profiles[profile_name]
-    sandbox = profile_def.get("sandbox_image")
+    images = profile_def.get("sandbox_images", {})
 
-    if sandbox:
-        return sandbox
-
-    # Inheritance: if not set on this profile, fall back to default
+    # Inheritance: merge default's sandbox_images, then profile overrides
     if profile_name not in ("default", "bare"):
         default_def = profiles.get("default", {})
-        sandbox = default_def.get("sandbox_image")
-        if sandbox:
-            eprint(f"[PROFILE] '{profile_name}' inherits sandbox_image from 'default'")
-            return sandbox
+        default_images = default_def.get("sandbox_images", {})
+        merged = dict(default_images)
+        merged.update(images)
+        return merged
 
-    return None
+    return dict(images)
+
+
+def get_profile_tools(
+    profile_name: str,
+    profiles_path: Path,
+    profiles: Dict[str, Any] | None = None,
+) -> List[str]:
+    """Get the tools list for a profile, respecting inheritance.
+
+    Merges default's tools with the child profile's tools (deduplicated,
+    order-preserving).  'bare' is standalone — does not inherit from default.
+    Returns an empty list if no tools are declared.
+    """
+    if profiles is None:
+        profiles = load_profiles(profiles_path)
+
+    if profile_name not in profiles:
+        return []
+
+    profile_def = profiles[profile_name]
+    tools: List[str] = list(profile_def.get("tools", []))
+
+    if profile_name in ("default", "bare"):
+        return tools
+
+    # Inherit default's tools, then append profile's own (deduplicated)
+    default_def = profiles.get("default", {})
+    default_tools: List[str] = list(default_def.get("tools", []))
+    merged = list(default_tools)
+    for t in tools:
+        if t not in merged:
+            merged.append(t)
+    return merged
 
 
 def list_profiles(profiles_path: Path) -> List[Dict[str, Any]]:
@@ -213,6 +247,7 @@ def list_profiles(profiles_path: Path) -> List[Dict[str, Any]]:
                 "env_keys": env_keys,
                 "sandbox_env_keys": sandbox_keys,
                 "local_env_keys": local_keys,
+                "tools": info.get("tools", []),
                 "standalone": name in ("default", "bare"),
             }
         )

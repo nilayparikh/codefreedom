@@ -5,7 +5,7 @@ database** — pure stateless model routing with zero persistence. You can
 optionally connect a PostgreSQL database to unlock the Admin UI, spend
 tracking, key management, and prompt logging.
 
-> **Docker is optional.** The proxy can run natively (`codefreedom proxy --up`) or via Docker Compose (`codefreedom proxy --up --docker`). Docker is only required for sandbox mode and Docker Compose proxy.
+> **Docker is optional.** The proxy can run natively (`codefreedom proxy start`) or via Docker Compose (`codefreedom proxy start --docker`). Docker is only required for sandbox mode and Docker Compose proxy.
 >
 > **Cloud-only user?** Skip local providers. **Local + cloud?** Enable both.
 > Providers are opt-in — set an API key to enable, leave empty to disable.
@@ -21,13 +21,13 @@ Environment variables are loaded through the [env chain](environment.md) — `~/
 codefreedom proxy init
 
 # Start via Docker Compose
-codefreedom proxy --up --docker
+codefreedom proxy start --docker
 
 # Or start natively (no Docker needed)
-codefreedom proxy --up
+codefreedom proxy start
 
 # Validate config
-codefreedom proxy --validate
+codefreedom proxy validate
 ```
 
 The proxy is available at `http://localhost:4000`.
@@ -72,8 +72,8 @@ general_settings:
 **Step 3: Restart the proxy:**
 
 ```bash
-codefreedom proxy --down
-codefreedom proxy --up --docker
+codefreedom proxy stop
+codefreedom proxy start --docker
 ```
 
 The Prisma migration runs automatically on first start — LiteLLM creates the
@@ -159,25 +159,25 @@ them as available models.
 
 ```bash
 # Start natively (no Docker needed)
-codefreedom proxy --up
+codefreedom proxy start
 
 # Start via Docker Compose
-codefreedom proxy --up --docker
+codefreedom proxy start --docker
 
 # On a custom port
-codefreedom proxy --up --port 4001
+codefreedom proxy start --port 4001
 
 # Bind to localhost only (not exposed on the network)
-codefreedom proxy --up --host 127.0.0.1
+codefreedom proxy start --host 127.0.0.1
 
 # Stop (Docker Compose mode only — does not stop a natively-started proxy)
-codefreedom proxy --down
+codefreedom proxy stop
 
 # Check status (Docker Compose mode only)
-codefreedom proxy --status
+codefreedom proxy status
 
 # Validate config
-codefreedom proxy --validate
+codefreedom proxy validate
 ```
 
 | Flag     | Default   | Description                               |

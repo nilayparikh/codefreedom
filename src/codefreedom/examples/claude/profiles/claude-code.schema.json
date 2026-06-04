@@ -27,9 +27,35 @@
               "type": "string",
               "description": "Human-readable description of this profile"
             },
-            "sandbox_image": {
-              "type": "string",
-              "description": "Docker image used for sandboxed execution (when --sandbox is passed). Inherits from 'default' if not set on a child profile."
+            "sandbox_images": {
+              "type": "object",
+              "description": "Sandbox images keyed by GPU type. Keys: default, cuda, rocm. 'default' is used when no --cuda/--rocm flag is passed. Inherits from 'default' profile.",
+              "properties": {
+                "default": {
+                  "type": "string",
+                  "description": "Default sandbox image (e.g. docker.io/nilayparikh/codefreedom:latest)"
+                },
+                "cuda": {
+                  "type": "string",
+                  "description": "CUDA sandbox image (e.g. docker.io/nilayparikh/codefreedom:cuda-latest)"
+                },
+                "rocm": {
+                  "type": "string",
+                  "description": "ROCm sandbox image (e.g. docker.io/nilayparikh/codefreedom:rocm-latest)"
+                }
+              },
+              "additionalProperties": false
+            },
+            "tools": {
+              "type": "array",
+              "description": "Tool containers to auto-start when this profile is used. First session starts them, last session stops them. Child profiles inherit from default (merge).",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "chrome",
+                  "web"
+                ]
+              }
             },
             "env": {
               "type": "object",

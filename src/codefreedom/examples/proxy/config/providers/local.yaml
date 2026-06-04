@@ -15,7 +15,7 @@
 #   # Primary coding/reasoning model on port 8000
 #   - model_name: DGX/Qwen3.6-27B
 #     litellm_params: &local_params
-#       model: openai/os.environ/LOCAL_M_SERVING_MODEL
+#       model: openai/qwen3.6_27b
 #       api_base: os.environ/LOCAL_M_BASE_URL
 #       api_key: os.environ/LOCAL_M_API_KEY
 #       timeout: 300
@@ -74,7 +74,7 @@
 #   - model_name: DGX/Qwen3.6-35B-A3B
 #     litellm_params:
 #       <<: *local_params
-#       model: openai/os.environ/LOCAL_S_SERVING_MODEL
+#       model: openai/qwen3.6_35b_a3b
 #       api_base: os.environ/LOCAL_S_BASE_URL
 #       api_key: os.environ/LOCAL_S_API_KEY
 #       max_tokens: 262144

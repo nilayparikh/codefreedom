@@ -71,6 +71,10 @@ nav:
       - Overview: claude-code.md
       - Sandbox Mode: claude-code/sandbox.md
       - Local Mode: claude-code/local.md
+  - Browser Tools:
+      - Overview: tools/index.md
+      - Chrome: tools/chrome.md
+      - Camoufox: tools/web.md
   - VS Code: vscode.md
   - Troubleshooting: troubleshooting.md
   - License & Contributions: license-contributions.md

@@ -9,7 +9,7 @@
    Install: pip install codefreedom[litellm]
 ```
 
-**Cause:** Running `codefreedom proxy --up` (native mode) without the LiteLLM dependency.
+**Cause:** Running `codefreedom proxy start` (native mode) without the LiteLLM dependency.
 
 **Fix:**
 
@@ -17,7 +17,7 @@
 pip install codefreedom[litellm]
 ```
 
-Or use Docker Compose mode instead: `codefreedom proxy --up --docker`.
+Or use Docker Compose mode instead: `codefreedom proxy start --docker`.
 
 ### "Could not find docker-compose.yaml"
 
@@ -32,7 +32,7 @@ Or use Docker Compose mode instead: `codefreedom proxy --up --docker`.
 
 ```bash
 codefreedom proxy init
-# Or overwrite existing: codefreedom proxy init --reset
+# If configs exist, init will skip. Delete them first, or merge manually.
 ```
 
 ### Port Already in Use
@@ -42,7 +42,7 @@ codefreedom proxy init
 **Fix:** Use a different port:
 
 ```bash
-codefreedom proxy --up --port 4001
+codefreedom proxy start --port 4001
 ```
 
 ### Auth Errors in Logs
@@ -79,7 +79,7 @@ Then either use an existing profile or add your profile to `~/.codefreedom/profi
 2. Check that the proxy is running and has the model configured
 3. Verify model aliases point to an enabled provider:
    ```bash
-   codefreedom proxy --validate
+   codefreedom proxy validate
    ```
 4. Check env chain — a workspace `.env` may override the profile:
    ```bash
@@ -94,7 +94,7 @@ Then either use an existing profile or add your profile to `~/.codefreedom/profi
 **Checklist:**
 
 1. Is Docker running? `docker info`
-2. Is the image pulled? `docker pull ghcr.io/nilayparikh/codefreedom:latest`
+2. Is the image pulled? `docker pull docker.io/nilayparikh/codefreedom:latest`
 3. Check Docker logs for GPU driver issues
 
 ### GPU Passthrough Errors
@@ -142,7 +142,7 @@ Check the profile and model alias chain:
 codefreedom claude --list-profiles
 
 # 2. Check proxy model aliases
-codefreedom proxy --validate
+codefreedom proxy validate
 
 # 3. List models available from the proxy
 curl http://localhost:4000/v1/models \
@@ -154,7 +154,7 @@ curl http://localhost:4000/v1/models \
 Validate the entire proxy configuration:
 
 ```bash
-codefreedom proxy --validate
+codefreedom proxy validate
 ```
 
 This checks:

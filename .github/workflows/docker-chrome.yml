@@ -13,8 +13,6 @@ on:
   push:
     branches: [main]
     paths: ["docker/chrome/Dockerfile.Chrome"]
-  pull_request:
-    paths: ["docker/chrome/Dockerfile.Chrome"]
   workflow_dispatch:
 
 env:

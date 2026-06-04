@@ -33,14 +33,17 @@ TOOL_INFO: Dict[str, dict] = {
         "description": (
             "Camoufox stealth browser for web search and scraping. "
             "Runs an MCP server on port 8420 with web_search and web_fetch tools. "
-            "Combines Brave Search + Bing results with AI summaries."
+            "Search engines are user-configured via the profile."
         ),
         "third_party": [
             ("Camoufox (stealth browser)", "daijro"),
             ("Firefox", "Mozilla Foundation"),
-            ("Brave Search API", "Brave Software, Inc."),
-            ("Bing Search API", "Microsoft Corporation"),
         ],
+        "warning": (
+            "The Camoufox scraping tool is designed for internal websites "
+            "or permissible public infrastructure. "
+            "DO NOT USE or REPURPOSE the tool beyond permissible use cases."
+        ),
         "docs_url": "https://nilayparikh.github.io/codefreedom/claude-code/tools/",
         "profile_name": "camoufox.json",
     },
@@ -50,10 +53,20 @@ TOOL_INFO: Dict[str, dict] = {
 
 _NON_DISCLAIMER = """\
 --- Notice ----------------------------------------------------------
-CodeFreedom is experimental software. Some features may
-interact with third-party services and components.
-CodeFreedom is not responsible for third-party behavior.
+CodeFreedom is provided \"as is\", without warranty of any kind.
+See the Apache 2.0 License for details.
 ---------------------------------------------------------------------"""
+
+_THIRD_PARTY_NOTICE = (
+    "CodeFreedom is not responsible"
+    " for their behavior, security, or privacy practices."
+)
+
+
+_TAG_MAP: Dict[str, str] = {
+    "chrome": "CHROME",
+    "web": "WEB",
+}
 
 
 def _print_tool_notice(tool_name: str) -> None:
@@ -62,16 +75,22 @@ def _print_tool_notice(tool_name: str) -> None:
     if not info:
         return
 
+    tag = _TAG_MAP.get(tool_name, tool_name.upper())
     components = info["third_party"]
     print()
-    print("─── Third-Party Notice ─────────────────────────────────")
-    print("This container includes third-party components:")
+    print(f"[{tag}] --- Third-Party Notice ---")
+    print(f"[{tag}] This container includes third-party components:")
     for component, vendor in components:
-        print(f"  • {component} ({vendor})")
-    print()
-    print("CodeFreedom is not responsible for the behavior,")
-    print("security, or privacy practices of these components.")
-    print("────────────────────────────────────────────────────────")
+        print(f"[{tag}]   * {component} ({vendor})")
+    print(f"[{tag}]")
+    print(
+        f"[{tag}] CodeFreedom is not responsible"
+        f" for their behavior, security, or privacy practices."
+    )
+    if "warning" in info:
+        print(f"[{tag}]")
+        print(f"[{tag}] WARNING: {info['warning']}")
+    print(f"[{tag}] ---")
 
 
 def _print_non_disclaimer() -> None:
@@ -101,8 +120,7 @@ def prompt_acceptance(tool_name: str) -> bool:
         print(f"  • {component} — {vendor}")
     print()
     print("By continuing, you acknowledge that this tool uses")
-    print("third-party components. CodeFreedom is not responsible")
-    print("for their behavior, security, or privacy practices.")
+    print("third-party components. " + _THIRD_PARTY_NOTICE)
     print()
     print("Documentation: " + info["docs_url"])
     print()

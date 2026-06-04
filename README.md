@@ -46,14 +46,15 @@ CodeFreedom integrates with code agents through their **publicly supported featu
 
 ## Features
 
-| Feature             | codefreedom                                       |
-| ------------------- | ------------------------------------------------- |
-| LLM proxy           | ✅ Stateless model routing (Docker or native)     |
-| Code agent launcher | ✅ `codefreedom claude` CLI                       |
-| Sandboxing          | ✅ Pre-configured containers (CUDA, ROCm, Ubuntu) |
-| Profile management  | ✅ Model switching & isolation                    |
-| PostgreSQL          | ✅ Optional — Admin UI, spend tracking            |
-| pip installable     | ✅ `pip install codefreedom`                      |
+| Feature             | codefreedom                                         |
+| ------------------- | --------------------------------------------------- |
+| LLM proxy           | ✅ Stateless model routing (Docker or native)       |
+| Code agent launcher | ✅ `codefreedom claude` CLI                         |
+| Sandboxing          | ✅ Pre-configured containers (CUDA, ROCm, Ubuntu)   |
+| Profile management  | ✅ Model switching & isolation                      |
+| Browser tools       | ✅ Chrome (CDP) + Camoufox (MCP) for web automation |
+| PostgreSQL          | ✅ Optional — Admin UI, spend tracking              |
+| pip installable     | ✅ `pip install codefreedom`                        |
 
 ## Quick Start
 
@@ -96,7 +97,7 @@ This creates:
 ~/.codefreedom/
 ├── profiles/
 │   ├── claude-code.json                  # Profile definitions
-│   └── claude-code-profiles.schema.json  # JSON Schema for validation
+│   └── claude-code.schema.json           # JSON Schema for validation
 └── proxy/
     ├── docker-compose.yaml                # Docker Compose for LiteLLM
     └── config/
@@ -115,13 +116,13 @@ This creates:
 
 ```bash
 # Start via Docker Compose
-codefreedom proxy --up --docker
+codefreedom proxy start --docker
 
 # Or start natively (requires: pip install codefreedom[litellm])
-codefreedom proxy --up
+codefreedom proxy start
 
 # Validate config
-codefreedom proxy --validate
+codefreedom proxy validate
 ```
 
 The proxy starts stateless — no database, no Prisma, just model routing.
@@ -141,6 +142,10 @@ codefreedom claude --profile my-profile
 
 # Run in sandboxed Docker container
 codefreedom claude --sandbox
+
+# Use GPU images (with --sandbox)
+codefreedom claude --sandbox --cuda   # NVIDIA GPU
+codefreedom claude --sandbox --rocm   # AMD GPU
 
 # Use native Anthropic /login auth (bypass proxy)
 codefreedom claude --native-models
@@ -165,8 +170,29 @@ codefreedom claude --profile my-profile --worktree feature-branch
 
 ## Sandbox Containers
 
-Three pre-configured images (CUDA, ROCm, Ubuntu) on `ghcr.io/nilayparikh/codefreedom`.
+Three pre-configured images (CUDA, ROCm, Ubuntu) on `docker.io/nilayparikh/codefreedom`. (Also available on `ghcr.io/nilayparikh/codefreedom` as a mirror.)
 See [Sandbox Mode → Available Images](docs/claude-code/sandbox.md#available-images) for the full tag reference and Dockerfile examples.
+
+## Browser Tools
+
+CodeFreedom provides containerized browser tools for coding agents:
+
+| Tool                           | Purpose                           | Interface             | Command                          |
+| ------------------------------ | --------------------------------- | --------------------- | -------------------------------- |
+| [Chrome](docs/tools/chrome.md) | Headed browser automation via CDP | `ws://localhost:9222` | `codefreedom tools chrome start` |
+| [Camoufox](docs/tools/web.md)  | Stealth web search & scraping     | MCP on port 8420      | `codefreedom tools web start`    |
+
+```bash
+# Initialize and start Chrome
+codefreedom tools chrome init
+codefreedom tools chrome start
+
+# Initialize and start Camoufox
+codefreedom tools web init
+codefreedom tools web start
+```
+
+See [Tools](docs/tools/index.md) for full documentation.
 
 ## CLI Reference
 
@@ -197,7 +223,7 @@ Create custom profiles by editing `~/.codefreedom/profiles/claude-code.json`:
 }
 ```
 
-A JSON Schema is provided at `~/.codefreedom/profiles/claude-code-profiles.schema.json`.
+A JSON Schema is provided at `~/.codefreedom/profiles/claude-code.schema.json`.
 
 ## Database (Optional)
 
@@ -218,6 +244,7 @@ See [Proxy → Database](docs/proxy.md#database-backends) for setup.
 - [Code Agents](docs/claude-code.md) — Profiles, sandbox mode, local mode
 - [Proxy](docs/proxy.md) — Provider setup, database, configuration
 - [Architecture](docs/architecture.md) — System design, data flow (Mermaid diagrams)
+- [Browser Tools](docs/tools/index.md) — Chrome and Camoufox browser automation
 - [VS Code](docs/vscode.md) — Proxy integration with VS Code extensions
 - [Troubleshooting](docs/troubleshooting.md) — Common issues and diagnostics
 - [License & Contributions](docs/license-contributions.md) — License, contributing guide

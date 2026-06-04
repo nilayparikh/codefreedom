@@ -65,8 +65,10 @@ class TestLoadEnvChain:
 
     @pytest.fixture(autouse=True)
     def _redirect_home(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """Redirect Path.home() → tmp_path so ~/.codefreedom/.env tests are isolated."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        """Redirect CODEFREEDOM_HOME -> tmp_path so .env tests are isolated."""
+        cf_home = tmp_path / ".codefreedom"
+        cf_home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
 
     def test_home_env_loaded(self, tmp_path):
         (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
@@ -124,13 +126,25 @@ class TestLoadEnvChain:
         assert merged["KEY"] == "from_workspace_secrets"
 
     def test_component_env_loaded(self, tmp_path):
-        """Component-specific .env.claude and .env.proxy are loaded."""
+        """Component-specific env files are only loaded for their component."""
         (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
         _write(tmp_path / ".codefreedom" / ".env.claude", "CLAUDE_VAR=claude_val\n")
         _write(tmp_path / ".codefreedom" / ".env.proxy", "PROXY_VAR=proxy_val\n")
-        merged = load_env_chain(tmp_path)
-        assert merged["CLAUDE_VAR"] == "claude_val"
-        assert merged["PROXY_VAR"] == "proxy_val"
+
+        # Without component, neither should load
+        merged_no_component = load_env_chain(tmp_path)
+        assert "CLAUDE_VAR" not in merged_no_component
+        assert "PROXY_VAR" not in merged_no_component
+
+        # With component="claude", only claude envs load
+        merged_claude = load_env_chain(tmp_path, component="claude")
+        assert merged_claude["CLAUDE_VAR"] == "claude_val"
+        assert "PROXY_VAR" not in merged_claude
+
+        # With component="proxy", only proxy envs load
+        merged_proxy = load_env_chain(tmp_path, component="proxy")
+        assert merged_proxy["PROXY_VAR"] == "proxy_val"
+        assert "CLAUDE_VAR" not in merged_proxy
 
     def test_component_secrets_override_component_env(self, tmp_path):
         """Component-specific secrets override component-specific env."""
@@ -140,23 +154,23 @@ class TestLoadEnvChain:
             tmp_path / ".codefreedom" / ".env.proxy.secrets",
             "API_KEY=from_secret\n",
         )
-        merged = load_env_chain(tmp_path)
+        merged = load_env_chain(tmp_path, component="proxy")
         assert merged["API_KEY"] == "from_secret"
 
-    def test_legacy_env_overrides_component_env(self, tmp_path):
-        """Legacy ~/.codefreedom/.env overrides component-specific env files."""
+    def test_shared_env_overrides_component_env(self, tmp_path):
+        """Shared ~/.codefreedom/.env overrides component-specific env files."""
         (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
         _write(tmp_path / ".codefreedom" / ".env.claude", "KEY=from_claude\n")
-        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_legacy\n")
-        merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_legacy"
+        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_shared\n")
+        merged = load_env_chain(tmp_path, component="claude")
+        assert merged["KEY"] == "from_shared"
 
     def test_missing_component_files_ok(self, tmp_path):
         """Missing component-specific env files are skipped gracefully."""
         (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_home\n")
-        merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_home"
+        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_shared\n")
+        merged = load_env_chain(tmp_path, component="claude")
+        assert merged["KEY"] == "from_shared"
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

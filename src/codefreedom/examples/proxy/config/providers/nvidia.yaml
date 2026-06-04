@@ -42,7 +42,7 @@
 #         - temperature
 #         - top_p
 #         - stop
-
+#
 #   - model_name: NVIDIA/MiniMax-M2.7
 #     litellm_params:
 #       model: openai/minimaxai/minimax-m2.7
@@ -72,7 +72,7 @@
 #       supports_native_streaming: true
 #       supports_vision: false
 #       supported_openai_params: *nvidia_supported_openai_params
-
+#
 #   - model_name: NVIDIA/Kimi-K2.6
 #     litellm_params:
 #       model: openai/moonshotai/kimi-k2.6
@@ -98,6 +98,9 @@
 #         context: 256000
 #         output: 16384
 #       supports_system_messages: true
+#       supports_native_streaming: true
+#       supports_vision: true
+#       supported_openai_params: *nvidia_supported_openai_params
 #       supports_native_streaming: true
 #       supports_vision: true
 #       supported_openai_params: *nvidia_supported_openai_params

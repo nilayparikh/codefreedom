@@ -31,13 +31,15 @@ class TestInitClaude:
     def test_creates_profiles_and_env(self, tmp_path, monkeypatch):
         """Clean init creates profiles, schema, and .env.claude files."""
         cf_dir = tmp_path / ".codefreedom"
-        monkeypatch.setattr("codefreedom.cli.claude._CODEFREEDOM_DIR", cf_dir)
+        monkeypatch.setattr(
+            "codefreedom.cli.claude.get_codefreedom_dir", lambda: cf_dir
+        )
         examples = _setup_bundled_claude_examples(tmp_path)
 
         with mock.patch(
-            "codefreedom.cli.claude._find_bundled_examples", return_value=examples
+            "codefreedom.cli.claude.find_bundled_examples", return_value=examples
         ):
-            result = init_claude(reset=False)
+            result = init_claude()
 
         assert result == 0
 
@@ -60,63 +62,43 @@ class TestInitClaude:
         assert secrets_dst.exists()
         assert "# CLAUDE_SECRET=test" in secrets_dst.read_text()
 
-    def test_skips_when_exists_no_reset(self, tmp_path, monkeypatch):
-        """When files exist and reset=False, init skips them."""
+    def test_skips_all_when_any_exists(self, tmp_path, monkeypatch):
+        """All-or-nothing: if any destination file exists, nothing is copied."""
         cf_dir = tmp_path / ".codefreedom"
-        monkeypatch.setattr("codefreedom.cli.claude._CODEFREEDOM_DIR", cf_dir)
+        monkeypatch.setattr(
+            "codefreedom.cli.claude.get_codefreedom_dir", lambda: cf_dir
+        )
 
-        # Pre-create files with existing content
-        profiles_dst = cf_dir / "profiles" / "claude-code.json"
-        profiles_dst.parent.mkdir(parents=True)
-        profiles_dst.write_text("existing")
+        # Pre-create one file (but not the rest)
+        (cf_dir / ".env.claude").parent.mkdir(parents=True, exist_ok=True)
         (cf_dir / ".env.claude").write_text("existing env")
 
         examples = _setup_bundled_claude_examples(tmp_path)
         (examples / "claude" / "profiles" / "claude-code.json").write_text("new")
 
         with mock.patch(
-            "codefreedom.cli.claude._find_bundled_examples", return_value=examples
+            "codefreedom.cli.claude.find_bundled_examples", return_value=examples
         ):
-            result = init_claude(reset=False)
+            result = init_claude()
 
         assert result == 0
-        assert profiles_dst.read_text() == "existing"
+        # None of the other files should be created either
+        assert not (cf_dir / "profiles" / "claude-code.json").exists()
         assert (cf_dir / ".env.claude").read_text() == "existing env"
-
-    def test_reset_overwrites(self, tmp_path, monkeypatch):
-        """With reset=True, existing files are overwritten."""
-        cf_dir = tmp_path / ".codefreedom"
-        monkeypatch.setattr("codefreedom.cli.claude._CODEFREEDOM_DIR", cf_dir)
-
-        profiles_dst = cf_dir / "profiles" / "claude-code.json"
-        profiles_dst.parent.mkdir(parents=True)
-        profiles_dst.write_text("old")
-
-        examples = _setup_bundled_claude_examples(tmp_path)
-        new_content = json.dumps(
-            {"profiles": {"test": {"description": "new", "env": {"KEY": "val"}}}}
-        )
-        (examples / "claude" / "profiles" / "claude-code.json").write_text(new_content)
-
-        with mock.patch(
-            "codefreedom.cli.claude._find_bundled_examples", return_value=examples
-        ):
-            result = init_claude(reset=True)
-
-        assert result == 0
-        assert profiles_dst.read_text() == new_content
 
     def test_missing_source_graceful(self, tmp_path, monkeypatch):
         """When bundled examples don't exist, init still returns 0."""
         cf_dir = tmp_path / ".codefreedom"
-        monkeypatch.setattr("codefreedom.cli.claude._CODEFREEDOM_DIR", cf_dir)
+        monkeypatch.setattr(
+            "codefreedom.cli.claude.get_codefreedom_dir", lambda: cf_dir
+        )
 
         empty = tmp_path / "empty"
         empty.mkdir()
 
         with mock.patch(
-            "codefreedom.cli.claude._find_bundled_examples", return_value=empty
+            "codefreedom.cli.claude.find_bundled_examples", return_value=empty
         ):
-            result = init_claude(reset=False)
+            result = init_claude()
 
         assert result == 0
