@@ -95,3 +95,6 @@ nav:
   - VS Code: vscode.md
   - Troubleshooting: troubleshooting.md
   - License & Contributions: license-contributions.md
+
+extra_javascript:
+  - js/external-links.js
