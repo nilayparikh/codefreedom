@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "camoufox.schema.json",
-  "title": "Camoufox Web Search Tool Profile",
-  "description": "Schema for camoufox.json — configures the Camoufox container image, ports, data directory, and environment.",
+  "$id": "web.schema.json",
+  "title": "Web Search Tool Profile",
+  "description": "Schema for web.json \u2014 configures the web browser container image, ports, data directory, and environment.",
   "type": "object",
   "properties": {
     "description": {
@@ -16,13 +16,13 @@
       },
       "description": "Usage notes"
     },
-    "camoufox": {
+    "web": {
       "type": "object",
-      "description": "Camoufox browser container settings",
+      "description": "Web browser container settings",
       "properties": {
         "image": {
           "type": "string",
-          "description": "Docker image tag (e.g. codefreedom:camoufox or docker.io/nilayparikh/codefreedom:camoufox-latest)"
+          "description": "Docker image tag (e.g. codefreedom:web or docker.io/nilayparikh/codefreedom:web-latest)"
         },
         "container_name": {
           "type": "string",
@@ -42,7 +42,7 @@
         },
         "search_engines": {
           "type": "object",
-          "description": "Map of search engine name to config. Each value is {url: string, parser: string}. Use {q} as the query placeholder in url. Example: {\"my-engine\": {\"url\": \"https://search.example.com/search?q={q}\", \"parser\": \"standard\"}}",
+          "description": "Map of search engine name to config. Each value is {url: string, parser: string}. Use {q} as the query placeholder in url.",
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -63,7 +63,7 @@
         },
         "parser_registry": {
           "type": "object",
-          "description": "Named parser configurations. Each parser defines CSS selectors for extracting search results from HTML. The 'standard' parser works with most modern search engines.",
+          "description": "Named parser configurations. Each parser defines CSS selectors for extracting search results from HTML.",
           "additionalProperties": {
             "type": "object",
             "properties": {

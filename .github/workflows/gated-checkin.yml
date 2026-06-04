@@ -1,0 +1,129 @@
+# ── CodeFreedom Gated Check-in ───────────────────────────────────────────────
+# Runs full unit + integration test suite on push to any branch except main.
+#
+# Use as a branch protection gate:
+#   Settings → Branches → Branch protection rules → Add rule for "main":
+#     ☑ Require status checks to pass before merging:
+#       - gated-unit-tests (3.10)
+#       - gated-unit-tests (3.11)
+#       - gated-unit-tests (3.12)
+#       - gated-integration (ubuntu-24.04 / py3.12)
+#       - gated-integration (windows-2022 / py3.12)
+#       - gated-integration (macos-14 / py3.12)
+#
+# Platforms: ubuntu-24.04, windows-2022, macos-14
+# ────────────────────────────────────────────────────────────────────────────────
+
+name: Gated Check-in
+
+on:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ── Unit tests (fast, Python matrix only) ───────────────────────────────
+  gated-unit-tests:
+    name: "gated-unit-tests (${{ matrix.python-version }})"
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install and test
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[ci]"
+          python -m pytest tests/ -v --tb=short
+
+  # ── Integration tests (build wheel, install, smoke test, cross-platform) ─
+  gated-integration:
+    name: "gated-integration (${{ matrix.os }} / py${{ matrix.python-version }})"
+    needs: gated-unit-tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - windows-2022
+          - macos-14
+        python-version:
+          - "3.12"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build and verify artifacts
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+          ls -la dist/
+          test -f dist/codefreedom-*.tar.gz || { echo "MISSING: sdist"; exit 1; }
+          test -f dist/codefreedom-*.whl   || { echo "MISSING: wheel"; exit 1; }
+
+      - name: Install from wheel and smoke test
+        run: |
+          WHEEL=$(ls dist/codefreedom-*.whl | head -1)
+          pip install "$WHEEL" --force-reinstall
+
+          # CLI entry points
+          codefreedom --help
+          cf --help
+          codefreedom claude --help
+          cf cc --help
+          codefreedom proxy --help
+          cf px --help
+
+          # Init
+          codefreedom --init
+          test -f ~/.codefreedom/profiles/claude-code.json || { echo "MISSING: profiles"; exit 1; }
+          test -f ~/.codefreedom/proxy/config/config.yaml || { echo "MISSING: proxy config"; exit 1; }
+          test -f ~/.codefreedom/proxy/docker-compose.yaml || { echo "MISSING: compose"; exit 1; }
+          test -d ~/.codefreedom/proxy/config/providers || { echo "MISSING: providers"; exit 1; }
+          test -f ~/.codefreedom/.env || { echo "MISSING: .env"; exit 1; }
+
+          # Profile listing
+          codefreedom claude --list-profiles
+
+          # Validate schema and profile JSON
+          python -c "
+          import json
+          from pathlib import Path
+          p = Path.home() / '.codefreedom' / 'profiles' / 'claude-code.json'
+          d = json.loads(p.read_text())
+          assert 'default' in d['profiles']
+          e = d['profiles']['default']['env']
+          assert 'CLAUDE_MODEL' in e
+          assert 'ANTHROPIC_BASE_URL' in e
+          assert 'ANTHROPIC_AUTH_TOKEN' in e
+          print('[OK]')
+          "
+          # Proxy validate
+          codefreedom proxy --validate 2>&1 || true
+
+          # Bare profile dry-run
+          export LITELLM_MASTER_KEY="sk-test-dummy-key-for-ci"
+          codefreedom claude --profile bare --help 2>&1 || true

@@ -1,6 +1,6 @@
 """Shared utilities for tool initialization — acceptance prompt, notices, metadata.
 
-Each tool (chrome, web/camoufox) uses these for init and start flows.
+Each tool (chrome, web) uses these for init and start flows.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ TOOL_INFO: Dict[str, dict] = {
             "DO NOT USE or REPURPOSE the tool beyond permissible use cases."
         ),
         "docs_url": "https://nilayparikh.github.io/codefreedom/claude-code/tools/",
-        "profile_name": "camoufox.json",
+        "profile_name": "web.json",
     },
 }
 

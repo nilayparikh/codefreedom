@@ -1,18 +1,18 @@
-# ── CodeFreedom: Docker Camoufox (MCP Web Automation) ─────────────────────────
-# Builds and publishes the Camoufox browser MCP automation image.
-# Triggered by changes to docker/web/Dockerfile.Camoufox.
+# ── CodeFreedom: Docker Web (MCP Web Automation) ─────────────────────────────
+# Builds and publishes the web browser MCP automation image.
+# Triggered by changes to docker/web/Dockerfile.Web.
 #
-# Tags: camoufox-v{semver}, camoufox-v{major.minor}, camoufox-latest
+# Tags: web-v{semver}, web-v{major.minor}, web-latest
 # Platforms: linux/arm64, linux/amd64
 # Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
 # ────────────────────────────────────────────────────────────────────────────────
 
-name: Docker Camoufox
+name: Docker Web
 
 on:
   push:
     branches: [main]
-    paths: ["docker/web/Dockerfile.Camoufox"]
+    paths: ["docker/web/Dockerfile.Web"]
   workflow_dispatch:
 
 env:
@@ -38,7 +38,7 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/web/Dockerfile.Camoufox | head -1 | sed 's/.*=\(.*\)/\1/')
+          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/web/Dockerfile.Web | head -1 | sed 's/.*=\(.*\)/\1/')
           MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
@@ -67,21 +67,21 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=camoufox-v${{ steps.version.outputs.version }}
-            type=raw,value=camoufox-v${{ steps.version.outputs.major_minor }}
-            type=raw,value=camoufox-latest
+            type=raw,value=web-v${{ steps.version.outputs.version }}
+            type=raw,value=web-v${{ steps.version.outputs.major_minor }}
+            type=raw,value=web-latest
           labels: |
-            org.opencontainers.image.title=CodeFreedom - Camoufox Browser (MCP)
+            org.opencontainers.image.title=CodeFreedom - Web Browser (MCP)
             org.opencontainers.image.description=Web automation with Camoufox (Firefox fork) + Xvfb + PyAutoGUI + MCP server
             org.opencontainers.image.version=v${{ steps.version.outputs.version }}
-            com.codefreedom.platform=Camoufox
+            com.codefreedom.platform=Web
 
       - name: Build and push
         id: build
         uses: docker/build-push-action@v7
         with:
           context: docker/web/
-          file: docker/web/Dockerfile.Camoufox
+          file: docker/web/Dockerfile.Web
           platforms: linux/arm64,linux/amd64
           build-args: |
             IMAGE_VERSION=${{ steps.version.outputs.version }}
@@ -89,8 +89,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha,scope=Camoufox
-          cache-to: type=gha,mode=max,scope=Camoufox
+          cache-from: type=gha,scope=Web
+          cache-to: type=gha,mode=max,scope=Web
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'

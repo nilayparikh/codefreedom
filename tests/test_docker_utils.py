@@ -19,6 +19,7 @@ class TestResolveDataDir:
 
     def test_expands_home(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))  # Windows expanduser
         result = resolve_data_dir("~/mydata")
         assert result == tmp_path / "mydata"
 

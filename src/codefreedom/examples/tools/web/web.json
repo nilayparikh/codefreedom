@@ -1,9 +1,9 @@
 {
-  "$schema": "camoufox.schema.json",
-  "description": "Camoufox web search tool profile for codefreedom — configures container image, ports, data directory, search engines, and parser registry.",
+  "$schema": "web.schema.json",
+  "description": "Web search tool profile for codefreedom \u2014 configures container image, ports, data directory, search engines, and parser registry.",
   "notes": [
-    "The 'camoufox' block defines all settings for 'codefreedom tools web'.",
-    "'image' is the Docker image to use — change to 'docker.io/nilayparikh/codefreedom:camoufox-latest' for published builds. (Also available on ghcr.io/nilayparikh/codefreedom as a mirror.)",
+    "The 'web' block defines all settings for 'codefreedom tools web'.",
+    "'image' is the Docker image to use \u2014 change to 'docker.io/nilayparikh/codefreedom:web-latest' for published builds. (Also available on ghcr.io/nilayparikh/codefreedom as a mirror.)",
     "'container_name' is the Docker container name (persistent, restart unless-stopped).",
     "'port' is the host port that maps to container port 8420 (MCP server).",
     "'data_dir' is the host path mounted to /userdata inside the container.",
@@ -12,11 +12,11 @@
     "Each engine entry: 'url' is the search URL template, 'parser' is a key in 'parser_registry'.",
     "'parser_registry' defines named parser configurations. Each parser specifies CSS selectors for extracting results, links, snippets, and AI summaries from search engine HTML. The 'standard' parser is provided as a starting point."
   ],
-  "camoufox": {
-    "image": "docker.io/nilayparikh/codefreedom:camoufox-latest",
-    "container_name": "codefreedom-camoufox",
+  "web": {
+    "image": "docker.io/nilayparikh/codefreedom:web-latest",
+    "container_name": "codefreedom-web",
     "port": 8420,
-    "data_dir": "~/.codefreedom/sandbox/tools/camoufox",
+    "data_dir": "~/.codefreedom/sandbox/tools/web",
     "env": {},
     "search_engines": {},
     "parser_registry": {
