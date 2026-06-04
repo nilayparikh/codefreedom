@@ -73,9 +73,9 @@ codefreedom = [
     "examples/claude/profiles/*.json",
     "examples/proxy/.env.proxy.example",
     "examples/proxy/.env.proxy.secrets.example",
-    "examples/proxy/config.yaml",
+    "examples/proxy/config/config.yaml",
     "examples/proxy/docker-compose.yaml",
-    "examples/proxy/providers/*.yaml",
+    "examples/proxy/config/providers/*.yaml",
     "examples/tools/chrome/*.json",
     "examples/tools/web/*.json",
 ]

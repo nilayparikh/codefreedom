@@ -13,8 +13,6 @@ on:
   push:
     branches: [main]
     paths: ["docker/web/Dockerfile.Camoufox"]
-  pull_request:
-    paths: ["docker/web/Dockerfile.Camoufox"]
   workflow_dispatch:
 
 env:

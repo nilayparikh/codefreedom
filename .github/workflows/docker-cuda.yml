@@ -13,8 +13,6 @@ on:
   push:
     branches: [main]
     paths: ["docker/claude-code/Dockerfile.CUDA"]
-  pull_request:
-    paths: ["docker/claude-code/Dockerfile.CUDA"]
   workflow_dispatch:
 
 env:
