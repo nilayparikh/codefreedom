@@ -180,7 +180,7 @@ def load_env_chain(
         ]
     )
 
-    for path, label, optional in env_sources:
+    for path, label, _optional in env_sources:
         if path.exists():
             merged.update(load_dotenv(path))
             eprint(f"  [ENV] Loaded {label} from {path}")

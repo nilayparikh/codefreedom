@@ -48,8 +48,9 @@ litellm = ["litellm[proxy]>=1.50", "prometheus-client>=0.25.0"]
 dev = ["mypy>=1.0", "ruff>=0.1", "pytest>=7.0", "types-PyYAML"]
 docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2"]
 camoufox = ["beautifulsoup4>=4.14.3"]
-ci = ["codefreedom[litellm,dev,docs,camoufox]"]
-all = ["codefreedom[litellm,dev,camoufox]"]
+encrypt = ["cryptography>=42.0"]
+ci = ["codefreedom[litellm,dev,docs,camoufox,encrypt]"]
+all = ["codefreedom[litellm,dev,camoufox,encrypt]"]
 
 [project.scripts]
 codefreedom = "codefreedom.cli.main:main"

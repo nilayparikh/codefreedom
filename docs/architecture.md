@@ -15,7 +15,7 @@ graph TD
 
     subgraph "Profile System"
         PROFILES["claude-code.json<br/>Profile definitions"]
-        PROFILES -->|default| P_DEFAULT["Flash model<br/>(built-in)"]
+        PROFILES -->|default| P_DEFAULT["CodeFreedom/Flash<br/>(built-in)"]
         PROFILES -->|bare| P_BARE["Minimal<br/>(built-in)"]
         PROFILES -->|"custom (pro, ultra, …)"| P_CUSTOM["User-created<br/>profiles"]
     end
@@ -81,44 +81,40 @@ codefreedom / cf
 
 ## Configuration Flow
 
+Each component loads its own subset of the env chain — they do not share component-specific files.
+
 ```mermaid
 flowchart LR
-    subgraph "Environment Loading (9 layers)"
-        C_ENV[".env.claude"]
-        C_SEC[".env.claude.secrets"]
-        P_ENV[".env.proxy"]
-        P_SEC[".env.proxy.secrets"]
-        LEG_ENV[".env legacy"]
-        LEG_SEC[".env.secrets legacy"]
-        WS_ENV["workspace/.env"]
-        WS_SEC["workspace/.env.secrets"]
-        SYS["System env vars"]
+    subgraph "codefreedom claude (7 layers)"
+        C1[".env.claude"]
+        C2[".env.claude.secrets"]
+        S1[".env (shared)"]
+        S2[".env.secrets (shared)"]
+        W1["workspace/.env"]
+        W2["workspace/.env.secrets"]
+        SYS1["System env"]
     end
 
-    subgraph "Profile Resolution"
-        PROF["claude-code.json"]
-        DEFAULT["default profile"]
-        CUSTOM["custom profile"]
-        MERGED["Merged env dict"]
+    subgraph "codefreedom proxy (7 layers)"
+        P1[".env.proxy"]
+        P2[".env.proxy.secrets"]
+        S1B[".env (shared)"]
+        S2B[".env.secrets (shared)"]
+        W1B["workspace/.env"]
+        W2B["workspace/.env.secrets"]
+        SYS2["System env"]
     end
 
-    subgraph "Execution"
-        CLAUDE_EXEC["Launch Claude Code<br/>with merged env"]
+    subgraph "codefreedom tools (5 layers)"
+        T1[".env (shared)"]
+        T2[".env.secrets (shared)"]
+        T3["workspace/.env"]
+        T4["workspace/.env.secrets"]
+        T5["System env"]
     end
-
-    C_ENV --> MERGED
-    C_SEC --> MERGED
-    P_ENV --> MERGED
-    P_SEC --> MERGED
-    LEG_ENV --> MERGED
-    LEG_SEC --> MERGED
-    WS_ENV --> MERGED
-    WS_SEC --> MERGED
-    SYS --> MERGED
-    PROF --> DEFAULT --> MERGED
-    PROF --> CUSTOM --> MERGED
-    MERGED --> CLAUDE_EXEC
 ```
+
+See [Environment Configuration](environment.md) for the full precedence chain and variable interpolation details.
 
 ## Data Flow
 

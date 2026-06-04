@@ -223,7 +223,8 @@ def _parse_search_results(
         if container.name == "a":
             a = container
         else:
-            a = container.select_one(parser_cfg.get("link_selector", "a[href]"))
+            elem = container.select_one(parser_cfg.get("link_selector", "a[href]"))
+            a = elem if elem is not None else container
         if not a:
             continue
         href = str(a.get("href", ""))

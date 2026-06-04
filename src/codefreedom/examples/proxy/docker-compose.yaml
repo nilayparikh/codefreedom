@@ -23,7 +23,7 @@ name: codefreedom
 
 services:
   litellm:
-    image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:v1.84.4}
+    image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:v1.87.0}
     container_name: ${LITELLM_CONTAINER_NAME:-litellm-codefreedom}
     restart: unless-stopped
     profiles:

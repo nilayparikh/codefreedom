@@ -97,6 +97,8 @@ Override the default profile file location:
 export CODEFREEDOM_PROFILES_FILE="/path/to/custom/profiles.json"
 ```
 
+See [Code Agents → Custom Profile Location](claude-code.md#custom-profile-location) for details.
+
 ## Security
 
 - **`.env.secrets` separation.** API keys live in `.env.secrets`, never in `.env`. This makes it easy to apply different gitignore rules or share `.env` templates without exposing keys.
@@ -116,4 +118,4 @@ The full variable reference is in the bundled example files:
 
 > **Note:** Variables like `LITELLM_PORT`, `LITELLM_LOG_LEVEL`, and `LITELLM_IMAGE` in `.env.proxy.example` only apply when running the proxy via Docker Compose (`codefreedom proxy start --docker`). Native mode (`codefreedom proxy start`) reads these from CLI flags and `config.yaml` instead.
 
-See [Proxy](proxy.md) for provider-specific configuration and [Sandbox Mode](claude-code/sandbox.md) for image selection.
+See [Proxy](proxy/index.md) for provider-specific configuration and [Sandbox Mode](claude-code/sandbox.md) for image selection.

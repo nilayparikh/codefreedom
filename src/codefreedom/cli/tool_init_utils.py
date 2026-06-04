@@ -25,7 +25,7 @@ TOOL_INFO: Dict[str, dict] = {
             ("MS Core Fonts (Arial, Times New Roman, etc.)", "Microsoft Corporation"),
             ("dumb-init (PID 1 supervisor)", "Yelp, Inc."),
         ],
-        "docs_url": "https://nilayparikh.github.io/codefreedom/claude-code/tools/",
+        "docs_url": "https://nilayparikh.github.io/codefreedom/tools/chrome/",
         "profile_name": "chrome.json",
     },
     "web": {
@@ -44,7 +44,7 @@ TOOL_INFO: Dict[str, dict] = {
             "or permissible public infrastructure. "
             "DO NOT USE or REPURPOSE the tool beyond permissible use cases."
         ),
-        "docs_url": "https://nilayparikh.github.io/codefreedom/claude-code/tools/",
+        "docs_url": "https://nilayparikh.github.io/codefreedom/tools/web/",
         "profile_name": "web.json",
     },
 }
@@ -83,10 +83,7 @@ def _print_tool_notice(tool_name: str) -> None:
     for component, vendor in components:
         print(f"[{tag}]   * {component} ({vendor})")
     print(f"[{tag}]")
-    print(
-        f"[{tag}] CodeFreedom is not responsible"
-        f" for their behavior, security, or privacy practices."
-    )
+    print(f"[{tag}] {_THIRD_PARTY_NOTICE}")
     if "warning" in info:
         print(f"[{tag}]")
         print(f"[{tag}] WARNING: {info['warning']}")
@@ -112,12 +109,12 @@ def prompt_acceptance(tool_name: str) -> bool:
         return False
 
     print()
-    print(f"─── {info['name']} ──────────────────────────────────────────")
+    print(f"--- {info['name']} " + "-" * 50)
     print(info["description"])
     print()
     print("Third-party components:")
     for component, vendor in info["third_party"]:
-        print(f"  • {component} — {vendor}")
+        print(f"  * {component} -- {vendor}")
     print()
     print("By continuing, you acknowledge that this tool uses")
     print("third-party components. " + _THIRD_PARTY_NOTICE)
@@ -134,5 +131,5 @@ def prompt_acceptance(tool_name: str) -> bool:
     if response.lower() == "i understand":
         return True
 
-    eprint("[init] Init aborted — you must type 'I understand' to proceed.")
+    eprint("[init] Init aborted -- you must type 'I understand' to proceed.")
     return False

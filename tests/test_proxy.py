@@ -185,6 +185,96 @@ class TestRun:
         result = run(args)
         assert result == 1  # config file not found (native mode)
 
+    def test_restart_native_errors(self):
+        """restart in native mode must error out (no native stop path)."""
+        args = argparse.Namespace(
+            action="restart",
+            reset=False,
+            docker=False,
+            port=4000,
+            host="0.0.0.0",
+        )
+        result = run(args)
+        assert result == 1
+
+    def test_restart_docker_calls_compose_restart(self, monkeypatch, tmp_path):
+        """restart in docker mode must call `docker compose restart`."""
+        compose = tmp_path / "proxy" / "docker-compose.yaml"
+        compose.parent.mkdir(parents=True)
+        compose.write_text("")
+
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, *args, **kwargs):
+            calls.append(cmd)
+
+            class _R:
+                returncode = 0
+
+            return _R()
+
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+        )
+        monkeypatch.setattr("codefreedom.cli.proxy.subprocess.run", fake_run)
+
+        args = argparse.Namespace(
+            action="restart",
+            reset=False,
+            docker=True,
+            port=4000,
+            host="0.0.0.0",
+        )
+        result = run(args)
+        assert result == 0
+        assert len(calls) == 1
+        # Must be `docker compose ... restart` (not down/up, not stop/start)
+        assert calls[0][:3] == ["docker", "compose", "-f"]
+        assert "restart" in calls[0]
+        assert "down" not in calls[0]
+        assert "up" not in calls[0]
+
+    def test_restart_docker_no_compose_file(self, monkeypatch):
+        """restart in docker mode returns 1 when compose file is missing."""
+        args = argparse.Namespace(
+            action="restart",
+            reset=False,
+            docker=True,
+            port=4000,
+            host="0.0.0.0",
+        )
+        monkeypatch.setattr("codefreedom.cli.proxy._find_compose_file", lambda: None)
+        result = run(args)
+        assert result == 1
+
+    def test_restart_propagates_failure(self, monkeypatch, tmp_path):
+        """restart returns non-zero exit code when compose restart fails."""
+        compose = tmp_path / "proxy" / "docker-compose.yaml"
+        compose.parent.mkdir(parents=True)
+        compose.write_text("")
+
+        def fake_run(cmd, *args, **kwargs):
+            class _R:
+                returncode = 1
+                stderr = "compose error"
+
+            return _R()
+
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+        )
+        monkeypatch.setattr("codefreedom.cli.proxy.subprocess.run", fake_run)
+
+        args = argparse.Namespace(
+            action="restart",
+            reset=False,
+            docker=True,
+            port=4000,
+            host="0.0.0.0",
+        )
+        result = run(args)
+        assert result == 1
+
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 

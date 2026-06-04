@@ -27,6 +27,7 @@ include:
   - providers/azure-foundry.yaml
   - providers/nvidia.yaml
   - providers/opencode-zen.yaml
+  - providers/openrouter.yaml
 
   # ── Compatible endpoints (bring your own) ────────────────────────────────
   # These providers let you connect any OpenAI or Anthropic-compatible API.

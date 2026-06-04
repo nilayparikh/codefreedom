@@ -88,6 +88,17 @@ def main() -> None:
         help="Skip Claude Code permission prompts (use in CI/non-interactive environments)",
     )
 
+    # ── admin subcommand ───────────────────────────────────────────────────
+    admin_parser = subparsers.add_parser(
+        "admin",
+        aliases=["adm"],
+        help="Backup, restore, list, inspect, and prune CodeFreedom configuration",
+    )
+    # Populate admin sub-subcommands (lazy import to keep startup fast)
+    from codefreedom.cli.admin import build_parser as build_admin_parser
+
+    build_admin_parser(admin_parser)
+
     # ── tools subcommand ──────────────────────────────────────────────────
     tools_parser = subparsers.add_parser(
         "tools",
@@ -106,8 +117,8 @@ def main() -> None:
         "action",
         nargs="?",
         default="status",
-        choices=["start", "stop", "status", "url", "init"],
-        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/.",
+        choices=["start", "stop", "restart", "status", "url", "init"],
+        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/. 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
     )
     chrome_parser.add_argument(
         "--port",
@@ -127,8 +138,8 @@ def main() -> None:
         "action",
         nargs="?",
         default="status",
-        choices=["start", "stop", "status", "init"],
-        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/.",
+        choices=["start", "stop", "restart", "status", "init"],
+        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/. 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
     )
     web_parser.add_argument(
         "--port",
@@ -148,8 +159,8 @@ def main() -> None:
         "action",
         nargs="?",
         default="status",
-        choices=["start", "stop", "status", "validate", "init"],
-        help="Action to perform (default: status). 'init' copies proxy configs to ~/.codefreedom/.",
+        choices=["start", "stop", "restart", "status", "validate", "init"],
+        help="Action to perform (default: status). 'init' copies proxy configs to ~/.codefreedom/. 'restart' uses `docker compose restart` (Docker mode only — native mode errors out; preserves container state, does not pull a new image).",
     )
     proxy_parser.add_argument(
         "--docker",
@@ -177,10 +188,7 @@ def main() -> None:
         from codefreedom.cli.claude import init_claude
         from codefreedom.cli.proxy import init_proxy
 
-        code = 0
-
-        code |= init_claude()
-        code |= init_proxy()
+        code = init_claude() or init_proxy()
 
         # Legacy shared .env (placeholder for backward compatibility)
         from codefreedom.config import get_codefreedom_dir
@@ -245,6 +253,13 @@ def main() -> None:
         from codefreedom.cli.proxy import run as proxy_run
 
         sys.exit(proxy_run(args))
+    elif args.command in ("admin", "adm"):
+        if unknown:
+            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            sys.exit(2)
+        from codefreedom.cli.admin import run as admin_run
+
+        sys.exit(admin_run(args))
     elif args.command == "tools":
         if args.tool == "chrome":
             if getattr(args, "action", None) == "init":

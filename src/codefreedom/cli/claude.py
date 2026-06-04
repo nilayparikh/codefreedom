@@ -13,6 +13,7 @@ import shutil
 from pathlib import Path
 
 from codefreedom.cli.init_utils import find_bundled_examples
+from codefreedom.cli.tool_init_utils import _print_non_disclaimer
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint, load_env_chain
 from codefreedom.launcher import run_docker, run_local, status, stop
@@ -28,26 +29,12 @@ from codefreedom.tool_registry import acquire_tools, generate_session_id, releas
 
 # Default location for profiles — ~/.codefreedom/profiles/claude-code.json
 # Can be overridden with CODEFREEDOM_PROFILES_FILE env var
-import os as _os
+import os
 
 
 def _get_cf_dir() -> Path:
     """Lazy accessor for the CodeFreedom config directory (test-patchable)."""
     return get_codefreedom_dir()
-
-
-DEFAULT_PROFILES_FILE = _os.environ.get(
-    "CODEFREEDOM_PROFILES_FILE",
-    str(_get_cf_dir() / "profiles" / "claude-code.json"),
-)
-
-# ── Non-disclaimer banner ──────────────────────────────────────────────────
-
-_NOTICE = """\
---- Notice ----------------------------------------------------------
-CodeFreedom is provided \"as is\", without warranty of any kind.
-See the Apache 2.0 License for details.
----------------------------------------------------------------------"""
 
 
 def init_claude() -> int:
@@ -88,28 +75,37 @@ def init_claude() -> int:
         )
         print("              Please merge changes manually.")
         print()
-        print(_NOTICE)
+        _print_non_disclaimer()
         return 0
 
-    # Nothing exists — copy all
-    created: list[str] = []
-    for src, dst in pairs:
-        if src.exists():
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            created.append(str(dst))
-            print(f"[claude init] [CREATE] {dst}")
-        else:
-            print(f"[claude init] [MISSING] Source not found: {src}")
+    # Nothing exists -- copy all, with rollback on failure
+    created: list[Path] = []
+    try:
+        for src, dst in pairs:
+            if src.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+                created.append(dst)
+                print(f"[claude init] [CREATE] {dst}")
+            else:
+                print(f"[claude init] [MISSING] Source not found: {src}")
+    except OSError as exc:
+        eprint(f"[claude init] [ERROR] Copy failed: {exc}. Rolling back.")
+        for path in created:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        return 1
 
     # ── Summary ─────────────────────────────────────────────────────────
     print()
     if created:
-        print(f"[claude init] Done — {len(created)} created.")
+        print(f"[claude init] Done -- {len(created)} created.")
     print(
         "              Configure: https://nilayparikh.github.io/codefreedom/claude-code/local/"
     )
-    print(_NOTICE)
+    _print_non_disclaimer()
     return 0
 
 
@@ -249,6 +245,7 @@ def run(args: argparse.Namespace) -> int:
 
 def _resolve_profiles_path() -> Path:
     """Return the profiles path (~/.codefreedom/profiles/claude-code.json)."""
-    if _os.environ.get("CODEFREEDOM_PROFILES_FILE"):
-        return Path(_os.environ["CODEFREEDOM_PROFILES_FILE"])
+    override = os.environ.get("CODEFREEDOM_PROFILES_FILE")
+    if override:
+        return Path(override)
     return _get_cf_dir() / "profiles" / "claude-code.json"

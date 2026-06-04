@@ -4,6 +4,7 @@ Usage:
     codefreedom tools chrome init    Initialize tool profile (requires acceptance)
     codefreedom tools chrome start   Start Chrome container (Xvfb + Chromium)
     codefreedom tools chrome stop    Stop and remove Chrome container
+    codefreedom tools chrome restart Restart Chrome container (preserves state)
     codefreedom tools chrome status  Show Chrome container status
     codefreedom tools chrome url     Show CDP debug URL
 
@@ -37,7 +38,7 @@ from codefreedom.cli.tool_init_utils import (
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
 _DEFAULT_IMAGE = "codefreedom:chrome"
-_DEFAULT_CONTAINER_NAME = "codefreedom-tools-chrome"
+_DEFAULT_CONTAINER_NAME = "codefreedom-chrome"
 _DEFAULT_PORT = 9222
 _DEFAULT_DATA_DIR = "~/.codefreedom/sandbox/tools/chrome"
 
@@ -122,7 +123,7 @@ def init_tool() -> int:
 
     print()
     if created:
-        print(f"[chrome init] Done — {len(created)} created.")
+        print(f"[chrome init] Done -- {len(created)} created.")
     _print_non_disclaimer()
     return 0
 
@@ -136,9 +137,7 @@ def start(settings: dict) -> int:
     if not _PROFILE_PATH.exists():
         eprint("[chrome] Tool not initialized.")
         eprint("         Run:  codefreedom tools chrome init")
-        eprint(
-            "         Docs: https://nilayparikh.github.io/codefreedom/claude-code/tools/"
-        )
+        eprint("         Docs: https://nilayparikh.github.io/codefreedom/tools/chrome/")
         return 1
 
     # ── Third-party notice on every start ────────────────────────────────
@@ -189,8 +188,7 @@ def start(settings: dict) -> int:
     # Build environment flags
     env_flags: list[str] = []
     for key, val in env_vars.items():
-        if key in env_vars:
-            env_flags.extend(["-e", f"{key}={val}"])
+        env_flags.extend(["-e", f"{key}={val}"])
     # Ensure DISPLAY is set
     if "DISPLAY" not in env_vars:
         env_flags.extend(["-e", "DISPLAY=:99"])
@@ -262,53 +260,73 @@ def stop(settings: dict) -> int:
     return 0
 
 
+def restart(settings: dict) -> int:
+    """Restart the Chrome container using `docker restart`.
+
+    Preserves the container ID, logs, and network namespace. Does NOT pull
+    a new image — to pick up a new image tag, use `stop` then `start`.
+
+    Returns exit code: 0 on success, 1 if container does not exist or
+    docker restart fails.
+    """
+    container_name = settings["container_name"]
+
+    if not container_exists(container_name):
+        eprint(f"[CHROME] Container '{container_name}' does not exist.")
+        eprint("   Start one with:  codefreedom tools chrome start")
+        return 1
+
+    eprint(f"[CHROME] Restarting container '{container_name}'...")
+    result = subprocess.run(
+        ["docker", "restart", container_name],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        eprint("[ERROR] Failed to restart Chrome container.")
+        if result.stderr:
+            eprint(f"   {result.stderr.strip()}")
+        return 1
+
+    port = settings["port"]
+    eprint("   [OK] Container restarted.")
+    eprint(f"   CDP debug URL: http://127.0.0.1:{port}")
+    return 0
+
+
 def status(settings: dict) -> int:
-    """Show Chrome container status. Returns exit code."""
+    """Show Chrome container status. Returns exit code.
+
+    Pattern matches web.status() -- simple container_is_running / exists checks.
+    """
     container_name = settings["container_name"]
     port = settings["port"]
 
-    if not container_exists(container_name):
-        eprint("[CHROME] No Chrome container found.")
-        eprint("   Start one with:  codefreedom tools chrome start")
+    if container_is_running(container_name):
+        eprint(f"[CHROME] Container '{container_name}' is running.")
+        eprint(f"[CHROME] CDP debug URL: http://127.0.0.1:{port}")
+        eprint(
+            f"[CHROME] DevTools: devtools://devtools/bundled/inspector.html?ws=127.0.0.1:{port}"
+        )
         return 0
 
-    try:
-        result = subprocess.run(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                f"name={container_name}",
-                "--format",
-                "{{.Names}}\t{{.Status}}\t{{.CreatedAt}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        for line in result.stdout.strip().split("\n"):
-            if line:
-                name, status_line, created = line.split("\t", 2)
-                marker = "[RUNNING]" if "Up " in status_line else "[STOPPED]"
-                eprint(f"[CHROME] {marker} {name}")
-                eprint(f"         Status: {status_line}")
-                eprint(f"         Created: {created}")
-
-        if container_is_running(container_name):
-            eprint(f"         CDP URL: http://127.0.0.1:{port}")
-            eprint(
-                f"         DevTools: devtools://devtools/bundled/inspector.html?ws=127.0.0.1:{port}"
-            )
-    except (subprocess.SubprocessError, FileNotFoundError) as e:
-        eprint(f"[ERROR] Failed to get container status: {e}")
+    if container_exists(container_name):
+        eprint(f"[CHROME] Container '{container_name}' exists but is not running.")
         return 1
+
+    eprint("[CHROME] No Chrome container found.")
+    eprint("   Start one with:  codefreedom tools chrome start")
     return 0
 
 
 def url(settings: dict) -> int:
-    """Print the CDP debug URL. Returns exit code."""
+    """Print the CDP debug URL. Returns exit code.
+
+    Note: intentionally uses stdout (print) so the URL is machine-readable
+    for scripting.  All other output in this module uses eprint (stderr).
+    """
     container_name = settings["container_name"]
     port = settings["port"]
 
@@ -325,8 +343,8 @@ def run(args: argparse.Namespace) -> int:
     """Execute the chrome tool subcommand. Returns exit code."""
     settings = _load_profile()
 
-    # CLI --port flag overrides profile and defaults
-    if hasattr(args, "port") and args.port:
+    # CLI --port flag overrides profile only when explicitly provided
+    if getattr(args, "port", None) and args.port != _DEFAULT_PORT:
         settings["port"] = args.port
 
     action = args.action or "status"
@@ -335,11 +353,13 @@ def run(args: argparse.Namespace) -> int:
         return start(settings)
     elif action == "stop":
         return stop(settings)
+    elif action == "restart":
+        return restart(settings)
     elif action == "status":
         return status(settings)
     elif action == "url":
         return url(settings)
     else:
         eprint(f"[ERROR] Unknown action: {action}")
-        eprint("   Valid actions: start, stop, status, url")
+        eprint("   Valid actions: start, stop, restart, status, url")
         return 1

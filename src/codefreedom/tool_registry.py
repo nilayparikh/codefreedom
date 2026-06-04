@@ -181,14 +181,14 @@ def acquire_tools(session_id: str, tools: list[str], profile: str) -> list[str]:
 
     for tool_name in tools:
         if tool_name not in _KNOWN_TOOLS:
-            eprint(f"[PROC] Unknown tool '{tool_name}' — skipping.")
+            eprint(f"[PROC] Unknown tool '{tool_name}' -- skipping.")
             continue
 
         _load_settings, _start, _stop = _KNOWN_TOOLS[tool_name]
 
         try:
             settings = _load_settings()
-        except Exception as exc:
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
             eprint(f"[PROC] Failed to load settings for '{tool_name}': {exc}")
             continue
 
@@ -256,7 +256,7 @@ def release_tools(session_id: str, tools: list[str]) -> None:
             # Last session — stop the container
             try:
                 settings = _load_settings()
-            except Exception:
+            except (FileNotFoundError, json.JSONDecodeError):
                 settings = {}
             _stop(settings)
             _safe_remove(lock_path)

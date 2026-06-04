@@ -112,6 +112,8 @@ export CLAUDE_CODE_IMAGE_TAG=latest
 codefreedom claude --sandbox
 ```
 
+See [Sandbox Mode → GPU Requirements](claude-code/sandbox.md#gpu-requirements) for full details.
+
 ### "Docker not found"
 
 **Cause:** Docker is not installed or not on PATH.

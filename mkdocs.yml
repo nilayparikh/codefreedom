@@ -66,11 +66,28 @@ nav:
   - Getting Started: index.md
   - Environment: environment.md
   - Architecture: architecture.md
-  - Proxy: proxy.md
+  - Proxy:
+      - Overview: proxy/index.md
+      - Configuration: proxy/config.md
+      - Database: proxy/database.md
+      - Docker Mode: proxy/docker.md
+      - Providers:
+          - Overview: proxy/providers/index.md
+          - DeepSeek: proxy/providers/deepseek.md
+          - Azure Foundry: proxy/providers/azure-foundry.md
+          - NVIDIA: proxy/providers/nvidia.md
+          - OpenCode Zen: proxy/providers/opencode-zen.md
+          - OpenRouter: proxy/providers/openrouter.md
+          - OpenAI Compatible: proxy/providers/openai-compatible.md
+          - Anthropic Compatible: proxy/providers/anthropic-compatible.md
+          - Local: proxy/providers/local.md
   - Code Agents:
       - Overview: claude-code.md
+      - Profiles: claude-code/profiles.md
       - Sandbox Mode: claude-code/sandbox.md
+      - Sandbox Isolation: claude-code/sandbox-isolation.md
       - Local Mode: claude-code/local.md
+  - Admin (Backup & Restore): admin.md
   - Browser Tools:
       - Overview: tools/index.md
       - Chrome: tools/chrome.md
