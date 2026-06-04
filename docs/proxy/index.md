@@ -101,7 +101,7 @@ The proxy loads two component-specific env files before the shared chain:
 1. `~/.codefreedom/.env.proxy` — proxy settings (ports, aliases, base URLs)
 2. `~/.codefreedom/.env.proxy.secrets` — API keys, master key
 
-See the full [environment chain](environment.md) for how these merge with workspace and system env vars.
+See the full [environment chain](../environment.md) for how these merge with workspace and system env vars.
 
 ## File Layout
 
