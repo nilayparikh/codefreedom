@@ -16,11 +16,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import subprocess
-from pathlib import Path
 
+from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint
+from codefreedom.cli.docker_utils import (
+    check_docker_available,
+    container_exists,
+    container_is_running,
+    ensure_image,
+    resolve_data_dir,
+)
+from codefreedom.cli.init_utils import copy_bundled_files, find_bundled_examples
 from codefreedom.cli.tool_init_utils import (
     _print_non_disclaimer,
     _print_tool_notice,
@@ -34,7 +41,7 @@ _DEFAULT_CONTAINER_NAME = "codefreedom-tools-chrome"
 _DEFAULT_PORT = 9222
 _DEFAULT_DATA_DIR = "~/.codefreedom/sandbox/tools/chrome"
 
-_CODEFREEDOM_DIR = Path.home() / ".codefreedom"
+_CODEFREEDOM_DIR = get_codefreedom_dir()
 _PROFILE_PATH = _CODEFREEDOM_DIR / "profiles" / "chrome.json"
 
 
@@ -87,137 +94,35 @@ def _load_profile() -> dict:
     return settings
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-
-def _resolve_data_dir(data_dir: str) -> Path:
-    """Resolve ~ to home directory and create the path."""
-    path = Path(data_dir).expanduser()
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _container_exists(name: str) -> bool:
-    """Check if a container exists (running or stopped)."""
-    try:
-        result = subprocess.run(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                f"name={name}",
-                "--format",
-                "{{.Names}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        return name in result.stdout.strip().split("\n")
-    except (subprocess.SubprocessError, FileNotFoundError):
-        return False
-
-
-def _container_is_running(name: str) -> bool:
-    """Check if a container is currently running."""
-    try:
-        result = subprocess.run(
-            ["docker", "ps", "--filter", f"name={name}", "--format", "{{.Names}}"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        return name in result.stdout.strip().split("\n")
-    except (subprocess.SubprocessError, FileNotFoundError):
-        return False
-
-
-def _ensure_image(image: str) -> bool:
-    """Ensure the Docker image is available locally; pull if missing. Returns True on success."""
-    _inspect = subprocess.run(
-        ["docker", "image", "inspect", image],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
-    if _inspect.returncode == 0:
-        eprint(f"[CHROME] Using cached image '{image}'")
-        return True
-
-    eprint(f"[CHROME] Image '{image}' not found locally, pulling...")
-    pull = subprocess.run(
-        ["docker", "pull", image],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-    if pull.returncode == 0:
-        eprint("   [OK] Image pulled.")
-        return True
-
-    eprint(f"[ERROR] Failed to pull image '{image}'.")
-    if pull.stderr:
-        eprint(f"   {pull.stderr.strip()}")
-    eprint("")
-    eprint("  Tips:")
-    eprint(
-        "    • Build locally:  docker build -t codefreedom:chrome -f docker/chrome/Dockerfile.Chrome docker/chrome/"
-    )
-    eprint("    • Set 'image' in ~/.codefreedom/profiles/chrome.json to your local tag")
-    eprint("    • Wait for CI to publish the image to ghcr.io")
-    return False
-
-
 # ── Init ────────────────────────────────────────────────────────────────────
 
 
-def _find_bundled_examples() -> Path:
-    """Find the bundled examples directory inside the installed package."""
-    return Path(__file__).resolve().parent.parent / "examples"
-
-
-def init_tool(reset: bool = False) -> int:
+def init_tool() -> int:
     """Initialize the chrome tool profile from bundled examples.
+
+    Only copies files into an empty target — if profile already exists,
+    directs user to docs and example configs for manual merging.
 
     Requires user acceptance of third-party components.
     """
     if not prompt_acceptance("chrome"):
         return 1
 
-    bundled = _find_bundled_examples()
+    bundled = find_bundled_examples(__file__)
     tools_src = bundled / "tools" / "chrome"
     profiles_dst_dir = _CODEFREEDOM_DIR / "profiles"
 
-    created: list[str] = []
-
-    def _copy(src: Path, dst: Path) -> None:
-        if not reset and dst.exists():
-            print(f"[chrome init] [SKIP] Already exists: {dst}")
-        elif src.exists():
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            created.append(str(dst))
-            print(f"[chrome init] [OK]   Created {dst}")
-        else:
-            print(f"[chrome init] [FAIL] Source not found: {src}")
-
-    _copy(tools_src / "chrome.json", profiles_dst_dir / "chrome.json")
-    _copy(tools_src / "chrome.schema.json", profiles_dst_dir / "chrome.schema.json")
+    created = copy_bundled_files(
+        tools_src,
+        profiles_dst_dir,
+        label="chrome init",
+        docs_url="https://nilayparikh.github.io/codefreedom/tools/chrome/",
+        examples_url="https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/tools/chrome/",
+    )
 
     print()
     if created:
         print(f"[chrome init] Done — {len(created)} created.")
-    else:
-        print("[chrome init] Nothing to do — already exists.")
-        print("              Use --reset to overwrite.")
-    print(
-        "              Docs: https://nilayparikh.github.io/codefreedom/claude-code/tools/"
-    )
     _print_non_disclaimer()
     return 0
 
@@ -245,30 +150,25 @@ def start(settings: dict) -> int:
     data_dir = settings["data_dir"]
     env_vars = settings.get("env", {})
 
-    if _container_is_running(container_name):
+    if container_is_running(container_name):
         eprint(f"[CHROME] Container '{container_name}' is already running.")
         return 0
 
     # Check if Docker is available
-    if (
-        not subprocess.run(
-            ["docker", "--version"], capture_output=True, timeout=5, check=False
-        ).returncode
-        == 0
-    ):
+    if not check_docker_available():
         eprint("[ERROR] Docker not found. Install Docker and try again.")
         return 1
 
     # Resolve & create data directory
-    resolved_data = _resolve_data_dir(data_dir)
+    resolved_data = resolve_data_dir(data_dir)
     eprint(f"[CHROME] Using data dir: {resolved_data}")
 
     # Ensure shared tools cache directory exists (used by Chrome DevTools MCP, etc.)
-    tools_cache = Path.home() / ".codefreedom" / "sandbox" / "tools" / ".cache"
+    tools_cache = get_codefreedom_dir() / "sandbox" / "tools" / ".cache"
     tools_cache.mkdir(parents=True, exist_ok=True)
 
     # Remove existing container if stopped
-    if _container_exists(container_name):
+    if container_exists(container_name):
         eprint(f"[CHROME] Removing existing container '{container_name}'...")
         subprocess.run(
             ["docker", "rm", "-f", container_name],
@@ -278,13 +178,18 @@ def start(settings: dict) -> int:
         )
 
     # Ensure image is available
-    if not _ensure_image(image):
+    if not ensure_image(
+        image,
+        label="CHROME",
+        build_tip="docker build -t codefreedom:chrome -f docker/chrome/Dockerfile.Chrome docker/chrome/",
+        profile_path="~/.codefreedom/profiles/chrome.json",
+    ):
         return 1
 
     # Build environment flags
     env_flags: list[str] = []
     for key, val in env_vars.items():
-        if val:
+        if key in env_vars:
             env_flags.extend(["-e", f"{key}={val}"])
     # Ensure DISPLAY is set
     if "DISPLAY" not in env_vars:
@@ -336,7 +241,7 @@ def stop(settings: dict) -> int:
     """Stop and remove the Chrome container. Returns exit code."""
     container_name = settings["container_name"]
 
-    if not _container_exists(container_name):
+    if not container_exists(container_name):
         eprint(f"[CHROME] Container '{container_name}' does not exist.")
         return 0
 
@@ -362,7 +267,7 @@ def status(settings: dict) -> int:
     container_name = settings["container_name"]
     port = settings["port"]
 
-    if not _container_exists(container_name):
+    if not container_exists(container_name):
         eprint("[CHROME] No Chrome container found.")
         eprint("   Start one with:  codefreedom tools chrome start")
         return 0
@@ -391,7 +296,7 @@ def status(settings: dict) -> int:
                 eprint(f"         Status: {status_line}")
                 eprint(f"         Created: {created}")
 
-        if _container_is_running(container_name):
+        if container_is_running(container_name):
             eprint(f"         CDP URL: http://127.0.0.1:{port}")
             eprint(
                 f"         DevTools: devtools://devtools/bundled/inspector.html?ws=127.0.0.1:{port}"
@@ -407,7 +312,7 @@ def url(settings: dict) -> int:
     container_name = settings["container_name"]
     port = settings["port"]
 
-    if not _container_is_running(container_name):
+    if not container_is_running(container_name):
         eprint("[CHROME] Chrome container is not running.")
         eprint("   Start it with:  codefreedom tools chrome start")
         return 1

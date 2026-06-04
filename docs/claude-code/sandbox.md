@@ -47,11 +47,11 @@ codefreedom claude --sandbox
 
 Three variables control the full image reference:
 
-| Variable                 | Default               | Purpose            |
-| ------------------------ | --------------------- | ------------------ |
-| `CLAUDE_CODE_REGISTRY`   | `ghcr.io/nilayparikh` | Container registry |
-| `CLAUDE_CODE_IMAGE_NAME` | `claude-code`         | Image name         |
-| `CLAUDE_CODE_IMAGE_TAG`  | `latest`              | Image tag          |
+| Variable                 | Default                 | Purpose            |
+| ------------------------ | ----------------------- | ------------------ |
+| `CLAUDE_CODE_REGISTRY`   | `docker.io/nilayparikh` | Container registry |
+| `CLAUDE_CODE_IMAGE_NAME` | `codefreedom`           | Image name         |
+| `CLAUDE_CODE_IMAGE_TAG`  | `latest`                | Image tag          |
 
 The resolved image is: `{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}`.
 

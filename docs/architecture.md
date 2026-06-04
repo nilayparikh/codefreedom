@@ -58,7 +58,7 @@ The CLI uses a subcommand structure:
 ```
 codefreedom / cf
 ├── claude (cc)         # Launch code agent
-│   ├── init            # Initialize Claude profiles + .env.claude (--reset to overwrite)
+│   ├── init            # Initialize Claude profiles + .env.claude (clean target only)
 │   ├── --profile       # Model profile
 │   ├── --sandbox       # Docker container
 │   ├── --native-models # Bypass proxy
@@ -66,12 +66,12 @@ codefreedom / cf
 │   ├── --status        # Container status
 │   └── --list-profiles # List profiles
 ├── proxy (px)          # Manage LLM proxy
-│   ├── init            # Initialize proxy configs + .env.proxy (--reset to overwrite)
-│   ├── --up            # Start proxy (native)
-│   ├── --up --docker   # Start via Docker Compose
-│   ├── --down          # Stop proxy
-│   ├── --status        # Proxy status
-│   └── --validate      # Validate config
+│   ├── init            # Initialize proxy configs + .env.proxy (clean target only)
+│   ├── start           # Start proxy (native)
+│   ├── start --docker  # Start via Docker Compose
+│   ├── stop            # Stop proxy
+│   ├── status          # Proxy status
+│   └── validate        # Validate config
 └── tools               # Manage auxiliary tools
     ├── chrome          # Chrome browser (Xvfb + CDP)
     │   └── init|start|stop|status|url

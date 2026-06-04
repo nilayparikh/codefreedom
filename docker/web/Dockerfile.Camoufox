@@ -24,7 +24,7 @@
 # Build:
 #   docker build \
 #     -t codefreedom:Camoufox-local \
-#     -f docker/camoufox/Dockerfile.Camoufox docker/camoufox/
+#     -f docker/web/Dockerfile.Camoufox docker/web/
 #
 # Run:
 #   docker run -d --name codefreedom-camoufox \

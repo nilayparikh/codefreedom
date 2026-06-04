@@ -17,7 +17,7 @@ CodeFreedom is a **unified interface for all code agents** — it does not hack,
 | Docker       | Sandbox + Docker Compose proxy (optional) | [docker.com](https://docs.docker.com/engine/install/) |
 | Node.js      | Local Claude Code                         | `npm install -g @anthropic-ai/claude-code`            |
 
-> **Docker is optional.** The proxy can run natively (`codefreedom proxy --up`). Docker is only required for sandbox mode and Docker Compose proxy.
+> **Docker is optional.** The proxy can run natively (`codefreedom proxy start`). Docker is only required for sandbox mode and Docker Compose proxy.
 
 ## Install
 
@@ -56,10 +56,10 @@ This creates `~/.codefreedom/` with profiles, proxy configs, and component-speci
 
 ```bash
 # Via Docker Compose
-codefreedom proxy --up --docker
+codefreedom proxy start --docker
 
 # Or natively (no Docker needed)
-codefreedom proxy --up
+codefreedom proxy start
 ```
 
 The proxy starts at `http://localhost:4000`.

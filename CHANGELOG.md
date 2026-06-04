@@ -32,7 +32,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- `codefreedom proxy` subcommand with `--up`, `--down`, `--status`, `--validate`, `--docker` flags
+- `codefreedom proxy` subcommand with `start`, `stop`, `status`, `validate`, `--docker` actions
 - Cross-platform CI (ubuntu, windows, macos)
 - Support for `.env` and `.env.secrets` env loading
 - Sandbox mode (`--sandbox`) with ephemeral Docker containers

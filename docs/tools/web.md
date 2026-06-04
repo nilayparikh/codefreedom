@@ -40,17 +40,17 @@ codefreedom tools web stop
 
 Once the container is running, coding agents can use:
 
-| Tool         | Description                                                                                   |
-| ------------ | --------------------------------------------------------------------------------------------- |
-| `web_search` | Search the web via Brave Search + Bing, returns structured results with optional AI summaries |
-| `web_fetch`  | Fetch a web page's content (text + HTML) with anti-bot evasion                                |
+| Tool         | Description                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------- |
+| `web_search` | Search the web via configured engines, returns structured results with optional AI summaries |
+| `web_fetch`  | Fetch a web page's content (text + HTML) with anti-bot evasion                               |
 
 ## Container
 
 The container image is based on `python:3.13-slim` (multi-arch: `linux/arm64`,
 `linux/amd64`). It includes:
 
-- Camoufox stealth browser (Firefox fork) — [Dockerfile](https://github.com/nilayparikh/codefreedom/blob/main/docker/camoufox/Dockerfile.Camoufox)
+- Camoufox stealth browser (Firefox fork) — [Dockerfile](https://github.com/nilayparikh/codefreedom/blob/main/docker/web/Dockerfile.Camoufox)
 - Xvfb (X virtual framebuffer)
 - PyAutoGUI (OS-level input automation)
 - browserforge (browser profile generation)
@@ -77,8 +77,6 @@ This container includes:
 
 - Camoufox — stealth browser (daijro)
 - Firefox — browser engine (Mozilla Foundation)
-- Brave Search API (Brave Software, Inc.)
-- Bing Search API (Microsoft Corporation)
 
 CodeFreedom is not responsible for the behavior, security, or privacy
 practices of these components.

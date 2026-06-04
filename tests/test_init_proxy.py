@@ -27,13 +27,13 @@ class TestInitProxy:
     def test_creates_proxy_configs(self, tmp_path, monkeypatch):
         """Clean init creates proxy config files with correct structure."""
         cf_dir = tmp_path / ".codefreedom"
-        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", cf_dir)
+        monkeypatch.setattr("codefreedom.cli.proxy.get_codefreedom_dir", lambda: cf_dir)
         examples = _setup_bundled_proxy_examples(tmp_path)
 
         with mock.patch(
-            "codefreedom.cli.proxy._find_bundled_examples", return_value=examples
+            "codefreedom.cli.proxy.find_bundled_examples", return_value=examples
         ):
-            result = init_proxy(reset=False)
+            result = init_proxy()
 
         assert result == 0
 
@@ -47,62 +47,39 @@ class TestInitProxy:
         assert (cf_dir / ".env.proxy").exists()
         assert (cf_dir / ".env.proxy.secrets").exists()
 
-    def test_skips_when_exists_no_reset(self, tmp_path, monkeypatch):
-        """When files exist and reset=False, proxy init skips them."""
+    def test_skips_all_when_any_exists(self, tmp_path, monkeypatch):
+        """All-or-nothing: if any destination file exists, nothing is copied."""
         cf_dir = tmp_path / ".codefreedom"
-        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", cf_dir)
+        monkeypatch.setattr("codefreedom.cli.proxy.get_codefreedom_dir", lambda: cf_dir)
 
-        proxy_dst = cf_dir / "proxy"
-        proxy_config = proxy_dst / "config"
-        proxy_config.mkdir(parents=True)
-        (proxy_config / "config.yaml").write_text("existing")
-        (proxy_dst / "docker-compose.yaml").write_text("existing compose")
+        # Pre-create one file (but not the rest)
+        (cf_dir / ".env.proxy").parent.mkdir(parents=True, exist_ok=True)
         (cf_dir / ".env.proxy").write_text("existing env")
 
         examples = _setup_bundled_proxy_examples(tmp_path)
         (examples / "proxy" / "config" / "config.yaml").write_text("new content")
 
         with mock.patch(
-            "codefreedom.cli.proxy._find_bundled_examples", return_value=examples
+            "codefreedom.cli.proxy.find_bundled_examples", return_value=examples
         ):
-            result = init_proxy(reset=False)
+            result = init_proxy()
 
         assert result == 0
-        assert (proxy_config / "config.yaml").read_text() == "existing"
+        # None of the other files should be created
+        assert not (cf_dir / "proxy" / "config" / "config.yaml").exists()
         assert (cf_dir / ".env.proxy").read_text() == "existing env"
-
-    def test_reset_overwrites(self, tmp_path, monkeypatch):
-        """With reset=True, existing proxy files are overwritten."""
-        cf_dir = tmp_path / ".codefreedom"
-        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", cf_dir)
-
-        proxy_dst = cf_dir / "proxy"
-        proxy_config = proxy_dst / "config"
-        proxy_config.mkdir(parents=True)
-        (proxy_config / "config.yaml").write_text("old")
-
-        examples = _setup_bundled_proxy_examples(tmp_path)
-        (examples / "proxy" / "config" / "config.yaml").write_text("new proxy")
-
-        with mock.patch(
-            "codefreedom.cli.proxy._find_bundled_examples", return_value=examples
-        ):
-            result = init_proxy(reset=True)
-
-        assert result == 0
-        assert (proxy_config / "config.yaml").read_text() == "new proxy"
 
     def test_missing_source_graceful(self, tmp_path, monkeypatch):
         """When bundled examples don't exist, init still returns 0."""
         cf_dir = tmp_path / ".codefreedom"
-        monkeypatch.setattr("codefreedom.cli.proxy._CODEFREEDOM_DIR", cf_dir)
+        monkeypatch.setattr("codefreedom.cli.proxy.get_codefreedom_dir", lambda: cf_dir)
 
         empty = tmp_path / "empty"
         empty.mkdir()
 
         with mock.patch(
-            "codefreedom.cli.proxy._find_bundled_examples", return_value=empty
+            "codefreedom.cli.proxy.find_bundled_examples", return_value=empty
         ):
-            result = init_proxy(reset=False)
+            result = init_proxy()
 
         assert result == 0

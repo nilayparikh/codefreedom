@@ -97,7 +97,7 @@ jobs:
           cf px --help
 
           # Init
-          codefreedom --init --force
+          codefreedom --init
           test -f ~/.codefreedom/profiles/claude-code.json || { echo "MISSING: profiles"; exit 1; }
           test -f ~/.codefreedom/proxy/config/config.yaml || { echo "MISSING: proxy config"; exit 1; }
           test -f ~/.codefreedom/proxy/docker-compose.yaml || { echo "MISSING: compose"; exit 1; }

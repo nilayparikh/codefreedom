@@ -46,6 +46,17 @@
               },
               "additionalProperties": false
             },
+            "tools": {
+              "type": "array",
+              "description": "Tool containers to auto-start when this profile is used. First session starts them, last session stops them. Child profiles inherit from default (merge).",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "chrome",
+                  "web"
+                ]
+              }
+            },
             "env": {
               "type": "object",
               "description": "Environment variables set by this profile — applied in both native and sandbox modes",

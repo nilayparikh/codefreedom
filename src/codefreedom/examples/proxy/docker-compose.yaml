@@ -86,7 +86,7 @@ services:
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       # Microsoft Foundry (Azure) — leave API_KEY empty to disable
-      MICROSOFT_FOUNDRY_API_BASE: ${MICROSOFT_FOUNDRY_API_BASE:-https://ergox-ca-resource.services.ai.azure.com/openai/v1}
+      MICROSOFT_FOUNDRY_API_BASE: ${MICROSOFT_FOUNDRY_API_BASE:-https://<project>.services.ai.azure.com/openai/v1}
       MICROSOFT_FOUNDRY_API_KEY: ${MICROSOFT_FOUNDRY_API_KEY:-}
       # NVIDIA AI Endpoints — leave API_KEY empty to disable
       NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}

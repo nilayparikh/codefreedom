@@ -45,14 +45,18 @@ mkdocs serve -a localhost:8080   # local docs preview
 src/codefreedom/
 ├── __init__.py      # __version__ from importlib.metadata
 ├── __main__.py      # python -m codefreedom entry point
+├── config.py        # CODEFREEDOM_HOME resolution (defaults to ~/.codefreedom)
 ├── cli/
 │   ├── main.py            # Top-level parser, dispatches to subcommands
 │   ├── claude.py          # 'codefreedom claude' — init, profile loading, run dispatch
-│   ├── proxy.py           # 'codefreedom proxy' — init, lifecycle (up/down/status)
+│   ├── proxy.py           # 'codefreedom proxy' — init, lifecycle (start/stop/status)
 │   ├── chrome.py          # 'codefreedom tools chrome' — init, start/stop/status/url
 │   ├── web.py             # 'codefreedom tools web' — init, start/stop/status (Camoufox)
+│   ├── docker_utils.py    # Shared Docker helpers (start/stop/status/ephemeral names)
+│   ├── init_utils.py      # Shared init bootstrap (bundled examples, all-or-nothing copy)
 │   └── tool_init_utils.py # Shared acceptance prompt, notices, tool metadata
 ├── profiles.py      # Profile JSON loading, ${VAR} resolution, inheritance
+├── tool_registry.py # Reference-counted tool lifecycle via ~/.codefreedom/proc/
 ├── launcher.py      # Docker sandbox and native local execution
 ├── env_loader.py    # .env chain: component-specific → legacy → workspace → system
 └── examples/        # Bundled into package, copied by init commands
@@ -63,26 +67,37 @@ src/codefreedom/
 
 Entry points: `codefreedom` / `cf` → `src/codefreedom/cli/main.py:main`
 
+### Architecture Docs
+
+| Document          | Purpose                                                         |
+| ----------------- | --------------------------------------------------------------- |
+| `ARCHITECTURE.md` | Full architecture map — components, dependencies, request flows |
+
+Use the `arch-docs` skill to keep this current when code changes.
+
 ### CLI Commands
 
 | Command                                             | Description                                                   |
 | --------------------------------------------------- | ------------------------------------------------------------- |
-| `codefreedom claude init`                           | Initialize Claude Code profiles + .env.claude (delta-aware)   |
+| `codefreedom claude init`                           | Initialize Claude Code profiles + .env.claude                 |
 | `codefreedom claude init --reset`                   | Overwrite existing Claude Code configs                        |
 | `codefreedom claude`                                | Launch Claude Code (alias: `cf cc`)                           |
 | `codefreedom claude --sandbox`                      | Launch in Docker container with GPU                           |
+| `codefreedom claude --cuda`                         | Use CUDA GPU image (with --sandbox)                           |
+| `codefreedom claude --rocm`                         | Use ROCm GPU image (with --sandbox)                           |
 | `codefreedom claude --native-models`                | Bypass proxy, use Anthropic `/login`                          |
+| `codefreedom claude --profile PROFILE`              | Use a specific profile (default: "default")                   |
 | `codefreedom claude --list-profiles`                | List available profiles                                       |
 | `codefreedom claude --stop`                         | Stop running sandbox containers                               |
 | `codefreedom claude --status`                       | Show sandbox container status                                 |
 | `codefreedom claude --dangerously-skip-permissions` | Skip permission prompts (local mode)                          |
-| `codefreedom proxy init`                            | Initialize proxy configs + .env.proxy (delta-aware)           |
+| `codefreedom proxy init`                            | Initialize proxy configs + .env.proxy                         |
 | `codefreedom proxy init --reset`                    | Overwrite existing proxy configs                              |
-| `codefreedom proxy --up`                            | Start LiteLLM proxy (native Python)                           |
-| `codefreedom proxy --up --docker`                   | Start via Docker Compose                                      |
-| `codefreedom proxy --down`                          | Stop proxy                                                    |
-| `codefreedom proxy --status`                        | Show proxy status                                             |
-| `codefreedom proxy --validate`                      | Validate proxy config                                         |
+| `codefreedom proxy start`                           | Start LiteLLM proxy (native Python)                           |
+| `codefreedom proxy start --docker`                  | Start via Docker Compose                                      |
+| `codefreedom proxy stop`                            | Stop proxy                                                    |
+| `codefreedom proxy status`                          | Show proxy status                                             |
+| `codefreedom proxy validate`                        | Validate proxy config                                         |
 | `codefreedom proxy --port PORT`                     | Set proxy port (default: 4000)                                |
 | `codefreedom proxy --host HOST`                     | Set bind host (default: 0.0.0.0)                              |
 | `codefreedom tools chrome init`                     | Initialize Chrome tool profile (requires acceptance)          |
@@ -106,6 +121,12 @@ Entry points: `codefreedom` / `cf` → `src/codefreedom/cli/main.py:main`
 ### Claude Code Profiles (`profiles.json`)
 
 - `default` and `bare` are **standalone** — no inheritance.
+- All other profiles inherit from `default`. Profile's own `env` merges on top.
+- Mode-specific overrides (`sandbox.env`, `local.env`) also inherit: custom profile gets `default`'s mode env first, then its own.
+- **`tools` field** (`"tools": ["chrome", "web"]`): declares tool containers to auto-start.
+  First session starts them, last session stops them. Child profiles merge with default's
+  tools (deduplicated). Set `"tools": []` to opt out. Tracked via `~/.codefreedom/proc/`.
+  Works in both sandbox and local modes.
 
 ### Tool Profiles (`~/.codefreedom/profiles/<tool>.json`)
 
@@ -116,7 +137,7 @@ Tool init requires user acceptance (typing "I understand"). Tools refuse to star
 | Setting          | Default                               | Profile override                                                                                                                       |
 | ---------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `image`          | `codefreedom:chrome`                  | Change to `docker.io/nilayparikh/codefreedom:chrome-latest` for published builds (also on `ghcr.io/nilayparikh/codefreedom` as mirror) |
-| `container_name` | `codefreedom-chrome`                  | Custom container name                                                                                                                  |
+| `container_name` | `codefreedom-tools-chrome`            | Custom container name                                                                                                                  |
 | `port`           | `9222`                                | CDP debug port                                                                                                                         |
 | `data_dir`       | `~/.codefreedom/sandbox/tools/chrome` | Persistent data mount                                                                                                                  |
 | `env`            | `DISPLAY=:99`                         | Extra env vars forwarded to container                                                                                                  |
@@ -124,17 +145,38 @@ Tool init requires user acceptance (typing "I understand"). Tools refuse to star
 - All other profiles inherit from `default`. Profile's own `env` merges on top.
 - Mode-specific overrides (`sandbox.env`, `local.env`) also inherit: custom profile gets `default`'s mode env first, then its own.
 
-### Environment Variable Chain (9 layers, lowest to highest)
+### Environment Variable Chain
+
+Component-specific env files are loaded only for the matching subcommand. Shared
+and workspace env files are loaded for all components.
+
+**codefreedom claude** (7 layers, lowest to highest):
 
 1. `~/.codefreedom/.env.claude` — Claude Code config (skips if missing)
 2. `~/.codefreedom/.env.claude.secrets` — Claude Code secrets (skips if missing)
-3. `~/.codefreedom/.env.proxy` — proxy config (skips if missing)
-4. `~/.codefreedom/.env.proxy.secrets` — proxy secrets (skips if missing)
-5. `~/.codefreedom/.env` — legacy shared config (warns if missing)
-6. `~/.codefreedom/.env.secrets` — legacy secrets (skips if missing)
-7. `{workspace}/.env` — workspace overrides (skips if missing)
-8. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
-9. `os.environ` — system env (always wins)
+3. `~/.codefreedom/.env` — shared config (skips if missing)
+4. `~/.codefreedom/.env.secrets` — shared secrets (skips if missing)
+5. `{workspace}/.env` — workspace overrides (skips if missing)
+6. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
+7. `os.environ` — system env (always wins)
+
+**codefreedom proxy** (7 layers):
+
+1. `~/.codefreedom/.env.proxy` — proxy config (skips if missing)
+2. `~/.codefreedom/.env.proxy.secrets` — proxy secrets (skips if missing)
+3. `~/.codefreedom/.env` — shared config (skips if missing)
+4. `~/.codefreedom/.env.secrets` — shared secrets (skips if missing)
+5. `{workspace}/.env` — workspace overrides (skips if missing)
+6. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
+7. `os.environ` — system env (always wins)
+
+**codefreedom tools** (chrome, web, etc.) — 5 layers:
+
+1. `~/.codefreedom/.env` — shared config (skips if missing)
+2. `~/.codefreedom/.env.secrets` — shared secrets (skips if missing)
+3. `{workspace}/.env` — workspace overrides (skips if missing)
+4. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
+5. `os.environ` — system env (always wins)
 
 All layers support `${VAR}` and `${VAR:-default}` interpolation. **Empty-string env vars are valid overrides** (`export FOO=""` does NOT fall through to defaults).
 
@@ -196,14 +238,17 @@ Images are built and published via `publish-docker.yml` GitHub Actions workflow 
 
 ## Tests
 
-Four test modules in `tests/`, all using `pytest` with `tmp_path` fixtures and `monkeypatch` for path isolation — never touching real `~/.codefreedom/` during tests.
+Eight test modules in `tests/`, all using `pytest` with `tmp_path` fixtures and `monkeypatch` for path isolation — never touching real `~/.codefreedom/` during tests.
 
-| File                 | Coverage                                                      |
-| -------------------- | ------------------------------------------------------------- |
-| `test_env_loader.py` | `.env` parsing, 5-layer chain precedence, `${VAR}` resolution |
-| `test_profiles.py`   | Profile loading, inheritance, env resolution                  |
-| `test_proxy.py`      | Path resolution, config validation, Docker Compose discovery  |
-| `test_init.py`       | `--init` bootstrap, file creation, skip/force logic           |
+| File                   | Coverage                                                              |
+| ---------------------- | --------------------------------------------------------------------- |
+| `test_env_loader.py`   | `.env` parsing, component-aware chain precedence, `${VAR}` resolution |
+| `test_profiles.py`     | Profile loading, inheritance, env resolution                          |
+| `test_proxy.py`        | Path resolution, config validation, Docker Compose discovery          |
+| `test_init_claude.py`  | Claude `--init` bootstrap, file creation, skip/force logic            |
+| `test_init_proxy.py`   | Proxy `--init` bootstrap, file creation, skip/force logic             |
+| `test_docker_utils.py` | Docker container lifecycle helpers (start/stop/status)                |
+| `test_init_utils.py`   | Bundled examples resolution, all-or-nothing file copy                 |
 
 CI runs tests on Python 3.10/11/12 across Ubuntu, Windows, and macOS via `integration-test.yml`.
 
@@ -228,9 +273,9 @@ Windows terminal defaults to cp1252 encoding, which cannot encode Unicode box-dr
 **Always use plain ASCII in user-facing strings** — replace `───` with `---`, `◆` with `*`, etc.
 Affected files: `src/codefreedom/cli/claude.py`, `proxy.py`, `tool_init_utils.py` (the `_NOTICE`/`_NON_DISCLAIMER` variables).
 
-### Top-level `--init` and `--force` must stay in sync with CI
+### Top-level `--init` must stay in sync with CI
 
-The integration test (`.github/workflows/integration-test.yml`) runs `codefreedom --init --force` to bootstrap all config files. If you rename or remove these top-level flags, update the test too. The handler lives in `src/codefreedom/cli/main.py` before subcommand dispatch.
+The integration test (`.github/workflows/integration-test.yml`) runs `codefreedom --init` to bootstrap all config files. The handler lives in `src/codefreedom/cli/main.py` before subcommand dispatch. Init is all-or-nothing: if any target file already exists, it skips and directs the user to docs/examples for manual merging.
 
 ## What to Include vs Exclude
 

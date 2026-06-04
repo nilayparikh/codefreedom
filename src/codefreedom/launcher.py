@@ -18,6 +18,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -28,7 +29,7 @@ IMAGE_TAG = os.environ.get("CLAUDE_CODE_IMAGE_TAG", "latest")
 TARGET_IMAGE = f"{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}"
 
 HOME_DIR = Path.home()
-CODEFREEDOM_DIR = HOME_DIR / ".codefreedom"
+CODEFREEDOM_DIR = get_codefreedom_dir()
 
 _CONTAINER_PREFIX = "codefreedom-"
 
@@ -175,27 +176,35 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
 
     Also ensures the shared tools cache directory exists for all sandbox sessions.
 
+    All directories are made world-writable (0o777) so the container user
+    (codefreedom, uid 1000) can read/write regardless of host uid mismatch.
+
     Returns (claude_dir, claude_json_path) -- the .claude directory and the
     .claude.json file path inside the profile's sandbox directory.
     """
     profile_dir = CODEFREEDOM_DIR / "sandbox" / profile_name
     profile_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(profile_dir, 0o777)
 
     claude_dir = profile_dir / ".claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(claude_dir, 0o777)
     eprint(f"[SANDBOX] Isolated .claude dir: {claude_dir}")
 
     # ── Fresh .claude.json (never copy from host) ──────────────────────
     sandbox_json = profile_dir / ".claude.json"
     if not sandbox_json.exists():
         sandbox_json.write_text("{}")
+        os.chmod(sandbox_json, 0o666)
         eprint(f"[SANDBOX] Created fresh .claude.json: {sandbox_json}")
     else:
+        os.chmod(sandbox_json, 0o666)
         eprint(f"[SANDBOX] Using existing .claude.json: {sandbox_json}")
 
     # ── Shared tools cache (used by Chrome DevTools MCP, etc.) ─────
     tools_cache = CODEFREEDOM_DIR / "sandbox" / "tools" / ".cache"
     tools_cache.mkdir(parents=True, exist_ok=True)
+    os.chmod(tools_cache, 0o777)
 
     return claude_dir, sandbox_json
 
@@ -221,7 +230,7 @@ def run_local(
 
     env = {**os.environ}
     for key, val in profile_env.items():
-        if val:
+        if key in profile_env:
             env[key] = val
 
     # Local mode: no bypass by default — use --dangerously-skip-permissions
@@ -251,6 +260,8 @@ def run_docker(
     profile_name: str,
     gpu_type: str | None = None,
     sandbox_images: Dict[str, str] | None = None,
+    run_as_me: bool = False,
+    container_name: str | None = None,
 ) -> int:
     """Run claude inside an ephemeral Docker container. Each session gets a fresh
     container with a random name -- cleaned up on exit (including Ctrl+C).
@@ -259,6 +270,14 @@ def run_docker(
     for a matching image reference, falling back to the standard tag naming
     convention (``docker.io/nilayparikh/codefreedom:{gpu_type}-latest``).
     Otherwise ``sandbox_images[\"default\"]`` (or ``TARGET_IMAGE``) is used.
+
+    By default the container runs as the ``codefreedom`` user (uid 1000) defined
+    in the image.  Pass ``run_as_me=True`` to override the container identity
+    with the host user's uid/gid so that file ownership inside mounted volumes
+    matches the host exactly.
+
+    If *container_name* is given, use it instead of auto-generating one
+    (useful for tying the container name to a /proc session ID).
     """
 
     sandbox_images = sandbox_images or {}
@@ -277,7 +296,8 @@ def run_docker(
     else:
         image = sandbox_images.get("default") or TARGET_IMAGE
 
-    container_name = _generate_container_name()
+    if container_name is None:
+        container_name = _generate_container_name()
 
     eprint(f"[IMAGE] Using sandbox image: {image}")
     eprint(f"[CONTAINER] Name: {container_name}")
@@ -285,44 +305,63 @@ def run_docker(
     env_flags: List[str] = []
     for key in sorted(profile_env.keys()):
         val = profile_env[key]
-        if val:
+        if val is not None:
             env_flags.extend(["-e", f"{key}={val}"])
 
     cols, lines = terminal_size()
     env_flags.extend(["-e", f"COLUMNS={cols}", "-e", f"LINES={lines}"])
 
-    uid = os.getuid()
-    gid = os.getgid()
+    host_uid = os.getuid()
+    host_gid = os.getgid()
 
     # ── Ensure isolated sandbox .claude dir exists for this profile ───────
     sandbox_claude_dir, sandbox_claude_json = ensure_codefreedom_dir(profile_name)
+
+    # ── Resolve container identity ─────────────────────────────────────────
+    if run_as_me:
+        container_home = f"/home/{HOME_DIR.name}"
+        container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
+        eprint(
+            f"[SANDBOX] --run-as-me: container will run as "
+            f"uid={host_uid}({HOME_DIR.name}) gid={host_gid}"
+        )
+    else:
+        container_home = "/home/codefreedom"
+        container_user_flag = []  # use image default (codefreedom, uid 1000)
+        eprint("[SANDBOX] Running as default container user 'codefreedom' (uid 1000).")
+        eprint(
+            "[SANDBOX] If you see permission errors on /workspace, grant access with:"
+        )
+        eprint(f"           sudo chown -R 1000:1000 {workspace_dir}")
+        eprint(
+            "           Or re-run with --run-as-me to match your host user identity."
+        )
 
     base_opts = [
         "--gpus",
         "all",
         "--network",
         "host",
-        "-u",
-        f"{uid}:{gid}",
+        *container_user_flag,
         "--ipc=host",
         "-v",
         f"{workspace_dir}:/workspace",
         "-w",
         "/workspace",
         "-v",
-        f"{HOME_DIR / '.gitconfig'}:/root/.gitconfig:ro",
+        f"{HOME_DIR / '.gitconfig'}:{container_home}/.gitconfig:ro",
         "-v",
-        f"{HOME_DIR / '.ssh'}:/root/.ssh:ro",
+        f"{HOME_DIR / '.ssh'}:{container_home}/.ssh:ro",
         "-v",
-        f"{sandbox_claude_dir}:/home/{HOME_DIR.name}/.claude",
+        f"{sandbox_claude_dir}:{container_home}/.claude",
         "-v",
-        f"{sandbox_claude_json}:/home/{HOME_DIR.name}/.claude.json",
+        f"{sandbox_claude_json}:{container_home}/.claude.json",
         "-e",
-        f"HOME=/home/{HOME_DIR.name}",
+        f"HOME={container_home}",
         "-v",
         f"{workspace_dir / '.claude'}:/workspace/.claude",
         "-v",
-        f"{CODEFREEDOM_DIR / 'sandbox' / 'tools' / '.cache'}:/home/{HOME_DIR.name}/.cache",
+        f"{CODEFREEDOM_DIR / 'sandbox' / 'tools' / '.cache'}:{container_home}/.cache",
     ]
 
     # ── Ensure image is available ─────────────────────────────────────────
@@ -377,7 +416,8 @@ def run_docker(
 
     exec_cmd = (
         ["docker", "exec", "-it"]
-        + ["-u", f"{uid}:{gid}", "-e", f"HOME=/home/{HOME_DIR.name}"]
+        + container_user_flag
+        + ["-e", f"HOME={container_home}"]
         + env_flags
         + [container_name, "claude", "--dangerously-skip-permissions"]
         + claude_args

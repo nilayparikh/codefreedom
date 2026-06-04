@@ -66,7 +66,7 @@ The container image is based on `ubuntu:24.04` (multi-arch: `linux/arm64`,
 | Setting          | Default                               | Profile override (in `chrome.json`)                         |
 | ---------------- | ------------------------------------- | ----------------------------------------------------------- |
 | `image`          | `codefreedom:chrome`                  | Change to `docker.io/nilayparikh/codefreedom:chrome-latest` |
-| `container_name` | `codefreedom-chrome`                  | Custom container name                                       |
+| `container_name` | `codefreedom-tools-chrome`            | Custom container name                                       |
 | `port`           | `9222`                                | CDP debug port                                              |
 | `data_dir`       | `~/.codefreedom/sandbox/tools/chrome` | Persistent data mount                                       |
 | `env`            | `DISPLAY=:99`                         | Extra env vars forwarded to container                       |

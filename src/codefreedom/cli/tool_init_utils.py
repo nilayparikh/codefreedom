@@ -33,14 +33,17 @@ TOOL_INFO: Dict[str, dict] = {
         "description": (
             "Camoufox stealth browser for web search and scraping. "
             "Runs an MCP server on port 8420 with web_search and web_fetch tools. "
-            "Combines Brave Search + Bing results with AI summaries."
+            "Search engines are user-configured via the profile."
         ),
         "third_party": [
             ("Camoufox (stealth browser)", "daijro"),
             ("Firefox", "Mozilla Foundation"),
-            ("Brave Search API", "Brave Software, Inc."),
-            ("Bing Search API", "Microsoft Corporation"),
         ],
+        "warning": (
+            "The Camoufox scraping tool is designed for internal websites "
+            "or permissible public infrastructure. "
+            "DO NOT USE or REPURPOSE the tool beyond permissible use cases."
+        ),
         "docs_url": "https://nilayparikh.github.io/codefreedom/claude-code/tools/",
         "profile_name": "camoufox.json",
     },
@@ -60,21 +63,34 @@ _THIRD_PARTY_NOTICE = (
 )
 
 
+_TAG_MAP: Dict[str, str] = {
+    "chrome": "CHROME",
+    "web": "WEB",
+}
+
+
 def _print_tool_notice(tool_name: str) -> None:
     """Print a third-party component notice for a specific tool."""
     info = TOOL_INFO.get(tool_name)
     if not info:
         return
 
+    tag = _TAG_MAP.get(tool_name, tool_name.upper())
     components = info["third_party"]
     print()
-    print("─── Third-Party Notice ─────────────────────────────────")
-    print("This container includes third-party components:")
+    print(f"[{tag}] --- Third-Party Notice ---")
+    print(f"[{tag}] This container includes third-party components:")
     for component, vendor in components:
-        print(f"  • {component} ({vendor})")
-    print()
-    print(_THIRD_PARTY_NOTICE)
-    print("────────────────────────────────────────────────────────")
+        print(f"[{tag}]   * {component} ({vendor})")
+    print(f"[{tag}]")
+    print(
+        f"[{tag}] CodeFreedom is not responsible"
+        f" for their behavior, security, or privacy practices."
+    )
+    if "warning" in info:
+        print(f"[{tag}]")
+        print(f"[{tag}] WARNING: {info['warning']}")
+    print(f"[{tag}] ---")
 
 
 def _print_non_disclaimer() -> None:

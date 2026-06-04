@@ -16,6 +16,7 @@ codefreedom claude --list-profiles    # List available profiles
 codefreedom claude --stop       # Stop sandbox containers
 codefreedom claude --status     # Show container status
 codefreedom claude -p "question"  # One-shot prompt
+codefreedom claude --run-as-me   # Run sandbox as host user (with --sandbox)
 ```
 
 Short aliases: `cf cc` is equivalent to `codefreedom claude`.
@@ -43,7 +44,7 @@ Profiles control which model a code agent uses by setting environment variables.
 | Profile   | Model               | Description                            |
 | --------- | ------------------- | -------------------------------------- |
 | `default` | `CodeFreedom/Flash` | General purpose — routes through proxy |
-| `bare`    | _(default)_         | Minimal — no model aliases             |
+| `bare`    | _(default)_         | Minimal — routes through proxy, no model aliases or extra settings |
 
 Custom profiles such as `pro` or `ultra` are not bundled by default — create them in the profiles file. The model aliases (`CodeFreedom/Flash`, `CodeFreedom/Pro`, `CodeFreedom/Ultra`) are defined in the [proxy configuration](proxy.md#model-aliases), not in profiles.
 

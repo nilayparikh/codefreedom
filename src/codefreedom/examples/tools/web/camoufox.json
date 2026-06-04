@@ -1,19 +1,37 @@
 {
   "$schema": "camoufox.schema.json",
-  "description": "Camoufox web search tool profile for codefreedom — configures container image, ports, and data directory.",
+  "description": "Camoufox web search tool profile for codefreedom — configures container image, ports, data directory, search engines, and parser registry.",
   "notes": [
     "The 'camoufox' block defines all settings for 'codefreedom tools web'.",
     "'image' is the Docker image to use — change to 'docker.io/nilayparikh/codefreedom:camoufox-latest' for published builds. (Also available on ghcr.io/nilayparikh/codefreedom as a mirror.)",
     "'container_name' is the Docker container name (persistent, restart unless-stopped).",
     "'port' is the host port that maps to container port 8420 (MCP server).",
     "'data_dir' is the host path mounted to /userdata inside the container.",
-    "'env' are environment variables forwarded to the container."
+    "'env' are environment variables forwarded to the container.",
+    "'search_engines' is a map of engine name -> {url, parser}. Use {q} for query placeholder. No engines are configured by default.",
+    "Each engine entry: 'url' is the search URL template, 'parser' is a key in 'parser_registry'.",
+    "'parser_registry' defines named parser configurations. Each parser specifies CSS selectors for extracting results, links, snippets, and AI summaries from search engine HTML. The 'standard' parser is provided as a starting point."
   ],
   "camoufox": {
     "image": "docker.io/nilayparikh/codefreedom:camoufox-latest",
     "container_name": "codefreedom-camoufox",
     "port": 8420,
     "data_dir": "~/.codefreedom/sandbox/tools/camoufox",
-    "env": {}
+    "env": {},
+    "search_engines": {},
+    "parser_registry": {
+      "standard": {
+        "result_selectors": "[data-type='web'], .b_algo, #res .g, .result, .search-result, li:has(h2 a[href]), li:has(h3 a[href])",
+        "link_selector": "h2 a[href], h3 a[href], a[href]",
+        "snippet_selectors": ".b_caption p, .b_lineclamp2, .generic-snippet .content, .snippet, .description, .st, span.st",
+        "ai_selectors": [
+          ".chatllm-content",
+          ".b_ans",
+          ".rai_content",
+          "[data-attrid='wa_description']",
+          ".knowledge-panel"
+        ]
+      }
+    }
   }
 }

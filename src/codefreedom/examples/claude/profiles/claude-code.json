@@ -10,7 +10,8 @@
     "ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN must be set explicitly per profile.",
     "Secrets (~/.env.secrets) are loaded but profiles define their own auth explicitly.",
     "Use sandbox.env to declare env vars that should only be forwarded in --sandbox mode (e.g., GITHUB_PERSONAL_ACCESS_TOKEN).",
-    "Use local.env to declare env vars that should only apply in native mode."
+    "Use local.env to declare env vars that should only apply in native mode.",
+    "tools declares tool containers (chrome, web) to auto-start. First session starts them, last session stops them. Child profiles inherit from default (merge). Set 'tools': [] to opt out."
   ],
   "profiles": {
     "default": {
@@ -20,6 +21,10 @@
         "cuda": "docker.io/nilayparikh/codefreedom:cuda-latest",
         "rocm": "docker.io/nilayparikh/codefreedom:rocm-latest"
       },
+      "tools": [
+        "chrome",
+        "web"
+      ],
       "env": {
         "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
         "CLAUDE_MODEL": "CodeFreedom/Flash",

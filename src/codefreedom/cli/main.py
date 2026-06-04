@@ -22,11 +22,6 @@ def main() -> None:
         action="store_true",
         help="Initialize all profiles, proxy configs, and env files in ~/.codefreedom/",
     )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite existing files when used with --init",
-    )
     subparsers = parser.add_subparsers(dest="command", title="commands")
 
     # ── claude subcommand ──────────────────────────────────────────────────
@@ -54,6 +49,11 @@ def main() -> None:
         "--sandbox",
         action="store_true",
         help="Run inside a sandboxed Docker container (default: native)",
+    )
+    claude_parser.add_argument(
+        "--run-as-me",
+        action="store_true",
+        help="Run sandbox container as host user (uid/gid match). Only valid with --sandbox.",
     )
     claude_parser.add_argument(
         "--native-models",
@@ -87,11 +87,6 @@ def main() -> None:
         action="store_true",
         help="Skip Claude Code permission prompts (use in CI/non-interactive environments)",
     )
-    claude_parser.add_argument(
-        "--reset",
-        action="store_true",
-        help="Overwrite existing files when used with 'init' (e.g. 'codefreedom claude init --reset')",
-    )
 
     # ── tools subcommand ──────────────────────────────────────────────────
     tools_parser = subparsers.add_parser(
@@ -115,11 +110,6 @@ def main() -> None:
         help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/.",
     )
     chrome_parser.add_argument(
-        "--reset",
-        action="store_true",
-        help="Overwrite existing tool config (use with 'init')",
-    )
-    chrome_parser.add_argument(
         "--port",
         type=int,
         default=9222,
@@ -139,11 +129,6 @@ def main() -> None:
         default="status",
         choices=["start", "stop", "status", "init"],
         help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/.",
-    )
-    web_parser.add_argument(
-        "--reset",
-        action="store_true",
-        help="Overwrite existing tool config (use with 'init')",
     )
     web_parser.add_argument(
         "--port",
@@ -167,11 +152,6 @@ def main() -> None:
         help="Action to perform (default: status). 'init' copies proxy configs to ~/.codefreedom/.",
     )
     proxy_parser.add_argument(
-        "--reset",
-        action="store_true",
-        help="Overwrite existing config files (use with 'init')",
-    )
-    proxy_parser.add_argument(
         "--docker",
         action="store_true",
         help="Run via Docker Compose instead of native Python",
@@ -193,20 +173,20 @@ def main() -> None:
 
     # ── Top-level --init ────────────────────────────────────────────────────
     if args.init:
-        from pathlib import Path
 
         from codefreedom.cli.claude import init_claude
         from codefreedom.cli.proxy import init_proxy
 
-        reset = args.force
         code = 0
 
-        code |= init_claude(reset=reset)
-        code |= init_proxy(reset=reset)
+        code |= init_claude()
+        code |= init_proxy()
 
         # Legacy shared .env (placeholder for backward compatibility)
-        env_path = Path.home() / ".codefreedom" / ".env"
-        if not reset and env_path.exists():
+        from codefreedom.config import get_codefreedom_dir
+
+        env_path = get_codefreedom_dir() / ".env"
+        if env_path.exists():
             print(f"[init] [SKIP] Already exists: {env_path}")
         else:
             env_path.parent.mkdir(parents=True, exist_ok=True)
@@ -222,17 +202,12 @@ def main() -> None:
         sys.exit(code)
 
     if args.command in ("claude", "cc"):
-        # ── claude init action ─────────────────────────────────────────────
-        if getattr(args, "claude_action", None) == "init":
-            from codefreedom.cli.claude import init_claude
-
-            sys.exit(init_claude(reset=args.reset))
-
         # ── Rescue known flags swallowed by parse_known_args ────────────────
         _CLAUDE_BOOL_FLAGS = {
             "--cuda": "gpu_cuda",
             "--rocm": "gpu_rocm",
             "--sandbox": "sandbox",
+            "--run-as-me": "run_as_me",
             "--native-models": "native_models",
             "--stop": "stop",
             "--status": "status",
@@ -256,7 +231,7 @@ def main() -> None:
             forwarded.pop(0)  # strip "init", keep anything else
             from codefreedom.cli.claude import init_claude
 
-            sys.exit(init_claude(reset=args.reset))
+            sys.exit(init_claude())
 
         # ── Forward everything remaining to claude CLI ─────────────────────
         args.claude_args = forwarded
@@ -278,7 +253,7 @@ def main() -> None:
                     sys.exit(2)
                 from codefreedom.cli.chrome import init_tool
 
-                sys.exit(init_tool(reset=args.reset))
+                sys.exit(init_tool())
             if unknown:
                 eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
                 sys.exit(2)
@@ -292,7 +267,7 @@ def main() -> None:
                     sys.exit(2)
                 from codefreedom.cli.web import init_tool
 
-                sys.exit(init_tool(reset=args.reset))
+                sys.exit(init_tool())
             if unknown:
                 eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
                 sys.exit(2)
