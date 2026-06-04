@@ -50,7 +50,7 @@ Once the container is running, coding agents can use:
 The container image is based on `python:3.13-slim` (multi-arch: `linux/arm64`,
 `linux/amd64`). It includes:
 
-- Camoufox stealth browser (Firefox fork) — [Dockerfile](https://github.com/nilayparikh/codefreedom/blob/main/docker/web/Dockerfile.Camoufox)
+- Camoufox stealth browser (Firefox fork) — [Dockerfile](https://github.com/nilayparikh/codefreedom/blob/main/docker/web/Dockerfile.Web)
 - Xvfb (X virtual framebuffer)
 - PyAutoGUI (OS-level input automation)
 - browserforge (browser profile generation)

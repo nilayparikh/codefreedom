@@ -116,11 +116,11 @@ def main() -> None:
         help="CDP debug port (default: 9222)",
     )
 
-    # ── web / camoufox tool ─────────────────────────────────────────────
+    # ── web tool ────────────────────────────────────────────────────────
     web_parser = tools_subparsers.add_parser(
         "web",
         aliases=["camoufox"],
-        help="Camoufox stealth browser for web search and scraping (MCP)",
+        help="Web search and scraping via Camoufox stealth browser (MCP)",
         description="Start/stop/manage a Camoufox browser container for stealth web search and scraping. The container runs an MCP-only server on port 8420 with web_search and web_fetch tools.",
     )
     web_parser.add_argument(
