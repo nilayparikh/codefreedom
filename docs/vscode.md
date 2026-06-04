@@ -65,7 +65,7 @@ Enable prompt caching (recommended — reduces latency and token usage):
   This lets the proxy safely ignore unsupported parameters rather than sending them to the upstream provider and causing errors.
 
 - **Model routing.** All model selection, fallback, and parameter tuning happens in the
-  [proxy config](proxy.md) — VS Code just points to the proxy URL.
+  [proxy config](proxy/index.md) — VS Code just points to the proxy URL.
 
 - **Prompt caching.** The extension supports Anthropic-style prompt caching
   through the proxy. Enable it in your VS Code settings (see above), then

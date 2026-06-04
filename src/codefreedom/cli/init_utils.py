@@ -48,7 +48,7 @@ def copy_bundled_files(
     existing = [dst for _, dst in pairs if dst.exists()]
     if existing:
         print(
-            f"[{label}] Config already exists — init only bootstraps clean directories."
+            f"[{label}] Config already exists -- init only bootstraps clean directories."
         )
         if docs_url:
             print(f"          Docs:    {docs_url}")
@@ -57,14 +57,24 @@ def copy_bundled_files(
         print("          Please merge changes manually.")
         return []
 
-    # Nothing exists — copy all
-    created: list[str] = []
-    for src, dst in pairs:
-        if src.exists():
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            print(f"[{label}] [CREATE] {dst}")
-            created.append(str(dst))
-        else:
-            print(f"[{label}] [MISSING] Source not found: {src}")
-    return created
+    # Nothing exists -- copy all, with rollback on failure
+    created: list[Path] = []
+    try:
+        for src, dst in pairs:
+            if src.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+                created.append(dst)
+                print(f"[{label}] [CREATE] {dst}")
+            else:
+                print(f"[{label}] [MISSING] Source not found: {src}")
+    except OSError as exc:
+        import sys
+        print(f"[{label}] [ERROR] Copy failed: {exc}. Rolling back.", file=sys.stderr)
+        for path in created:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        raise
+    return [str(p) for p in created]

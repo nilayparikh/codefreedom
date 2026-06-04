@@ -58,18 +58,18 @@ The container image is based on `python:3.13-slim` (multi-arch: `linux/arm64`,
 
 ### Image
 
-| Setting          | Default                                 | Profile override (in `camoufox.json`)                         |
-| ---------------- | --------------------------------------- | ------------------------------------------------------------- |
-| `image`          | `codefreedom:camoufox`                  | Change to `docker.io/nilayparikh/codefreedom:camoufox-latest` |
-| `container_name` | `codefreedom-camoufox`                  | Custom container name                                         |
-| `port`           | `8420`                                  | MCP server port                                               |
-| `data_dir`       | `~/.codefreedom/sandbox/tools/camoufox` | Persistent data mount                                         |
-| `env`            | `DISPLAY=:99`                           | Extra env vars forwarded to container                         |
+| Setting          | Default                                  | Profile override (in `web.json`)                              |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------------- |
+| `image`          | `codefreedom:web`                        | Change to `docker.io/nilayparikh/codefreedom:web-latest`      |
+| `container_name` | `codefreedom-web`                        | Custom container name                                         |
+| `port`           | `8420`                                   | MCP server port                                               |
+| `data_dir`       | `~/.codefreedom/sandbox/tools/web`       | Persistent data mount                                         |
+| `env`            | _(none)_                                 | Extra env vars forwarded to container                         |
 
 ### Data Persistence
 
 Browser profile data (cookies, sessions, storage) persists in
-`~/.codefreedom/sandbox/tools/camoufox/` across container restarts.
+`~/.codefreedom/sandbox/tools/web/` across container restarts.
 
 ## Third-Party Components
 

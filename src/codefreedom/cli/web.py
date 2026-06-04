@@ -4,6 +4,7 @@ Usage:
     codefreedom tools web init     Initialize tool profile (requires acceptance)
     codefreedom tools web start    Start web container (MCP server on port 8420)
     codefreedom tools web stop     Stop and remove web container
+    codefreedom tools web restart  Restart web container (preserves state)
     codefreedom tools web status   Show web container status
 
 The container runs an MCP-only server with two tools:
@@ -132,7 +133,7 @@ def init_tool() -> int:
 
     print()
     if created:
-        print(f"[web init] Done — {len(created)} created.")
+        print(f"[web init] Done -- {len(created)} created.")
     _print_non_disclaimer()
     return 0
 
@@ -145,9 +146,7 @@ def start(settings: dict) -> int:
     if not _PROFILE_PATH.exists():
         eprint("[web] Tool not initialized.")
         eprint("      Run:  codefreedom tools web init")
-        eprint(
-            "      Docs: https://nilayparikh.github.io/codefreedom/claude-code/tools/"
-        )
+        eprint("      Docs: https://nilayparikh.github.io/codefreedom/tools/web/")
         return 1
 
     # ── Third-party notice on every start ────────────────────────────────
@@ -248,6 +247,41 @@ def stop(settings: dict) -> int:
     return 0
 
 
+def restart(settings: dict) -> int:
+    """Restart the web container using `docker restart`.
+
+    Preserves the container ID, logs, and network namespace. Does NOT pull
+    a new image — to pick up a new image tag, use `stop` then `start`.
+
+    Returns exit code: 0 on success, 1 if container does not exist or
+    docker restart fails.
+    """
+    container_name = settings["container_name"]
+    if not container_exists(container_name):
+        eprint(f"[WEB] Container '{container_name}' not found.")
+        eprint("   Start with: codefreedom tools web start")
+        return 1
+
+    eprint(f"[WEB] Restarting container '{container_name}'...")
+    result = subprocess.run(
+        ["docker", "restart", container_name],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        eprint("[ERROR] Failed to restart web container.")
+        if result.stderr:
+            eprint(f"   {result.stderr.strip()}")
+        return 1
+
+    port = settings["port"]
+    eprint("[WEB] Container restarted.")
+    eprint(f"[WEB] MCP endpoint: http://127.0.0.1:{port}/mcp")
+    return 0
+
+
 def status(settings: dict) -> int:
     container_name = settings["container_name"]
     port = settings["port"]
@@ -281,6 +315,8 @@ def run(args: argparse.Namespace) -> int:
         return start(settings)
     elif args.action == "stop":
         return stop(settings)
+    elif args.action == "restart":
+        return restart(settings)
     elif args.action == "status":
         return status(settings)
     else:

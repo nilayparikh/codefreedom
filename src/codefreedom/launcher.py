@@ -100,7 +100,7 @@ def status() -> int:
             check=False,
         )
 
-        containers = [l for l in result.stdout.strip().split("\n") if l]
+        containers = [line for line in result.stdout.strip().split("\n") if line]
         if containers:
             eprint(f"[STATUS] {len(containers)} codefreedom sandbox container(s):")
             for line in containers:
@@ -229,9 +229,7 @@ def run_local(
     eprint("[LOCAL] Running Claude Code natively...")
 
     env = {**os.environ}
-    for key, val in profile_env.items():
-        if key in profile_env:
-            env[key] = val
+    env.update(profile_env)
 
     # Local mode: no bypass by default — use --dangerously-skip-permissions
     # to opt in for CI/non-interactive environments.

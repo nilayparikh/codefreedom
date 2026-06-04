@@ -5,6 +5,7 @@ Usage:
     codefreedom proxy start            Start the proxy (native, default)
     codefreedom proxy start --docker   Start via Docker Compose
     codefreedom proxy stop             Stop the proxy
+    codefreedom proxy restart --docker Restart the proxy (Docker Compose native)
     codefreedom proxy status           Show proxy status
     codefreedom proxy validate         Validate configuration
 """
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from codefreedom.cli.init_utils import find_bundled_examples
+from codefreedom.cli.tool_init_utils import _print_non_disclaimer
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint, load_dotenv
 
@@ -28,15 +30,6 @@ from codefreedom.env_loader import eprint, load_dotenv
 def _get_cf_dir() -> Path:
     """Lazy accessor for the CodeFreedom config directory (test-patchable)."""
     return get_codefreedom_dir()
-
-
-# ── Non-disclaimer banner ────────────────────────────────────────────────────
-
-_NOTICE = """\
---- Notice ----------------------------------------------------------
-CodeFreedom is provided \"as is\", without warranty of any kind.
-See the Apache 2.0 License for details.
----------------------------------------------------------------------"""
 
 
 def init_proxy() -> int:
@@ -77,26 +70,35 @@ def init_proxy() -> int:
         )
         print("             Please merge changes manually.")
         print()
-        print(_NOTICE)
+        _print_non_disclaimer()
         return 0
 
-    # Nothing exists — copy all
-    created: list[str] = []
-    for src, dst in pairs:
-        if src.exists():
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            created.append(str(dst))
-            print(f"[proxy init] [CREATE] {dst}")
-        else:
-            print(f"[proxy init] [MISSING] Source not found: {src}")
+    # Nothing exists -- copy all, with rollback on failure
+    created: list[Path] = []
+    try:
+        for src, dst in pairs:
+            if src.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+                created.append(dst)
+                print(f"[proxy init] [CREATE] {dst}")
+            else:
+                print(f"[proxy init] [MISSING] Source not found: {src}")
+    except OSError as exc:
+        eprint(f"[proxy init] [ERROR] Copy failed: {exc}. Rolling back.")
+        for path in created:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        return 1
 
     # ── Summary ────────────────────────────────────────────────────────
     print()
     if created:
-        print(f"[proxy init] Done — {len(created)} created.")
+        print(f"[proxy init] Done -- {len(created)} created.")
     print("             Configure: https://nilayparikh.github.io/codefreedom/proxy/")
-    print(_NOTICE)
+    _print_non_disclaimer()
     return 0
 
 
@@ -128,6 +130,8 @@ def run(args: argparse.Namespace) -> int:
         return _start(args)
     elif action == "stop":
         return _stop()
+    elif action == "restart":
+        return _restart(args)
     elif action == "status":
         return _status()
     elif action == "validate":
@@ -137,7 +141,7 @@ def run(args: argparse.Namespace) -> int:
     else:
         eprint(
             "[proxy] No action specified."
-            " Use start, stop, status, validate, or init."
+            " Use start, stop, restart, status, validate, or init."
         )
         return 1
 
@@ -158,6 +162,17 @@ def _load_proxy_env_files() -> Dict[str, str]:
         else:
             eprint(f"[proxy] Env file not found (skipping): {env_path}")
     return merged
+
+
+def _build_proxy_env() -> Dict[str, str]:
+    """Build merged environment: proxy env files override system env.
+
+    Proxy env files override system env so the proxy process sees
+    configured values even when system env has empty-string vars
+    (e.g. MICROSOFT_FOUNDRY_API_BASE="" in shell).
+    """
+    proxy_file_env = _load_proxy_env_files()
+    return {**os.environ, **proxy_file_env}
 
 
 # ── Start ────────────────────────────────────────────────────────────────────
@@ -181,12 +196,8 @@ def _start_compose() -> int:
 
     eprint(f"[proxy] Starting LiteLLM via Docker Compose ({compose_file})...")
 
-    # Load proxy env files and merge with system env.
-    # Proxy env files override system env so docker compose sees
-    # configured values even when system env has empty-string vars
-    # (e.g. MICROSOFT_FOUNDRY_API_BASE="" in shell).
-    proxy_file_env = _load_proxy_env_files()
-    merged_env = {**os.environ, **proxy_file_env}
+    # Build merged environment (proxy files override system env).
+    merged_env = _build_proxy_env()
 
     result = subprocess.run(
         [
@@ -201,6 +212,7 @@ def _start_compose() -> int:
         ],
         env=merged_env,
         capture_output=False,
+        timeout=120,
         check=False,
     )
     if result.returncode == 0:
@@ -249,11 +261,8 @@ def _start_native(args: argparse.Namespace) -> int:
         host,
     ]
 
-    # Load proxy env files and merge with system env.
-    # Proxy env files override system env so the litellm process sees
-    # configured values even when system env has empty-string vars.
-    proxy_file_env = _load_proxy_env_files()
-    merged_env = {**os.environ, **proxy_file_env}
+    # Build merged environment (proxy files override system env).
+    merged_env = _build_proxy_env()
 
     try:
         proc = subprocess.Popen(cmd, env=merged_env)
@@ -284,10 +293,61 @@ def _stop() -> int:
     result = subprocess.run(
         ["docker", "compose", "-f", str(compose_file), "--profile", "litellm", "down"],
         capture_output=False,
+        timeout=60,
         check=False,
     )
     if result.returncode == 0:
         eprint("[proxy] [OK] Proxy stopped.")
+    return result.returncode
+
+
+# ── Restart ───────────────────────────────────────────────────────────────────
+
+
+def _restart(args: argparse.Namespace) -> int:
+    """Restart the LiteLLM proxy.
+
+    Docker mode: uses `docker compose restart` (compose's native capability —
+    fast, preserves container state, picks up compose-file changes; does not
+    pull a new image).
+
+    Native mode: errors out cleanly. The native proxy has no stop path
+    (it runs in the foreground and exits on Ctrl+C), so there is nothing
+    to restart. Use `codefreedom proxy start` directly, or pass --docker.
+    """
+    if not args.docker:
+        eprint(
+            "[proxy] 'restart' is only supported in Docker mode."
+            " Use: codefreedom proxy start --docker"
+        )
+        eprint("   (Native mode runs in the foreground and exits on Ctrl+C.)")
+        return 1
+
+    compose_file = _find_compose_file()
+    if not compose_file:
+        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
+        eprint("   Run: codefreedom proxy init")
+        return 1
+
+    eprint(f"[proxy] Restarting LiteLLM via Docker Compose ({compose_file})...")
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(compose_file),
+            "--profile",
+            "litellm",
+            "restart",
+        ],
+        capture_output=False,
+        timeout=60,
+        check=False,
+    )
+    if result.returncode == 0:
+        eprint("[proxy] [OK] Proxy restarted at http://localhost:4000")
+    else:
+        eprint("[proxy] [FAIL] Failed to restart. Check docker logs.")
     return result.returncode
 
 
@@ -305,6 +365,7 @@ def _status() -> int:
     result = subprocess.run(
         ["docker", "compose", "-f", str(compose_file), "--profile", "litellm", "ps"],
         capture_output=False,
+        timeout=15,
         check=False,
     )
     return result.returncode
@@ -325,6 +386,9 @@ def _validate() -> int:
 
     eprint(f"[proxy] Validating {config_file}...")
     eprint()
+
+    # Load proxy env files so we can check api_key references against them
+    proxy_env = _load_proxy_env_files()
 
     try:
         import yaml
@@ -371,7 +435,7 @@ def _validate() -> int:
                         api_key_ref = params.get("api_key", "")
                         if api_key_ref.startswith("os.environ/"):
                             env_var = api_key_ref[len("os.environ/") :]
-                            if not _env_is_set(env_var):
+                            if not _env_is_set(env_var, proxy_env):
                                 eprint(
                                     f"    [WARN]  {name}: env var {env_var} is not set"
                                 )
@@ -395,7 +459,7 @@ def _validate() -> int:
     if aliases:
         eprint(f"  [OK]  Model aliases: {len(aliases)} defined")
         for alias, model in aliases.items():
-            eprint(f"       {alias} → {model}")
+            eprint(f"       {alias} -> {model}")
     else:
         eprint("  [WARN]  No model_group_alias defined")
 
@@ -434,10 +498,14 @@ def _validate_basic(config_file: Path, errors: List[str]) -> None:
                 errors.append(f"Missing: {provider_file}")
 
 
-def _env_is_set(var_name: str) -> bool:
-    """Check if an environment variable is set (including empty strings)."""
-    import os
+def _env_is_set(var_name: str, env: Optional[Dict[str, str]] = None) -> bool:
+    """Check if an environment variable is set (including empty strings).
 
+    If *env* is provided, it is checked first, then os.environ.  This lets
+    callers (e.g. _validate) include vars loaded from .env.proxy files.
+    """
+    if env is not None and var_name in env:
+        return True
     return var_name in os.environ
 
 

@@ -45,9 +45,11 @@ mkdocs serve -a localhost:8080   # local docs preview
 src/codefreedom/
 ├── __init__.py      # __version__ from importlib.metadata
 ├── __main__.py      # python -m codefreedom entry point
+├── admin.py         # Backup/restore engine (manifest, diff, prune)
 ├── config.py        # CODEFREEDOM_HOME resolution (defaults to ~/.codefreedom)
 ├── cli/
 │   ├── main.py            # Top-level parser, dispatches to subcommands
+│   ├── admin.py           # 'codefreedom admin' — backup, restore, list, inspect, prune
 │   ├── claude.py          # 'codefreedom claude' — init, profile loading, run dispatch
 │   ├── proxy.py           # 'codefreedom proxy' — init, lifecycle (start/stop/status)
 │   ├── chrome.py          # 'codefreedom tools chrome' — init, start/stop/status/url
@@ -80,7 +82,6 @@ Use the `arch-docs` skill to keep this current when code changes.
 | Command                                             | Description                                                   |
 | --------------------------------------------------- | ------------------------------------------------------------- |
 | `codefreedom claude init`                           | Initialize Claude Code profiles + .env.claude                 |
-| `codefreedom claude init --reset`                   | Overwrite existing Claude Code configs                        |
 | `codefreedom claude`                                | Launch Claude Code (alias: `cf cc`)                           |
 | `codefreedom claude --sandbox`                      | Launch in Docker container with GPU                           |
 | `codefreedom claude --cuda`                         | Use CUDA GPU image (with --sandbox)                           |
@@ -92,27 +93,37 @@ Use the `arch-docs` skill to keep this current when code changes.
 | `codefreedom claude --status`                       | Show sandbox container status                                 |
 | `codefreedom claude --dangerously-skip-permissions` | Skip permission prompts (local mode)                          |
 | `codefreedom proxy init`                            | Initialize proxy configs + .env.proxy                         |
-| `codefreedom proxy init --reset`                    | Overwrite existing proxy configs                              |
 | `codefreedom proxy start`                           | Start LiteLLM proxy (native Python)                           |
 | `codefreedom proxy start --docker`                  | Start via Docker Compose                                      |
 | `codefreedom proxy stop`                            | Stop proxy                                                    |
+| `codefreedom proxy restart --docker`                | Restart proxy (Docker Compose native; preserves state)        |
 | `codefreedom proxy status`                          | Show proxy status                                             |
 | `codefreedom proxy validate`                        | Validate proxy config                                         |
 | `codefreedom proxy --port PORT`                     | Set proxy port (default: 4000)                                |
 | `codefreedom proxy --host HOST`                     | Set bind host (default: 0.0.0.0)                              |
+| `codefreedom admin backup`                          | Backup CodeFreedom config (no secrets)                        |
+| `codefreedom admin backup --out PATH`               | Backup to a specific path                                     |
+| `codefreedom admin restore PATH`                    | Restore with interactive diff preview                         |
+| `codefreedom admin restore PATH --dry-run`          | Preview restore without making changes                        |
+| `codefreedom admin restore PATH --force`            | Restore without confirmation prompt                           |
+| `codefreedom admin list-backups`                    | List all available backups                                    |
+| `codefreedom admin inspect PATH`                    | Show manifest contents of a backup archive                    |
+| `codefreedom admin prune --keep N`                  | Keep N most recent backups, delete rest                       |
+| `codefreedom admin prune --older-than 30d`          | Delete backups older than duration                            |
 | `codefreedom tools chrome init`                     | Initialize Chrome tool profile (requires acceptance)          |
-| `codefreedom tools chrome init --reset`             | Overwrite existing Chrome tool config (requires acceptance)   |
 | `codefreedom tools chrome start`                    | Start Chrome browser container (Xvfb + Chromium)              |
 | `codefreedom tools chrome stop`                     | Stop Chrome container                                         |
+| `codefreedom tools chrome restart`                  | Restart Chrome container (preserves state, no image pull)     |
 | `codefreedom tools chrome status`                   | Show Chrome container status                                  |
 | `codefreedom tools chrome url`                      | Print CDP debug URL for agent connection                      |
 | `codefreedom tools web init`                        | Initialize Camoufox tool profile (requires acceptance)        |
-| `codefreedom tools web init --reset`                | Overwrite existing Camoufox tool config (requires acceptance) |
 | `codefreedom tools web start`                       | Start Camoufox container (MCP server on port 8420)            |
 | `codefreedom tools web stop`                        | Stop Camoufox container                                       |
+| `codefreedom tools web restart`                     | Restart Camoufox container (preserves state, no image pull)   |
 | `codefreedom tools web status`                      | Show Camoufox container status                                |
 | `cf cc`                                             | Alias for `codefreedom claude`                                |
 | `cf px`                                             | Alias for `codefreedom proxy`                                 |
+| `cf adm`                                            | Alias for `codefreedom admin`                                 |
 
 ## Key Patterns
 
@@ -211,7 +222,7 @@ references. Examples:
 | `codefreedom:chrome`                  | `codefreedom:Chrome`                  |
 | `ghcr.io/.../codefreedom:cuda-latest` | `ghcr.io/.../codefreedom:CUDA-latest` |
 | `codefreedom:rocm-v0.1.0`             | `codefreedom:ROCm-v0.1.0`             |
-| `codefreedom:camoufox`                | `codefreedom:Camoufox`                |
+| `codefreedom:web`                     | `codefreedom:Web`                     |
 
 ### Image Families
 
@@ -223,6 +234,7 @@ Four image families in `docker/` published to `docker.io/nilayparikh/codefreedom
 | **ROCm**   | `docker/claude-code/Dockerfile.ROCm`   | AMD GPU workloads                                                  |
 | **Ubuntu** | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only / general-purpose                                         |
 | **Chrome** | `docker/chrome/Dockerfile.Chrome`      | Xvfb + Chromium for undetectable headed browsing via CDP port 9222 |
+| **Web**    | `docker/web/Dockerfile.Web`            | Camoufox MCP server for stealth web search and scraping            |
 
 Images are built and published via `publish-docker.yml` GitHub Actions workflow on `v*` tags.
 
@@ -242,6 +254,7 @@ Eight test modules in `tests/`, all using `pytest` with `tmp_path` fixtures and 
 
 | File                   | Coverage                                                              |
 | ---------------------- | --------------------------------------------------------------------- |
+| `test_admin.py`        | Backup, restore, list, inspect, prune, sha256, categorization         |
 | `test_env_loader.py`   | `.env` parsing, component-aware chain precedence, `${VAR}` resolution |
 | `test_profiles.py`     | Profile loading, inheritance, env resolution                          |
 | `test_proxy.py`        | Path resolution, config validation, Docker Compose discovery          |

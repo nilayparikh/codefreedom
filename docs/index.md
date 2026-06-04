@@ -50,7 +50,15 @@ codefreedom claude init
 codefreedom proxy init
 ```
 
+Or initialize everything at once:
+
+```bash
+codefreedom --init
+```
+
 This creates `~/.codefreedom/` with profiles, proxy configs, and component-specific `.env` files.
+
+Each init command is idempotent — it skips files that already exist. To force a fresh setup, delete the existing configs and re-run init, or merge changes manually from the [bundled examples](https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/).
 
 ## Start the Proxy
 
@@ -84,5 +92,8 @@ All done. You're now running a code agent through the CodeFreedom proxy.
 | Page                            | What You'll Learn                       |
 | ------------------------------- | --------------------------------------- |
 | [Architecture](architecture.md) | How the pieces fit together             |
-| [Proxy](proxy.md)               | Provider setup, database, configuration |
+| [Proxy](proxy/index.md)               | Provider setup, database, configuration |
 | [Code Agents](claude-code.md)   | Profiles, sandbox mode, local mode      |
+| [Browser Tools](tools/index.md) | Chrome and Camoufox for web automation  |
+| [VS Code](vscode.md)            | Connect VS Code to the proxy            |
+| [Troubleshooting](troubleshooting.md) | Common issues and how to fix them |

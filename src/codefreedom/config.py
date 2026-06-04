@@ -24,3 +24,8 @@ def get_codefreedom_dir() -> Path:
     if env_override:
         return Path(env_override)
     return Path.home() / ".codefreedom"
+
+
+def get_backup_dir() -> Path:
+    """Return the default backup directory under CodeFreedom home."""
+    return get_codefreedom_dir() / "backup"

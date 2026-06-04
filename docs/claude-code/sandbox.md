@@ -17,6 +17,13 @@ codefreedom claude --sandbox --profile bare
 
 # Bypass proxy, use native auth
 codefreedom claude --sandbox --native-models
+
+# GPU-specific images
+codefreedom claude --sandbox --cuda   # NVIDIA GPU
+codefreedom claude --sandbox --rocm   # AMD GPU
+
+# Run as host user (for file permissions)
+codefreedom claude --sandbox --run-as-me
 ```
 
 ## Available Images
@@ -118,3 +125,5 @@ Then run `/reload-plugins` to activate. Claude Code's LSP tool will automaticall
 ## Security Note
 
 Sandbox mode runs Claude Code with `--dangerously-skip-permissions` inside the container. This is safe because the container is ephemeral (destroyed on exit) and isolated from the host. In local mode, normal Claude Code permissions apply.
+
+See [Local Mode](local.md) for the non-sandboxed alternative.

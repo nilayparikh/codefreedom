@@ -37,3 +37,5 @@ Native mode runs the code agent directly on the host. Profiles control model rou
 | Container isolation, GPU passthrough         | [Sandbox](sandbox.md) (`--sandbox`) |
 | Per-profile state isolation                  | Sandbox                             |
 | Pass `--dangerously-skip-permissions` safely | Sandbox                             |
+
+See [Sandbox Mode](sandbox.md) for GPU passthrough, image selection, and container lifecycle details.

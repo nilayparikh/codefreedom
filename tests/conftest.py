@@ -17,7 +17,7 @@ import pytest
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _codefreedom_test_home() -> str:
+def _codefreedom_test_home() -> str:  # type: ignore[misc]
     """Session-scoped fixture: CODEFREEDOM_HOME points to a temp directory.
 
     Runs once per test session, before any test.  Cleans up after all
