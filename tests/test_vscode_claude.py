@@ -617,7 +617,7 @@ class TestVscodeSettingsGenerate:
             lambda *a, **kw: {},
         )
 
-        def boom(*a, **kw):
+        def boom(*_a, **_kw):
             from codefreedom.profiles import ProfileError
 
             raise ProfileError("nope")
@@ -705,6 +705,7 @@ class TestSubprocessDispatch:
             capture_output=True,
             text=True,
             timeout=15,
+            check=False,
         )
 
     def test_vscode_claude_config_help_succeeds(self):
@@ -748,8 +749,14 @@ class TestSubprocessDispatch:
         # Use --help to short-circuit before any I/O.  Confirms the flag
         # is registered on the subparser.
         result = self._run(
-            "vscode", "claude", "config",
-            "--host", "192.168.1.10", "--port", "5000", "--help",
+            "vscode",
+            "claude",
+            "config",
+            "--host",
+            "192.168.1.10",
+            "--port",
+            "5000",
+            "--help",
         )
         assert result.returncode == 0, result.stderr
 

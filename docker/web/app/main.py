@@ -91,7 +91,7 @@ async def _recover_browser() -> bool:
     ``_MAX_RECOVERY_ATTEMPTS`` consecutive failures the browser is left
     stopped and the caller should signal the container to restart.
     """
-    global browser, _active_page, _recovery_failures
+    global _active_page, _recovery_failures
     if not browser:
         return False
 
@@ -307,13 +307,13 @@ async def _dispatch_action_inner(cmd: dict, action: str) -> dict:
 
 _request_lock = asyncio.Lock()
 
-from mcp_server import mcp, set_dispatcher
+from mcp_server import mcp, set_dispatcher  # noqa: E402
 
 set_dispatcher(dispatch_action, _request_lock)
 
 mcp_http_app = mcp.http_app(transport="streamable-http")
 
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse  # noqa: E402
 
 
 async def _oauth_metadata(_request):

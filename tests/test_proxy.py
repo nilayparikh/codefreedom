@@ -1,5 +1,7 @@
 """Tests for proxy CLI — path resolution, validation, compose discovery."""
 
+# pyright: reportPrivateUsage = false
+
 import argparse
 from pathlib import Path
 
@@ -206,7 +208,7 @@ class TestRun:
 
         calls: list[list[str]] = []
 
-        def fake_run(cmd, *args, **kwargs):
+        def fake_run(cmd, *_args, **_kwargs):
             calls.append(cmd)
 
             class _R:
@@ -254,7 +256,7 @@ class TestRun:
         compose.parent.mkdir(parents=True)
         compose.write_text("")
 
-        def fake_run(cmd, *args, **kwargs):
+        def fake_run(*_args, **_kwargs):
             class _R:
                 returncode = 1
                 stderr = "compose error"
@@ -329,9 +331,7 @@ class TestWebBridgeBuildContext:
             (pkg_dir / "__init__.py").write_text("")
             # No docker/ directory at project_root.
 
-            monkeypatch.setattr(
-                codefreedom, "__file__", str(pkg_dir / "__init__.py")
-            )
+            monkeypatch.setattr(codefreedom, "__file__", str(pkg_dir / "__init__.py"))
 
             from codefreedom.cli.proxy import _web_bridge_build_context
 
@@ -341,15 +341,13 @@ class TestWebBridgeBuildContext:
 class TestEnsureWebBridgeImage:
     """Tests for _ensure_web_bridge_image — idempotent image check."""
 
-    def test_image_present_skips_build(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_image_present_skips_build(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When ``docker image inspect`` succeeds, no build is invoked."""
         from codefreedom.cli import proxy as proxy_mod
 
         calls: list[list[str]] = []
 
-        def fake_run(cmd, *args, **kwargs):
+        def fake_run(cmd, *_args, **_kwargs):
             calls.append(cmd)
 
             class _R:
@@ -376,7 +374,7 @@ class TestEnsureWebBridgeImage:
         """
         from codefreedom.cli import proxy as proxy_mod
 
-        def fake_run(cmd, *args, **kwargs):
+        def fake_run(*_args, **_kwargs):
             class _R:
                 returncode = 1  # image inspect fails
                 stderr = "No such image"
@@ -399,7 +397,7 @@ class TestEnsureWebBridgeImage:
 
         calls: list[list[str]] = []
 
-        def fake_run(cmd, *args, **kwargs):
+        def fake_run(cmd, *_args, **_kwargs):
             calls.append(cmd)
             # The first call is `docker image inspect` (returns 1 because
             # the image is missing). The second call is `docker build`
@@ -429,17 +427,13 @@ class TestEnsureWebBridgeImage:
         build_calls = [c for c in calls if "build" in c]
         assert len(build_calls) == 1
         # Tag should be the full registry reference (pushable without retag).
-        assert (
-            "docker.io/nilayparikh/codefreedom:web-bridge" in build_calls[0]
-        )
+        assert "docker.io/nilayparikh/codefreedom:web-bridge" in build_calls[0]
 
-    def test_build_failure_returns_1(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_build_failure_returns_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When the build subprocess returns non-zero, helper returns 1."""
         from codefreedom.cli import proxy as proxy_mod
 
-        def fake_run(cmd, *args, **kwargs):
+        def fake_run(cmd, *_args, **_kwargs):
             if "inspect" in cmd:
                 rc = 1
             else:

@@ -639,8 +639,8 @@ async def web_fetch(
     url: str,
     timeout: float = 15.0,
     use_browser: bool | None = None,
-    include_screenshot: bool = False,
-    wait_until: str = "domcontentloaded",
+    _include_screenshot: bool = False,
+    _wait_until: str = "domcontentloaded",
 ) -> str:
     """Fetch a web page and return its text content. No cooldown.
 

@@ -161,7 +161,7 @@ class TestFetchModelInfo:
         ctx.__enter__.return_value.read.return_value = b'{"data": []}'
         captured: list = []
 
-        def fake(req, timeout):
+        def fake(req, _timeout):
             captured.append(req)
             return ctx
 
@@ -617,7 +617,9 @@ class TestCmdVscodeGenerate:
             ],
         )
 
-        result = cmd_vscode_proxy_config(_args(host="example.lan", port=5000, name="MyCo"))
+        result = cmd_vscode_proxy_config(
+            _args(host="example.lan", port=5000, name="MyCo")
+        )
         assert result == 0
 
         captured = capsys.readouterr()
