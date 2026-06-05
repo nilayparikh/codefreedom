@@ -1,0 +1,98 @@
+# ── CodeFreedom Web Search Bridge (SearXNG-shaped) ─────────────────────────
+# Thin FastAPI service that translates SearXNG-style /search requests into
+# JSON-RPC calls against the local Camoufox MCP web_search tool.
+#
+#   GET /search?q=<query>&format=json  ->  SearXNG JSON response
+#   GET /healthz                        ->  liveness probe
+#
+# Talks to: ${MCP_WEB_URL}/mcp (FastMCP Streamable HTTP)
+# Cooldown: ${WEB_BRIDGE_COOLDOWN_SECONDS} (default 2.0)
+# Failure:  HTTP 502 + {"error": "..."} when MCP is unreachable
+#
+# Build:
+#   docker build -t docker.io/nilayparikh/codefreedom:web-bridge \
+#     -f docker/web-bridge/Dockerfile.Bridge docker/web-bridge/
+#
+# @platform  linux/amd64, linux/arm64
+# @version   v0.1.0
+#
+# Vulnerability strategy:
+#   * Multi-stage build — final image has no pip, no compilers, no apt cache.
+#   * `apt-get upgrade -y` on the runtime base patches known OS CVEs at build
+#     time; rebuild the image regularly to pick up new Debian security
+#     releases.
+#   * Python deps are pinned to exact versions in requirements.txt so a
+#     rebuild cannot accidentally pull a vulnerable wheel.
+# ──────────────────────────────────────────────────────────────────────────
+
+ARG IMAGE_VERSION=0.1.0
+
+# ── Stage 1: builder ─ install pinned wheels into an isolated prefix ──────
+FROM python:3.13-slim AS builder
+
+# Patch the builder base as well, then install build tools required by some
+# wheels (uvicorn[standard] pulls in uvloop and httptools which compile C
+# extensions). The toolchain does NOT ship in the final image.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        gcc \
+        libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY requirements.txt .
+# Install into /install (copied to runtime stage below). --no-cache keeps
+# the layer small; --prefix gives us a self-contained site-packages tree.
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+
+# ── Stage 2: runtime ─ minimal Python + app + pinned wheels only ──────────
+FROM python:3.13-slim AS runtime
+
+ARG IMAGE_VERSION
+
+LABEL org.opencontainers.image.title="CodeFreedom - Web Search Bridge" \
+      org.opencontainers.image.description="SearXNG-shaped HTTP bridge in front of the CodeFreedom Camoufox MCP web_search tool. Lets LiteLLM's websearch_interception route Claude Code's native WebSearch to a local stealth browser." \
+      org.opencontainers.image.version="v${IMAGE_VERSION}" \
+      org.opencontainers.image.vendor="nilayparikh" \
+      org.opencontainers.image.authors="Nilay Parikh" \
+      com.codefreedom.platform="web-bridge" \
+      com.codefreedom.arch="linux/arm64,linux/amd64"
+
+# Patch runtime base and install only what the app needs at runtime.
+# No compilers, no headers — keeps the image surface small and shrinks the
+# Trivy CVE list.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the pinned, pre-built site-packages from the builder.
+COPY --from=builder /install /usr/local
+
+WORKDIR /app
+
+# Application source only — no requirements.txt, no .git, no caches.
+COPY app/ ./app/
+
+# Run as a non-root user for defense in depth (still inside the compose network).
+RUN groupadd -g 1000 codefreedom \
+    && useradd --create-home --shell /bin/false -u 1000 -g 1000 codefreedom \
+    && chown -R codefreedom:codefreedom /app
+USER codefreedom
+
+ENV HTTP_LISTEN_HOST=0.0.0.0 \
+    HTTP_LISTEN_PORT=8500 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/usr/local/bin:${PATH}"
+
+EXPOSE 8500
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8500/healthz', timeout=2)" || exit 1
+
+CMD ["uvicorn", "app.bridge:app", "--host", "0.0.0.0", "--port", "8500", "--log-level", "info"]

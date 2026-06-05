@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Breaking Changes
+
+- **Chrome v0.3.0 — headless refactor.** The Chrome container was rewritten from "Xvfb + stealth + SYS_ADMIN" to plain headless Chrome. This removes `--ipc=host`, `--cap-add=SYS_ADMIN`, Xvfb, PulseAudio, and font packages. The image version bumped from `v0.1.0` to `v0.3.0`. Existing Chrome containers will continue running until restarted, but new `start` commands will use the headless image. For stealth / anti-bot browsing, use the `web` tool (Camoufox) instead.
+- **`codefreedom claude vscode` removed.** The old path has been replaced with the dedicated `codefreedom vscode` subcommand. Migrate:
+  - `codefreedom claude vscode` → `codefreedom vscode claude config`
+  - `codefreedom proxy vscode generate` → `codefreedom vscode proxy config --host HOST`
+- **Web Dockerfile user rename: `browser` → `codefreedom`.** The Camoufox container user was renamed from `browser` to `codefreedom` for consistency. Existing containers with data owned by the old `browser` user should be restarted fresh or have their data ownership updated (`chown -R codefreedom:codefreedom`).
+
+### Added
+
+- **Transparent WebSearch replacement via the proxy.** New
+  `web-bridge` sidecar (sibling service in the proxy `docker-compose.yaml`)
+  translates SearXNG-shaped HTTP requests into JSON-RPC calls against the
+  existing Camoufox MCP `web_search` tool. Combined with LiteLLM's
+  `websearch_interception` callback, Claude Code's native `WebSearch` is
+  silently replaced with a call to the local Camoufox browser — for any
+  model behind the proxy, with no client-side configuration. See
+  [Web Search Interception](docs/proxy/websearch-interception.md).
+  The legacy MCP + `CLAUDE.md` approach in the FAQ is preserved as a
+  fallback for `--native-models` users.
+- `codefreedom vscode proxy config --host HOST` — generates a
+  `chatLanguageModels.json` entry for VS Code from the running LiteLLM proxy.
+  Reads `/v1/model/info` using `LITELLM_MASTER_KEY` (from env or
+  `~/.codefreedom/.env.proxy.secrets`), probes `/health/liveliness` to verify
+  the proxy is up, and emits a JSON object with `toolCalling` / `vision` /
+  token-limit fields derived from the proxy response.
+- `codefreedom vscode claude config [--profile NAME]` — generates a
+  `claudeCode.*` settings.json fragment for the Anthropic Claude Code VS Code
+  extension. Replaces `codefreedom claude vscode`.
+
+### Changed
+
+- **VS Code config moved to a dedicated subcommand.** `codefreedom claude
+  vscode` and `codefreedom proxy vscode generate` have been moved to a
+  top-level `codefreedom vscode {claude,proxy} config` command. The old paths
+  are no longer recognised. Use `codefreedom vscode claude config` and
+  `codefreedom vscode proxy config --host HOST` respectively. All VS Code
+  integration logic has been consolidated into `src/codefreedom/cli/vscode.py`.
+
 ## [0.0.3] - 2026-06-02
 
 ### Added

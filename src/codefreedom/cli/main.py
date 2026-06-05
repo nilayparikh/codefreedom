@@ -88,6 +88,23 @@ def main() -> None:
         help="Skip Claude Code permission prompts (use in CI/non-interactive environments)",
     )
 
+    # ── claude sub-actions ───────────────────────────────────────────────
+    # `init` is a subparser so --help works correctly and args are
+    # validated.  The dispatch in main() checks args.claude_action.
+    # (VS Code config generation was moved to the top-level `vscode`
+    # subcommand -- use `codefreedom vscode claude config` instead.)
+    claude_subparsers = claude_parser.add_subparsers(
+        dest="claude_action", title="actions"
+    )
+    claude_subparsers.add_parser(
+        "init",
+        help="Initialize Claude Code profiles and .env.claude in ~/.codefreedom/",
+        description=(
+            "Initialize Claude Code profiles and .env.claude from bundled"
+            " examples into ~/.codefreedom/."
+        ),
+    )
+
     # ── admin subcommand ───────────────────────────────────────────────────
     admin_parser = subparsers.add_parser(
         "admin",
@@ -102,16 +119,16 @@ def main() -> None:
     # ── tools subcommand ──────────────────────────────────────────────────
     tools_parser = subparsers.add_parser(
         "tools",
-        help="Manage auxiliary tools (chrome browser, etc.)",
-        description="Manage auxiliary tools used by coding agents (Chrome browser with Xvfb, etc.).",
+        help="Manage auxiliary tools (chrome browser, web search, etc.)",
+        description="Manage auxiliary tools used by coding agents (headless Chrome browser, Camoufox web search, etc.).",
     )
     tools_subparsers = tools_parser.add_subparsers(dest="tool", title="tools")
 
     # ── chrome tool ─────────────────────────────────────────────────────
     chrome_parser = tools_subparsers.add_parser(
         "chrome",
-        help="Chrome browser with Xvfb for undetectable headed browsing",
-        description="Start/stop/manage a Chrome browser container with virtual display (Xvfb) for undetectable web browsing. Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222.",
+        help="Headless Chrome browser for automation (CDP at port 9222)",
+        description="Start/stop/manage a headless Chrome browser container for browser automation. Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222. For stealth / anti-bot browsing, use the 'web' tool (Camoufox) instead.",
     )
     chrome_parser.add_argument(
         "action",
@@ -155,30 +172,103 @@ def main() -> None:
         help="Manage the LLM proxy (start, stop, status, validate, init)",
         description="Manage the LLM proxy lifecycle (Docker or native).",
     )
-    proxy_parser.add_argument(
-        "action",
-        nargs="?",
-        default="status",
-        choices=["start", "stop", "restart", "status", "validate", "init"],
-        help="Action to perform (default: status). 'init' copies proxy configs to ~/.codefreedom/. 'restart' uses `docker compose restart` (Docker mode only — native mode errors out; preserves container state, does not pull a new image).",
+    proxy_sub = proxy_parser.add_subparsers(
+        dest="action", title="actions",
     )
-    proxy_parser.add_argument(
+    proxy_sub.required = False  # default via set_defaults below
+    proxy_sub.add_parser(
+        "status",
+        help="Show proxy status",
+        description="Show whether the proxy is running and on which port.",
+    )
+    proxy_parser.set_defaults(action="status")
+
+    # start
+    start_parser = proxy_sub.add_parser(
+        "start",
+        help="Start the proxy (native Python by default; --docker for Compose)",
+        description=(
+            "Start the proxy. Native Python by default; pass --docker to use"
+            " `docker compose up -d` instead."
+        ),
+    )
+    start_parser.add_argument(
         "--docker",
         action="store_true",
         help="Run via Docker Compose instead of native Python",
     )
-    proxy_parser.add_argument(
+    start_parser.add_argument(
         "--port",
         type=int,
         default=4000,
         help="Port for proxy (default: 4000)",
     )
-    proxy_parser.add_argument(
+    start_parser.add_argument(
         "--host",
         type=str,
         default="0.0.0.0",
         help="Bind host for proxy (default: 0.0.0.0)",
     )
+
+    # stop
+    proxy_sub.add_parser(
+        "stop",
+        help="Stop the proxy",
+        description="Stop the running proxy (native process or Docker container).",
+    )
+
+    # restart
+    restart_parser = proxy_sub.add_parser(
+        "restart",
+        help="Restart the proxy (Docker Compose only)",
+        description=(
+            "Restart the proxy. Uses `docker compose restart` (preserves state,"
+            " does not pull a new image). Errors out in native mode."
+        ),
+    )
+    restart_parser.add_argument(
+        "--docker",
+        action="store_true",
+        help="Run via Docker Compose (default and only mode for restart)",
+    )
+
+    # validate
+    proxy_sub.add_parser(
+        "validate",
+        help="Validate proxy configuration",
+        description="Validate the proxy configuration file (config.yaml).",
+    )
+
+    # init
+    proxy_sub.add_parser(
+        "init",
+        help="Initialize proxy configs into ~/.codefreedom/",
+        description=(
+            "Initialize proxy configs into ~/.codefreedom/."
+            " Copies bundled examples from the package."
+        ),
+    )
+    # (VS Code config generation was moved to the top-level `vscode`
+    # subcommand -- use `codefreedom vscode proxy config` instead.)
+
+    # ── vscode subcommand ──────────────────────────────────────────────────
+    vscode_parser = subparsers.add_parser(
+        "vscode",
+        aliases=["vsc"],
+        help="Generate VS Code configuration fragments (Claude Code, proxy)",
+        description=(
+            "Generate VS Code configuration fragments from CodeFreedom profiles"
+            " and the running proxy. Currently supports:\n"
+            "  * `vscode claude config` -- a `claudeCode.*` settings fragment"
+            " for the Claude Code VS Code extension.\n"
+            "  * `vscode proxy config`  -- a `chatLanguageModels.json` entry"
+            " for VS Code's built-in Copilot Chat custom-provider system."
+        ),
+    )
+    # Populate vscode sub-subcommands (lazy import to keep startup fast)
+    from codefreedom.cli.vscode import build_parser as build_vscode_parser
+
+    build_vscode_parser(vscode_parser)
 
     args, unknown = parser.parse_known_args()
 
@@ -234,9 +324,9 @@ def main() -> None:
                     forwarded.append(arg)
             else:
                 forwarded.append(arg)
-        # ── claude init action (subparser-free: check forwarded args) ──────
-        if forwarded and forwarded[0] == "init":
-            forwarded.pop(0)  # strip "init", keep anything else
+        # ── claude sub-actions (subparser-based) ───────────────────────────
+        claude_action = getattr(args, "claude_action", None)
+        if claude_action == "init":
             from codefreedom.cli.claude import init_claude
 
             sys.exit(init_claude())
@@ -295,6 +385,32 @@ def main() -> None:
         else:
             eprint(f"[ERROR] Unknown tool: {args.tool}")
             eprint("   Available tools: chrome, web (camoufox)")
+            sys.exit(1)
+    elif args.command in ("vscode", "vsc"):
+        if unknown:
+            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            sys.exit(2)
+        from codefreedom.cli.vscode import (
+            cmd_vscode_claude_config,
+            cmd_vscode_proxy_config,
+        )
+
+        # Two-level dispatch: `vscode_action` (claude|proxy) and the
+        # `*_config_action` (always "config" for now -- future verbs like
+        # `install` go alongside `config`).
+        action = getattr(args, "vscode_action", None)
+        if action == "claude":
+            if getattr(args, "claude_config_action", None) != "config":
+                vscode_parser.print_help()
+                sys.exit(1)
+            sys.exit(cmd_vscode_claude_config(args))
+        elif action == "proxy":
+            if getattr(args, "proxy_config_action", None) != "config":
+                vscode_parser.print_help()
+                sys.exit(1)
+            sys.exit(cmd_vscode_proxy_config(args))
+        else:
+            vscode_parser.print_help()
             sys.exit(1)
     else:
         parser.print_help()

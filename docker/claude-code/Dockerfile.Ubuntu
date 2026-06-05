@@ -34,25 +34,34 @@ LABEL org.opencontainers.image.title="CodeFreedom - Claude Code (Ubuntu)" \
 ENV DEBIAN_FRONTEND=noninteractive
 
 # 2. Python 3 + system packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
-    python3-venv \
-    curl \
-    git \
-    ca-certificates \
-    shellcheck \
-    fd-find \
-    tree \
-    ripgrep \
-    jq \
-    yq \
-    zoxide \
-    sd \
-    unzip \
-    bubblewrap \
-    socat \
-    openssh-client \
+#
+# Vulnerability strategy: `apt-get upgrade -y` patches the base image's
+# security updates BEFORE we install any user packages, so installed
+# versions come from the patched pool. Use `dist-upgrade` (not `upgrade`)
+# to handle dependency changes introduced by security patches. The
+# `--no-install-recommends` keeps the image lean, which in turn keeps the
+# Trivy CVE list smaller.
+RUN apt-get update \
+    && apt-get -y dist-upgrade \
+    && apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
+        curl \
+        git \
+        ca-certificates \
+        shellcheck \
+        fd-find \
+        tree \
+        ripgrep \
+        jq \
+        yq \
+        zoxide \
+        sd \
+        unzip \
+        bubblewrap \
+        socat \
+        openssh-client \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s $(which fdfind) /usr/local/bin/fd \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3 1 \

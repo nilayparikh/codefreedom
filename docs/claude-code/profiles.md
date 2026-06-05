@@ -49,24 +49,24 @@ All CodeFreedom state lives under `~/.codefreedom/` (configurable via `CODEFREED
 
 ### Key Directories
 
-| Path | Purpose | Created By |
-|------|---------|------------|
-| `profiles/` | Profile JSON + tool settings + schemas | `codefreedom claude init`, `codefreedom tools <tool> init` |
-| `proxy/` | LiteLLM proxy config + providers | `codefreedom proxy init` |
-| `sandbox/<profile>/` | Isolated Claude Code state per profile | Automatic on first sandbox launch |
-| `sandbox/tools/` | Persistent tool data (browser profiles, cache) | Automatic on first tool start |
-| `proc/` | Runtime reference counting for tool containers | Automatic during tool lifecycle |
-| `backups/` | Config backup archives | `codefreedom admin backup` |
+| Path                 | Purpose                                        | Created By                                                 |
+| -------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
+| `profiles/`          | Profile JSON + tool settings + schemas         | `codefreedom claude init`, `codefreedom tools <tool> init` |
+| `proxy/`             | LiteLLM proxy config + providers               | `codefreedom proxy init`                                   |
+| `sandbox/<profile>/` | Isolated Claude Code state per profile         | Automatic on first sandbox launch                          |
+| `sandbox/tools/`     | Persistent tool data (browser profiles, cache) | Automatic on first tool start                              |
+| `proc/`              | Runtime reference counting for tool containers | Automatic during tool lifecycle                            |
+| `backups/`           | Config backup archives                         | `codefreedom admin backup`                                 |
 
 ## JSON Schema Validation
 
 Every profile file comes with a companion `.schema.json` for editor validation and autocomplete:
 
-| Profile File | Schema File | Purpose |
-|---|---|---|
+| Profile File                | Schema File                        | Purpose                                                     |
+| --------------------------- | ---------------------------------- | ----------------------------------------------------------- |
 | `profiles/claude-code.json` | `profiles/claude-code.schema.json` | Claude Code profiles (model routing, tools, sandbox images) |
-| `profiles/chrome.json` | `profiles/chrome.schema.json` | Chrome browser tool settings |
-| `profiles/web.json` | `profiles/web.schema.json` | Camoufox web tool settings |
+| `profiles/chrome.json`      | `profiles/chrome.schema.json`      | Chrome browser tool settings                                |
+| `profiles/web.json`         | `profiles/web.schema.json`         | Camoufox web tool settings                                  |
 
 Each `*.json` file references its schema via the `$schema` property, so compatible editors apply validation automatically.
 
@@ -137,14 +137,14 @@ Claude Code profiles live in `~/.codefreedom/profiles/claude-code.json`:
 
 Each profile supports these fields:
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `description` | string | **Yes** | Human-readable description |
-| `env` | object | **Yes** | Environment variables (applied in both modes) |
-| `sandbox_images` | object | No | Docker images keyed by GPU type (`default`, `cuda`, `rocm`) |
-| `tools` | string[] | No | Tool containers to auto-start (`"chrome"`, `"web"`) |
-| `sandbox.env` | object | No | Env vars applied only in sandbox mode |
-| `local.env` | object | No | Env vars applied only in local/native mode |
+| Field            | Type     | Required | Description                                                 |
+| ---------------- | -------- | -------- | ----------------------------------------------------------- |
+| `description`    | string   | **Yes**  | Human-readable description                                  |
+| `env`            | object   | **Yes**  | Environment variables (applied in both modes)               |
+| `sandbox_images` | object   | No       | Docker images keyed by GPU type (`default`, `cuda`, `rocm`) |
+| `tools`          | string[] | No       | Tool containers to auto-start (`"chrome"`, `"web"`)         |
+| `sandbox.env`    | object   | No       | Env vars applied only in sandbox mode                       |
+| `local.env`      | object   | No       | Env vars applied only in local/native mode                  |
 
 Profile names must match `^[a-zA-Z0-9_-]+$`.
 
@@ -283,15 +283,15 @@ codefreedom claude --sandbox --profile research
 
 To keep profiles maintainable:
 
-| Guideline | Reason |
-|-----------|--------|
-| **Inherit from `default`** | Set only what differs -- model, endpoint, or a few flags |
-| **Use `${VAR:-default}`** | Provide sensible fallbacks so profiles work out of the box |
-| **Name profiles by purpose** | `research`, `production`, `local-dev` -- not `model-x` or `fast` |
-| **Use `sandbox.env` for sandbox-only vars** | Keep local and sandbox configs separate |
-| **Use `local.env` for local-only vars** | Same principle in reverse |
-| **Keep `env` for cross-mode settings** | Proxy URL, auth token, model selection |
-| **Validate with the schema** | Catch errors before runtime |
+| Guideline                                   | Reason                                                           |
+| ------------------------------------------- | ---------------------------------------------------------------- |
+| **Inherit from `default`**                  | Set only what differs -- model, endpoint, or a few flags         |
+| **Use `${VAR:-default}`**                   | Provide sensible fallbacks so profiles work out of the box       |
+| **Name profiles by purpose**                | `research`, `production`, `local-dev` -- not `model-x` or `fast` |
+| **Use `sandbox.env` for sandbox-only vars** | Keep local and sandbox configs separate                          |
+| **Use `local.env` for local-only vars**     | Same principle in reverse                                        |
+| **Keep `env` for cross-mode settings**      | Proxy URL, auth token, model selection                           |
+| **Validate with the schema**                | Catch errors before runtime                                      |
 
 ## Tool Declarations
 
@@ -371,22 +371,24 @@ Each tool has its own profile file in `~/.codefreedom/profiles/`, generated by `
     "port": 9222,
     "data_dir": "~/.codefreedom/sandbox/tools/chrome",
     "env": {
-      "DISPLAY": ":99",
       "CHROME_DEBUG_PORT": "9222"
     }
   }
 }
 ```
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `image` | `codefreedom:chrome` | Docker image for Chrome container |
-| `container_name` | `codefreedom-chrome` | Container name |
-| `port` | `9222` | CDP debug port for agent connection |
-| `data_dir` | `~/.codefreedom/sandbox/tools/chrome` | Persistent browser data |
-| `env` | `DISPLAY=:99` | Extra env vars forwarded to container |
+| Setting          | Default                               | Description                                |
+| ---------------- | ------------------------------------- | ------------------------------------------ |
+| `image`          | `codefreedom:chrome`                  | Docker image for headless Chrome container |
+| `container_name` | `codefreedom-chrome`                  | Container name                             |
+| `port`           | `9222`                                | CDP debug port for agent connection        |
+| `data_dir`       | `~/.codefreedom/sandbox/tools/chrome` | Persistent browser data                    |
+| `env`            | `CHROME_DEBUG_PORT=9222`              | Extra env vars forwarded to container      |
 
 Schema: `~/.codefreedom/profiles/chrome.schema.json`
+
+> Chrome runs headless (no Xvfb, no display server). For stealth / anti-bot
+> browsing, use the [web tool](web.json) (Camoufox) instead.
 
 ### Web / Camoufox (`web.json`)
 
@@ -411,14 +413,14 @@ Schema: `~/.codefreedom/profiles/chrome.schema.json`
 }
 ```
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `image` | `codefreedom:web` | Docker image for Camoufox container |
-| `container_name` | `codefreedom-web` | Container name |
-| `port` | `8420` | MCP server port |
-| `data_dir` | `~/.codefreedom/sandbox/tools/web` | Persistent data |
-| `search_engines` | `{}` | Search engine configurations (user-configured) |
-| `parser_registry` | `{}` | CSS selector parsers for search results |
+| Setting           | Default                            | Description                                    |
+| ----------------- | ---------------------------------- | ---------------------------------------------- |
+| `image`           | `codefreedom:web`                  | Docker image for Camoufox container            |
+| `container_name`  | `codefreedom-web`                  | Container name                                 |
+| `port`            | `8420`                             | MCP server port                                |
+| `data_dir`        | `~/.codefreedom/sandbox/tools/web` | Persistent data                                |
+| `search_engines`  | `{}`                               | Search engine configurations (user-configured) |
+| `parser_registry` | `{}`                               | CSS selector parsers for search results        |
 
 Schema: `~/.codefreedom/profiles/web.schema.json`
 
@@ -453,6 +455,7 @@ export CODEFREEDOM_PROFILES_FILE="/path/to/custom/profiles.json"
 ```
 
 This is useful for:
+
 - Version-controlling profiles in a shared team repo
 - A/B testing different model configurations
 - Keeping work profiles separate from personal ones

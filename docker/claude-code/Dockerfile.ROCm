@@ -18,8 +18,12 @@
 ARG IMAGE_VERSION=0.1.0
 
 # 1. AMD ROCm PyTorch (Ubuntu 24.04, Python 3.12, PyTorch 2.10, ROCm 7.2.4)
-#    ROCm has no ARM64/aarch64 support — build with: docker build --platform linux/amd64 ...
-FROM rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.10.0
+#    ROCm has no ARM64/aarch64 support — pin a custom ARG (not
+#    TARGETPLATFORM, which hadolint treats as redundant) to linux/amd64
+#    and forward it to --platform so buildx never resolves an arm64
+#    base against an amd64-only PyTorch image.
+ARG ROCM_PLATFORM=linux/amd64
+FROM --platform=$ROCM_PLATFORM rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.10.0
 
 ARG IMAGE_VERSION
 

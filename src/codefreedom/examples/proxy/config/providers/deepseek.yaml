@@ -41,6 +41,8 @@
 #         - top_p
 #         - stop
 #         - thinking
+#         - reasoning_effort
+#         - response_format
 #
 #   - model_name: DeepSeek/DeepSeek-V4-Pro
 #     litellm_params:

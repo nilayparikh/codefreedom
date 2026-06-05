@@ -111,6 +111,28 @@ litellm_settings:
   # Expose Prometheus metrics at /metrics/
   callbacks:
     - prometheus
+    # ── Uncomment the next line to enable transparent WebSearch replacement
+    #    via the local Camoufox MCP. See docs/proxy/websearch-interception.md.
+    # - websearch_interception
+
+  # websearch_interception_params:
+  #   enabled_providers: ["openai", "anthropic", "vertex_ai", "bedrock", "azure"]
+  #   search_tool_name: codefreedom-web
 
   # Require auth for the /metrics/ endpoint (set to true for production)
   require_auth_for_metrics_endpoint: os.environ/LITELLM_REQUIRE_AUTH_METRICS
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Web Search Bridge — SearXNG-shaped provider for the Camoufox MCP
+# ═══════════════════════════════════════════════════════════════════════════════
+# Uncomment this entire block to make LiteLLM's websearch_interception
+# callback route every Claude Code WebSearch to the local web-bridge, which
+# in turn calls the Camoufox MCP web_search tool. See
+# docs/proxy/websearch-interception.md.
+#
+# search_tools:
+#   - search_tool_name: codefreedom-web
+#     litellm_params:
+#       search_provider: searxng
+#       # Reachable on the shared 'codefreedom' Docker network.
+#       api_base: http://web-bridge:8500

@@ -1,8 +1,11 @@
 """Tests for proxy CLI — path resolution, validation, compose discovery."""
 
+# pyright: reportPrivateUsage = false
+
 import argparse
 from pathlib import Path
 
+import pytest
 import yaml
 
 from codefreedom.cli.proxy import (
@@ -205,7 +208,7 @@ class TestRun:
 
         calls: list[list[str]] = []
 
-        def fake_run(cmd, *args, **kwargs):
+        def fake_run(cmd, *_args, **_kwargs):
             calls.append(cmd)
 
             class _R:
@@ -253,7 +256,7 @@ class TestRun:
         compose.parent.mkdir(parents=True)
         compose.write_text("")
 
-        def fake_run(cmd, *args, **kwargs):
+        def fake_run(*_args, **_kwargs):
             class _R:
                 returncode = 1
                 stderr = "compose error"
@@ -285,3 +288,168 @@ def _write_proxy_config(tmp_path: Path, data: dict) -> Path:
     config_file = config_dir / "config.yaml"
     config_file.write_text(yaml.dump(data))
     return config_file
+
+
+# ── web-bridge image helper ─────────────────────────────────────────────────
+
+
+class TestWebBridgeBuildContext:
+    """Tests for _web_bridge_build_context — locate docker/web-bridge/."""
+
+    def test_finds_dockerfile_in_source_tree(self) -> None:
+        """When the package is installed editable, the helper should find
+        the real ``docker/web-bridge/Dockerfile.Bridge`` shipped with the
+        source tree."""
+        from codefreedom.cli.proxy import _web_bridge_build_context
+
+        ctx = _web_bridge_build_context()
+        # We only assert if the source tree is available — when installed
+        # from a wheel the directory may be missing, in which case the
+        # helper should return None (not raise).
+        if ctx is not None:
+            assert (ctx / "Dockerfile.Bridge").is_file()
+            assert ctx.name == "web-bridge"
+
+    def test_returns_none_when_dockerfile_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If ``codefreedom.__file__`` is rewritten to a path whose
+        grandparent has no ``docker/web-bridge/`` directory, the helper
+        should return None (not raise)."""
+        import codefreedom
+
+        # Build a temp layout that mimics src/codefreedom/ but without a
+        # docker/ tree at the project root.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            project_root = tmp_path / "fake-project"
+            project_root.mkdir()
+            pkg_dir = project_root / "src" / "codefreedom"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "__init__.py").write_text("")
+            # No docker/ directory at project_root.
+
+            monkeypatch.setattr(codefreedom, "__file__", str(pkg_dir / "__init__.py"))
+
+            from codefreedom.cli.proxy import _web_bridge_build_context
+
+            assert _web_bridge_build_context() is None
+
+
+class TestEnsureWebBridgeImage:
+    """Tests for _ensure_web_bridge_image — idempotent image check."""
+
+    def test_image_present_skips_build(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When ``docker image inspect`` succeeds, no build is invoked."""
+        from codefreedom.cli import proxy as proxy_mod
+
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, *_args, **_kwargs):
+            calls.append(cmd)
+
+            class _R:
+                returncode = 0
+                stderr = ""
+                stdout = ""
+
+            return _R()
+
+        monkeypatch.setattr(proxy_mod.subprocess, "run", fake_run)
+
+        rc = proxy_mod._ensure_web_bridge_image()
+        assert rc == 0
+        # First call: docker image inspect. No docker build should follow.
+        assert any("inspect" in c for c in calls)
+        assert not any("build" in c for c in calls)
+
+    def test_image_missing_and_source_tree_missing_warns(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When the image is missing AND we can't locate the Dockerfile,
+        the helper should warn (not crash) and return 0 — the rest of the
+        proxy stack can still come up; only the bridge will be unhealthy.
+        """
+        from codefreedom.cli import proxy as proxy_mod
+
+        def fake_run(*_args, **_kwargs):
+            class _R:
+                returncode = 1  # image inspect fails
+                stderr = "No such image"
+                stdout = ""
+
+            return _R()
+
+        monkeypatch.setattr(proxy_mod.subprocess, "run", fake_run)
+        monkeypatch.setattr(proxy_mod, "_web_bridge_build_context", lambda: None)
+
+        rc = proxy_mod._ensure_web_bridge_image()
+        assert rc == 0  # soft-warn, not hard-fail
+
+    def test_image_missing_and_build_succeeds(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When the image is missing but the source tree is present and
+        the build succeeds, the helper should return 0."""
+        from codefreedom.cli import proxy as proxy_mod
+
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, *_args, **_kwargs):
+            calls.append(cmd)
+            # The first call is `docker image inspect` (returns 1 because
+            # the image is missing). The second call is `docker build`
+            # (returns 0 to simulate a successful build).
+            if "inspect" in cmd:
+                rc = 1
+            else:
+                rc = 0
+
+            class _R:
+                returncode = rc
+                stderr = ""
+                stdout = ""
+
+            return _R()
+
+        monkeypatch.setattr(proxy_mod.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            proxy_mod, "_web_bridge_build_context", lambda: Path("/tmp/fake-bridge")
+        )
+        # The fake build context doesn't need to exist; the real subprocess
+        # call is mocked.
+
+        rc = proxy_mod._ensure_web_bridge_image()
+        assert rc == 0
+        # Second call: docker build (after inspect failed).
+        build_calls = [c for c in calls if "build" in c]
+        assert len(build_calls) == 1
+        # Tag should be the full registry reference (pushable without retag).
+        assert "docker.io/nilayparikh/codefreedom:web-bridge" in build_calls[0]
+
+    def test_build_failure_returns_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When the build subprocess returns non-zero, helper returns 1."""
+        from codefreedom.cli import proxy as proxy_mod
+
+        def fake_run(cmd, *_args, **_kwargs):
+            if "inspect" in cmd:
+                rc = 1
+            else:
+                rc = 1  # build also fails
+
+            class _R:
+                returncode = rc
+                stderr = "build error"
+                stdout = ""
+
+            return _R()
+
+        monkeypatch.setattr(proxy_mod.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            proxy_mod, "_web_bridge_build_context", lambda: Path("/tmp/fake-bridge")
+        )
+
+        rc = proxy_mod._ensure_web_bridge_image()
+        assert rc == 1

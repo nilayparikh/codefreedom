@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+from pathlib import Path
 
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint
@@ -48,9 +49,15 @@ _DEFAULT_IMAGE = "codefreedom:web"
 _DEFAULT_CONTAINER_NAME = "codefreedom-web"
 _DEFAULT_PORT = 8420
 _DEFAULT_DATA_DIR = "~/.codefreedom/sandbox/tools/web"
+_DEFAULT_SEARCH_COOLDOWN_SECONDS = 10.0
 
 _CODEFREEDOM_DIR = get_codefreedom_dir()
-_PROFILE_PATH = _CODEFREEDOM_DIR / "profiles" / "web.json"
+
+
+def _profile_path() -> Path:
+    """Return the web tool profile path (re-evaluated each call so tests can
+    override ``CODEFREEDOM_HOME`` after import)."""
+    return get_codefreedom_dir() / "profiles" / "web.json"
 
 
 # ── Profile loader ───────────────────────────────────────────────────────
@@ -67,20 +74,23 @@ def _load_profile() -> dict:
         "image": _DEFAULT_IMAGE,
         "container_name": _DEFAULT_CONTAINER_NAME,
         "port": _DEFAULT_PORT,
+        "mcp_path": "/mcp",
         "data_dir": _DEFAULT_DATA_DIR,
         "env": {},
         "search_engines": {},
         "parser_registry": {},
+        "search_cooldown_seconds": _DEFAULT_SEARCH_COOLDOWN_SECONDS,
     }
 
-    if not _PROFILE_PATH.exists():
+    profile_path = _profile_path()
+    if not profile_path.exists():
         return settings
 
     try:
-        with open(_PROFILE_PATH, encoding="utf-8") as f:
+        with open(profile_path, encoding="utf-8") as f:
             raw = json.load(f)
     except (json.JSONDecodeError, OSError) as exc:
-        eprint(f"[WEB] Warning: failed to read {_PROFILE_PATH}: {exc}")
+        eprint(f"[WEB] Warning: failed to read {profile_path}: {exc}")
         return settings
 
     cfg = raw.get("web", {})
@@ -93,6 +103,8 @@ def _load_profile() -> dict:
         settings["container_name"] = cfg["container_name"]
     if isinstance(cfg.get("port"), int) and cfg["port"] > 0:
         settings["port"] = cfg["port"]
+    if isinstance(cfg.get("mcp_path"), str) and cfg["mcp_path"]:
+        settings["mcp_path"] = cfg["mcp_path"]
     if isinstance(cfg.get("data_dir"), str) and cfg["data_dir"]:
         settings["data_dir"] = cfg["data_dir"]
     if isinstance(cfg.get("env"), dict):
@@ -101,6 +113,10 @@ def _load_profile() -> dict:
         settings["search_engines"] = cfg["search_engines"]
     if isinstance(cfg.get("parser_registry"), dict):
         settings["parser_registry"] = cfg["parser_registry"]
+
+    cooldown = cfg.get("search_cooldown_seconds")
+    if isinstance(cooldown, (int, float)) and cooldown >= 0:
+        settings["search_cooldown_seconds"] = float(cooldown)
 
     return settings
 
@@ -143,7 +159,8 @@ def init_tool() -> int:
 
 def start(settings: dict) -> int:
     # ── Init gate: refuse to start if tool not initialized ───────────────
-    if not _PROFILE_PATH.exists():
+    profile_path = _profile_path()
+    if not profile_path.exists():
         eprint("[web] Tool not initialized.")
         eprint("      Run:  codefreedom tools web init")
         eprint("      Docs: https://nilayparikh.github.io/codefreedom/tools/web/")
@@ -194,6 +211,10 @@ def start(settings: dict) -> int:
     parser_registry = settings.get("parser_registry", {})
     if isinstance(parser_registry, dict) and parser_registry:
         env_vars["PARSER_REGISTRY"] = json.dumps(parser_registry)
+    # Pass the search cooldown (seconds) into the container
+    cooldown = settings.get("search_cooldown_seconds", _DEFAULT_SEARCH_COOLDOWN_SECONDS)
+    if cooldown is not None:
+        env_vars["SEARCH_COOLDOWN_SECONDS"] = str(float(cooldown))
     env_flags: list[str] = []
     for key, val in env_vars.items():
         env_flags.extend(["-e", f"{key}={val}"])
@@ -208,6 +229,11 @@ def start(settings: dict) -> int:
             container_name,
             "--restart",
             "unless-stopped",
+            "--shm-size=192m",
+            "-m",
+            "2g",
+            "--memory-swap",
+            "2g",
             "-p",
             f"{port}:8420",
             "-v",

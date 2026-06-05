@@ -66,9 +66,86 @@ if len(_args) >= 2 and _args[0] == "--script":
     SCRIPT_PATH = _args[1]
 
 
+_BROWSER_CONNECTION_ERRORS = (
+    "Connection closed",
+    "Target closed",
+    "Browser closed",
+    "Protocol error",
+)
+
+
+def _is_connection_error(error: Exception) -> bool:
+    """Check if an error indicates the browser connection is dead."""
+    msg = str(error)
+    return any(marker in msg for marker in _BROWSER_CONNECTION_ERRORS)
+
+
+_recovery_failures: int = 0
+_MAX_RECOVERY_ATTEMPTS: int = 3
+
+
+async def _recover_browser() -> bool:
+    """Attempt to restart the browser after a connection failure.
+
+    Returns True if the browser was successfully restarted.  After
+    ``_MAX_RECOVERY_ATTEMPTS`` consecutive failures the browser is left
+    stopped and the caller should signal the container to restart.
+    """
+    global _active_page, _recovery_failures
+    if not browser:
+        return False
+
+    _recovery_failures += 1
+    if _recovery_failures > _MAX_RECOVERY_ATTEMPTS:
+        log.error(
+            "Browser recovery failed %d times — giving up. "
+            "Restart the container to recover.",
+            _MAX_RECOVERY_ATTEMPTS,
+        )
+        return False
+
+    log.warning(
+        "Browser connection lost, attempting restart (attempt %d/%d)...",
+        _recovery_failures,
+        _MAX_RECOVERY_ATTEMPTS,
+    )
+    try:
+        await browser.stop()
+    except Exception as exc:
+        log.warning("Error stopping crashed browser: %s", exc)
+    _active_page = None
+    try:
+        await browser.start()
+        log.info("Browser restarted successfully")
+        _recovery_failures = 0
+        return True
+    except Exception as exc:
+        log.error("Failed to restart browser: %s", exc)
+        return False
+
+
 async def dispatch_action(cmd: dict) -> dict:
     action = cmd.get("action", "")
 
+    try:
+        return await _dispatch_action_inner(cmd, action)
+    except Exception as exc:
+        if _is_connection_error(exc):
+            recovered = await _recover_browser()
+            if recovered:
+                return make_response(
+                    False, error=f"Browser connection lost (recovered): {exc}"
+                )
+            return make_response(
+                False, error=f"Browser connection lost (restart failed): {exc}"
+            )
+        # Don't eat arbitrary exceptions — only connection errors get the
+        # auto-recovery path.  Everything else (programming errors,
+        # type errors, etc.) propagates to the MCP caller.
+        raise
+
+
+async def _dispatch_action_inner(cmd: dict, action: str) -> dict:
     if action == "sleep":
         duration = cmd.get("duration", 1)
         await asyncio.sleep(float(duration))
@@ -101,6 +178,24 @@ async def dispatch_action(cmd: dict) -> dict:
             return make_response(False, error="No browser context")
         await ctx.clear_cookies()
         return make_response(True, {"cleared": True})
+
+    if action == "restart_browser":
+        # Periodic housekeeping triggered by mcp_server after N searches.
+        # Stops the persistent context, then starts a fresh one. This releases
+        # all accumulated rendered DOMs, cookies, network cache, and JS heap.
+        if not browser:
+            return make_response(False, error="No browser instance")
+        global _active_page
+        try:
+            await browser.stop()
+        except Exception as exc:
+            log.warning("Error stopping browser for restart: %s", exc)
+        _active_page = None
+        try:
+            await browser.start()
+            return make_response(True, {"restarted": True})
+        except Exception as exc:
+            return make_response(False, error=f"Failed to restart browser: {exc}")
 
     if action == "save_screenshot":
         ss_type = cmd.get("type", "browser")
@@ -212,13 +307,13 @@ async def dispatch_action(cmd: dict) -> dict:
 
 _request_lock = asyncio.Lock()
 
-from mcp_server import mcp, set_dispatcher
+from mcp_server import mcp, set_dispatcher  # noqa: E402
 
 set_dispatcher(dispatch_action, _request_lock)
 
 mcp_http_app = mcp.http_app(transport="streamable-http")
 
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse  # noqa: E402
 
 
 async def _oauth_metadata(_request):

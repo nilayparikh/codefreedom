@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codefreedom"
-version = "0.1.1"
+version = "0.1.2"
 description = "Unified CLI for code agents — LLM proxy routing, Docker sandboxing, profile management, and browser tools. All config in ~/.codefreedom."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -42,10 +42,19 @@ classifiers = [
 #   litellm[proxy]  — LiteLLM proxy with all extras (websockets, gunicorn, etc.)
 #                     Required for: codefreedom proxy start (native mode)
 #                     Not needed for Docker Compose mode.
-#   dev             — Development extras (type checking, linting)
+#   dev             — Development extras (type checking, linting, testing)
+#                     httpx + fastapi are needed to import the web-bridge
+#                     module (docker/web-bridge/app/bridge.py) in tests.
 [project.optional-dependencies]
 litellm = ["litellm[proxy]>=1.50", "prometheus-client>=0.25.0"]
-dev = ["mypy>=1.0", "ruff>=0.1", "pytest>=7.0", "types-PyYAML"]
+dev = [
+    "mypy>=1.0",
+    "ruff>=0.1",
+    "pytest>=7.0",
+    "types-PyYAML",
+    "httpx>=0.28",
+    "fastapi>=0.115",
+]
 docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2"]
 camoufox = ["beautifulsoup4>=4.14.3"]
 encrypt = ["cryptography>=42.0"]

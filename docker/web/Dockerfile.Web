@@ -50,7 +50,11 @@ LABEL org.opencontainers.image.title="CodeFreedom - Camoufox Browser (MCP)" \
       com.codefreedom.arch="linux/arm64,linux/amd64"
 
 # Patch known vulnerabilities in base image
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+# `dist-upgrade` (vs `upgrade`) lets apt handle dependency changes that some
+# security patches introduce. The same upgrade is repeated after the
+# additional package installs below so that packages added in later layers
+# also receive the latest security patches from the refreshed apt index.
+RUN apt-get update && apt-get -y dist-upgrade && rm -rf /var/lib/apt/lists/*
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -103,22 +107,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir "camoufox[geoip]" pyautogui fastapi uvicorn fastmcp Pillow pyyaml beautifulsoup4 requests
 
 # Create non-root user and directories
-RUN groupadd -g 1000 browser && useradd -u 1000 -g 1000 -m browser
-RUN mkdir -p /app /userdata && chown -R browser:browser /app /userdata
+RUN groupadd -g 1000 codefreedom && useradd -u 1000 -g 1000 -m codefreedom
+RUN mkdir -p /app /userdata && chown -R codefreedom:codefreedom /app /userdata
 
-# Allow browser user to write GeoIP db into camoufox package dir
+# Allow codefreedom user to write GeoIP db into camoufox package dir
 # Use Python to find the actual path (avoids hardcoding Python version)
 RUN CAMOUFOX_DIR=$(python -c "import camoufox; print(camoufox.__path__[0])") && \
-    chown -R browser:browser "$CAMOUFOX_DIR"
+    chown -R codefreedom:codefreedom "$CAMOUFOX_DIR"
 
 # Switch to non-root user for camoufox fetch + extensions
-USER browser
+USER codefreedom
 
 # Download Camoufox browser (writes to ~/.cache/camoufox + GeoIP db)
 RUN python -m camoufox fetch
 
 # Copy app code
-COPY --chown=browser:browser app/ /app/
+COPY --chown=codefreedom:codefreedom app/ /app/
 
 # Install browser extensions (writes to ~/.cache/camoufox)
 RUN python /app/install_extensions.py
@@ -127,9 +131,13 @@ RUN python /app/install_extensions.py
 WORKDIR /app
 
 # Install gosu for privilege dropping in entrypoint
+# Re-run dist-upgrade after every other apt install so security patches
+# that landed since the first upgrade are applied to packages we just
+# installed (tzdata, x11, openbox, firefox-esr deps, xdotool, etc.).
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gosu \
+RUN apt-get update \
+    && apt-get -y dist-upgrade \
+    && apt-get install -y --no-install-recommends gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy entrypoint (runs as root, drops to target user)

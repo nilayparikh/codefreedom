@@ -9,256 +9,106 @@
 
 CodeFreedom solves three problems:
 
-1. **Model lock-in** — you want to switch models across providers without reconfiguring your code agent each time.
-2. **Environment chaos** — you want isolated, reproducible environments per project with GPU support.
-3. **Config sprawl** — you want profiles, proxy routing, and sandbox settings managed from one place (`~/.codefreedom`).
+1. **Model lock-in** — switch models across providers without reconfiguring your code agent.
+2. **Environment chaos** — isolated, reproducible environments per project with GPU support.
+3. **Config sprawl** — profiles, proxy routing, and sandbox settings managed from one place (`~/.codefreedom`).
 
-It does this by orchestrating code agents through their **publicly supported interfaces** (environment variables, CLI flags, API endpoints). No patching, no reverse-engineering.
+It orchestrates code agents through their **publicly supported interfaces** (environment variables, CLI flags, API endpoints). No patching, no reverse-engineering.
 
-### Supported Agents
+> **Full documentation:** [https://nilayparikh.github.io/codefreedom/](https://nilayparikh.github.io/codefreedom/)
 
-| Agent       | Status     | Subcommand           | Notes                                       |
-| ----------- | ---------- | -------------------- | ------------------------------------------- |
-| Claude Code | ✅ Ready   | `codefreedom claude` | Local + sandbox modes, full profile support |
-| Cursor      | 🚧 Roadmap | —                    | Coming — same profile + proxy pattern       |
-| Codex       | 🚧 Roadmap | —                    | Coming — same profile + proxy pattern       |
+## Bring Your Own Agent
 
-The architecture is agent-agnostic: each agent gets a subcommand, profile, and routes through the same proxy. Claude Code is the first implementation.
+CodeFreedom works with any code agent that supports OpenAI-compatible or Anthropic-compatible APIs — Claude Code, Cursor, Codex CLI, VS Code extensions, and more. The architecture is agent-agnostic: each agent gets a subcommand, profile, and routes through the same proxy.
+
+Currently, **Claude Code** is the fully implemented agent. Adding a new agent is a matter of profile + subcommand — the proxy, sandbox, and tooling layers are shared.
+
+## Web Search
+
+Claude Code's built-in `WebSearch` requires Anthropic's internal login and silently fails for most users. The CodeFreedom proxy solves this with a built-in SearXNG-shaped bridge that routes every `WebSearch` call to a local Camoufox stealth browser — transparently, for any model. See [Web Search Interception](https://nilayparikh.github.io/codefreedom/proxy/websearch-interception/).
 
 ## Principles
 
-CodeFreedom integrates with code agents through their **publicly supported features only** — environment variables, CLI flags, config files, and API endpoints. No reverse-engineering, no patching, no vendor lock-in.
-
 - **Just configuration.** Profiles are environment variables. Proxy routing is standard LiteLLM config.
 - **Opt-in providers.** Set an API key to enable a provider. Leave it empty to disable. Nothing phones home by default.
-- **All config in one place.** `~/.codefreedom` is the single source of truth for profiles, proxy settings, and sandbox configuration.
-- **Trademarks belong to their owners.** See [NOTICE](NOTICE) for attributions.
+- **All config in one place.** `~/.codefreedom` is the single source of truth.
+
+## Data Privacy
+
+CodeFreedom is a **local configuration tool**. It does not:
+
+- Collect telemetry, analytics, or usage data.
+- Connect to any external servers.
+- Store or transmit your prompts, code, or API keys.
+
+All configuration lives on your machine in `~/.codefreedom/`. CodeFreedom generates config files that you use with third-party tools (LiteLLM, Claude Code, Docker, etc.). You are responsible for reviewing the privacy policies and terms of service of every provider and tool you configure.
+
+> **Free model endpoints** — Free tiers may log requests, retain conversation data, or use inputs for model improvement. Always read the provider's privacy policy before sending sensitive code. See [Free Models](https://nilayparikh.github.io/codefreedom/free-models/) for a guide.
 
 ## Disclaimer
 
-**CodeFreedom is provided "as is" without warranty of any kind.** Use at your own risk.
+CodeFreedom is provided **"as is" without warranty of any kind**. Use at your own risk.
 
-- **Supported methods only.** CodeFreedom integrates with code agents exclusively through their publicly documented interfaces — environment variables, CLI flags, config files, and API endpoints. It does **not** reverse-engineer, patch, modify, or tamper with any code agent. No binary patching, no MITM, no internal API abuse.
+- **Supported methods only.** CodeFreedom integrates with code agents exclusively through their publicly documented interfaces — environment variables, CLI flags, config files, and API endpoints. It does **not** reverse-engineer, patch, modify, or tamper with any code agent.
 - **Third-party responsibility.** CodeFreedom orchestrates upstream tools (LiteLLM, Claude Code, Docker, etc.) but does not control their behavior. You are responsible for evaluating the suitability, security, and terms of service of every upstream tool and provider you configure.
 - **Security.** The proxy handles API keys and tokens. Sandbox mode mounts host directories (`~/.ssh`, `~/.gitconfig`) into containers. Configure these according to your organization's security policies.
-- **No warranty.** This software is provided under the Apache 2.0 License without warranty or guarantee of any kind. The author is not liable for any damages arising from its use.
-- **Trademarks.** CodeFreedom is not affiliated with, endorsed by, or sponsored by Anthropic, Microsoft, Anysphere, OpenAI, BerriAI, Docker, or any other third-party mentioned in this project. All trademarks belong to their respective owners.
-
-## Features
-
-| Feature             | codefreedom                                         |
-| ------------------- | --------------------------------------------------- |
-| LLM proxy           | ✅ Stateless model routing (Docker or native)       |
-| Code agent launcher | ✅ `codefreedom claude` CLI                         |
-| Sandboxing          | ✅ Pre-configured containers (CUDA, ROCm, Ubuntu)   |
-| Profile management  | ✅ Model switching & isolation                      |
-| Browser tools       | ✅ Chrome (CDP) + Camoufox (MCP) for web automation |
-| PostgreSQL          | ✅ Optional — Admin UI, spend tracking              |
-| pip installable     | ✅ `pip install codefreedom`                        |
+- **Trademarks.** CodeFreedom is not affiliated with, endorsed by, or sponsored by Anthropic, Microsoft, Anysphere, OpenAI, BerriAI, Docker, or any other third party mentioned in this project. All trademarks belong to their respective owners. See [NOTICE](NOTICE).
 
 ## Quick Start
 
-### Installation
-
-**From PyPI (recommended):**
+### Install
 
 ```bash
 pip install codefreedom
 ```
 
-**From source:**
-
-```bash
-git clone https://github.com/nilayparikh/codefreedom.git
-cd codefreedom
-pip install -e .
-```
-
-Now you can run `codefreedom` or `cf` from anywhere:
-
-```bash
-codefreedom --help
-cf --help
-```
-
 ### Initialize
 
 ```bash
-# Creates ~/.codefreedom/ with default profiles and proxy configs
 codefreedom --init
-
-# Overwrite existing files
-codefreedom --init --force
 ```
 
-This creates:
+Creates `~/.codefreedom/` with default profiles, proxy configs, and provider templates.
 
-```
-~/.codefreedom/
-├── profiles/
-│   ├── claude-code.json                  # Profile definitions
-│   └── claude-code.schema.json           # JSON Schema for validation
-└── proxy/
-    ├── docker-compose.yaml                # Docker Compose for LiteLLM
-    └── config/
-        ├── config.yaml                   # LiteLLM proxy configuration
-        └── providers/                    # Provider-specific configs
-            ├── deepseek.yaml
-            ├── azure-foundry.yaml
-            ├── nvidia.yaml
-            ├── local.yaml
-            ├── openai-compatible.yaml
-            ├── anthropic-compatible.yaml
-            └── opencode-zen.yaml
-```
-
-### 1. Start the Proxy
+### Launch
 
 ```bash
-# Start via Docker Compose
-codefreedom proxy start --docker
-
-# Or start natively (requires: pip install codefreedom[litellm])
-codefreedom proxy start
-
-# Validate config
-codefreedom proxy validate
-```
-
-The proxy starts stateless — no database, no Prisma, just model routing.
-See [Proxy → Database](docs/proxy.md#database-backends) for PostgreSQL setup.
-
-### 2. Launch a Code Agent
-
-```bash
-# Default: native mode with Flash model
+# Launch Claude Code through the proxy
 codefreedom claude
 
-# Pick a different built-in profile (bare = minimal, no model aliases)
-codefreedom claude --profile bare
-
-# Or use a custom profile you created in claude-code.json
-codefreedom claude --profile my-profile
-
-# Run in sandboxed Docker container
+# Launch in a sandboxed container
 codefreedom claude --sandbox
 
-# Use GPU images (with --sandbox)
-codefreedom claude --sandbox --cuda   # NVIDIA GPU
-codefreedom claude --sandbox --rocm   # AMD GPU
-
-# Use native Anthropic /login auth (bypass proxy)
-codefreedom claude --native-models
-
-# List available profiles
-codefreedom claude --list-profiles
-
-# Manage the container
-codefreedom claude --status
-codefreedom claude --stop
+# Use GPU images
+codefreedom claude --sandbox --cuda   # NVIDIA
+codefreedom claude --sandbox --rocm   # AMD
 ```
 
 Short aliases: `cf cc` is equivalent to `codefreedom claude`.
 
-### 3. Pass Arguments Through
+See the [Getting Started guide](https://nilayparikh.github.io/codefreedom/) for proxy setup, custom profiles, browser tools, and more.
 
-```bash
-codefreedom claude -p "Explain this codebase"
-codefreedom claude --resume "<session-id>"
-codefreedom claude --profile my-profile --worktree feature-branch
-```
+## Features
 
-## Sandbox Containers
-
-Three pre-configured images (CUDA, ROCm, Ubuntu) on `docker.io/nilayparikh/codefreedom`. (Also available on `ghcr.io/nilayparikh/codefreedom` as a mirror.)
-See [Sandbox Mode → Available Images](docs/claude-code/sandbox.md#available-images) for the full tag reference and Dockerfile examples.
-
-## Browser Tools
-
-CodeFreedom provides containerized browser tools for coding agents:
-
-| Tool                           | Purpose                           | Interface             | Command                          |
-| ------------------------------ | --------------------------------- | --------------------- | -------------------------------- |
-| [Chrome](docs/tools/chrome.md) | Headed browser automation via CDP | `ws://localhost:9222` | `codefreedom tools chrome start` |
-| [Camoufox](docs/tools/web.md)  | Stealth web search & scraping     | MCP on port 8420      | `codefreedom tools web start`    |
-
-```bash
-# Initialize and start Chrome
-codefreedom tools chrome init
-codefreedom tools chrome start
-
-# Initialize and start Camoufox
-codefreedom tools web init
-codefreedom tools web start
-```
-
-See [Tools](docs/tools/index.md) for full documentation.
-
-## CLI Reference
-
-See [Architecture → CLI Design](docs/architecture.md#cli-design) for the full command tree.
-
-## Profiles
-
-Profiles control which model a code agent uses and which API endpoint it routes through. All profiles live in `~/.codefreedom/profiles/claude-code.json`.
-
-| Profile   | Model               | Description                                      |
-| --------- | ------------------- | ------------------------------------------------ |
-| `default` | `CodeFreedom/Flash` | Base profile — routes through proxy              |
-| `bare`    | _(default)_         | Minimal — no model aliases, routes through proxy |
-
-Create custom profiles by editing `~/.codefreedom/profiles/claude-code.json`:
-
-```json
-{
-  "profiles": {
-    "my-profile": {
-      "description": "Custom profile — override model and endpoint",
-      "env": {
-        "CLAUDE_MODEL": "CodeFreedom/Ultra",
-        "ANTHROPIC_BASE_URL": "http://localhost:4000"
-      }
-    }
-  }
-}
-```
-
-A JSON Schema is provided at `~/.codefreedom/profiles/claude-code.schema.json`.
-
-## Database (Optional)
-
-The proxy runs **stateless by default** — no database, no Prisma, no persistence.
-Model routing works out of the box.
-
-| Backend            | Use Case                                           |
-| ------------------ | -------------------------------------------------- |
-| **None** (default) | Dev/CI — stateless model routing, zero persistence |
-| **PostgreSQL**     | Admin UI, spend tracking, key management, teams    |
-
-See [Proxy → Database](docs/proxy.md#database-backends) for setup.
-
-## Documentation
-
-- [Getting Started](docs/index.md) — Install, init, launch
-- [Environment](docs/environment.md) — `.env` chain, variable interpolation, workspace overrides
-- [Code Agents](docs/claude-code.md) — Profiles, sandbox mode, local mode
-- [Proxy](docs/proxy.md) — Provider setup, database, configuration
-- [Architecture](docs/architecture.md) — System design, data flow (Mermaid diagrams)
-- [Browser Tools](docs/tools/index.md) — Chrome and Camoufox browser automation
-- [VS Code](docs/vscode.md) — Proxy integration with VS Code extensions
-- [Troubleshooting](docs/troubleshooting.md) — Common issues and diagnostics
-- [License & Contributions](docs/license-contributions.md) — License, contributing guide
+| Feature             | Details                                                    |
+| ------------------- | ---------------------------------------------------------- |
+| LLM proxy           | Stateless model routing (native Python or Docker Compose)  |
+| Code agent launcher | `codefreedom claude` CLI -- local + sandbox modes           |
+| Sandboxing          | Pre-configured containers (CUDA, ROCm, Ubuntu)             |
+| Profile management  | Model switching, env inheritance, isolation                |
+| Browser tools       | Chrome (CDP) + Camoufox (MCP) for web automation          |
+| Backup & restore    | Config backups with diff preview and selective restore     |
 
 ## Requirements
 
 - Python 3.10+
-- Docker — optional, for sandbox mode and Docker Compose proxy
-- Node.js + `@anthropic-ai/claude-code` (for local mode only)
+- Docker -- optional, for sandbox mode and Docker Compose proxy
+- Node.js + `@anthropic-ai/claude-code` -- for local mode only
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Apache 2.0 -- see [LICENSE](LICENSE).
 
 ---
 
-_Claude Code is a trademark of Anthropic. VS Code is a trademark of Microsoft. Cursor is a trademark of Anysphere. Codex is a trademark of OpenAI. Other trademarks are property of their respective owners. See [NOTICE](NOTICE)._
+_Claude Code is a trademark of Anthropic. VS Code is a trademark of Microsoft. Cursor is a trademark of Anysphere. Codex is a trademark of OpenAI. Other trademarks are property of their respective owners. See [NOTICE](NOTICE)._

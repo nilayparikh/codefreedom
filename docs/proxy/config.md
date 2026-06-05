@@ -119,3 +119,28 @@ litellm_settings:
 | `callbacks: prometheus` | on | Expose metrics at `/metrics/`. |
 
 For the full parameter reference, see [LiteLLM Proxy Parameters](https://docs.litellm.ai/docs/config/parameters).
+
+## Web Search Interception
+
+The proxy can transparently replace Claude Code's built-in `WebSearch` with calls to a local search backend. This is implemented via LiteLLM's `websearch_interception` callback. See [Web Search Interception](websearch-interception.md) for the full pipeline.
+
+To enable, uncomment two blocks in `config.yaml`:
+
+```yaml
+litellm_settings:
+  callbacks:
+    - prometheus
+    - websearch_interception
+
+  websearch_interception_params:
+    enabled_providers: ["openai", "anthropic", "vertex_ai", "bedrock", "azure"]
+    search_tool_name: codefreedom-web
+
+search_tools:
+  - search_tool_name: codefreedom-web
+    litellm_params:
+      search_provider: searxng
+      api_base: http://web-bridge:8500
+```
+
+The default `api_base` points at the bundled `web-bridge` service in `docker-compose.yaml`, which translates SearXNG-shaped requests into JSON-RPC calls against the Camoufox MCP `web_search` tool.

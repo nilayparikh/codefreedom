@@ -5,13 +5,13 @@
 
 ## When to Use
 
-| Scenario                                   | Command                                         |
-| ------------------------------------------ | ----------------------------------------------- |
-| Before upgrading CodeFreedom               | `codefreedom admin backup`                      |
-| Porting config to a new machine            | `backup` → copy archive → `restore`    |
-| After a misconfigured restore              | `restore --dry-run` to preview, then `restore`   |
-| Cleaning up old backups                    | `codefreedom admin prune --keep 5`              |
-| Checking what a backup contains            | `codefreedom admin inspect path.tar.gz`         |
+| Scenario                        | Command                                        |
+| ------------------------------- | ---------------------------------------------- |
+| Before upgrading CodeFreedom    | `codefreedom admin backup`                     |
+| Porting config to a new machine | `backup` → copy archive → `restore`            |
+| After a misconfigured restore   | `restore --dry-run` to preview, then `restore` |
+| Cleaning up old backups         | `codefreedom admin prune --keep 5`             |
+| Checking what a backup contains | `codefreedom admin inspect path.tar.gz`        |
 
 ## Commands
 
@@ -25,9 +25,9 @@ archive. Only the following files are backed up:
 | `profiles/`           | Profile JSON files (claude-code, chrome, web) |
 | `proxy/`              | Proxy config, docker-compose, provider YAMLs  |
 | `.env.claude`         | Claude Code environment config                |
-| `.env.claude.secrets` | **Redacted** -- keys preserved, values masked  |
+| `.env.claude.secrets` | **Redacted** -- keys preserved, values masked |
 | `.env.proxy`          | Proxy environment config                      |
-| `.env.proxy.secrets`  | **Redacted** -- keys preserved, values masked  |
+| `.env.proxy.secrets`  | **Redacted** -- keys preserved, values masked |
 
 Other directories (`sandbox/`, `proc/`, `backup/`) are **not** backed up.
 
@@ -224,9 +224,9 @@ tar xzf backup.tar.gz manifest.json -O | jq .  # read manifest
 
 ## Exit Codes
 
-| Code | Meaning                                                        |
-| ---- | -------------------------------------------------------------- |
-| 0    | Success                                                        |
+| Code | Meaning                                                                     |
+| ---- | --------------------------------------------------------------------------- |
+| 0    | Success                                                                     |
 | 1    | Error -- file not found, invalid archive, parse error, or cancelled restore |
 
 ## Security
