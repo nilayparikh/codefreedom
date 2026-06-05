@@ -29,3 +29,4 @@ site/
 .claude/
 
 # Camoufox tool — tracked for release builds
+.venv-mkdocs/

@@ -12,7 +12,9 @@ All CodeFreedom state lives under `~/.codefreedom/` (configurable via `CODEFREED
 │   ├── claude-code.json           # Claude Code profiles (model routing, tools)
 │   ├── claude-code.schema.json    # JSON Schema for editor validation
 │   ├── chrome.json                # Chrome browser tool settings
-│   └── web.json                   # Camoufox web tool settings
+│   ├── chrome.schema.json         # JSON Schema for chrome.json
+│   ├── web.json                   # Camoufox web tool settings
+│   └── web.schema.json            # JSON Schema for web.json
 ├── proxy/                         # LiteLLM proxy configuration
 │   ├── config/
 │   │   ├── config.yaml            # Main proxy config
@@ -49,12 +51,51 @@ All CodeFreedom state lives under `~/.codefreedom/` (configurable via `CODEFREED
 
 | Path | Purpose | Created By |
 |------|---------|------------|
-| `profiles/` | Profile JSON + tool settings | `codefreedom claude init`, `codefreedom tools <tool> init` |
+| `profiles/` | Profile JSON + tool settings + schemas | `codefreedom claude init`, `codefreedom tools <tool> init` |
 | `proxy/` | LiteLLM proxy config + providers | `codefreedom proxy init` |
 | `sandbox/<profile>/` | Isolated Claude Code state per profile | Automatic on first sandbox launch |
 | `sandbox/tools/` | Persistent tool data (browser profiles, cache) | Automatic on first tool start |
 | `proc/` | Runtime reference counting for tool containers | Automatic during tool lifecycle |
 | `backups/` | Config backup archives | `codefreedom admin backup` |
+
+## JSON Schema Validation
+
+Every profile file comes with a companion `.schema.json` for editor validation and autocomplete:
+
+| Profile File | Schema File | Purpose |
+|---|---|---|
+| `profiles/claude-code.json` | `profiles/claude-code.schema.json` | Claude Code profiles (model routing, tools, sandbox images) |
+| `profiles/chrome.json` | `profiles/chrome.schema.json` | Chrome browser tool settings |
+| `profiles/web.json` | `profiles/web.schema.json` | Camoufox web tool settings |
+
+Each `*.json` file references its schema via the `$schema` property, so compatible editors apply validation automatically.
+
+### Editor Setup
+
+**VS Code:** Install the [JSON Schema Validator](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-json) extension (included by default in most VS Code installations). Open any profile file -- validation and autocomplete work automatically via the `$schema` reference.
+
+**Neovim:** Use `nvim-lspconfig` with `vscode-json-language-server` -- it respects `$schema` references out of the box.
+
+### Validating from the Command Line
+
+```bash
+# Validate Claude Code profiles
+python -m jsonschema \
+  ~/.codefreedom/profiles/claude-code.schema.json \
+  ~/.codefreedom/profiles/claude-code.json
+
+# Validate Chrome tool profile
+python -m jsonschema \
+  ~/.codefreedom/profiles/chrome.schema.json \
+  ~/.codefreedom/profiles/chrome.json
+
+# Validate web tool profile
+python -m jsonschema \
+  ~/.codefreedom/profiles/web.schema.json \
+  ~/.codefreedom/profiles/web.json
+```
+
+Install the validator with `pip install jsonschema`.
 
 ## Profile File Structure
 
@@ -66,14 +107,14 @@ Claude Code profiles live in `~/.codefreedom/profiles/claude-code.json`:
     "default": {
       "description": "Base profile -- routes through proxy",
       "env": {
-        "CLAUDE_MODEL": "CodeFreedom/Flash",
+        "CLAUDE_MODEL": "your-model-alias",
         "ANTHROPIC_BASE_URL": "http://localhost:4000",
         "ANTHROPIC_AUTH_TOKEN": "${LITELLM_MASTER_KEY}"
       },
       "sandbox_images": {
-        "default": "docker.io/nilayparikh/codefreedom:latest",
-        "cuda": "docker.io/nilayparikh/codefreedom:cuda-latest",
-        "rocm": "docker.io/nilayparikh/codefreedom:rocm-latest"
+        "default": "your-registry/image:default-tag",
+        "cuda": "your-registry/image:cuda-tag",
+        "rocm": "your-registry/image:rocm-tag"
       },
       "tools": ["chrome", "web"],
       "sandbox": {
@@ -85,14 +126,14 @@ Claude Code profiles live in `~/.codefreedom/profiles/claude-code.json`:
     "ultra": {
       "description": "Inherits from default -- uses Ultra model",
       "env": {
-        "CLAUDE_MODEL": "CodeFreedom/Ultra"
+        "CLAUDE_MODEL": "your-model-alias-ultra"
       }
     }
   }
 }
 ```
 
-### Profile Schema
+### Profile Fields
 
 Each profile supports these fields:
 
@@ -106,8 +147,6 @@ Each profile supports these fields:
 | `local.env` | object | No | Env vars applied only in local/native mode |
 
 Profile names must match `^[a-zA-Z0-9_-]+$`.
-
-A JSON Schema is provided at `~/.codefreedom/profiles/claude-code.schema.json` for editor validation and autocomplete.
 
 ## Inheritance
 
@@ -131,7 +170,7 @@ Inheritance eliminates duplication. Custom profiles inherit from `default` -- yo
       "env": {
         "ANTHROPIC_BASE_URL": "http://localhost:4000",
         "ANTHROPIC_AUTH_TOKEN": "${LITELLM_MASTER_KEY}",
-        "CLAUDE_MODEL": "CodeFreedom/Flash"
+        "CLAUDE_MODEL": "your-model-alias"
       },
       "tools": ["chrome", "web"],
       "sandbox": {
@@ -141,9 +180,9 @@ Inheritance eliminates duplication. Custom profiles inherit from `default` -- yo
       }
     },
     "my-profile": {
-      "description": "Custom -- overrides model, adds a tool",
+      "description": "Custom -- overrides model",
       "env": {
-        "CLAUDE_MODEL": "CodeFreedom/Ultra"
+        "CLAUDE_MODEL": "your-model-alias-ultra"
       }
     }
   }
@@ -155,7 +194,7 @@ When `my-profile` is loaded, the effective env is:
 ```
 ANTHROPIC_BASE_URL = http://localhost:4000    # inherited from default
 ANTHROPIC_AUTH_TOKEN = <resolved from LITELLM_MASTER_KEY>  # inherited, resolved
-CLAUDE_MODEL = CodeFreedom/Ultra              # overridden by my-profile
+CLAUDE_MODEL = your-model-alias-ultra         # overridden by my-profile
 ```
 
 In sandbox mode, `IS_SANDBOX=1` is also inherited from `default`'s `sandbox.env`.
@@ -187,7 +226,7 @@ Profile values support `${VAR}` references, resolved from the environment chain:
 {
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "${LITELLM_MASTER_KEY}",
-    "CLAUDE_MODEL": "${MODEL_NAME:-CodeFreedom/Flash}",
+    "CLAUDE_MODEL": "${MODEL_NAME:-your-default-model}",
     "PROXY_URL": "${PROXY_URL:-http://localhost:4000}"
   }
 }
@@ -218,14 +257,22 @@ Add your profile to the `"profiles"` object:
     "research": {
       "description": "Research profile -- uses fast model for quick queries",
       "env": {
-        "CLAUDE_MODEL": "CodeFreedom/Air"
+        "CLAUDE_MODEL": "your-model-alias-air"
       }
     }
   }
 }
 ```
 
-### Step 2: Use It
+### Step 2: Validate
+
+```bash
+python -m jsonschema \
+  ~/.codefreedom/profiles/claude-code.schema.json \
+  ~/.codefreedom/profiles/claude-code.json
+```
+
+### Step 3: Use It
 
 ```bash
 codefreedom claude --profile research
@@ -244,7 +291,7 @@ To keep profiles maintainable:
 | **Use `sandbox.env` for sandbox-only vars** | Keep local and sandbox configs separate |
 | **Use `local.env` for local-only vars** | Same principle in reverse |
 | **Keep `env` for cross-mode settings** | Proxy URL, auth token, model selection |
-| **Validate with the schema** | Run `python -m jsonschema ~/.codefreedom/profiles/claude-code.schema.json ~/.codefreedom/profiles/claude-code.json` |
+| **Validate with the schema** | Catch errors before runtime |
 
 ## Tool Declarations
 
@@ -312,14 +359,14 @@ Child profiles inherit `default`'s tools list (merged, deduplicated):
 
 ## Tool Profiles
 
-Each tool has its own profile file in `~/.codefreedom/profiles/`:
+Each tool has its own profile file in `~/.codefreedom/profiles/`, generated by `codefreedom tools <tool> init`. Tool profiles are independent of Claude Code profiles -- they configure Docker container settings (image, ports, data directories).
 
 ### Chrome (`chrome.json`)
 
 ```json
 {
   "chrome": {
-    "image": "docker.io/nilayparikh/codefreedom:chrome-latest",
+    "image": "your-registry/chrome:latest",
     "container_name": "codefreedom-chrome",
     "port": 9222,
     "data_dir": "~/.codefreedom/sandbox/tools/chrome",
@@ -339,12 +386,14 @@ Each tool has its own profile file in `~/.codefreedom/profiles/`:
 | `data_dir` | `~/.codefreedom/sandbox/tools/chrome` | Persistent browser data |
 | `env` | `DISPLAY=:99` | Extra env vars forwarded to container |
 
+Schema: `~/.codefreedom/profiles/chrome.schema.json`
+
 ### Web / Camoufox (`web.json`)
 
 ```json
 {
   "web": {
-    "image": "docker.io/nilayparikh/codefreedom:web-latest",
+    "image": "your-registry/web:latest",
     "container_name": "codefreedom-web",
     "port": 8420,
     "data_dir": "~/.codefreedom/sandbox/tools/web",
@@ -352,11 +401,10 @@ Each tool has its own profile file in `~/.codefreedom/profiles/`:
     "search_engines": {},
     "parser_registry": {
       "standard": {
-        "selectors": {
-          "results": "#results",
-          "title": "h3",
-          "link": "a"
-        }
+        "result_selectors": "your-css-selectors-here",
+        "link_selector": "your-link-selector-here",
+        "snippet_selectors": "your-snippet-selectors-here",
+        "ai_selectors": ["selector-1", "selector-2"]
       }
     }
   }
@@ -372,6 +420,8 @@ Each tool has its own profile file in `~/.codefreedom/profiles/`:
 | `search_engines` | `{}` | Search engine configurations (user-configured) |
 | `parser_registry` | `{}` | CSS selector parsers for search results |
 
+Schema: `~/.codefreedom/profiles/web.schema.json`
+
 ### Tool Initialization
 
 Tools require explicit user acceptance before initialization (third-party software notice):
@@ -381,7 +431,7 @@ codefreedom tools chrome init    # Requires typing "I understand"
 codefreedom tools web init       # Requires typing "I understand"
 ```
 
-Tools refuse to start without successful initialization.
+Tools refuse to start without successful initialization. Init copies both the profile JSON and its schema file to `~/.codefreedom/profiles/`.
 
 ## Sensitive Value Masking
 
@@ -391,7 +441,7 @@ When profiles are loaded, values for keys containing `TOKEN`, `KEY`, `SECRET`, `
 [PROFILE] Loading 'default' (standalone)...
      ANTHROPIC_AUTH_TOKEN=a****...ty
      ANTHROPIC_BASE_URL=http://localhost:4000
-     CLAUDE_MODEL=CodeFreedom/Flash
+     CLAUDE_MODEL=your-model-alias
 ```
 
 ## Custom Profile Location
