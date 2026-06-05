@@ -64,7 +64,7 @@ The resolved image is: `{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}`.
 
 **Method 2: Profile `sandbox_images`** (GPU-aware per-profile)
 
-Set `sandbox_images` (a dict with `default`, `cuda`, and/or `rocm` keys) in the profile. Child profiles inherit from `default` and can override individual entries. When `--cuda` or `--rocm` is passed, the matching key is selected; otherwise `default` is used. See [Profile System → Sandbox Images per Profile](../claude-code.md#sandbox-images-per-profile).
+Set `sandbox_images` (a dict with `default`, `cuda`, and/or `rocm` keys) in the profile. Child profiles inherit from `default` and can override individual entries. When `--cuda` or `--rocm` is passed, the matching key is selected; otherwise `default` is used. See [Profile System → Sandbox Images per Profile](../claude-code.md#sandbox-images).
 
 ## GPU Requirements
 

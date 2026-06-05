@@ -66,5 +66,5 @@ The generated fragment contains the full env array, but **secret values
 are replaced with `${env:VARNAME}` references** using the same env var
 name. The resolved secret value is never written to disk — VS Code
 substitutes the real value from your system environment at runtime.
-See the [Secret Management section in VS Code docs](../../vscode.md#secret-management)
+See the [Secret Management section in VS Code docs](../vscode.md#secret-management)
 for the rationale and how to set the referenced env vars.

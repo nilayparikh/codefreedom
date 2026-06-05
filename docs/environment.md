@@ -6,52 +6,52 @@ CodeFreedom uses a **4-tier precedence chain** for `.env` configuration. Later t
 
 ### `codefreedom claude` (7 files, 4 tiers)
 
-| Tier | Priority | Source | Purpose |
-|------|----------|--------|---------|
-| 1 | Component | `~/.codefreedom/.env.claude` | Claude Code agent config |
-| 1 | Component | `~/.codefreedom/.env.claude.secrets` | Claude Code secrets |
-| 2 | Shared | `~/.codefreedom/.env` | Shared config |
-| 2 | Shared | `~/.codefreedom/.env.secrets` | Shared secrets |
-| 3 | Workspace | `{workspace}/.env` | Per-project overrides — local model aliases, proxy tweaks |
-| 3 | Workspace | `{workspace}/.env.secrets` | Per-project secrets — project-specific API keys |
-| 4 | System | System environment | Machine-level overrides — `export FOO=bar` always wins |
+| Tier | Priority  | Source                               | Purpose                                                   |
+| ---- | --------- | ------------------------------------ | --------------------------------------------------------- |
+| 1    | Component | `~/.codefreedom/.env.claude`         | Claude Code agent config                                  |
+| 1    | Component | `~/.codefreedom/.env.claude.secrets` | Claude Code secrets                                       |
+| 2    | Shared    | `~/.codefreedom/.env`                | Shared config                                             |
+| 2    | Shared    | `~/.codefreedom/.env.secrets`        | Shared secrets                                            |
+| 3    | Workspace | `{workspace}/.env`                   | Per-project overrides — local model aliases, proxy tweaks |
+| 3    | Workspace | `{workspace}/.env.secrets`           | Per-project secrets — project-specific API keys           |
+| 4    | System    | System environment                   | Machine-level overrides — `export FOO=bar` always wins    |
 
 ### `codefreedom proxy` (7 files, 4 tiers)
 
-| Tier | Priority | Source | Purpose |
-|------|----------|--------|---------|
-| 1 | Component | `~/.codefreedom/.env.proxy` | Proxy config — database URLs, model aliases, provider settings |
-| 1 | Component | `~/.codefreedom/.env.proxy.secrets` | Proxy secrets — provider API keys |
-| 2 | Shared | `~/.codefreedom/.env` | Shared config |
-| 2 | Shared | `~/.codefreedom/.env.secrets` | Shared secrets |
-| 3 | Workspace | `{workspace}/.env` | Per-project overrides |
-| 3 | Workspace | `{workspace}/.env.secrets` | Per-project secrets |
-| 4 | System | System environment | Machine-level overrides — always wins |
+| Tier | Priority  | Source                              | Purpose                                                        |
+| ---- | --------- | ----------------------------------- | -------------------------------------------------------------- |
+| 1    | Component | `~/.codefreedom/.env.proxy`         | Proxy config — database URLs, model aliases, provider settings |
+| 1    | Component | `~/.codefreedom/.env.proxy.secrets` | Proxy secrets — provider API keys                              |
+| 2    | Shared    | `~/.codefreedom/.env`               | Shared config                                                  |
+| 2    | Shared    | `~/.codefreedom/.env.secrets`       | Shared secrets                                                 |
+| 3    | Workspace | `{workspace}/.env`                  | Per-project overrides                                          |
+| 3    | Workspace | `{workspace}/.env.secrets`          | Per-project secrets                                            |
+| 4    | System    | System environment                  | Machine-level overrides — always wins                          |
 
 ### `codefreedom tools` (chrome, web) (5 files, 3 tiers)
 
-| Tier | Priority | Source | Purpose |
-|------|----------|--------|---------|
-| 2 | Shared | `~/.codefreedom/.env` | Shared config |
-| 2 | Shared | `~/.codefreedom/.env.secrets` | Shared secrets |
-| 3 | Workspace | `{workspace}/.env` | Per-project overrides |
-| 3 | Workspace | `{workspace}/.env.secrets` | Per-project secrets |
-| 4 | System | System environment | Machine-level overrides — always wins |
+| Tier | Priority  | Source                        | Purpose                               |
+| ---- | --------- | ----------------------------- | ------------------------------------- |
+| 2    | Shared    | `~/.codefreedom/.env`         | Shared config                         |
+| 2    | Shared    | `~/.codefreedom/.env.secrets` | Shared secrets                        |
+| 3    | Workspace | `{workspace}/.env`            | Per-project overrides                 |
+| 3    | Workspace | `{workspace}/.env.secrets`    | Per-project secrets                   |
+| 4    | System    | System environment            | Machine-level overrides — always wins |
 
 > **Missing files are silently skipped.** No warning is emitted for any missing `.env` file.
 
 ## File Conventions
 
-| File | Contents | Git |
-|------|----------|-----|
-| `.env.claude.example` | Template for Claude Code vars (commented) | Tracked |
-| `.env.claude.secrets.example` | Template for Claude Code secrets (commented) | Tracked |
-| `.env.claude` | Active Claude Code config | **Never commit** |
-| `.env.claude.secrets` | Active Claude Code secrets | **Never commit** |
-| `.env.proxy.example` | Template for proxy vars (commented) | Tracked |
-| `.env.proxy.secrets.example` | Template for proxy secrets (commented) | Tracked |
-| `.env.proxy` | Active proxy config | **Never commit** |
-| `.env.proxy.secrets` | Active proxy secrets | **Never commit** |
+| File                          | Contents                                     | Git              |
+| ----------------------------- | -------------------------------------------- | ---------------- |
+| `.env.claude.example`         | Template for Claude Code vars (commented)    | Tracked          |
+| `.env.claude.secrets.example` | Template for Claude Code secrets (commented) | Tracked          |
+| `.env.claude`                 | Active Claude Code config                    | **Never commit** |
+| `.env.claude.secrets`         | Active Claude Code secrets                   | **Never commit** |
+| `.env.proxy.example`          | Template for proxy vars (commented)          | Tracked          |
+| `.env.proxy.secrets.example`  | Template for proxy secrets (commented)       | Tracked          |
+| `.env.proxy`                  | Active proxy config                          | **Never commit** |
+| `.env.proxy.secrets`          | Active proxy secrets                         | **Never commit** |
 
 Run the relevant init command to create active files:
 
@@ -85,6 +85,7 @@ ANTHROPIC_BASE_URL="http://localhost:8000/v1"
 ```
 
 This is useful for:
+
 - Pinning a project to a specific model
 - Using local inference for one project while keeping cloud for others
 - Project-specific proxy settings
@@ -97,7 +98,7 @@ Override the default profile file location:
 export CODEFREEDOM_PROFILES_FILE="/path/to/custom/profiles.json"
 ```
 
-See [Code Agents → Custom Profile Location](claude-code.md#custom-profile-location) for details.
+See [Code Agents → Profile System](claude-code.md#profile-system) for details.
 
 ## Security
 
@@ -109,12 +110,12 @@ See [Code Agents → Custom Profile Location](claude-code.md#custom-profile-loca
 
 The full variable reference is in the bundled example files:
 
-| File | Variables |
-|------|-----------|
-| `.env.claude.example` | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`, `CLAUDE_CODE_COLUMNS`, `CLAUDE_CODE_LINES` |
-| `.env.proxy.example` | Model aliases (`LITELLM_MODEL_ALIAS_*`), retry settings, privacy flags, provider base URLs |
+| File                         | Variables                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `.env.claude.example`        | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`, `CLAUDE_CODE_COLUMNS`, `CLAUDE_CODE_LINES`                         |
+| `.env.proxy.example`         | Model aliases (`LITELLM_MODEL_ALIAS_*`), retry settings, privacy flags, provider base URLs                                          |
 | `.env.proxy.secrets.example` | `LITELLM_MASTER_KEY`, provider API keys (`DEEPSEEK_API_KEY`, `MICROSOFT_FOUNDRY_API_KEY`, `NVIDIA_API_KEY`, `OPENCODE_ZEN_API_KEY`) |
-| `CODEFREEDOM_PROFILES_FILE` | Override profile file location (system env) |
+| `CODEFREEDOM_PROFILES_FILE`  | Override profile file location (system env)                                                                                         |
 
 > **Note:** Variables like `LITELLM_PORT`, `LITELLM_LOG_LEVEL`, and `LITELLM_IMAGE` in `.env.proxy.example` only apply when running the proxy via Docker Compose (`codefreedom proxy start --docker`). Native mode (`codefreedom proxy start`) reads these from CLI flags and `config.yaml` instead.
 

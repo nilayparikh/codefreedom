@@ -229,7 +229,7 @@ you create the secret).
 | 1         | Network failure or invalid response from `/v1/model/info`   |
 
 For end-to-end instructions (creating the file, restarting VS Code,
-verifying models appear), see [VS Code Integration → Built-in](../vscode.md#built-in-chatlanguagemodelsjson).
+verifying models appear), see [VS Code Integration → Built-in](../vscode.md#built-in-chatlanguagemodelsjson-no-extension-required).
 
 ## Endpoints
 

@@ -59,7 +59,7 @@ LABEL org.opencontainers.image.title="CodeFreedom - Web Search Bridge" \
       org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
-      com.codefreedom.platform="web-bridge" \
+    com.codefreedom.platform="Web Bridge" \
       com.codefreedom.arch="linux/arm64,linux/amd64"
 
 # Patch runtime base and install only what the app needs at runtime.
