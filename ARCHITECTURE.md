@@ -41,15 +41,20 @@ Details on env chain layers and profile inheritance: see `CLAUDE.md` > Key Patte
 | `docker_utils`    | `src/codefreedom/cli/docker_utils.py`    | Shared Docker helpers — container exists/running, ensure image, ephemeral names |
 | `init_utils`      | `src/codefreedom/cli/init_utils.py`      | Shared init — find bundled examples, delta-aware copy                           |
 | `tool_init_utils` | `src/codefreedom/cli/tool_init_utils.py` | Tool acceptance gates, notices, tool metadata                                   |
+| `admin`           | `src/codefreedom/cli/admin.py`           | `codefreedom admin` — backup/restore/prune                                     |
+| `vscode`          | `src/codefreedom/cli/vscode.py`          | `codefreedom vscode` — VS Code config generation (claude, proxy)                |
 
 ### Infrastructure (runtime assets)
 
-| Block           | Location                    | Responsibility                                      |
-| --------------- | --------------------------- | --------------------------------------------------- |
-| `docker_images` | `docker/`                   | CUDA, ROCm, Ubuntu, Chrome, Camoufox image families |
-| `proxy_config`  | `~/.codefreedom/proxy/`     | LiteLLM routing, provider YAML, model aliases       |
-| `examples`      | `src/codefreedom/examples/` | Bundled configs copied by init commands             |
-| `tool_profiles` | `~/.codefreedom/profiles/`  | Per-tool JSON settings (chrome, web)                |
+| Block             | Location                        | Responsibility                                                         |
+| ----------------- | ------------------------------- | ---------------------------------------------------------------------- |
+| `docker_images`   | `docker/`                       | CUDA, ROCm, Ubuntu, Chrome, Camoufox image families                    |
+| `web-bridge`      | `docker/web-bridge/`            | FastAPI sidecar — SearXNG → Camoufox MCP translation for WebSearch interception |
+| `proxy_config`    | `~/.codefreedom/proxy/`         | LiteLLM routing, provider YAML, model aliases                          |
+| `examples`        | `src/codefreedom/examples/`     | Bundled configs copied by init commands                               |
+| `tool_profiles`   | `~/.codefreedom/profiles/`      | Per-tool JSON settings (chrome, web)                                   |
+
+**web-bridge component.** The `docker/web-bridge/` directory contains `Dockerfile.Bridge`, `requirements.txt`, and `app/bridge.py`. It builds the `codefreedom:web-bridge` image, published on `docker.io` and `ghcr.io`. The bridge runs as a sibling service in the proxy `docker-compose.yaml` on the shared `codefreedom` network — no host port is published. LiteLLM reaches it via service DNS at `http://web-bridge:8500`. The bridge translates SearXNG-shaped `/search` requests into JSON-RPC calls against the Camoufox MCP `web_search` tool, enabling LiteLLM's `websearch_interception` callback to transparently replace Claude Code's native `WebSearch` with a local stealth browser. See `docker/web-bridge/README.md` and `docs/proxy/websearch-interception.md`.
 
 Details on Docker naming, image families, proxy system: see `CLAUDE.md` > Docker / Proxy System.
 
@@ -67,6 +72,7 @@ cli/launcher.py                                            -> config, env_loader
 cli/claude.py                                              -> init_utils, config, env_loader, launcher, profiles, tool_registry
 cli/proxy.py                                               -> init_utils, config, env_loader
 cli/chrome.py, cli/web.py                                  -> docker_utils, init_utils, tool_init_utils, config, env_loader
+cli/vscode.py                                              -> config, env_loader, profiles
 ```
 
 ## Request Flow
@@ -91,6 +97,23 @@ main.py (parse)
     -> config.py (get_codefreedom_dir for proxy path)
     -> env_loader.py (load_dotenv for proxy env files)
 ```
+
+### `codefreedom proxy start --docker` (with web-bridge)
+
+```
+main.py (parse)
+  -> proxy.py (_start: Docker Compose)
+    -> config.py (get_codefreedom_dir for proxy path)
+    -> docker-compose.yaml starts:
+       - litellm proxy (:4000)
+       - web-bridge (:8500)  -->  Camoufox MCP (:8420/mcp)
+```
+
+The web-bridge is a FastAPI sidecar (`docker/web-bridge/`) that translates
+SearXNG-shaped `/search` requests into JSON-RPC calls against the Camoufox
+MCP `web_search` tool. LiteLLM's `websearch_interception` callback routes
+Claude Code's native `WebSearch` to the bridge — transparently replacing it
+with a local stealth browser call.
 
 ### `codefreedom tools chrome start`
 

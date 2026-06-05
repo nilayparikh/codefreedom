@@ -36,7 +36,7 @@
 #       supports_system_messages: true
 #       supports_native_streaming: true
 #       supports_vision: true
-#       supported_openai_params:
+#       supported_openai_params: &openrouter_supported_openai_params
 #         - tools
 #         - tool_choice
 #         - parallel_tool_calls
@@ -48,6 +48,7 @@
 #         - temperature
 #         - top_p
 #         - stop
+#         - reasoning_effort
 
 #   - model_name: OpenRouter/FreeRouter
 #     litellm_params:
@@ -57,3 +58,18 @@
 #     model_info:
 #       <<: *openrouter_model_info
 #       id: "openrouter-freerouter"
+#       # FreeRouter is a dynamic load-balanced endpoint with no native
+#       # reasoning_effort gradient — drop that param to match the
+#       # "only none" capability advertised to VS Code.
+#       supported_openai_params: &openrouter_freerouter_supported_openai_params
+#         - tools
+#         - tool_choice
+#         - parallel_tool_calls
+#         - response_format
+#         - max_tokens
+#         - max_completion_tokens
+#         - stream
+#         - stream_options
+#         - temperature
+#         - top_p
+#         - stop

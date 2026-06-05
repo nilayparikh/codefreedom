@@ -79,51 +79,57 @@ Use the `arch-docs` skill to keep this current when code changes.
 
 ### CLI Commands
 
-| Command                                             | Description                                                   |
-| --------------------------------------------------- | ------------------------------------------------------------- |
-| `codefreedom claude init`                           | Initialize Claude Code profiles + .env.claude                 |
-| `codefreedom claude`                                | Launch Claude Code (alias: `cf cc`)                           |
-| `codefreedom claude --sandbox`                      | Launch in Docker container with GPU                           |
-| `codefreedom claude --cuda`                         | Use CUDA GPU image (with --sandbox)                           |
-| `codefreedom claude --rocm`                         | Use ROCm GPU image (with --sandbox)                           |
-| `codefreedom claude --native-models`                | Bypass proxy, use Anthropic `/login`                          |
-| `codefreedom claude --profile PROFILE`              | Use a specific profile (default: "default")                   |
-| `codefreedom claude --list-profiles`                | List available profiles                                       |
-| `codefreedom claude --stop`                         | Stop running sandbox containers                               |
-| `codefreedom claude --status`                       | Show sandbox container status                                 |
-| `codefreedom claude --dangerously-skip-permissions` | Skip permission prompts (local mode)                          |
-| `codefreedom proxy init`                            | Initialize proxy configs + .env.proxy                         |
-| `codefreedom proxy start`                           | Start LiteLLM proxy (native Python)                           |
-| `codefreedom proxy start --docker`                  | Start via Docker Compose                                      |
-| `codefreedom proxy stop`                            | Stop proxy                                                    |
-| `codefreedom proxy restart --docker`                | Restart proxy (Docker Compose native; preserves state)        |
-| `codefreedom proxy status`                          | Show proxy status                                             |
-| `codefreedom proxy validate`                        | Validate proxy config                                         |
-| `codefreedom proxy --port PORT`                     | Set proxy port (default: 4000)                                |
-| `codefreedom proxy --host HOST`                     | Set bind host (default: 0.0.0.0)                              |
-| `codefreedom admin backup`                          | Backup CodeFreedom config (no secrets)                        |
-| `codefreedom admin backup --out PATH`               | Backup to a specific path                                     |
-| `codefreedom admin restore PATH`                    | Restore with interactive diff preview                         |
-| `codefreedom admin restore PATH --dry-run`          | Preview restore without making changes                        |
-| `codefreedom admin restore PATH --force`            | Restore without confirmation prompt                           |
-| `codefreedom admin list-backups`                    | List all available backups                                    |
-| `codefreedom admin inspect PATH`                    | Show manifest contents of a backup archive                    |
-| `codefreedom admin prune --keep N`                  | Keep N most recent backups, delete rest                       |
-| `codefreedom admin prune --older-than 30d`          | Delete backups older than duration                            |
-| `codefreedom tools chrome init`                     | Initialize Chrome tool profile (requires acceptance)          |
-| `codefreedom tools chrome start`                    | Start Chrome browser container (Xvfb + Chromium)              |
-| `codefreedom tools chrome stop`                     | Stop Chrome container                                         |
-| `codefreedom tools chrome restart`                  | Restart Chrome container (preserves state, no image pull)     |
-| `codefreedom tools chrome status`                   | Show Chrome container status                                  |
-| `codefreedom tools chrome url`                      | Print CDP debug URL for agent connection                      |
-| `codefreedom tools web init`                        | Initialize Camoufox tool profile (requires acceptance)        |
-| `codefreedom tools web start`                       | Start Camoufox container (MCP server on port 8420)            |
-| `codefreedom tools web stop`                        | Stop Camoufox container                                       |
-| `codefreedom tools web restart`                     | Restart Camoufox container (preserves state, no image pull)   |
-| `codefreedom tools web status`                      | Show Camoufox container status                                |
-| `cf cc`                                             | Alias for `codefreedom claude`                                |
-| `cf px`                                             | Alias for `codefreedom proxy`                                 |
-| `cf adm`                                            | Alias for `codefreedom admin`                                 |
+| Command                                                    | Description                                                            |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `codefreedom claude init`                                  | Initialize Claude Code profiles + .env.claude                          |
+| `codefreedom claude`                                       | Launch Claude Code (alias: `cf cc`)                                    |
+| `codefreedom claude --sandbox`                             | Launch in Docker container with GPU                                    |
+| `codefreedom claude --cuda`                                | Use CUDA GPU image (with --sandbox)                                    |
+| `codefreedom claude --rocm`                                | Use ROCm GPU image (with --sandbox)                                    |
+| `codefreedom claude --native-models`                       | Bypass proxy, use Anthropic `/login`                                   |
+| `codefreedom claude --profile PROFILE`                     | Use a specific profile (default: "default")                            |
+| `codefreedom claude --list-profiles`                       | List available profiles                                                |
+| `codefreedom claude --stop`                                | Stop running sandbox containers                                        |
+| `codefreedom claude --status`                              | Show sandbox container status                                          |
+| `codefreedom claude --dangerously-skip-permissions`        | Skip permission prompts (local mode)                                   |
+| `codefreedom claude vscode`                                | (removed — see `codefreedom vscode claude config` below)               |
+| `codefreedom proxy init`                                   | Initialize proxy configs + .env.proxy                                  |
+| `codefreedom proxy start`                                  | Start LiteLLM proxy (native Python)                                    |
+| `codefreedom proxy start --docker`                         | Start via Docker Compose                                               |
+| `codefreedom proxy stop`                                   | Stop proxy                                                             |
+| `codefreedom proxy restart --docker`                       | Restart proxy (Docker Compose native; preserves state)                 |
+| `codefreedom proxy status`                                 | Show proxy status                                                      |
+| `codefreedom proxy validate`                               | Validate proxy config                                                  |
+| `codefreedom proxy --port PORT`                            | Set proxy port (default: 4000)                                         |
+| `codefreedom proxy --host HOST`                            | Set bind host (default: 0.0.0.0)                                       |
+| `codefreedom admin backup`                                 | Backup CodeFreedom config (no secrets)                                 |
+| `codefreedom admin backup --out PATH`                      | Backup to a specific path                                              |
+| `codefreedom admin restore PATH`                           | Restore with interactive diff preview                                  |
+| `codefreedom admin restore PATH --dry-run`                 | Preview restore without making changes                                 |
+| `codefreedom admin restore PATH --force`                   | Restore without confirmation prompt                                    |
+| `codefreedom admin list-backups`                           | List all available backups                                             |
+| `codefreedom admin inspect PATH`                           | Show manifest contents of a backup archive                             |
+| `codefreedom admin prune --keep N`                         | Keep N most recent backups, delete rest                                |
+| `codefreedom admin prune --older-than 30d`                 | Delete backups older than duration                                     |
+| `codefreedom vscode claude config`                         | Print a VS Code `settings.json` fragment for the Claude Code extension |
+| `codefreedom vscode claude config --profile PROFILE`       | Render the fragment for a specific profile                             |
+| `codefreedom vscode claude config --host HOST --port PORT` | Override `ANTHROPIC_BASE_URL` host/port in the fragment                |
+| `codefreedom vscode claude config --out PATH`              | Write the fragment to a file instead of stdout                         |
+| `codefreedom vscode proxy config --host H`                 | Generate a VS Code `chatLanguageModels.json` entry from the proxy      |
+| `codefreedom tools chrome init`                            | Initialize Chrome tool profile (requires acceptance)                   |
+| `codefreedom tools chrome start`                           | Start Chrome browser container (Xvfb + Chromium)                       |
+| `codefreedom tools chrome stop`                            | Stop Chrome container                                                  |
+| `codefreedom tools chrome restart`                         | Restart Chrome container (preserves state, no image pull)              |
+| `codefreedom tools chrome status`                          | Show Chrome container status                                           |
+| `codefreedom tools chrome url`                             | Print CDP debug URL for agent connection                               |
+| `codefreedom tools web init`                               | Initialize Camoufox tool profile (requires acceptance)                 |
+| `codefreedom tools web start`                              | Start Camoufox container (MCP server on port 8420)                     |
+| `codefreedom tools web stop`                               | Stop Camoufox container                                                |
+| `codefreedom tools web restart`                            | Restart Camoufox container (preserves state, no image pull)            |
+| `codefreedom tools web status`                             | Show Camoufox container status                                         |
+| `cf cc`                                                    | Alias for `codefreedom claude`                                         |
+| `cf px`                                                    | Alias for `codefreedom proxy`                                          |
+| `cf adm`                                                   | Alias for `codefreedom admin`                                          |
 
 ## Key Patterns
 
@@ -151,7 +157,9 @@ Tool init requires user acceptance (typing "I understand"). Tools refuse to star
 | `container_name` | `codefreedom-tools-chrome`            | Custom container name                                                                                                                  |
 | `port`           | `9222`                                | CDP debug port                                                                                                                         |
 | `data_dir`       | `~/.codefreedom/sandbox/tools/chrome` | Persistent data mount                                                                                                                  |
-| `env`            | `DISPLAY=:99`                         | Extra env vars forwarded to container                                                                                                  |
+| `env`            | `CHROME_DEBUG_PORT=9222`              | Extra env vars forwarded to container                                                                                                  |
+
+Chrome runs headless. For stealth / anti-bot browsing, use the `web` tool (Camoufox) instead.
 
 - All other profiles inherit from `default`. Profile's own `env` merges on top.
 - Mode-specific overrides (`sandbox.env`, `local.env`) also inherit: custom profile gets `default`'s mode env first, then its own.
@@ -233,8 +241,8 @@ Four image families in `docker/` published to `docker.io/nilayparikh/codefreedom
 | **CUDA**   | `docker/claude-code/Dockerfile.CUDA`   | NVIDIA GPU workloads                                               |
 | **ROCm**   | `docker/claude-code/Dockerfile.ROCm`   | AMD GPU workloads                                                  |
 | **Ubuntu** | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only / general-purpose                                         |
-| **Chrome** | `docker/chrome/Dockerfile.Chrome`      | Xvfb + Chromium for undetectable headed browsing via CDP port 9222 |
-| **Web**    | `docker/web/Dockerfile.Web`            | Camoufox MCP server for stealth web search and scraping            |
+| **Chrome** | `docker/chrome/Dockerfile.Chrome`      | Headless Chromium for browser automation via CDP port 9222         |
+| **Web**    | `docker/web/Dockerfile.Web`            | Camoufox MCP server for stealth / anti-bot web search and scraping |
 
 Images are built and published via `publish-docker.yml` GitHub Actions workflow on `v*` tags.
 

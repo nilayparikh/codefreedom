@@ -1,0 +1,29 @@
+# ── CodeFreedom — Trivy ignore list ────────────────────────────────────────
+# Use only for vulnerabilities that have NO upstream fix at scan time AND
+# whose affected code path is unreachable in our build/runtime context.
+# Each entry MUST be reviewed when a fixed version ships upstream.
+#
+# Trivy syntax:  CVE-YYYY-NNNN  [exp:YYYY-MM-DD]
+# The `exp:` directive is a self-imposed review deadline, not a Trivy
+# enforcement. Trivy will suppress the finding until the date passes.
+#
+# Last reviewed: 2026-06-05
+# ──────────────────────────────────────────────────────────────────────────
+
+# ── python:3.13-slim (Dockerfile.Web, Dockerfile.Bridge) ─────────────────
+# Affected package: libncursesw6 (ncurses). The Bridge and the Camoufox
+# service are non-interactive HTTP daemons; ncurses is only loaded by
+# terminal-driven CLIs which we do not exec. No code path is exposed.
+CVE-2025-69720  exp:2026-12-31
+
+# Affected package: perl-base. Perl is not installed by any of our
+# Dockerfiles and the Bridge/Camoufox services never exec a Perl
+# interpreter. perl-base is pulled into the slim Debian base as a
+# transitive dependency of dpkg/apt, but it is dormant at runtime.
+# The five entries below cover all current critical/high perl CVEs
+# flagged in python:3.13-slim at scan time. Re-check after 5.40.1-7.
+CVE-2026-42496  exp:2026-12-31
+CVE-2026-8376   exp:2026-12-31
+CVE-2026-42497  exp:2026-12-31
+CVE-2026-48962  exp:2026-12-31
+CVE-2026-9538   exp:2026-12-31

@@ -72,7 +72,7 @@ jobs:
             type=raw,value=chrome-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Chrome Browser
-            org.opencontainers.image.description=Chrome + Xvfb for undetectable headed browsing via CDP port 9222
+            org.opencontainers.image.description=Headless Chrome for browser automation via CDP port 9222
             org.opencontainers.image.version=v${{ steps.version.outputs.version }}
             com.codefreedom.platform=Chrome
 

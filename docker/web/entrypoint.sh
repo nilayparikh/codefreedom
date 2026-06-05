@@ -5,7 +5,7 @@
 
 set -e
 
-# Determine target user: PUID/PGID env vars, or default browser (1000)
+# Determine target user: PUID/PGID env vars, or default codefreedom (1000)
 TARGET_UID="${PUID:-1000}"
 TARGET_GID="${PGID:-$TARGET_UID}"
 
@@ -20,15 +20,16 @@ _fix_perms() {
     done
 
     # Camoufox — only GeoIP db files, not the whole tree
-    local cfox="/usr/local/lib/python3.12/site-packages/camoufox"
-    if [ -d "$cfox" ]; then
+    local cfox
+    cfox=$(python -c "import camoufox; print(camoufox.__path__[0])" 2>/dev/null) || true
+    if [ -n "$cfox" ] && [ -d "$cfox" ]; then
         find "$cfox" -name "*.mmdb" \
             -exec chown "$TARGET_UID:$TARGET_GID" {} + 2>/dev/null || true
     fi
 
     # Browser home dir — camoufox cache lives here
-    if [ -d /home/browser ]; then
-        chown -R "$TARGET_UID:$TARGET_GID" /home/browser 2>/dev/null || true
+    if [ -d /home/codefreedom ]; then
+        chown -R "$TARGET_UID:$TARGET_GID" /home/codefreedom 2>/dev/null || true
     fi
 }
 
@@ -37,11 +38,11 @@ _fix_perms
 # Drop privileges — re-exec as target user unless already non-root
 if [ "$(id -u)" = "0" ]; then
     exec gosu "$TARGET_UID:$TARGET_GID" \
-        env HOME=/home/browser "$0" "$@"
+        env HOME=/home/codefreedom "$0" "$@"
 fi
 
 # Ensure HOME is set for non-root users without passwd entry
-export HOME="${HOME:-/home/browser}"
+export HOME="${HOME:-/home/codefreedom}"
 
 PIDS=()
 

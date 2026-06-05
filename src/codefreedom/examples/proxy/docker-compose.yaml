@@ -31,6 +31,7 @@ services:
       - all
     labels:
       "codefreedom.component": "litellm-proxy"
+    entrypoint: ["/app/patch_websearch_count.sh"]
     command:
       - --config
       - /app/litellm-config/config.yaml
@@ -77,6 +78,12 @@ services:
       LITELLM_TURN_OFF_MSG_LOGGING: ${LITELLM_TURN_OFF_MSG_LOGGING:-false}
       LITELLM_STREAM_USAGE: ${LITELLM_STREAM_USAGE:-true}
 
+      # ── Web Search Bridge ──────────────────────────────────────────────
+      # The websearch_interception callback (in config.yaml) uses LiteLLM's
+      # SearXNG search provider. The handler doesn't pass api_base from
+      # litellm_params, so we set it as an env var for the SearXNG transformer.
+      SEARXNG_API_BASE: ${SEARXNG_API_BASE:-http://web-bridge:8500}
+
       # ── Cloud provider credentials ───────────────────────────────────────
       # Set API keys in .env or .env.secrets; leave empty to disable that provider.
       # To fully disable a cloud provider, also comment out its include line
@@ -118,6 +125,53 @@ services:
       - codefreedom
     volumes:
       - ./config:/app/litellm-config:ro
+      # WebSearch count patch: LiteLLM's short-circuit handler omits
+      # server_tool_use.web_search_requests from the usage object, causing
+      # Claude Code to display "Did 0 searches". This patch adds the missing
+      # field. See docs/proxy/websearch-interception.md.
+      - ./patch_websearch_count.py:/app/patch_websearch_count.py:ro
+      - ./patch_websearch_count.sh:/app/patch_websearch_count.sh:ro
+
+  # ── Web search bridge (SearXNG-shaped → MCP) ────────────────────────────
+  # Replaces Claude Code's native WebSearch with calls to the local Camoufox
+  # MCP web_search tool. Started together with the proxy via
+  #   codefreedom proxy start --docker
+  # Reachable on the shared 'codefreedom' network at http://web-bridge:8500.
+  # No host port published — the proxy reaches it via service DNS.
+  # Set the two `websearch_interception` and `search_tools` blocks in
+  # config.yaml to actually use it. See docs/proxy/websearch-interception.md.
+  web-bridge:
+    # Pre-built image. The codefreedom proxy CLI auto-builds it on first start
+    # if missing (see codefreedom/cli/proxy.py:_ensure_web_bridge_image).
+    # Default is the full Docker Hub reference so the local tag is directly
+    # pushable — no retag step needed before `docker push`.
+    # To build manually:
+    #   docker build -t docker.io/nilayparikh/codefreedom:web-bridge \
+    #     -f docker/web-bridge/Dockerfile.Bridge docker/web-bridge/
+    image: ${WEB_BRIDGE_IMAGE:-docker.io/nilayparikh/codefreedom:web-bridge}
+    container_name: ${WEB_BRIDGE_CONTAINER_NAME:-codefreedom-web-bridge}
+    restart: unless-stopped
+    profiles:
+      - litellm
+      - all
+    labels:
+      "codefreedom.component": "web-search-bridge"
+    environment:
+      # Address of the Camoufox MCP web_search endpoint. Default assumes
+      # `codefreedom tools web` is running on the Docker host at port 8420.
+      MCP_WEB_URL: ${MCP_WEB_URL:-http://host.docker.internal:8420/mcp}
+      # Per-call cooldown in seconds. The bridge returns HTTP 429 if a
+      # second /search arrives within this window. 2.0 is a good default
+      # for typical Claude Code usage.
+      WEB_BRIDGE_COOLDOWN_SECONDS: ${WEB_BRIDGE_COOLDOWN_SECONDS:-2.0}
+      # Per-call MCP timeout. Should be larger than the MCP's own
+      # cooldown (default 10s) plus browser-render time.
+      MCP_TIMEOUT_SECONDS: ${MCP_TIMEOUT_SECONDS:-60}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - codefreedom
+    # No ports: — bridge is only reachable on the codefreedom network.
 
 networks:
   codefreedom:

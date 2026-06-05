@@ -280,3 +280,66 @@ def _now_iso() -> str:
     from datetime import datetime, timezone
 
     return datetime.now(timezone.utc).isoformat()
+
+
+# ── MCP endpoint resolution ───────────────────────────────────────────────────
+
+_TOOL_MCP_SERVER_NAMES: dict[str, str] = {
+    "chrome": "chrome-devtools",
+    "web": "web",
+}
+
+
+def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
+    """Build MCP server entries for acquired tools.
+
+    Reads each tool's profile to get the HTTP MCP endpoint URL and returns
+    a dict suitable for writing as a project ``.mcp.json`` file.
+
+    Returns a dict with a ``mcpServers`` key (even when empty):
+    ``{"mcpServers": {"chrome-devtools": {"type": "http", "url": "..."}}}``
+    """
+    servers: dict[str, dict] = {}
+
+    for tool_name in acquired_tools:
+        if tool_name not in _KNOWN_TOOLS:
+            continue
+
+        load_settings, _start, _stop = _KNOWN_TOOLS[tool_name]
+        try:
+            settings = load_settings()
+        except FileNotFoundError:
+            eprint(
+                f"[MCP] Tool '{tool_name}' profile not found —"
+                " run 'codefreedom tools {tool_name} init' first."
+            )
+            continue
+        except json.JSONDecodeError as exc:
+            eprint(
+                f"[MCP] Tool '{tool_name}' profile is malformed — {exc}."
+            )
+            continue
+
+        server_name = _TOOL_MCP_SERVER_NAMES.get(tool_name, tool_name)
+
+        if tool_name == "chrome":
+            port = settings.get("mcp_port", 9223)
+            path = settings.get("mcp_path", "/mcp")
+        elif tool_name == "web":
+            port = settings.get("port", 8420)
+            path = settings.get("mcp_path", "/mcp")
+        else:
+            eprint(
+                f"[MCP] Tool '{tool_name}' has no MCP endpoint mapping —"
+                " update _TOOL_MCP_SERVER_NAMES and add a branch here."
+            )
+            continue
+
+        # Normalize: ensure path starts with "/" for a valid URL.
+        if not path.startswith("/"):
+            path = "/" + path
+
+        url = f"http://127.0.0.1:{port}{path}"
+        servers[server_name] = {"type": "http", "url": url}
+
+    return {"mcpServers": servers}

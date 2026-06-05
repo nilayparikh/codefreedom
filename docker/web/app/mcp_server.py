@@ -1,11 +1,15 @@
-"""MCP server for CodeFreedom Camoufox — web_search + web_fetch.
+"""MCP server for CodeFreedom Camoufox — web_search + lightweight web_fetch.
 
-Only two MCP tools:
+Two MCP tools:
   • web_search(query) — search configured engines, return structured results + AI summaries
-  • web_fetch(url)    — fetch a page, return text + HTML + optional screenshot
+  • web_fetch(url)    — lightweight page fetch: HTTP first, browser fallback if blocked
 
-Internal: rate limiting (30s cooldown), session cleanup, parallel search.
-Mounted at /mcp on the main HTTP server.
+Internal: web_search uses a configurable cooldown (default 10s).
+web_fetch has no cooldown — it runs immediately and prefers a fast HTTP path,
+falling back to the Camoufox browser only when the site blocks plain HTTP.
+
+The cooldown between searches is configured via the SEARCH_COOLDOWN_SECONDS
+environment variable (float, default 10.0).
 
 Search engines are configured via the SEARCH_ENGINES environment variable
 (a JSON object where each key maps to {url, parser}).
@@ -23,10 +27,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 from typing import Any, Callable, Coroutine
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
+import requests
 from bs4 import BeautifulSoup
 from fastmcp import FastMCP
 from logger import get_logger
@@ -34,11 +40,11 @@ from logger import get_logger
 log = get_logger(__name__)
 
 _INSTRUCTIONS = (
-    "CodeFreedom Camoufox — stealth browser for web search and scraping. "
+    "CodeFreedom Camoufox — stealth browser for web search and lightweight fetch. "
     "TWO TOOLS: web_search(query) — searches configured engines, returns structured results. "
-    "web_fetch(url) — fetches a page blocked by standard HTTP, returns text+HTML. "
-    "Internal: 30s cooldown between searches, session cleanup, Camoufox fingerprinting. "
-    "Passes Cloudflare, CreepJS, BrowserScan, Pixelscan."
+    "web_fetch(url) — fast HTTP fetch with browser fallback for anti-bot pages. "
+    "web_search has a configurable cooldown; web_fetch runs immediately. "
+    "Passes Cloudflare, CreepJS, BrowserScan, Pixelscan via Camoufox when needed."
 )
 
 mcp = FastMCP("codefreedom-camoufox", instructions=_INSTRUCTIONS)
@@ -46,7 +52,40 @@ mcp = FastMCP("codefreedom-camoufox", instructions=_INSTRUCTIONS)
 _dispatch: Callable[[dict], Coroutine[Any, Any, dict]] | None = None
 _lock: asyncio.Lock | None = None
 _last_search: float = 0.0
-SEARCH_COOLDOWN = 30.0
+
+
+def _get_search_cooldown() -> float:
+    """Read the search cooldown from SEARCH_COOLDOWN_SECONDS env var.
+
+    Defaults to 10.0 seconds. Invalid values fall back to the default.
+    """
+    raw = os.environ.get("SEARCH_COOLDOWN_SECONDS", "10.0")
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        log.warning(
+            "SEARCH_COOLDOWN_SECONDS=%r is not a valid float, using default 10.0", raw
+        )
+        return 10.0
+
+
+def _get_browser_restart_every() -> int:
+    """How many searches to run before triggering a full browser restart.
+
+    Defaults to 10. The browser process accumulates rendered-page memory in its
+    persistent context; restarting it periodically releases that pressure. Set
+    to 0 to disable periodic restarts.
+    """
+    raw = os.environ.get("BROWSER_RESTART_EVERY", "10")
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 10
+
+
+# Tracks how many searches have been served since the last browser restart.
+# When this reaches BROWSER_RESTART_EVERY we trigger a full restart.
+_searches_since_restart: int = 0
 
 # =============================================================================
 # Parser registry — loaded from PARSER_REGISTRY env var at startup.
@@ -191,6 +230,58 @@ def _text_result(result: dict) -> str:
 
 
 # =============================================================================
+# Internal: post-search cleanup — keep memory pressure low
+# =============================================================================
+
+
+async def _release_page_memory() -> None:
+    """Navigate the active page to about:blank to release rendered state.
+
+    Camoufox's persistent context keeps every visited page's rendered DOM in
+    memory until the page is closed or navigated away. After every search we
+    go to about:blank so the next search starts from a clean slate. Best-effort:
+    any error is logged but does not propagate.
+    """
+    try:
+        await _call(
+            "run_script",
+            steps=[{"action": "goto", "url": "about:blank", "wait_until": "load"}],
+            name="cleanup_blank",
+        )
+    except Exception as exc:
+        log.warning("Page memory release failed: %s", exc)
+
+
+async def _periodic_browser_restart() -> bool:
+    """Restart the browser process every N searches to release accumulated state.
+
+    Returns True if a restart was triggered by this call.
+    """
+    global _searches_since_restart
+    _searches_since_restart += 1
+    every = _get_browser_restart_every()
+    if every <= 0 or _searches_since_restart < every:
+        return False
+
+    log.info(
+        "Periodic browser restart (every %d searches, count=%d)",
+        every,
+        _searches_since_restart,
+    )
+    try:
+        # Tell main.py to restart the browser — it owns the Browser instance
+        result = await _call("restart_browser")
+        if not result.get("success"):
+            log.warning("Browser restart failed: %s", result.get("error"))
+            return False
+        _searches_since_restart = 0
+        return True
+    except Exception as exc:
+        log.warning("Browser restart raised: %s", exc)
+        return False
+
+
+# =============================================================================
 # Internal: parser-driven search result extraction
 # =============================================================================
 
@@ -318,7 +409,7 @@ async def _search_one(engine: str, engine_cfg: dict, query: str) -> dict:
 
 
 # =============================================================================
-# MCP Tools — only two
+# MCP Tools — only one (web_search)
 # =============================================================================
 
 
@@ -328,7 +419,8 @@ async def web_search(query: str) -> str:
 
     Returns structured results with titles, URLs, snippets, and AI summaries
     when available. If parsing yields no results, raw HTML is included.
-    Internal: 30s cooldown, session cleanup.
+    Internal: configurable cooldown (SEARCH_COOLDOWN_SECONDS env var, default 10s),
+    session cleanup, periodic browser restart (BROWSER_RESTART_EVERY, default 10).
 
     Engines are configured via the SEARCH_ENGINES environment variable.
 
@@ -348,10 +440,11 @@ async def web_search(query: str) -> str:
             }
         )
 
-    # Cooldown
+    # Cooldown (configurable via SEARCH_COOLDOWN_SECONDS, default 10s)
+    cooldown = _get_search_cooldown()
     elapsed = time.time() - _last_search
-    if elapsed < SEARCH_COOLDOWN:
-        wait = SEARCH_COOLDOWN - elapsed
+    if elapsed < cooldown:
+        wait = cooldown - elapsed
         log.info("Cooldown: waiting %.0fs", wait)
         await asyncio.sleep(wait)
     _last_search = time.time()
@@ -359,11 +452,16 @@ async def web_search(query: str) -> str:
     # Delete cookies for fresh fingerprint on first search of session
     await _call("delete_cookies")
 
-    # Search engines sequentially (can't parallelize through asyncio.Lock)
-    all_results: list[dict] = []
-    for engine_name, engine_cfg in engines.items():
-        result = await _search_one(engine_name, engine_cfg, query)
-        all_results.append(result)
+    try:
+        # Search engines sequentially (can't parallelize through asyncio.Lock)
+        all_results: list[dict] = []
+        for engine_name, engine_cfg in engines.items():
+            result = await _search_one(engine_name, engine_cfg, query)
+            all_results.append(result)
+    finally:
+        # Always release page memory after a search, even on failure.
+        # This keeps the persistent context from accumulating rendered DOMs.
+        await _release_page_memory()
 
     output: dict[str, Any] = {
         "query": query,
@@ -390,52 +488,215 @@ async def web_search(query: str) -> str:
     if raw_html_blocks:
         output["raw_html"] = raw_html_blocks
 
+    # Periodic full browser restart to release accumulated cache / DOM / network state
+    restarted = await _periodic_browser_restart()
+    if restarted:
+        output["browser_restarted"] = True
+
     return json.dumps(output, default=str)
+
+
+# =============================================================================
+# MCP Tools — web_fetch (lightweight, no cooldown)
+# =============================================================================
+
+
+# Status codes that mean "the site rejected our plain request — use the browser"
+_BLOCK_STATUS_CODES = {403, 429, 503}
+
+# Status codes that mean "fetch failed at the transport level" — also browser
+_TRANSPORT_FAILURE_STATUSES = {0}
+
+_DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
+)
+
+# Tags we keep when extracting clean visible text from a page
+_DROP_TAGS = {"script", "style", "noscript", "iframe", "svg", "canvas", "video"}
+
+
+def _is_probably_blocked(html: str, status: int) -> bool:
+    """Heuristic check for anti-bot challenges in plain HTTP responses.
+
+    Returns True if the response looks like a Cloudflare / Akamai / DataDome
+    challenge page (empty body, "checking your browser", etc.) — even when the
+    HTTP status code is 200.
+    """
+    if status in _BLOCK_STATUS_CODES:
+        return True
+    if not html:
+        return True
+    head = html[:4096].lower()
+    markers = (
+        "checking your browser before accessing",
+        "attention required! | cloudflare",
+        "please complete the security check",
+        "access denied",
+        "verify you are human",
+    )
+    return any(m in head for m in markers)
+
+
+def _extract_text_from_html(html: str, max_chars: int = 50000) -> str:
+    """Strip scripts/styles and return clean visible text from HTML.
+
+    Lightweight — no browser, no JS. Just BeautifulSoup get_text + collapse
+    whitespace. Returns up to max_chars characters.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in _DROP_TAGS:
+        for el in soup.find_all(tag):
+            el.decompose()
+    text = soup.get_text(separator="\n", strip=True)
+    # Collapse runs of 3+ blank lines into a single blank line
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    if len(text) > max_chars:
+        text = text[:max_chars]
+    return text
+
+
+def _extract_title(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    if soup.title and soup.title.string:
+        return soup.title.string.strip()
+    return ""
+
+
+async def _http_fetch(url: str, timeout: float) -> dict | None:
+    """Plain HTTP fetch via requests. Returns a dict or None on transport failure.
+
+    The caller decides whether the response was actually usable (e.g. looks like
+    an anti-bot challenge) and whether to fall back to the browser.
+    """
+    try:
+        resp = await asyncio.to_thread(
+            requests.get,
+            url,
+            headers={"User-Agent": _DEFAULT_USER_AGENT, "Accept": "*/*"},
+            timeout=timeout,
+            allow_redirects=True,
+        )
+    except requests.RequestException as exc:
+        log.warning("HTTP fetch failed for %s: %s", url, exc)
+        return None
+
+    return {
+        "url": resp.url,
+        "status": resp.status_code,
+        "html": resp.text,
+    }
+
+
+async def _browser_fetch(url: str, timeout: float) -> dict:
+    """Browser-based fetch via the existing dispatcher. Last-resort fallback.
+
+    Uses the same persistent browser context (no extra launches) but throws
+    away the page state after the fetch to keep memory pressure low.
+    """
+    steps: list[dict] = [
+        {"action": "goto", "url": url, "wait_until": "domcontentloaded"},
+        {"action": "wait_for_network_idle", "timeout": int(timeout * 1000)},
+        {"action": "get_text", "output_id": "text"},
+        {"action": "get_html", "output_id": "html"},
+        {"action": "eval", "expression": "document.title", "output_id": "title"},
+    ]
+
+    resp = await _call("run_script", steps=steps, name="web_fetch_browser")
+    if not resp.get("success"):
+        return {
+            "url": url,
+            "method": "browser",
+            "error": resp.get("error", "browser fetch failed"),
+        }
+
+    outputs = resp.get("data", {}).get("outputs", {})
+    text = outputs.get("text", {}).get("text", "")
+    html = outputs.get("html", {}).get("html", "")
+    title = outputs.get("title", {}).get("result", "")
+
+    # Free the page memory — go to about:blank so Camoufox releases rendered state
+    try:
+        await _call(
+            "run_script",
+            steps=[{"action": "goto", "url": "about:blank", "wait_until": "load"}],
+            name="web_fetch_cleanup",
+        )
+    except Exception:
+        pass
+
+    return {
+        "url": url,
+        "method": "browser",
+        "title": title,
+        "text": text[:50000],
+        "text_truncated": len(text) > 50000,
+        "html_length": len(html),
+    }
 
 
 @mcp.tool
 async def web_fetch(
     url: str,
+    timeout: float = 15.0,
+    use_browser: bool | None = None,
     include_screenshot: bool = False,
-    wait_until: str = "networkidle",
+    wait_until: str = "domcontentloaded",
 ) -> str:
-    """Fetch a web page using Camoufox (bypasses anti-bot protection).
+    """Fetch a web page and return its text content. No cooldown.
 
-    Use when standard HTTP fetch is blocked by Cloudflare, bot detection,
-    or JS-rendering requirements. Returns page text, HTML, and title.
+    Tries a fast plain-HTTP fetch first. If the server blocks the request
+    (Cloudflare, Akamai, JS-only pages, etc.) it falls back to a single-page
+    Camoufox browser load, extracts the visible text, then releases the page
+    back to about:blank to keep memory usage low.
+
+    Use this for quick page reads. For full search, use web_search.
 
     Args:
         url: The URL to fetch
-        include_screenshot: Also return a screenshot (whLargest=512)
-        wait_until: "domcontentloaded", "load", or "networkidle" (default)
+        timeout: Per-attempt timeout in seconds (default 15)
+        use_browser: Force browser mode (True), force HTTP only (False),
+                     or auto (default None = try HTTP first, fallback to browser)
+        include_screenshot: (deprecated) Ignored — screenshots are no longer
+                            captured. Use a separate screenshot tool if needed.
+        wait_until: (deprecated) Ignored — page load strategy is now always
+                    "domcontentloaded" with a network-idle grace period.
     """
-    # Delete cookies for clean session
-    await _call("delete_cookies")
+    if not url or not urlparse(url).scheme.startswith("http"):
+        return json.dumps({"url": url, "error": "Invalid URL — must be http(s)"})
 
-    steps: list[dict] = [
-        {"action": "goto", "url": url, "wait_until": wait_until},
-        {"action": "wait_for_network_idle", "timeout": 15},
-        {"action": "get_text", "output_id": "text"},
-        {"action": "get_html", "output_id": "html"},
-        {"action": "eval", "expression": "document.title", "output_id": "title"},
-    ]
-    if include_screenshot:
-        steps.append(
-            {"action": "save_screenshot", "output_id": "screenshot", "whLargest": 512}
-        )
+    log.info("web_fetch: %s (timeout=%.0fs, use_browser=%s)", url, timeout, use_browser)
 
-    resp = await _call("run_script", steps=steps, name="web_fetch")
-    if not resp.get("success"):
-        return json.dumps({"error": resp.get("error", "fetch failed")})
+    if use_browser is not True:
+        # Fast path: plain HTTP
+        http_resp = await _http_fetch(url, timeout)
+        if http_resp is not None and not _is_probably_blocked(
+            http_resp["html"], http_resp["status"]
+        ):
+            html = http_resp["html"]
+            text = _extract_text_from_html(html)
+            return json.dumps(
+                {
+                    "url": http_resp["url"],
+                    "method": "http",
+                    "status": http_resp["status"],
+                    "title": _extract_title(html),
+                    "text": text,
+                    "text_truncated": len(text) >= 50000,
+                },
+                default=str,
+            )
 
-    outputs = resp.get("data", {}).get("outputs", {})
-    result: dict[str, Any] = {
-        "url": url,
-        "title": outputs.get("title", {}).get("result", ""),
-        "text": outputs.get("text", {}).get("text", ""),
-        "html": outputs.get("html", {}).get("html", ""),
-    }
-    if include_screenshot:
-        result["screenshot_base64"] = outputs.get("screenshot", "")
+        if use_browser is False:
+            return json.dumps(
+                {
+                    "url": url,
+                    "method": "http",
+                    "error": "HTTP fetch blocked or empty; use_browser=False",
+                }
+            )
 
+        log.info("web_fetch: HTTP blocked, falling back to browser for %s", url)
+
+    # Slow path: browser (only when HTTP is blocked or browser is forced)
+    result = await _browser_fetch(url, timeout)
     return json.dumps(result, default=str)

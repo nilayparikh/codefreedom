@@ -1,13 +1,15 @@
 """Proxy subcommand -- manage the LLM routing proxy (Docker or native).
 
 Usage:
-    codefreedom proxy init            Initialize proxy configs
-    codefreedom proxy start            Start the proxy (native, default)
-    codefreedom proxy start --docker   Start via Docker Compose
-    codefreedom proxy stop             Stop the proxy
-    codefreedom proxy restart --docker Restart the proxy (Docker Compose native)
-    codefreedom proxy status           Show proxy status
-    codefreedom proxy validate         Validate configuration
+    codefreedom proxy init                              Initialize proxy configs
+    codefreedom proxy start                            Start the proxy (native, default)
+    codefreedom proxy start --docker                   Start via Docker Compose
+    codefreedom proxy stop                             Stop the proxy
+    codefreedom proxy restart --docker                 Restart the proxy (Docker Compose native)
+    codefreedom proxy status                           Show proxy status
+    codefreedom proxy validate                         Validate configuration
+
+VS Code integration: see `codefreedom vscode proxy config`.
 """
 
 from __future__ import annotations
@@ -50,6 +52,15 @@ def init_proxy() -> int:
         (proxy_src / "docker-compose.yaml", proxy_dst / "docker-compose.yaml"),
         (proxy_src / ".env.proxy.example", cf_dir / ".env.proxy"),
         (proxy_src / ".env.proxy.secrets.example", cf_dir / ".env.proxy.secrets"),
+        # WebSearch count display patch (see docs/proxy/websearch-interception.md)
+        (
+            proxy_src / "patch_websearch_count.py",
+            proxy_dst / "patch_websearch_count.py",
+        ),
+        (
+            proxy_src / "patch_websearch_count.sh",
+            proxy_dst / "patch_websearch_count.sh",
+        ),
     ]
 
     providers_src = proxy_src / "config" / "providers"
@@ -124,7 +135,7 @@ def _find_config_file() -> Optional[Path]:
 def run(args: argparse.Namespace) -> int:
     """Execute the proxy subcommand. Returns exit code."""
 
-    action = args.action or "status"
+    action = args.action
 
     if action == "start":
         return _start(args)
@@ -138,6 +149,8 @@ def run(args: argparse.Namespace) -> int:
         return _validate()
     elif action == "init":
         return init_proxy()
+    # `vscode` moved to the top-level `codefreedom vscode proxy config`
+    # subcommand -- see codefreedom.cli.vscode.
     else:
         eprint(
             "[proxy] No action specified."
@@ -186,12 +199,112 @@ def _start(args: argparse.Namespace) -> int:
         return _start_native(args)
 
 
+def _web_bridge_build_context() -> Optional[Path]:
+    """Locate the ``docker/web-bridge`` directory in the installed source tree.
+
+    Returns ``None`` if the source tree is not available (e.g. installed from
+    a wheel without the docker/ directory).  The caller should treat that as
+    "skip the auto-build" and rely on a pre-built image instead.
+    """
+    # codefreedom.__file__ is .../src/codefreedom/__init__.py.  Walk up two
+    # levels to the project root, then into docker/web-bridge.
+    try:
+        import codefreedom
+    except ImportError:
+        return None
+    pkg_dir = Path(codefreedom.__file__).resolve().parent
+    project_root = pkg_dir.parent.parent
+    candidate = project_root / "docker" / "web-bridge"
+    if (candidate / "Dockerfile.Bridge").is_file():
+        return candidate
+    return None
+
+
+def _web_bridge_image() -> str:
+    """Return the fully-qualified image tag used for the web-bridge sidecar.
+
+    Reads ``WEB_BRIDGE_IMAGE`` from the merged env (proxy env files override
+    system env). Falls back to the published ``docker.io/nilayparikh/codefreedom:web-bridge``
+    reference so the local build is directly pushable to Docker Hub without
+    a retag step. Override the env var to use a different registry/tag.
+    """
+    merged = _build_proxy_env()
+    return merged.get(
+        "WEB_BRIDGE_IMAGE", "docker.io/nilayparikh/codefreedom:web-bridge"
+    )
+
+
+def _ensure_web_bridge_image() -> int:
+    """Make sure the web-bridge image (see :func:`_web_bridge_image`) exists.
+
+    Returns 0 on success, 1 on hard failure (Docker error, source tree
+    missing, build failure).  A pre-built image is a no-op.
+    """
+    image = _web_bridge_image()
+
+    # Fast path: image already present?
+    check = subprocess.run(
+        ["docker", "image", "inspect", image],
+        capture_output=True,
+        check=False,
+    )
+    if check.returncode == 0:
+        return 0
+
+    # Try to auto-build from the source tree.
+    build_ctx = _web_bridge_build_context()
+    if build_ctx is None:
+        eprint(
+            f"[proxy] [WARN] '{image}' image is missing and the source tree"
+            " (docker/web-bridge/) could not be located."
+        )
+        eprint(
+            "   Build it manually:"
+            f"  docker build -t {image} -f docker/web-bridge/Dockerfile.Bridge"
+            " docker/web-bridge/"
+        )
+        eprint("   The web-bridge sidecar will fail to start until the image exists.")
+        # Don't hard-fail: the rest of the proxy stack can still come up.
+        return 0
+
+    eprint(
+        f"[proxy] Web-bridge image '{image}' not found locally."
+        " Building from source tree..."
+    )
+    eprint("   This is a one-time build (may take ~30 s).")
+    result = subprocess.run(
+        [
+            "docker",
+            "build",
+            "-t",
+            image,
+            "-f",
+            str(build_ctx / "Dockerfile.Bridge"),
+            str(build_ctx),
+        ],
+        capture_output=False,
+        timeout=300,
+        check=False,
+    )
+    if result.returncode != 0:
+        eprint(f"[proxy] [FAIL] Failed to build {image}. Check docker output above.")
+        return 1
+    eprint(f"[proxy] [OK] Built {image}.")
+    return 0
+
+
 def _start_compose() -> int:
     """Start LiteLLM via docker compose."""
     compose_file = _find_compose_file()
     if not compose_file:
         eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
         eprint("   Run: codefreedom proxy init")
+        return 1
+
+    # Auto-build the web-bridge image if it isn't present locally. The image
+    # is referenced (not built) by docker-compose.yaml because a relative
+    # build context would not survive the example → ~/.codefreedom copy step.
+    if _ensure_web_bridge_image() != 0:
         return 1
 
     eprint(f"[proxy] Starting LiteLLM via Docker Compose ({compose_file})...")
@@ -517,3 +630,6 @@ def _print_validation_result(errors: List[str]) -> None:
             eprint(f"       - {e}")
     else:
         eprint("  [OK]  Configuration looks good!")
+
+
+# VS Code config generation moved to codefreedom.cli.vscode.

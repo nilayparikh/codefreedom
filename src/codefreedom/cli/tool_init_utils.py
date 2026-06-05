@@ -13,16 +13,14 @@ from codefreedom.env_loader import eprint
 
 TOOL_INFO: Dict[str, dict] = {
     "chrome": {
-        "name": "Chrome Browser",
+        "name": "Chrome Browser (Headless)",
         "description": (
-            "Chrome browser with Xvfb virtual display for undetectable headed browsing. "
-            "Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222."
+            "Headless Google Chrome for browser automation. "
+            "Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222. "
+            "For stealth / anti-bot browsing, use the 'web' tool (Camoufox) instead."
         ),
         "third_party": [
             ("Google Chrome / Chromium", "Google LLC"),
-            ("Xvfb (virtual display)", "X.org Foundation"),
-            ("PulseAudio (virtual audio)", "freedesktop.org"),
-            ("MS Core Fonts (Arial, Times New Roman, etc.)", "Microsoft Corporation"),
             ("dumb-init (PID 1 supervisor)", "Yelp, Inc."),
         ],
         "docs_url": "https://nilayparikh.github.io/codefreedom/tools/chrome/",

@@ -4,6 +4,8 @@ Usage:
     codefreedom claude [--profile NAME] [--sandbox] [--stop|--status|--list-profiles] [agent-args...]
     codefreedom claude init
     cf cc [same]
+
+VS Code integration: see `codefreedom vscode claude config`.
 """
 
 from __future__ import annotations
@@ -107,6 +109,9 @@ def init_claude() -> int:
     )
     _print_non_disclaimer()
     return 0
+
+
+# VS Code settings generation moved to codefreedom.cli.vscode.
 
 
 def run(args: argparse.Namespace) -> int:
@@ -232,6 +237,7 @@ def run(args: argparse.Namespace) -> int:
                 sandbox_images=sandbox_images,
                 run_as_me=run_as_me,
                 container_name=session_id,
+                acquired_tools=acquired_tools,
             )
         else:
             if run_as_me:

@@ -10,6 +10,7 @@ container-locking from shared reuse."""
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import shutil
@@ -20,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint
+from codefreedom.tool_registry import load_tool_mcp_endpoints
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -38,6 +40,52 @@ def _generate_container_name() -> str:
     """Generate a random container name: codefreedom-XXXX (4 alphanumeric chars)."""
     suffix = secrets.token_hex(2)  # 4 hex chars
     return f"{_CONTAINER_PREFIX}{suffix}"
+
+
+def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
+    """Write .mcp.json into the workspace so Claude Code connects to acquired tool
+    containers via their HTTP MCP endpoints.
+
+    Auto-generated tool entries are merged into any existing ``.mcp.json`` so
+    manually configured MCP servers are preserved.  The file is created if
+    it doesn't exist yet.
+    """
+    mcp_config = load_tool_mcp_endpoints(acquired_tools)
+    auto_servers = mcp_config.get("mcpServers", {})
+    if not auto_servers:
+        eprint("[MCP] No MCP endpoints to register.")
+        return
+
+    mcp_path = workspace_dir / ".mcp.json"
+
+    # Merge with existing .mcp.json if present.
+    existing: dict = {}
+    if mcp_path.exists():
+        try:
+            existing = json.loads(mcp_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            eprint(f"[MCP] Could not parse existing {mcp_path} — backing up and replacing.")
+            backup = mcp_path.with_suffix(".mcp.json.bak")
+            try:
+                mcp_path.rename(backup)
+            except OSError:
+                pass
+
+    existing.setdefault("mcpServers", {})
+    # Auto-generated entries overwrite any existing entry with the same
+    # server name (the profile is authoritative).  Existing servers that
+    # are NOT auto-generated are left untouched.
+    existing["mcpServers"].update(auto_servers)
+
+    mcp_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    eprint(
+        f"[MCP] Wrote {len(auto_servers)} MCP server(s) to {mcp_path}: "
+        + ", ".join(auto_servers.keys())
+    )
+    # Note if other servers were preserved.
+    other = [s for s in existing["mcpServers"] if s not in auto_servers]
+    if other:
+        eprint(f"[MCP] Preserved {len(other)} existing MCP server(s): {', '.join(other)}")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -260,6 +308,7 @@ def run_docker(
     sandbox_images: Dict[str, str] | None = None,
     run_as_me: bool = False,
     container_name: str | None = None,
+    acquired_tools: list[str] | None = None,
 ) -> int:
     """Run claude inside an ephemeral Docker container. Each session gets a fresh
     container with a random name -- cleaned up on exit (including Ctrl+C).
@@ -361,6 +410,10 @@ def run_docker(
         "-v",
         f"{CODEFREEDOM_DIR / 'sandbox' / 'tools' / '.cache'}:{container_home}/.cache",
     ]
+
+    # ── Write project .mcp.json for acquired tool containers ───────────
+    if acquired_tools:
+        _write_mcp_json(workspace_dir, acquired_tools)
 
     # ── Ensure image is available ─────────────────────────────────────────
     _inspect = subprocess.run(

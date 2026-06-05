@@ -71,6 +71,7 @@ nav:
       - Configuration: proxy/config.md
       - Database: proxy/database.md
       - Docker Mode: proxy/docker.md
+      - Web Search Interception: proxy/websearch-interception.md
       - Providers:
           - Overview: proxy/providers/index.md
           - DeepSeek: proxy/providers/deepseek.md
@@ -81,6 +82,7 @@ nav:
           - OpenAI Compatible: proxy/providers/openai-compatible.md
           - Anthropic Compatible: proxy/providers/anthropic-compatible.md
           - Local: proxy/providers/local.md
+  - Free Models: free-models.md
   - Code Agents:
       - Overview: claude-code.md
       - Profiles: claude-code/profiles.md
@@ -93,6 +95,8 @@ nav:
       - Chrome: tools/chrome.md
       - Camoufox: tools/web.md
   - VS Code: vscode.md
+  - FAQ:
+      - Web Search: faq/web-search.md
   - Troubleshooting: troubleshooting.md
   - License & Contributions: license-contributions.md
 

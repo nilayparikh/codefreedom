@@ -40,6 +40,11 @@
           "type": "object",
           "description": "Extra environment variables"
         },
+        "search_cooldown_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum seconds between web_search calls. Set to 0 to disable. Defaults to 10.0."
+        },
         "search_engines": {
           "type": "object",
           "description": "Map of search engine name to config. Each value is {url: string, parser: string}. Use {q} as the query placeholder in url.",
@@ -88,6 +93,11 @@
               }
             }
           }
+        },
+        "mcp_path": {
+          "type": "string",
+          "description": "HTTP MCP endpoint path (e.g. /mcp). Used when codefreedom writes the project .mcp.json for Claude Code. Defaults to /mcp.",
+          "default": "/mcp"
         }
       }
     }

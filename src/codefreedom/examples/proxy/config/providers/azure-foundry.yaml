@@ -44,6 +44,7 @@
 #         - temperature
 #         - top_p
 #         - stop
+#         - reasoning_effort
 #
 #   - model_name: Azure/GLM-5.1
 #     litellm_params:
