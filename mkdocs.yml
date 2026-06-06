@@ -74,14 +74,44 @@ nav:
       - Web Search Interception: proxy/websearch-interception.md
       - Providers:
           - Overview: proxy/providers/index.md
-          - DeepSeek: proxy/providers/deepseek.md
-          - Azure Foundry: proxy/providers/azure-foundry.md
-          - NVIDIA: proxy/providers/nvidia.md
-          - OpenCode Zen: proxy/providers/opencode-zen.md
-          - OpenRouter: proxy/providers/openrouter.md
-          - OpenAI Compatible: proxy/providers/openai-compatible.md
-          - Anthropic Compatible: proxy/providers/anthropic-compatible.md
-          - Local: proxy/providers/local.md
+          - DeepSeek:
+              - Overview: proxy/providers/deepseek/index.md
+              - DeepSeek-V4-Flash: proxy/providers/deepseek/deepseek-v4-flash.md
+              - DeepSeek-V4-Pro: proxy/providers/deepseek/deepseek-v4-pro.md
+          - Azure Foundry:
+              - Overview: proxy/providers/azure-foundry/index.md
+              - GPT-5.4: proxy/providers/azure-foundry/gpt-5.4.md
+              - GPT-5.4-Mini: proxy/providers/azure-foundry/gpt-5.4-mini.md
+              - GPT-5.4-Nano: proxy/providers/azure-foundry/gpt-5.4-nano.md
+          - NVIDIA:
+              - Overview: proxy/providers/nvidia/index.md
+              - DeepSeek-V4-Flash: proxy/providers/nvidia/deepseek-v4-flash.md
+              - DeepSeek-V4-Pro: proxy/providers/nvidia/deepseek-v4-pro.md
+              - GLM-5.1: proxy/providers/nvidia/glm-5.1.md
+              - Kimi-K2.6: proxy/providers/nvidia/kimi-k2.6.md
+              - Step-3.7-Flash: proxy/providers/nvidia/step-3.7-flash.md
+          - OpenCode Zen:
+              - Overview: proxy/providers/opencode-zen/index.md
+              - MiMo-V2.5-FREE: proxy/providers/opencode-zen/mimo-v2.5.md
+              - Nemotron-3-Super-FREE: proxy/providers/opencode-zen/nemotron-3-super.md
+              - Nemotron-3-Ultra-FREE: proxy/providers/opencode-zen/nemotron-3-ultra.md
+              - DeepSeek-V4-Flash-FREE: proxy/providers/opencode-zen/deepseek-v4-flash.md
+              - Big-Pickle: proxy/providers/opencode-zen/big-pickle.md
+              - MiniMax-M3-FREE: proxy/providers/opencode-zen/minimax-m3.md
+          - OpenRouter:
+              - Overview: proxy/providers/openrouter/index.md
+              - Nemotron-3-Ultra-550B-A55B: proxy/providers/openrouter/nemotron-3-ultra-550b-a55b.md
+              - FreeRouter: proxy/providers/openrouter/freerouter.md
+          - OpenAI Compatible:
+              - Overview: proxy/providers/openai-compatible/index.md
+              - Default: proxy/providers/openai-compatible/default.md
+          - Anthropic Compatible:
+              - Overview: proxy/providers/anthropic-compatible/index.md
+              - Default: proxy/providers/anthropic-compatible/default.md
+          - Local:
+              - Overview: proxy/providers/local/index.md
+              - Qwen3.6-27B: proxy/providers/local/qwen3.6-27b.md
+              - Qwen3.6-35B-A3B: proxy/providers/local/qwen3.6-35b-a3b.md
   - Free Models: free-models.md
   - Code Agents:
       - Overview: claude-code.md

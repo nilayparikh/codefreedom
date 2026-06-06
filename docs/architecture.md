@@ -149,3 +149,12 @@ sequenceDiagram
 | **Opt-in providers**             | Set an API key to enable; leave empty to disable                             |
 | **Docker is optional**           | Proxy runs natively or via Docker Compose; Docker only required for sandbox  |
 | **Env chain loading**            | `.env` → `.env.secrets` → system env — later overrides earlier               |
+
+## See Also
+
+- [Proxy Overview](proxy/index.md) — provider list with per-model links
+- [Providers](proxy/providers/index.md) — full provider configuration reference
+- [Proxy Configuration](proxy/config.md) — model aliases, retry policy, fallbacks
+- [Profiles](claude-code/profiles.md) — Claude Code profile schema and inheritance
+- [Code Agents](claude-code.md) — local vs sandbox mode
+- [Browser Tools](tools/index.md) — Chrome and Camoufox tool profiles

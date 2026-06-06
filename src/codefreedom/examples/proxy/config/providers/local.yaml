@@ -19,11 +19,11 @@
 #       api_base: os.environ/LOCAL_M_BASE_URL
 #       api_key: os.environ/LOCAL_M_API_KEY
 #       timeout: 300
-
+#
 #       include_reasoning: true
 #       max_tokens: 131072
 #       max_completion_tokens: 16384
-
+#
 #       extra_body:
 #         seed: 42
 #         temperature: 0.0
@@ -38,7 +38,7 @@
 #         chat_template_kwargs:
 #           enable_thinking: true
 #           preserve_thinking: false
-
+#
 #     model_info: &local_model_info
 #       id: "local-qwen3.6-27b"
 #       db_model: false
@@ -68,7 +68,7 @@
 #         - stop
 #         - thinking
 #         - reasoning_effort
-
+#
 #   # ── CodeFreedom/Air alias maps here ──────────────────────────────────────
 #   # Fast, large-context model on port 8001
 #   - model_name: DGX/Qwen3.6-35B-A3B
@@ -79,7 +79,7 @@
 #       api_key: os.environ/LOCAL_S_API_KEY
 #       max_tokens: 262144
 #       max_completion_tokens: 16384
-
+#
 #       extra_body:
 #         seed: 42
 #         temperature: 0.0
@@ -94,14 +94,7 @@
 #         chat_template_kwargs:
 #           enable_thinking: true
 #           preserve_thinking: false
-
+#
 #     model_info:
 #       <<: *local_model_info
 #       id: "local-qwen3.6-35b-a3b"
-#       supports_vision: true
-#       context_window: 262144
-#       max_tokens: 262144
-#       max_input_tokens: 245760
-#       limit:
-#         context: 262144
-#         output: 16384

@@ -5,14 +5,16 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 # model_list:
-#   - model_name: OpenCodeZen/Mimo-V2.5-FREE
+#   # https://models.dev/models/xiaomi/mimo-v2.5
+#   # MiMo V2.5 — Xiaomi, 1M context, 131K output
+#   # Capabilities: reasoning, tools, temperature
+#   # Vision: YES — models.dev shows Image icon (data-tooltip="Image")
+#   - model_name: OpenCodeZen/MiMo-V2.5-FREE
 #     litellm_params: &opencode_zen_openai_params
 #       model: openai/mimo-v2.5-free
 #       api_base: os.environ/OPENCODE_ZEN_BASE_URL
 #       api_key: os.environ/OPENCODE_ZEN_API_KEY
 #       timeout: 300
-#       max_tokens: 200000
-#       max_completion_tokens: 20000
 #       drop_params: true
 #       stream_options:
 #         include_usage: true
@@ -20,20 +22,26 @@
 #         temperature: 0.0
 #         top_p: 1.0
 #         reasoning_effort: "high"
-
+#
 #     model_info: &opencode_zen_openai_model_info
 #       id: "opencode-mimo-v2.5-free"
 #       db_model: false
 #       supports_reasoning: true
 #       mode: chat
-#       context_window: 200000
-#       max_tokens: 200000
-#       max_input_tokens: 180000
-#       max_output_tokens: 20000
 #       supports_system_messages: true
 #       supports_native_streaming: true
-#       supports_vision: false
+#       supports_vision: true
+#       context_window: 1048576
+#       max_tokens: 1048576
+#       max_input_tokens: 917504
+#       max_output_tokens: 131072
+#       limit:
+#         context: 1048576
+#         output: 131072
 #       supported_openai_params:
+#         - tools
+#         - tool_choice
+#         - parallel_tool_calls
 #         - max_tokens
 #         - max_completion_tokens
 #         - stream
@@ -41,44 +49,110 @@
 #         - temperature
 #         - top_p
 #         - stop
+#         - thinking
+#         - reasoning_effort
+#         - response_format
 #
+#   # Nemotron-3-Super — NVIDIA-backed, strong coding
+#   # Spec not independently verified on models.dev; using conservative defaults
+#   # based on Nemotron-3-Ultra specs (same family).
+#   # Vision: NO — Nemotron models are text-only (no vision on models.dev)
 #   - model_name: OpenCodeZen/Nemotron-3-Super-FREE
 #     litellm_params:
 #       <<: *opencode_zen_openai_params
 #       model: openai/nemotron-3-super-free
-#       max_tokens: 205000
-#       max_completion_tokens: 20000
 #     model_info:
 #       <<: *opencode_zen_openai_model_info
 #       id: "opencode-nemotron-3-super-free"
-#       context_window: 205000
-#       max_tokens: 205000
-#       max_input_tokens: 185000
+#       supports_vision: false
+#       # Conservative: same as Ultra but smaller
+#       context_window: 262144
+#       max_tokens: 262144
+#       max_input_tokens: 131072
+#       max_output_tokens: 65536
+#       limit:
+#         context: 262144
+#         output: 65536
 #
+#   # https://models.dev/models/nvidia/nemotron-3-ultra-550b-a55b
+#   # Nemotron-3-Ultra — NVIDIA, 1M context, 128K output
+#   # Capabilities: reasoning, tools, temperature
+#   # Vision: YES — models.dev shows Image icon (data-tooltip="Image")
+#   - model_name: OpenCodeZen/Nemotron-3-Ultra-FREE
+#     litellm_params:
+#       <<: *opencode_zen_openai_params
+#       model: openai/nemotron-3-ultra-free
+#     model_info:
+#       <<: *opencode_zen_openai_model_info
+#       id: "opencode-nemotron-3-ultra-free"
+#       supports_vision: true
+#       context_window: 1048576
+#       max_tokens: 1048576
+#       max_input_tokens: 917504
+#       max_output_tokens: 131072
+#       limit:
+#         context: 1048576
+#         output: 131072
+#
+#   # https://models.dev/models/deepseek/deepseek-v4-flash
+#   # DeepSeek V4-Flash — 1M context, 384K output
+#   # Capabilities: reasoning, tools, thinking, temperature
+#   # Vision: NO — models.dev shows no Image icon
 #   - model_name: OpenCodeZen/DeepSeek-V4-Flash-FREE
 #     litellm_params:
 #       <<: *opencode_zen_openai_params
 #       model: openai/deepseek-v4-flash-free
-#       max_tokens: 200000
-#       max_completion_tokens: 20000
 #     model_info:
 #       <<: *opencode_zen_openai_model_info
 #       id: "opencode-deepseek-v4-flash-free"
-#       context_window: 200000
-#       max_tokens: 200000
-#       max_input_tokens: 180000
-#       max_output_tokens: 20000
+#       supports_vision: false
+#       context_window: 1000000
+#       max_tokens: 1000000
+#       max_input_tokens: 616000
+#       max_output_tokens: 384000
+#       limit:
+#         context: 1000000
+#         output: 384000
 #
+#   # Big Pickle — general purpose, reasoning + tools
+#   # Spec not independently verified on models.dev; using conservative defaults
+#   # Vision: NO — text-only model (no vision data found)
 #   - model_name: OpenCodeZen/Big-Pickle
 #     litellm_params:
 #       <<: *opencode_zen_openai_params
 #       model: openai/big-pickle
-#       max_tokens: 200000
-#       max_completion_tokens: 20000
 #     model_info:
 #       <<: *opencode_zen_openai_model_info
 #       id: "opencode-big-pickle"
-#       context_window: 200000
-#       max_tokens: 200000
-#       max_input_tokens: 180000
-#       max_output_tokens: 20000
+#       supports_vision: false
+#       # Conservative: similar to mid-tier models
+#       context_window: 262144
+#       max_tokens: 262144
+#       max_input_tokens: 131072
+#       max_output_tokens: 65536
+#       limit:
+#         context: 262144
+#         output: 65536
+#
+#   # https://models.dev/models/minimax/MiniMax-M3
+#   # MiniMax-M3 — 512K context, 128K output
+#   # Capabilities: reasoning, tools, temperature
+#   # Vision: YES — models.dev shows Image icon (data-tooltip="Image")
+#   - model_name: OpenCodeZen/Minimax-M3-FREE
+#     litellm_params:
+#       <<: *opencode_zen_openai_params
+#       model: minimax/minimax-m3-free
+#       # Add this parameter to enable the internal reasoning parser
+#       drop_params: false
+#       modify_params: true
+#     model_info:
+#       <<: *opencode_zen_openai_model_info
+#       id: "opencode-minimax-m3-free"
+#       supports_vision: true
+#       context_window: 512000
+#       max_tokens: 512000
+#       max_input_tokens: 384000
+#       max_output_tokens: 128000
+#       limit:
+#         context: 512000
+#         output: 128000

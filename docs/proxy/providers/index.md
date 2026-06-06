@@ -8,16 +8,18 @@ Each provider is a YAML file in `~/.codefreedom/proxy/config/providers/` that de
 
 ## Available Providers
 
-| Provider | File | Description |
-| --- | --- | --- |
-| [DeepSeek](deepseek.md) | `deepseek.yaml` | DeepSeek-V4-Flash and V4-Pro |
-| [Azure Foundry](azure-foundry.md) | `azure-foundry.yaml` | Kimi-K2.6, GLM-5.1, DeepSeek-V4-Pro via Azure |
-| [NVIDIA](nvidia.md) | `nvidia.yaml` | Models via NVIDIA AI Endpoints |
-| [OpenCode Zen](opencode-zen.md) | `opencode-zen.yaml` | Free-tier models (Mimo, Nemotron, DeepSeek) |
-| [OpenRouter](openrouter.md) | `openrouter.yaml` | Aggregated models via OpenRouter |
-| [OpenAI Compatible](openai-compatible.md) | `openai-compatible.yaml` | Any OpenAI-compatible endpoint |
-| [Anthropic Compatible](anthropic-compatible.md) | `anthropic-compatible.yaml` | Any Anthropic-compatible endpoint |
-| [Local](local.md) | `local.yaml` | Self-hosted inference servers |
+| Provider                                              | File                        | Description                                             |
+| ----------------------------------------------------- | --------------------------- | ------------------------------------------------------- |
+| [DeepSeek](deepseek/index.md)                         | `deepseek.yaml`             | V4-Flash and V4-Pro via DeepSeek API                    |
+| [Azure Foundry](azure-foundry/index.md)               | `azure-foundry.yaml`        | GPT-5.4 family via Microsoft Foundry                    |
+| [NVIDIA](nvidia/index.md)                             | `nvidia.yaml`               | DeepSeek, GLM, Kimi, Step via NVIDIA AI Endpoints       |
+| [OpenCode Zen](opencode-zen/index.md)                 | `opencode-zen.yaml`         | Free-tier models (Mimo, Nemotron, DeepSeek, MiniMax-M3) |
+| [OpenRouter](openrouter/index.md)                     | `openrouter.yaml`           | Aggregated models via OpenRouter                        |
+| [OpenAI Compatible](openai-compatible/index.md)       | `openai-compatible.yaml`    | Any OpenAI-compatible `/v1/chat/completions` endpoint   |
+| [Anthropic Compatible](anthropic-compatible/index.md) | `anthropic-compatible.yaml` | Any Anthropic-compatible `/v1/messages` endpoint        |
+| [Local](local/index.md)                               | `local.yaml`                | Self-hosted inference servers on two ports              |
+
+Each provider page has a per-model breakdown under its directory.
 
 ## How a Provider YAML Works
 
@@ -25,14 +27,14 @@ Each file defines a `model_list`. Every entry has two parts:
 
 ```yaml
 model_list:
-  - model_name: Provider/ModelName          # Name used by aliases and clients
-    litellm_params:                         # How to call the API
-      model: deepseek/deepseek-v4-flash     # LiteLLM model identifier
+  - model_name: Provider/ModelName # Name used by aliases and clients
+    litellm_params: # How to call the API
+      model: deepseek/deepseek-v4-flash # LiteLLM model identifier
       api_base: os.environ/DEEPSEEK_BASE_URL
       api_key: os.environ/DEEPSEEK_API_KEY
       timeout: 300
       drop_params: true
-    model_info:                             # Capabilities and limits
+    model_info: # Capabilities and limits
       mode: chat
       context_window: 1000000
       supports_reasoning: true

@@ -29,7 +29,7 @@
 #       extra_body:
 #         stream_options:
 #           include_usage: true
-
+#
 #     model_info: &openrouter_model_info
 #       id: "openrouter-nemotron-3-ultra-550b-a55b"
 #       mode: chat
@@ -49,12 +49,12 @@
 #         - top_p
 #         - stop
 #         - reasoning_effort
-
+#
 #   - model_name: OpenRouter/FreeRouter
 #     litellm_params:
 #       <<: *openrouter_params
 #       model: openrouter/openrouter/free
-
+#
 #     model_info:
 #       <<: *openrouter_model_info
 #       id: "openrouter-freerouter"
