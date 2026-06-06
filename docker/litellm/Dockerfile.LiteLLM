@@ -65,17 +65,28 @@ FROM debian:trixie-slim AS pg-builder
 ARG PG_VERSION
 ARG PG_SOURCE_URL
 ARG PG_TAG
+# TARGETARCH is injected by docker buildx during multi-platform builds
+# (linux/arm64 → "arm64", linux/amd64 → "amd64").  It drives the -march
+# selection in the configure step below so the C compiler produces valid
+# objects on every platform.
+ARG TARGETARCH
 
 # CFLAGS / LDFLAGS are overridable so CI can swap them in if a
 # regression surfaces.  -O2 (not -O3) keeps the optimizer conservative
-# enough to avoid UB surprises; -march=armv8-a+crypto is the
-# portable ARMv8 baseline that every server core (Graviton, Ampere,
-# Apple, etc.) implements and that the bookworm-slim assembler can
-# actually encode.  -march=native was tried and breaks on this
-# image: gcc emits SHA256 intrinsics (bcax) for src/backend/libpq/
-# ifaddr.c, but the bookworm binutils does not know how to encode
-# them.  The crypto extension covers that and gives a measurable win
-# on crypto-heavy PG workloads.
+# enough to avoid UB surprises.  The architecture-specific -march flag
+# is selected in the configure RUN step via TARGETARCH:
+#
+#   ARM64: -march=armv8-a+crypto — the portable ARMv8 baseline that
+#   every server core (Graviton, Ampere, Apple, etc.) implements and
+#   that the bookworm-slim assembler can actually encode.  -march=native
+#   was tried and breaks on this image: gcc emits SHA256 intrinsics
+#   (bcax) for src/backend/libpq/ifaddr.c, but the bookworm binutils
+#   does not know how to encode them.  The crypto extension covers that
+#   and gives a measurable win on crypto-heavy PG workloads.
+#
+#   AMD64: -march=x86-64-v2 — the de-facto baseline for modern x86-64
+#   server hardware (SSE4.2, POPCNT, etc.; Intel Nehalem / AMD K10 and
+#   later).  GCC on trixie supports it natively.
 #
 # -flto is intentionally NOT used: binutils' lto-wrapper script
 # rejects the GCC LTO bytecode on the bookworm-slim build image we use
@@ -84,7 +95,7 @@ ARG PG_TAG
 # planning + I/O, not raw CPU, so the ~1-2% LTO win is not worth the
 # build-system fragility.  Re-add `-flto` here AND ensure gcc-12-lto /
 # binutils-gold >= 2.39 are both present if you want to experiment.
-ENV PG_CFLAGS="-O2 -march=armv8-a+crypto" \
+ENV PG_CFLAGS_BASE="-O2" \
     PG_LDFLAGS="-Wl,--as-needed -Wl,-z,now"
 
 RUN apt-get update \
@@ -107,9 +118,14 @@ RUN apt-get update \
 # build script; the ones we keep (--with-icu, --with-openssl) are
 # load-bearing — see CLAUDE.md for the Unicode / TLS rationale.
 RUN set -eux; \
+    case "${TARGETARCH}" in \
+      arm64) PG_ARCH_CFLAGS="-march=armv8-a+crypto" ;; \
+      amd64) PG_ARCH_CFLAGS="-march=x86-64-v2" ;; \
+      *)     PG_ARCH_CFLAGS="" ;; \
+    esac; \
     git clone --depth 1 --branch "${PG_TAG}" "${PG_SOURCE_URL}" /tmp/pg-src; \
     cd /tmp/pg-src; \
-    CFLAGS="${PG_CFLAGS}" LDFLAGS="${PG_LDFLAGS}" ./configure \
+    CFLAGS="${PG_CFLAGS_BASE} ${PG_ARCH_CFLAGS}" LDFLAGS="${PG_LDFLAGS}" ./configure \
         --prefix=/usr/local/pgsql \
         --with-icu \
         --with-openssl \
