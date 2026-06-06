@@ -16,8 +16,8 @@ Smallest GPT-5.4 deployment via Microsoft Foundry. 400K context window, optimize
 | ---------------- | --------- |
 | Vision           | Yes       |
 | Reasoning        | Yes       |
-| Native streaming | Yes       |
-| System messages  | Yes       |
+| Native streaming | No        |
+| System messages  | No        |
 | Tool use         | Yes       |
 
 ## Pricing (per token)
@@ -43,6 +43,7 @@ Smallest GPT-5.4 deployment via Microsoft Foundry. 400K context window, optimize
         include_usage: true
   model_info:
     id: "azure-gpt-5-4-nano"
+    db_model: false
     mode: chat
     context_window: 400000
     max_tokens: 400000
@@ -53,6 +54,8 @@ Smallest GPT-5.4 deployment via Microsoft Foundry. 400K context window, optimize
       output: 128000
     supports_reasoning: true
     supports_vision: true
+    supports_system_messages: false
+    supports_native_streaming: false
     input_cost_per_token: 0.00000080
     cached_input_cost_per_token: 0.00000008
     output_cost_per_token: 0.00001250

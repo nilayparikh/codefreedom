@@ -68,7 +68,7 @@ The image is selected by profile (`sandbox_images` dict) or CLI flags (`--cuda`,
 
 ### 5. IPC Isolation
 
-The sandbox uses `--ipc=host` (shared IPC namespace) to enable inter-process communication between the agent and tool containers.
+The sandbox uses `--ipc=host` (shared IPC namespace) to improve GPU shared-memory performance and simplify inter-process communication.
 
 ## Session Lifecycle
 
@@ -125,8 +125,7 @@ Tool containers (Chrome, Camoufox) are shared across sessions but isolated from 
 ### Chrome Container
 
 - Runs with `--network host` (host networking for CDP access).
-- `--cap-add=SYS_ADMIN` for browser sandboxing.
-- `--init` (dumb-init as PID 1 for signal handling).
+- `--shm-size=512m` (prevents Chrome crashes on shared memory).
 - `--restart unless-stopped` (persists across session restarts).
 - Persistent data at `~/.codefreedom/sandbox/tools/chrome/` (browser profiles, cache).
 
@@ -171,12 +170,12 @@ Tool containers are managed via reference counting in `~/.codefreedom/proc/`:
 | Network | `--network host` | Bridge network + explicit port mappings |
 | IPC | `--ipc=host` | Private IPC namespace |
 | GPU | `--gpus all` | Selective device passthrough |
-| Capabilities | Default + `SYS_ADMIN` (Chrome) | Minimal capabilities |
+| Capabilities | Default | Minimal capabilities |
 
 The current configuration prioritizes functionality (tool communication, proxy routing) over strict isolation. For higher-security environments, consider:
 
 1. **Bridge networking:** Replace `--network host` with a custom bridge network and explicit port mappings.
-2. **Private IPC:** Remove `--ipc=host` if tool communication doesn't require shared IPC.
+2. **Private IPC:** Remove `--ipc=host` if GPU shared-memory performance isn't needed.
 3. **Read-only workspace:** Mount the workspace as `:ro` if the agent only needs to read files.
 
 ## Image Selection

@@ -43,6 +43,7 @@ Flagship GPT-5.4 deployment via Microsoft Foundry. 1.05M context window with vis
         include_usage: true
   model_info:
     id: "azure-gpt-5-4"
+    db_model: false
     mode: chat
     context_window: 1050000
     max_tokens: 1050000
@@ -53,6 +54,8 @@ Flagship GPT-5.4 deployment via Microsoft Foundry. 1.05M context window with vis
       output: 128000
     supports_reasoning: true
     supports_vision: true
+    supports_system_messages: true
+    supports_native_streaming: true
     input_cost_per_token: 0.00000250
     cached_input_cost_per_token: 0.00000025
     output_cost_per_token: 0.00001500

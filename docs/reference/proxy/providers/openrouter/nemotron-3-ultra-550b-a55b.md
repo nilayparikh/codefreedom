@@ -56,7 +56,6 @@ NVIDIA Nemotron-3-Ultra routed through OpenRouter's free tier. Pin this when you
       - temperature
       - top_p
       - stop
-      - reasoning_effort
 ```
 
 ## Notes
