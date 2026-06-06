@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codefreedom"
-version = "0.1.2"
+version = "0.1.3"
 description = "Unified CLI for code agents — LLM proxy routing, Docker sandboxing, profile management, and browser tools. All config in ~/.codefreedom."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -77,17 +77,39 @@ Documentation = "https://nilayparikh.github.io/codefreedom/"
 where = ["src"]
 
 [tool.setuptools.package-data]
+# All files copied by the init subcommands (claude, proxy, chrome, web).
+# Keep this in sync with src/codefreedom/cli/{claude,proxy,chrome,web}.py
+# and src/codefreedom/cli/init_utils.py — every file referenced there
+# must be listed here so it's included in the wheel/sdist and available
+# for first-time `codefreedom ... init` runs.
 codefreedom = [
+    # Claude code agent — copied by `codefreedom claude init`
     "examples/claude/.env.claude.example",
     "examples/claude/.env.claude.secrets.example",
-    "examples/claude/profiles/*.json",
+    "examples/claude/profiles/claude-code.json",
+    "examples/claude/profiles/claude-code.schema.json",
+    # LiteLLM proxy — copied by `codefreedom proxy init`
     "examples/proxy/.env.proxy.example",
     "examples/proxy/.env.proxy.secrets.example",
     "examples/proxy/config/config.yaml",
     "examples/proxy/docker-compose.yaml",
-    "examples/proxy/config/providers/*.yaml",
-    "examples/tools/chrome/*.json",
-    "examples/tools/web/*.json",
+    "examples/proxy/config/providers/anthropic-compatible.yaml",
+    "examples/proxy/config/providers/azure-foundry.yaml",
+    "examples/proxy/config/providers/deepseek.yaml",
+    "examples/proxy/config/providers/local.yaml",
+    "examples/proxy/config/providers/nvidia.yaml",
+    "examples/proxy/config/providers/openai-compatible.yaml",
+    "examples/proxy/config/providers/opencode-zen.yaml",
+    "examples/proxy/config/providers/openrouter.yaml",
+    # WebSearch count display patch — mounted into the proxy container
+    # (see docs/proxy/websearch-interception.md)
+    "examples/proxy/patch_websearch_count.py",
+    "examples/proxy/patch_websearch_count.sh",
+    # Browser tools — copied by `codefreedom tools <tool> init`
+    "examples/tools/chrome/chrome.json",
+    "examples/tools/chrome/chrome.schema.json",
+    "examples/tools/web/web.json",
+    "examples/tools/web/web.schema.json",
 ]
 
 # ── Pylint ───────────────────────────────────────────────────────────────────
