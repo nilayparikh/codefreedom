@@ -119,6 +119,7 @@ disable = [
     "missing-class-docstring",                # test classes are self-documenting
     "unused-import",                          # pytest fixture imports look unused
     "use-implicit-booleaness-not-comparison", # assert == {} is clearer in tests
+    "protected-access",                       # tests intentionally call underscore-prefixed helpers
 ]
 
 [tool.pylint.main]

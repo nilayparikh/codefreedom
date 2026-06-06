@@ -64,7 +64,9 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
         try:
             existing = json.loads(mcp_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
-            eprint(f"[MCP] Could not parse existing {mcp_path} — backing up and replacing.")
+            eprint(
+                f"[MCP] Could not parse existing {mcp_path} — backing up and replacing."
+            )
             backup = mcp_path.with_suffix(".mcp.json.bak")
             try:
                 mcp_path.rename(backup)
@@ -85,7 +87,9 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
     # Note if other servers were preserved.
     other = [s for s in existing["mcpServers"] if s not in auto_servers]
     if other:
-        eprint(f"[MCP] Preserved {len(other)} existing MCP server(s): {', '.join(other)}")
+        eprint(
+            f"[MCP] Preserved {len(other)} existing MCP server(s): {', '.join(other)}"
+        )
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -155,7 +159,7 @@ def status() -> int:
                 name, status_line, _created = line.split("\t", 2)
                 marker = "[RUNNING]" if "Up " in status_line else "[STOPPED]"
                 eprint(f"   {marker} {name}  ({status_line})")
-            eprint("\n   Stop all:  codefreedom claude --stop")
+            eprint("\n   Stop all:  docker stop <container-name>")
         else:
             eprint("[STATUS] No codefreedom sandbox containers found.")
         return 0

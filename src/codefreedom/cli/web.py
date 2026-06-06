@@ -45,7 +45,7 @@ from codefreedom.cli.tool_init_utils import (
 
 # ── Defaults ─────────────────────────────────────────────────────────────
 
-_DEFAULT_IMAGE = "codefreedom:web"
+_DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:web-latest"
 _DEFAULT_CONTAINER_NAME = "codefreedom-web"
 _DEFAULT_PORT = 8420
 _DEFAULT_DATA_DIR = "~/.codefreedom/sandbox/tools/web"

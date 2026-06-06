@@ -9,14 +9,16 @@
 #         Override LITELLM_IMAGE in .env.proxy to use a different tag
 #         (e.g. a locally-built `codefreedom:litellm-local`).
 #
-# DATABASE: Not configured — runs as a pure stateless proxy.
-#   No DATABASE_URL = no Prisma, no migrations, no persistence.
-#   This means no spend tracking, no key management via UI, no prompt logging.
-#   Perfect for dev/CI where you just need model routing.
-#
-# To add a database (spend tracking, key mgmt, etc.):
-#   Set DATABASE_URL=postgresql://user:pass@host:5432/dbname in .env
-#   Update litellm/config/config.yaml: set store_model_in_db: true
+# DATABASE: Embedded PostgreSQL 18.4 inside the image.
+#   The image ships its own stripped PG (Unix-socket only, no TCP listener).
+#   The entrypoint auto-initialises the cluster, runs `prisma db push`,
+#   and sets DATABASE_URL=postgresql://litellm@/litellm?host=/var/run/postgresql
+#   before exec'ing litellm. NO user configuration is needed for the
+#   embedded PG — just provide a host directory for the data + socket
+#   bind mounts below (the codefreedom proxy init helper creates them
+#   at ~/.codefreedom/pg/{data,backup,socket} with ownership uid 1000).
+#   To point at an EXTERNAL PG instead, set DATABASE_URL in .env.proxy
+#   and remove the three PG volume mounts below.
 #
 # ── DISABLING PROVIDERS ───────────────────────────────────────────────────
 # To disable a provider, comment out or remove its env vars below.
@@ -138,6 +140,22 @@ services:
       - codefreedom
     volumes:
       - ./config:/app/litellm-config:ro
+
+      # ── Embedded PostgreSQL 18.4 (no TCP, Unix-socket only) ──────────
+      # The entrypoint auto-initialises the cluster, generates the Prisma
+      # client, pushes the schema, and exports DATABASE_URL pointing at
+      # the Unix socket. No DATABASE_URL to set, no migrations to run.
+      #
+      # The host dirs must be owned by uid 1000 (the in-container
+      # 'codefreedom' user). codefreedom proxy init creates them.
+      # Override via .env.proxy: POSTGRES_HOST_DATA_DIR /
+      # POSTGRES_HOST_BACKUP_DIR / POSTGRES_HOST_SOCKET_DIR.
+      - ${POSTGRES_HOST_DATA_DIR:-${HOME}/.codefreedom/pg/data}:/var/lib/postgresql/data
+      - ${POSTGRES_HOST_BACKUP_DIR:-${HOME}/.codefreedom/pg/backup}:/var/lib/postgresql/backup
+      # /var/run/postgresql (PG's Unix socket dir) is intentionally NOT
+      # bind-mounted.  The socket is pure in-process IPC, recreated on
+      # every container start, and has no value persisting across
+      # restarts.  The entrypoint creates the dir + chmod 700s it.
     # The WebSearch count display patch is baked into the image (see
     # docker/litellm/Dockerfile.LiteLLM). No volume mounts or entrypoint
     # wrappers needed here.

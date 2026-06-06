@@ -1,12 +1,89 @@
-# ── CodeFreedom LiteLLM Proxy — pinned dependency set ───────────────────────
-# Pinned to exact versions so a rebuild cannot accidentally pull a
-# vulnerable or behaviour-changing wheel.  Bump deliberately and rebuild
-# the image (and re-test the WebSearch count display) on every change.
+# ── CodeFreedom LiteLLM Proxy — minimal pinned deps ───────────────────────
+# LiteLLM itself is installed separately (see Dockerfile.LiteLLM) from
+# the git FORK at the tag pinned by the LITELLM_FORK_URL / LITELLM_TAG
+# build args, with --no-deps.  That is the switch that keeps the
+# enterprise UI + extras off the image: `litellm[proxy]` would pull
+# litellm-enterprise, litellm-proxy-extras, granian, pyroscope-io,
+# etc. from PyPI as transitive deps.  With --no-deps on the git install
+# those are never resolved, and the curated set below is everything the
+# proxy + dashboard actually need at runtime.
 #
-# litellm[proxy] pulls in the proxy CLI, websockets, gunicorn, prisma,
-# httpx, and prometheus-client.  All required for the compose stack.
-# ─────────────────────────────────────────────────────────────────────────────
+# Scope we keep (matches the user-visible product):
+#   - core proxy runtime (fastapi / uvicorn / gunicorn / websockets)
+#   - auth + sso for the dashboard (PyJWT, fastapi-sso, cryptography)
+#   - database for spend logs / virtual keys / teams (prisma)
+#   - cost / observability (prometheus-client)
+#   - HTTP / API clients (httpx, aiohttp, openai, boto3)
+#   - tokenisation (tiktoken, tokenizers)
+#   - background jobs (apscheduler)
+#   - utility (jinja2, click, jsonschema, rich, ...)
+#
+# Scope we strip:
+#   - litellm-enterprise            (gated SSO / branding / paywall)
+#   - litellm-proxy-extras          (we run `prisma db push` from entrypoint)
+#   - granian                       (alternate ASGI; we run on uvicorn)
+#   - pyroscope-io, ddtrace, sentry (profiling / APM, not core)
+#   - mangum                        (AWS-Lambda adapter; we run in a container)
+#   - azure-identity, google-cloud-aiplatform, anthropic[vertex]
+#                                   (provider SDKs that are not all needed
+#                                    at once; add per-environment)
+#   - pypdf, llm-sandbox, detect-secrets, soundfile, polars
+#                                   (heavyweight tools the proxy can
+#                                    lazy-import only if a model needs them)
+#
+# Bump deliberately and rebuild the image (and re-test the WebSearch
+# count display) on every change.
+# ────────────────────────────────────────────────────────────────────────────
 
-litellm[proxy]==1.87.1
+# --- Core proxy runtime ---
+fastapi==0.124.4
+gunicorn==23.0.0
+uvicorn==0.33.0
+uvloop==0.21.0; sys_platform != 'win32'
+orjson==3.11.6
+pyyaml==6.0.3
+python-multipart==0.0.27
+websockets==15.0.1
+backoff==2.2.1
+pydantic>=2.10.0,<3.0.0
+pydantic-settings>=2.14.1
+
+# --- Auth + SSO for the dashboard ---
+PyJWT==2.12.0
+pynacl==1.6.2
+fastapi-sso==0.19.0
+cryptography==46.0.7
+
+# --- Database (spend logs, virtual keys, teams) ---
 prisma==0.15.0
+
+# --- Cost / observability ---
 prometheus-client==0.25.0
+
+# --- HTTP / API clients ---
+httpx>=0.28.0,<1.0
+openai>=2.20.0,<3.0.0
+aiohttp>=3.10,<4.0
+
+# --- Tokenisation ---
+tiktoken>=0.8.0,<1.0
+tokenizers>=0.21.0,<1.0
+
+# --- Background jobs ---
+apscheduler==3.11.2
+
+# --- Utility ---
+jinja2>=3.1.6,<4.0
+click>=8.0.0,<9.0
+importlib-metadata>=8.0.0,<9.0
+jsonschema>=4.0.0,<5.0
+python-dotenv>=1.0.0,<2.0
+fastuuid>=0.14.0,<1.0
+rich==13.9.4
+
+# --- Common providers ---
+# Per-provider SDKs are lazy-imported inside litellm, so we only need
+# to preinstall the ones that are also transitive deps of the curated
+# list above.  Add boto3 for the AWS provider paths most codefreedom
+# stacks use (Bedrock); others can be added per environment.
+boto3==1.43.1
