@@ -1,6 +1,6 @@
 ---
-# ── OpenCode Zen Provider ────────────────────────────────────────────────────
-# Free-tier models from OpenCode Zen.
+# ── OpenCode Zen Provider — MNP Key ──────────────────────────────────────────
+# Free-tier models from OpenCode Zen, routed through the MNP API key.
 # Set OPENCODE_ZEN_API_KEY to enable.
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -8,7 +8,7 @@
 #   # https://models.dev/models/xiaomi/mimo-v2.5
 #   # MiMo V2.5 — Xiaomi, 1M context, 131K output
 #   # Capabilities: reasoning, tools, temperature
-#   # Vision: YES — models.dev shows Image icon (data-tooltip="Image")
+#   # Vision: YES
 #   - model_name: OpenCodeZen/MiMo-V2.5-FREE
 #     litellm_params: &opencode_zen_openai_params
 #       model: openai/mimo-v2.5-free
@@ -22,7 +22,7 @@
 #         temperature: 0.0
 #         top_p: 1.0
 #         reasoning_effort: "high"
-#
+
 #     model_info: &opencode_zen_openai_model_info
 #       id: "opencode-mimo-v2.5-free"
 #       db_model: false
@@ -52,11 +52,8 @@
 #         - thinking
 #         - reasoning_effort
 #         - response_format
-#
+
 #   # Nemotron-3-Super — NVIDIA-backed, strong coding
-#   # Spec not independently verified on models.dev; using conservative defaults
-#   # based on Nemotron-3-Ultra specs (same family).
-#   # Vision: NO — Nemotron models are text-only (no vision on models.dev)
 #   - model_name: OpenCodeZen/Nemotron-3-Super-FREE
 #     litellm_params:
 #       <<: *opencode_zen_openai_params
@@ -65,7 +62,6 @@
 #       <<: *opencode_zen_openai_model_info
 #       id: "opencode-nemotron-3-super-free"
 #       supports_vision: false
-#       # Conservative: same as Ultra but smaller
 #       context_window: 262144
 #       max_tokens: 262144
 #       max_input_tokens: 131072
@@ -73,11 +69,9 @@
 #       limit:
 #         context: 262144
 #         output: 65536
-#
+
 #   # https://models.dev/models/nvidia/nemotron-3-ultra-550b-a55b
 #   # Nemotron-3-Ultra — NVIDIA, 1M context, 128K output
-#   # Capabilities: reasoning, tools, temperature
-#   # Vision: YES — models.dev shows Image icon (data-tooltip="Image")
 #   - model_name: OpenCodeZen/Nemotron-3-Ultra-FREE
 #     litellm_params:
 #       <<: *opencode_zen_openai_params
@@ -93,11 +87,8 @@
 #       limit:
 #         context: 1048576
 #         output: 131072
-#
-#   # https://models.dev/models/deepseek/deepseek-v4-flash
-#   # DeepSeek V4-Flash — 1M context, 384K output
-#   # Capabilities: reasoning, tools, thinking, temperature
-#   # Vision: NO — models.dev shows no Image icon
+
+#   # DeepSeek V4-Flash — 1M context, 384K output, no vision
 #   - model_name: OpenCodeZen/DeepSeek-V4-Flash-FREE
 #     litellm_params:
 #       <<: *opencode_zen_openai_params
@@ -113,10 +104,8 @@
 #       limit:
 #         context: 1000000
 #         output: 384000
-#
+
 #   # Big Pickle — general purpose, reasoning + tools
-#   # Spec not independently verified on models.dev; using conservative defaults
-#   # Vision: NO — text-only model (no vision data found)
 #   - model_name: OpenCodeZen/Big-Pickle
 #     litellm_params:
 #       <<: *opencode_zen_openai_params
@@ -125,7 +114,6 @@
 #       <<: *opencode_zen_openai_model_info
 #       id: "opencode-big-pickle"
 #       supports_vision: false
-#       # Conservative: similar to mid-tier models
 #       context_window: 262144
 #       max_tokens: 262144
 #       max_input_tokens: 131072
@@ -133,18 +121,13 @@
 #       limit:
 #         context: 262144
 #         output: 65536
-#
+
 #   # https://models.dev/models/minimax/MiniMax-M3
-#   # MiniMax-M3 — 512K context, 128K output
-#   # Capabilities: reasoning, tools, temperature
-#   # Vision: YES — models.dev shows Image icon (data-tooltip="Image")
+#   # MiniMax-M3 — 512K context, 128K output, vision
 #   - model_name: OpenCodeZen/Minimax-M3-FREE
 #     litellm_params:
 #       <<: *opencode_zen_openai_params
 #       model: minimax/minimax-m3-free
-#       # Add this parameter to enable the internal reasoning parser
-#       drop_params: false
-#       modify_params: true
 #     model_info:
 #       <<: *opencode_zen_openai_model_info
 #       id: "opencode-minimax-m3-free"

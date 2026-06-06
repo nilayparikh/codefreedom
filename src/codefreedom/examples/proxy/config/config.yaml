@@ -74,12 +74,21 @@ router_settings:
   #
   # Example: route Pro to a local model instead of DeepSeek:
   #   LITELLM_MODEL_ALIAS_PRO="DGX/Qwen3.6-27B"
+  #
+  # The short Claude names (opus, sonnet, haiku) let tools that hardcode
+  # Anthropic model IDs (e.g. VS Code extension, MCP hosts) route through
+  # the proxy without profile changes.
   # ──────────────────────────────────────────────────────────────────────────
   model_group_alias:
     "CodeFreedom/Ultra": os.environ/LITELLM_MODEL_ALIAS_ULTRA
     "CodeFreedom/Pro": os.environ/LITELLM_MODEL_ALIAS_PRO
     "CodeFreedom/Flash": os.environ/LITELLM_MODEL_ALIAS_FLASH
     "CodeFreedom/Air": os.environ/LITELLM_MODEL_ALIAS_AIR
+    "opus": os.environ/LITELLM_MODEL_ALIAS_ULTRA # alias opus to the same as Ultra
+    "sonnet": os.environ/LITELLM_MODEL_ALIAS_PRO # alias sonnet to the same as Pro
+    "haiku": os.environ/LITELLM_MODEL_ALIAS_AIR # alias haiku to the same as Air
+    "claude-haiku-4": OCZ/NPG/Nemotron-3-Super-FREE
+    "claude-sonnet-4": OCZ/NPG/Nemotron-3-Ultra-FREE
 
   # ── Context Window Fallbacks ─────────────────────────────────────────────
   # If a local model can't fit the context, fall back to cloud.
@@ -104,6 +113,7 @@ litellm_settings:
   redact_user_api_key_info: os.environ/LITELLM_REDACT_USER_API_KEY
   turn_off_message_logging: os.environ/LITELLM_TURN_OFF_MSG_LOGGING
   json_logs: os.environ/LITELLM_JSON_LOGS
+  modify_params: true
 
   # Translate Anthropic /v1/messages format to OpenAI for non-Anthropic backends
   use_chat_completions_url_for_anthropic_messages: true
@@ -111,13 +121,25 @@ litellm_settings:
   # Expose Prometheus metrics at /metrics/
   callbacks:
     - prometheus
-    # ── Uncomment the next line to enable transparent WebSearch replacement
-    #    via the local Camoufox MCP. See docs/proxy/websearch-interception.md.
-    # - websearch_interception
+    # Transparently replaces Claude Code's native WebSearch with calls to
+    # the local Camoufox MCP. See docs/proxy/websearch-interception.md.
+    - websearch_interception
 
-  # websearch_interception_params:
-  #   enabled_providers: ["openai", "anthropic", "vertex_ai", "bedrock", "azure"]
-  #   search_tool_name: codefreedom-web
+  websearch_interception_params:
+    enabled_providers:
+      [
+        "openai",
+        "anthropic",
+        "vertex_ai",
+        "bedrock",
+        "azure",
+        "deepseek",
+        "nvidia",
+        "opencode-zen",
+        "openrouter",
+        "minimax",
+      ]
+    search_tool_name: codefreedom-web
 
   # Require auth for the /metrics/ endpoint (set to true for production)
   require_auth_for_metrics_endpoint: os.environ/LITELLM_REQUIRE_AUTH_METRICS
@@ -125,14 +147,13 @@ litellm_settings:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Web Search Bridge — SearXNG-shaped provider for the Camoufox MCP
 # ═══════════════════════════════════════════════════════════════════════════════
-# Uncomment this entire block to make LiteLLM's websearch_interception
-# callback route every Claude Code WebSearch to the local web-bridge, which
+# Routes every Claude Code WebSearch through the local web-bridge, which
 # in turn calls the Camoufox MCP web_search tool. See
 # docs/proxy/websearch-interception.md.
-#
-# search_tools:
-#   - search_tool_name: codefreedom-web
-#     litellm_params:
-#       search_provider: searxng
-#       # Reachable on the shared 'codefreedom' Docker network.
-#       api_base: http://web-bridge:8500
+
+search_tools:
+  - search_tool_name: codefreedom-web
+    litellm_params:
+      search_provider: searxng
+      # Reachable on the shared 'codefreedom' Docker network.
+      api_base: http://web-bridge:8500

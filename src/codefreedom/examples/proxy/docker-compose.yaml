@@ -110,7 +110,7 @@ services:
       # NVIDIA AI Endpoints — leave API_KEY empty to disable
       NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
-      # OpenCode Zen — leave API_KEY empty to disable
+      # OpenCode Zen — leave API key empty to disable
       OPENCODE_ZEN_BASE_URL: ${OPENCODE_ZEN_BASE_URL:-https://opencode.ai/zen/v1}
       OPENCODE_ZEN_API_KEY: ${OPENCODE_ZEN_API_KEY:-}
       # OpenRouter — leave API_KEY empty to disable

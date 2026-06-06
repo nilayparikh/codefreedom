@@ -11,7 +11,8 @@
     "'search_engines' is a map of engine name -> {url, parser}. Use {q} for query placeholder. No engines are configured by default.",
     "Each engine entry: 'url' is the search URL template, 'parser' is a key in 'parser_registry'.",
     "'parser_registry' defines named parser configurations. Each parser specifies CSS selectors for extracting results, links, snippets, and AI summaries from search engine HTML. The 'standard' parser is provided as a starting point.",
-    "'search_cooldown_seconds' is the minimum time (in seconds) between successive web_search calls. Defaults to 10.0. Set to 0 to disable the cooldown."
+    "'search_cooldown_seconds' is the minimum time (in seconds) between successive web_search calls. Defaults to 10.0. Set to 0 to disable the cooldown.",
+    "Search engine entries: 'url' is the search URL template with {q} as the query placeholder; 'parser' references a key in 'parser_registry'. Engines are defined in the profile rather than hardcoded in the server."
   ],
   "web": {
     "image": "docker.io/nilayparikh/codefreedom:web-latest",
@@ -21,7 +22,16 @@
     "data_dir": "~/.codefreedom/sandbox/tools/web",
     "env": {},
     "search_cooldown_seconds": 10.0,
-    "search_engines": {},
+    "search_engines": {
+      "brave": {
+        "url": "http://yoursearchengine1/search?q={q}",
+        "parser": "standard"
+      },
+      "bing": {
+        "url": "http://yoursearchengine2/search?q={q}",
+        "parser": "standard"
+      }
+    },
     "parser_registry": {
       "standard": {
         "result_selectors": "[data-type='web'], .b_algo, #res .g, .result, .search-result, li:has(h2 a[href]), li:has(h3 a[href])",

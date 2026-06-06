@@ -90,6 +90,32 @@ This is useful for:
 - Using local inference for one project while keeping cloud for others
 - Project-specific proxy settings
 
+## Custom Config Directory
+
+Override the default `~/.codefreedom` config directory:
+
+```bash
+export CODEFREEDOM_HOME="/path/to/custom/config"
+```
+
+All component paths resolve under this directory:
+
+| Component | Path under CODEFREEDOM_HOME |
+| --------- | --------------------------- |
+| Claude | `$CODEFREEDOM_HOME/.env.claude` |
+| Proxy | `$CODEFREEDOM_HOME/.env.proxy` |
+| Tools | `$CODEFREEDOM_HOME/profiles/` |
+| Backups | `$CODEFREEDOM_HOME/backup/` |
+| Sandbox | `$CODEFREEDOM_HOME/sandbox/` |
+
+This is useful for:
+
+- Testing deployments without touching your home directory
+- Sharing a config directory across multiple user accounts
+- Placing config on a specific mount or encrypted volume
+
+> **Note:** `CODEFREEDOM_HOME` must be set before any CodeFreedom command runs. It is not read from `.env` files — it controls where those files live.
+
 ## Custom Profile Location
 
 Override the default profile file location:
@@ -115,6 +141,7 @@ The full variable reference is in the bundled example files:
 | `.env.claude.example`        | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`, `CLAUDE_CODE_COLUMNS`, `CLAUDE_CODE_LINES`                         |
 | `.env.proxy.example`         | Model aliases (`LITELLM_MODEL_ALIAS_*`), retry settings, privacy flags, provider base URLs                                          |
 | `.env.proxy.secrets.example` | `LITELLM_MASTER_KEY`, provider API keys (`DEEPSEEK_API_KEY`, `MICROSOFT_FOUNDRY_API_KEY`, `NVIDIA_API_KEY`, `OPENCODE_ZEN_API_KEY`) |
+| `CODEFREEDOM_HOME`           | Override the entire config directory (default: `~/.codefreedom`)                                                                  |
 | `CODEFREEDOM_PROFILES_FILE`  | Override profile file location (system env)                                                                                         |
 
 > **Note:** Variables like `LITELLM_PORT`, `LITELLM_LOG_LEVEL`, and `LITELLM_IMAGE` in `.env.proxy.example` are read by the proxy container at startup. `--port` and `--host` on `codefreedom proxy start` override `LITELLM_PORT` and `LITELLM_BIND_HOST` for that run only (they do not edit `.env.proxy`).
