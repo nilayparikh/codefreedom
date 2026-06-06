@@ -1,0 +1,12 @@
+# ── CodeFreedom LiteLLM Proxy — pinned dependency set ───────────────────────
+# Pinned to exact versions so a rebuild cannot accidentally pull a
+# vulnerable or behaviour-changing wheel.  Bump deliberately and rebuild
+# the image (and re-test the WebSearch count display) on every change.
+#
+# litellm[proxy] pulls in the proxy CLI, websockets, gunicorn, prisma,
+# httpx, and prometheus-client.  All required for the compose stack.
+# ─────────────────────────────────────────────────────────────────────────────
+
+litellm[proxy]==1.87.1
+prisma==0.15.0
+prometheus-client==0.25.0
