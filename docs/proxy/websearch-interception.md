@@ -31,7 +31,7 @@ The proxy intercepts the native `web_search` tool, calls the bridge (a SearXNG-s
 | Requirement                                                                 | Why                                                               |
 | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | `codefreedom tools web start` running                                       | Provides the MCP `web_search` tool at `http://127.0.0.1:8420/mcp` |
-| `codefreedom proxy start --docker` working                                  | The proxy and bridge are sibling services in the compose stack    |
+| `codefreedom proxy start` working                                           | The proxy and bridge are sibling services in the compose stack    |
 | A model behind the proxy (Anthropic, OpenAI-compat, Bedrock, Vertex, Azure) | Any of them can now use the bridge for `WebSearch`                |
 
 ## Quick Start (4 steps)
@@ -48,7 +48,7 @@ codefreedom tools web status   # confirm 'running'
 The bridge is a sibling service in the existing `docker-compose.yaml`. No new commands:
 
 ```bash
-codefreedom proxy start --docker
+codefreedom proxy start
 docker ps --filter "name=codefreedom-web-bridge"   # confirm it's up
 ```
 
@@ -76,7 +76,7 @@ search_tools: # ← uncomment
 ### 4. Restart the proxy and test
 
 ```bash
-codefreedom proxy restart --docker
+codefreedom proxy restart
 codefreedom claude
 ```
 
@@ -124,16 +124,16 @@ To remove the bridge entirely from the stack, delete the `web-bridge:` service f
 
 ## Troubleshooting
 
-| Symptom                                                     | Likely cause                                                                                                                                            | Fix                                                                                                                                                                                         |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Proxy logs show `websearch_interception` not triggered      | The two config blocks are not both uncommented, or the model is not in `enabled_providers`                                                              | Re-check `config.yaml`; add the provider to `enabled_providers`                                                                                                                             |
-| Bridge container restart-loops                              | Camoufox MCP not running                                                                                                                                | `codefreedom tools web start`                                                                                                                                                               |
-| `/search` returns HTTP 502 `mcp_unreachable`                | Bridge can't reach `MCP_WEB_URL`                                                                                                                        | Check `MCP_WEB_URL`; on Linux Docker, the `host.docker.internal:host-gateway` extra_hosts mapping must be present (it is, in the example compose)                                           |
-| `/search` returns HTTP 429 `cooldown`                       | The 2-second bridge cooldown is active. Normal — Claude Code will retry.                                                                                | If too aggressive, raise `WEB_BRIDGE_COOLDOWN_SECONDS` in `.env.proxy` and restart the proxy                                                                                                |
-| Claude Code says "WebSearch is not available"               | The interception is disabled in `config.yaml`                                                                                                           | Re-enable the `websearch_interception` callback                                                                                                                                             |
-| Native Claude Code (`--native-models`) still doesn't search | The bridge is proxy-only; direct Anthropic calls bypass it                                                                                              | Either switch to the proxy (`codefreedom claude` without `--native-models`) or fall back to the [MCP approach in the FAQ](../faq/web-search.md)                                             |
-| Proxy logs show `SEARXNG_API_BASE is not set`               | The SearXNG provider requires this env var (LiteLLM's handler doesn't pass `api_base` from `litellm_params`)                                            | Set `SEARXNG_API_BASE=http://web-bridge:8500` in `docker-compose.yaml` (litellm service env). Must `docker compose down && up -d` (not `restart`) to pick up new vars.                      |
-| Search works but Claude Code shows "Did 0 searches"         | LiteLLM's short-circuit handler omits `usage.server_tool_use.web_search_requests` from the response. Claude Code's TUI uses this field for the counter. | The `docker-compose.yaml` mounts a startup patch (`patch_websearch_count.py` + `patch_websearch_count.sh`) that injects the missing field. Must `docker compose down && up -d` to activate. |
+| Symptom                                                     | Likely cause                                                                                                                                            | Fix                                                                                                                                                                                                 |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Proxy logs show `websearch_interception` not triggered      | The two config blocks are not both uncommented, or the model is not in `enabled_providers`                                                              | Re-check `config.yaml`; add the provider to `enabled_providers`                                                                                                                                     |
+| Bridge container restart-loops                              | Camoufox MCP not running                                                                                                                                | `codefreedom tools web start`                                                                                                                                                                       |
+| `/search` returns HTTP 502 `mcp_unreachable`                | Bridge can't reach `MCP_WEB_URL`                                                                                                                        | Check `MCP_WEB_URL`; on Linux Docker, the `host.docker.internal:host-gateway` extra_hosts mapping must be present (it is, in the example compose)                                                   |
+| `/search` returns HTTP 429 `cooldown`                       | The 2-second bridge cooldown is active. Normal — Claude Code will retry.                                                                                | If too aggressive, raise `WEB_BRIDGE_COOLDOWN_SECONDS` in `.env.proxy` and restart the proxy                                                                                                        |
+| Claude Code says "WebSearch is not available"               | The interception is disabled in `config.yaml`                                                                                                           | Re-enable the `websearch_interception` callback                                                                                                                                                     |
+| Native Claude Code (`--native-models`) still doesn't search | The bridge is proxy-only; direct Anthropic calls bypass it                                                                                              | Either switch to the proxy (`codefreedom claude` without `--native-models`) or fall back to the [MCP approach in the FAQ](../faq/web-search.md)                                                     |
+| Proxy logs show `SEARXNG_API_BASE is not set`               | The SearXNG provider requires this env var (LiteLLM's handler doesn't pass `api_base` from `litellm_params`)                                            | Set `SEARXNG_API_BASE=http://web-bridge:8500` in `docker-compose.yaml` (litellm service env). Must `docker compose down && up -d` (not `restart`) to pick up new vars.                              |
+| Search works but Claude Code shows "Did 0 searches"         | LiteLLM's short-circuit handler omits `usage.server_tool_use.web_search_requests` from the response. Claude Code's TUI uses this field for the counter. | The patch is baked into the `codefreedom:litellm-latest` image at build time (see `docker/litellm/patch_websearch_count.py`). Pull the latest image and `docker compose pull && up -d` to activate. |
 
 ## Healthcheck
 

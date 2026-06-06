@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CodeFreedom">
+  <defs>
+    <linearGradient id="cf-bg" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7986cb"/>
+      <stop offset="1" stop-color="#283593"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#cf-bg)"/>
+  <!-- Left bracket: < -->
+  <path d="M24 18 L14 32 L24 46" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Right bracket: > -->
+  <path d="M40 18 L50 32 L40 46" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Center dot: the "freedom" choice point between the brackets -->
+  <circle cx="32" cy="32" r="3.5" fill="#ffffff"/>
+</svg>

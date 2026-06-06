@@ -1,18 +1,25 @@
-# ── CodeFreedom: Docker ROCm (AMD GPUs) ───────────────────────────────────────
-# Builds and publishes the ROCm-based Claude Code image.
-# Triggered by changes to docker/claude-code/Dockerfile.ROCm.
+# ── CodeFreedom: Docker LiteLLM (self-contained proxy image) ────────────────
+# Builds and publishes the self-hosted LiteLLM proxy image that replaces
+# ghcr.io/berriai/litellm in the compose stack. The image bakes in the
+# WebSearch count display patch (see docker/litellm/patch_websearch_count.py).
 #
-# Tags: rocm-v{semver}, rocm-v{major.minor}, rocm-latest
-# Platforms: linux/amd64
+# Triggered by changes to docker/litellm/Dockerfile.LiteLLM or its
+# requirements.txt. Manually dispatchable for rebuilds on dependency bumps.
+#
+# Tags: litellm-v{semver}, litellm-v{major.minor}, litellm-latest
+# Platforms: linux/arm64, linux/amd64
 # Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
-# ────────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
 
-name: Docker ROCm
+name: Docker LiteLLM
 
 on:
   push:
     branches: [main]
-    paths: ["docker/claude-code/Dockerfile.ROCm"]
+    paths:
+      - "docker/litellm/Dockerfile.LiteLLM"
+      - "docker/litellm/requirements.txt"
+      - "docker/litellm/patch_websearch_count.py"
   workflow_dispatch:
 
 env:
@@ -37,14 +44,14 @@ jobs:
           platforms: arm64,amd64
       - uses: docker/setup-buildx-action@v4
 
-      - name: Extract version
+      - name: Extract image version
         id: version
         run: |
-          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/claude-code/Dockerfile.ROCm | head -1 | sed 's/.*=\(.*\)/\1/')
+          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/litellm/Dockerfile.LiteLLM | head -1 | sed 's/.*=\(.*\)/\1/')
           MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
-          echo "📦 Version: v${VERSION}"
+          echo "LiteLLM image version: v${VERSION}"
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
@@ -69,30 +76,30 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=rocm-v${{ steps.version.outputs.version }}
-            type=raw,value=rocm-v${{ steps.version.outputs.major_minor }}
-            type=raw,value=rocm-latest
+            type=raw,value=litellm-v${{ steps.version.outputs.version }}
+            type=raw,value=litellm-v${{ steps.version.outputs.major_minor }}
+            type=raw,value=litellm-latest
           labels: |
-            org.opencontainers.image.title=CodeFreedom - Claude Code (ROCm)
-            org.opencontainers.image.description=AMD ROCm — Instinct MI300X, MI250X, Radeon PRO
+            org.opencontainers.image.title=CodeFreedom - LiteLLM Proxy
+            org.opencontainers.image.description=Self-hosted LiteLLM proxy with the WebSearch count display patch baked in. Replaces ghcr.io/berriai/litellm in the codefreedom proxy stack.
             org.opencontainers.image.version=v${{ steps.version.outputs.version }}
-            com.codefreedom.platform=ROCm
+            com.codefreedom.platform=LiteLLM
 
       - name: Build and push
         id: build
         uses: docker/build-push-action@v7
         with:
-          context: docker/claude-code/
-          file: docker/claude-code/Dockerfile.ROCm
-          platforms: linux/amd64
+          context: docker/litellm/
+          file: docker/litellm/Dockerfile.LiteLLM
+          platforms: linux/arm64,linux/amd64
           build-args: |
             IMAGE_VERSION=${{ steps.version.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha,scope=ROCm
-          cache-to: type=gha,mode=max,scope=ROCm
+          cache-from: type=gha,scope=LiteLLM
+          cache-to: type=gha,mode=max,scope=LiteLLM
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'

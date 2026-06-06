@@ -8,15 +8,34 @@ docs_dir: docs
 
 theme:
   name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
   features:
     - navigation.instant
     - navigation.tracking
     - navigation.sections
+    - navigation.indexes
     - navigation.path
+    - navigation.top
+    - toc.follow
+    - search.suggest
     - search.highlight
+    - search.share
     - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+    - content.action.edit
+    - content.action.view
   icon:
     repo: fontawesome/brands/github
+  font:
+    text: Roboto
+    code: Roboto Mono
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/nilayparikh/codefreedom
+      name: CodeFreedom on GitHub
   palette:
     - media: "(prefers-color-scheme)"
       toggle:
@@ -49,21 +68,43 @@ plugins:
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      # Route ```mermaid``` blocks to the mermaid2 plugin via its
+      # Material-theme formatter. Without this, pymdownx.highlight strips the
+      # language class from the <code> element and the mermaid2 plugin's
+      # `on_post_page` cannot locate the diagrams — they render as plain code.
+      # See: https://github.com/fralau/mkdocs-mermaid2-plugin
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
   - pymdownx.tabbed:
       alternate_style: true
-  - pymdownx.highlight
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.keys
   - pymdownx.snippets
   - pymdownx.tasklist:
       custom_checkbox: true
+  - pymdownx.smartsymbols
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - toc:
       permalink: true
+      toc_depth: 3
 
 nav:
-  - Getting Started: index.md
+  - Home: index.md
   - Environment: environment.md
   - Architecture: architecture.md
   - Proxy:
@@ -129,6 +170,9 @@ nav:
       - Web Search: faq/web-search.md
   - Troubleshooting: troubleshooting.md
   - License & Contributions: license-contributions.md
+
+extra_css:
+  - stylesheets/extra.css
 
 extra_javascript:
   - js/external-links.js

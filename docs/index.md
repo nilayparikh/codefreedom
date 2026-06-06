@@ -1,99 +1,168 @@
-# Getting Started
+---
+title: CodeFreedom
+description: One CLI for every code agent — simple LLM routing, sandboxing, and profile management. All configuration in ~/.codefreedom.
+hide:
+  - toc
+---
 
-Get CodeFreedom up and running in a few minutes.
+<div class="cf-hero" markdown>
 
-## How It Works
+# CodeFreedom
 
-CodeFreedom is a **unified interface for all code agents** — it does not hack, patch, or modify any code agent. Instead, it provides simple LLM endpoint routing, sandboxing, and profile management through publicly supported interfaces (environment variables, CLI flags, config files, and API endpoints). All configuration lives in `~/.codefreedom`.
+<div class="cf-hero__tagline" markdown>
 
-> _All product and company names are trademarks of their respective owners.
-> See [NOTICE](https://github.com/nilayparikh/codefreedom/blob/main/NOTICE)._
+**One CLI for every code agent.**  
+Switch LLM providers, isolate environments, and stop fighting config sprawl — all from `~/.codefreedom`.
 
-## Prerequisites
+</div>
 
-| What         | Required For                              | How to Check                                          |
-| ------------ | ----------------------------------------- | ----------------------------------------------------- |
-| Python 3.10+ | CLI                                       | `python3 --version`                                   |
-| Docker       | Sandbox + Docker Compose proxy (optional) | [docker.com](https://docs.docker.com/engine/install/) |
-| Node.js      | Local Claude Code                         | `npm install -g @anthropic-ai/claude-code`            |
-
-> **Docker is optional.** The proxy can run natively (`codefreedom proxy start`). Docker is only required for sandbox mode and Docker Compose proxy.
-
-## Install
+<div class="cf-hero__install" markdown>
 
 ```bash
 pip install codefreedom
 ```
 
-Or from source:
+</div>
 
-```bash
-git clone https://github.com/nilayparikh/codefreedom.git
-cd codefreedom
-pip install -e .
+<div class="cf-hero__buttons" markdown>
+[:material-rocket-launch: Get started](environment.md){ .md-button .md-button--primary }
+[:material-book-open-variant: Architecture](architecture.md){ .md-button }
+[:material-github: GitHub](https://github.com/nilayparikh/codefreedom){ .md-button }
+</div>
+
+</div>
+
+## Why CodeFreedom
+
+<div class="grid cards" markdown>
+
+- :material-swap-horizontal:{ .lg .middle } **Switch models, not configs**
+
+  ***
+
+  DeepSeek for drafting, Azure for reasoning, OpenCode Zen for free-tier exploration. Same CLI, different profile. No agent code changes.
+
+  [:octicons-arrow-right-24: Profile system](claude-code/profiles.md)
+
+- :material-shield-check:{ .lg .middle } **Isolated, reproducible sandboxes**
+
+  ***
+
+  CUDA, ROCm, or plain Ubuntu Docker images. Every session gets a fresh ephemeral container — no state leaks between runs.
+
+  [:octicons-arrow-right-24: Sandbox mode](claude-code/sandbox.md)
+
+- :material-graph-outline:{ .lg .middle } **Self-hosted proxy**
+
+  ***
+
+  LiteLLM at `http://localhost:4000`. Provider failover, spend tracking, model aliases — all opt-in.
+
+  [:octicons-arrow-right-24: Proxy setup](proxy/index.md)
+
+- :material-toolbox-outline:{ .lg .middle } **Browser tools that just work**
+
+  ***
+
+  Headless Chrome via CDP for automation. Stealth Camoufox for anti-bot sites. Lifecycle managed automatically per session.
+
+  [:octicons-arrow-right-24: Browser tools](tools/index.md)
+
+</div>
+
+## Quick start
+
+=== "Linux / macOS"
+
+    ```bash
+    pip install codefreedom
+    codefreedom --init
+    codefreedom proxy start
+    codefreedom claude
+    ```
+
+=== "Windows"
+
+    ```powershell
+    py -3 -m pip install codefreedom
+    py -3 -m codefreedom --init
+    py -3 -m codefreedom proxy start
+    py -3 -m codefreedom claude
+    ```
+
+=== "From source"
+
+    ```bash
+    git clone https://github.com/nilayparikh/codefreedom.git
+    cd codefreedom
+    pip install -e ".[all]"
+    codefreedom --init
+    codefreedom proxy start
+    codefreedom claude
+    ```
+
+## Architecture at a glance
+
+CodeFreedom orchestrates code agents through their **publicly supported interfaces only** — environment variables, CLI flags, and API endpoints. No patching, no reverse-engineering.
+
+```mermaid
+graph LR
+    CLI["<b>codefreedom CLI</b>"]
+    CLI --> Claude["Claude Code"]
+    CLI --> Proxy["LiteLLM Proxy<br/>:4000"]
+    Claude --> Proxy
+    Proxy --> DS["DeepSeek"]
+    Proxy --> AZ["Azure Foundry"]
+    Proxy --> NV["NVIDIA"]
+    Proxy --> OZ["OpenCode Zen"]
+    Proxy --> OR["OpenRouter"]
+    Proxy --> Local["Local models"]
 ```
 
-Verify it works:
+## Prerequisites
 
-```bash
-codefreedom --help
-cf --help
-```
+| What         | Required For                                 | How to Check                                          |
+| ------------ | -------------------------------------------- | ----------------------------------------------------- |
+| Python 3.10+ | CLI                                          | `python3 --version`                                   |
+| Docker       | Sandbox + proxy (hard prerequisite for both) | [docker.com](https://docs.docker.com/engine/install/) |
+| Node.js      | Local Claude Code                            | `npm install -g @anthropic-ai/claude-code`            |
 
-## Initialize
+> **Docker is required for the proxy.** The proxy always runs via `docker compose` against the self-hosted `codefreedom:litellm-latest` image — no host-side `litellm` install is needed.
 
-```bash
-# Claude Code profiles + environment
-codefreedom claude init
+## What's next?
 
-# Proxy configs + environment
-codefreedom proxy init
-```
+<div class="grid cards" markdown>
 
-Or initialize everything at once:
+- :material-cog-outline:{ .lg .middle } **Configuration**
 
-```bash
-codefreedom --init
-```
+  ***
 
-This creates `~/.codefreedom/` with profiles, proxy configs, and component-specific `.env` files.
+  The full `.env` chain, profile inheritance, and `${VAR}` interpolation.
 
-Each init command is idempotent — it skips files that already exist. To force a fresh setup, delete the existing configs and re-run init, or merge changes manually from the [bundled examples](https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/).
+  [:octicons-arrow-right-24: Environment](environment.md)
 
-## Start the Proxy
+- :material-graph-outline:{ .lg .middle } **Architecture**
 
-```bash
-# Via Docker Compose
-codefreedom proxy start --docker
+  ***
 
-# Or natively (no Docker needed)
-codefreedom proxy start
-```
+  How the CLI, profiles, sandbox, and proxy fit together.
 
-The proxy starts at `http://localhost:4000`.
+  [:octicons-arrow-right-24: Architecture](architecture.md)
 
-## Launch a Code Agent
+- :material-help-circle-outline:{ .lg .middle } **Troubleshooting**
 
-```bash
-# Native mode (default) — runs on your host
-codefreedom claude
+  ***
 
-# Docker sandbox — isolated container with GPU passthrough
-codefreedom claude --sandbox
+  Common issues, Docker quirks, and proxy debugging.
 
-# Pick a built-in profile (or one you created)
-codefreedom claude --profile bare
-```
+  [:octicons-arrow-right-24: Troubleshooting](troubleshooting.md)
 
-All done. You're now running a code agent through the CodeFreedom proxy.
+- :material-scale-balance:{ .lg .middle } **License**
 
-## What's Next?
+  ***
 
-| Page                            | What You'll Learn                       |
-| ------------------------------- | --------------------------------------- |
-| [Architecture](architecture.md) | How the pieces fit together             |
-| [Proxy](proxy/index.md)               | Provider setup, database, configuration |
-| [Code Agents](claude-code.md)   | Profiles, sandbox mode, local mode      |
-| [Browser Tools](tools/index.md) | Chrome and Camoufox for web automation  |
-| [VS Code](vscode.md)            | Connect VS Code to the proxy            |
-| [Troubleshooting](troubleshooting.md) | Common issues and how to fix them |
+  Apache 2.0 — see the NOTICE file for attributions.
+
+  [:octicons-arrow-right-24: License](license-contributions.md)
+
+</div>

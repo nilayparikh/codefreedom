@@ -1,0 +1,119 @@
+/* ── CodeFreedom docs: visual polish ────────────────────────────────
+ * Loaded after Material's stylesheets via `extra_css` in mkdocs.yml.
+ * Keep additions surgical — leverage Material's CSS variables rather
+ * than hard-coding colors so the dark/light palettes both work.
+ */
+
+/* ── Hero section on the landing page ────────────────────────────── */
+.cf-hero {
+  text-align: center;
+  padding: 1.5rem 0 2.5rem 0;
+  margin: 0 auto;
+  max-width: 760px;
+}
+
+/* H1 inside the hero gets a brand-tinted gradient. We match by descendant
+ * selector (rather than `.cf-hero__title`) so the markdown `# Title` on
+ * the home page works without a wrapper div. */
+.cf-hero > h1 {
+  font-size: clamp(2.2rem, 5vw, 3.2rem);
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0 0 1rem 0;
+  background: linear-gradient(
+    135deg,
+    var(--md-primary-fg-color),
+    var(--md-accent-fg-color)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+.cf-hero__tagline {
+  font-size: 1.15rem;
+  line-height: 1.6;
+  color: var(--md-default-fg-color--light);
+  margin: 0 0 1.75rem 0;
+}
+
+.cf-hero__install {
+  margin: 1.25rem 0 1.5rem 0;
+}
+
+.cf-hero__install pre {
+  display: inline-block;
+  margin: 0;
+  padding: 0.65rem 1.1rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.cf-hero__install code {
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+}
+
+.cf-hero__buttons {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+/* ── Section divider used between major landing-page sections ──── */
+.cf-section-divider {
+  text-align: center;
+  margin: 3rem auto 0.5rem auto;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+  max-width: 760px;
+}
+
+/* ── Feature grid: subtle lift for Material's built-in grid cards ── */
+.grid.cards > ul > li,
+.grid.cards > ol > li {
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    border-color 120ms ease;
+}
+
+.grid.cards > ul > li:hover,
+.grid.cards > ol > li:hover {
+  transform: translateY(-2px);
+  border-color: var(--md-accent-fg-color);
+}
+
+/* ── Make the inline icon prefixes in feature cards a bit larger ── */
+.grid.cards > ul > li > p > .lg,
+.grid.cards > ul > li > hr + p > .lg,
+.grid.cards > ul > li > .lg {
+  font-size: 1.6rem;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+/* ── Tighter, more readable admonitions ─────────────────────────── */
+.admonition {
+  border-radius: 8px;
+}
+
+/* ── Subtle improvement to inline code in regular paragraphs ────── */
+.md-typeset p > code,
+.md-typeset li > code {
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+/* ── Footer attribution: blend with the design ──────────────────── */
+.md-copyright {
+  font-size: 0.75rem;
+}

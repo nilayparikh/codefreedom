@@ -157,51 +157,26 @@ class TestRun:
         args = argparse.Namespace(
             action="invalid",
             reset=False,
-            docker=False,
             port=4000,
             host="0.0.0.0",
         )
         result = run(args)
         assert result == 1
 
-    def test_start_docker_compose_not_found(self, monkeypatch):
+    def test_start_compose_not_found(self, monkeypatch):
+        """start must return 1 if the compose file is missing."""
         args = argparse.Namespace(
             action="start",
             reset=False,
-            docker=True,
             port=4000,
             host="0.0.0.0",
         )
         monkeypatch.setattr("codefreedom.cli.proxy._find_compose_file", lambda: None)
         result = run(args)
-        assert result == 1  # docker compose file not found
-
-    def test_start_native_config_not_found(self, monkeypatch):
-        args = argparse.Namespace(
-            action="start",
-            reset=False,
-            docker=False,
-            port=4000,
-            host="0.0.0.0",
-        )
-        monkeypatch.setattr("codefreedom.cli.proxy._find_config_file", lambda: None)
-        result = run(args)
-        assert result == 1  # config file not found (native mode)
-
-    def test_restart_native_errors(self):
-        """restart in native mode must error out (no native stop path)."""
-        args = argparse.Namespace(
-            action="restart",
-            reset=False,
-            docker=False,
-            port=4000,
-            host="0.0.0.0",
-        )
-        result = run(args)
         assert result == 1
 
-    def test_restart_docker_calls_compose_restart(self, monkeypatch, tmp_path):
-        """restart in docker mode must call `docker compose restart`."""
+    def test_restart_calls_compose_restart(self, monkeypatch, tmp_path):
+        """restart must call `docker compose restart` (no --docker flag)."""
         compose = tmp_path / "proxy" / "docker-compose.yaml"
         compose.parent.mkdir(parents=True)
         compose.write_text("")
@@ -224,7 +199,6 @@ class TestRun:
         args = argparse.Namespace(
             action="restart",
             reset=False,
-            docker=True,
             port=4000,
             host="0.0.0.0",
         )
@@ -237,12 +211,11 @@ class TestRun:
         assert "down" not in calls[0]
         assert "up" not in calls[0]
 
-    def test_restart_docker_no_compose_file(self, monkeypatch):
-        """restart in docker mode returns 1 when compose file is missing."""
+    def test_restart_no_compose_file(self, monkeypatch):
+        """restart returns 1 when compose file is missing."""
         args = argparse.Namespace(
             action="restart",
             reset=False,
-            docker=True,
             port=4000,
             host="0.0.0.0",
         )
@@ -271,12 +244,45 @@ class TestRun:
         args = argparse.Namespace(
             action="restart",
             reset=False,
-            docker=True,
             port=4000,
             host="0.0.0.0",
         )
         result = run(args)
         assert result == 1
+
+    def test_start_overrides_port_and_host_in_env(self, monkeypatch, tmp_path):
+        """`--port` and `--host` must set LITELLM_PORT/LITELLM_BIND_HOST
+        in the subprocess env (for this run only — does not edit .env.proxy)."""
+        compose = tmp_path / "proxy" / "docker-compose.yaml"
+        compose.parent.mkdir(parents=True)
+        compose.write_text("")
+
+        captured_env: dict[str, str] = {}
+
+        def fake_run(cmd, *_args, **kwargs):
+            captured_env.update(kwargs.get("env", {}))
+
+            class _R:
+                returncode = 0
+
+            return _R()
+
+        monkeypatch.setattr(
+            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+        )
+        monkeypatch.setattr("codefreedom.cli.proxy.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.cli.proxy._ensure_web_bridge_image", lambda: 0)
+
+        args = argparse.Namespace(
+            action="start",
+            reset=False,
+            port=4001,
+            host="127.0.0.1",
+        )
+        result = run(args)
+        assert result == 0
+        assert captured_env.get("LITELLM_PORT") == "4001"
+        assert captured_env.get("LITELLM_BIND_HOST") == "127.0.0.1"
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

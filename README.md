@@ -90,19 +90,19 @@ See the [Getting Started guide](https://nilayparikh.github.io/codefreedom/) for 
 
 ## Features
 
-| Feature             | Details                                                    |
-| ------------------- | ---------------------------------------------------------- |
-| LLM proxy           | Stateless model routing (native Python or Docker Compose)  |
-| Code agent launcher | `codefreedom claude` CLI -- local + sandbox modes           |
-| Sandboxing          | Pre-configured containers (CUDA, ROCm, Ubuntu)             |
-| Profile management  | Model switching, env inheritance, isolation                |
-| Browser tools       | Chrome (CDP) + Camoufox (MCP) for web automation          |
-| Backup & restore    | Config backups with diff preview and selective restore     |
+| Feature             | Details                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| LLM proxy           | Stateless model routing (self-hosted `codefreedom:litellm-latest` image via Docker Compose) |
+| Code agent launcher | `codefreedom claude` CLI -- local + sandbox modes                                           |
+| Sandboxing          | Pre-configured containers (CUDA, ROCm, Ubuntu)                                              |
+| Profile management  | Model switching, env inheritance, isolation                                                 |
+| Browser tools       | Chrome (CDP) + Camoufox (MCP) for web automation                                            |
+| Backup & restore    | Config backups with diff preview and selective restore                                      |
 
 ## Requirements
 
 - Python 3.10+
-- Docker -- optional, for sandbox mode and Docker Compose proxy
+- Docker -- required for sandbox mode and the proxy
 - Node.js + `@anthropic-ai/claude-code` -- for local mode only
 
 ## License
