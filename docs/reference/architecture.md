@@ -192,6 +192,6 @@ cosign verify \
 - [Proxy Overview](proxy/index.md) — provider list with per-model links
 - [Providers](proxy/providers/index.md) — full provider configuration reference
 - [Proxy Configuration](proxy/config.md) — model aliases, retry policy, fallbacks
-- [Profiles](claude-code/profiles.md) — Claude Code profile schema and inheritance
-- [Code Agents](claude-code.md) — local vs sandbox mode
-- [Browser Tools](tools/index.md) — Chrome and Camoufox tool profiles
+- [Profiles](../guides/profiles.md) — Claude Code profile schema and inheritance
+- [Code Agents](../guides/agents.md) — local vs sandbox mode
+- [Browser Tools](../guides/tools/index.md) — Chrome and Camoufox tool profiles

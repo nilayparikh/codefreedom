@@ -17,7 +17,7 @@ Search for **"LiteLLM Provider for GitHub Copilot Chat"** by **Vivswan** in the 
 - [marketplace.visualstudio.com/items?itemName=vivswan.litellm-vscode-chat](https://marketplace.visualstudio.com/items?itemName=vivswan.litellm-vscode-chat)
 - [GitHub repository](https://github.com/Vivswan/litellm-vscode-chat)
 
-![LiteLLM Provider for GitHub Copilot Chat extension](assets/vscode-1-extension.png)
+![LiteLLM Provider for GitHub Copilot Chat extension](../assets/vscode-1-extension.png)
 
 ## 2. Add the Proxy as a Server
 
@@ -28,19 +28,19 @@ In VS Code settings (`Ctrl+,` or `Cmd+,`), search for **`litellm-vscode-chat`** 
 | `litellm-vscode-chat.url` | `http://localhost:4000`   |
 | `litellm-vscode-chat.key` | Your `LITELLM_MASTER_KEY` |
 
-![Adding the proxy server in VS Code settings](assets/vscode-2-add-server.png)
+![Adding the proxy server in VS Code settings](../assets/vscode-2-add-server.png)
 
 ## 3. Test the Connection
 
 Open the VS Code chat panel and pick **"LiteLLM"** as the provider. You should see the models from your proxy listed — pick one and start chatting.
 
-![Testing the server connection](assets/vscode-3-test-the-server.png)
+![Testing the server connection](../assets/vscode-3-test-the-server.png)
 
 ## 4. All Models Available
 
 Once configured, every model from your proxy appears in the VS Code model picker. Switch between DeepSeek, Claude (via proxy), local models, or any other provider — all in one place.
 
-![All proxy models available in VS Code](assets/vscode-4-configured.png)
+![All proxy models available in VS Code](../assets/vscode-4-configured.png)
 
 ## Configuration
 
@@ -65,7 +65,7 @@ Enable prompt caching (recommended — reduces latency and token usage):
   This lets the proxy safely ignore unsupported parameters rather than sending them to the upstream provider and causing errors.
 
 - **Model routing.** All model selection, fallback, and parameter tuning happens in the
-  [proxy config](proxy/index.md) — VS Code just points to the proxy URL.
+  [proxy config](../reference/proxy/index.md) — VS Code just points to the proxy URL.
 
 - **Prompt caching.** The extension supports Anthropic-style prompt caching
   through the proxy. Enable it in your VS Code settings (see above), then
@@ -164,7 +164,7 @@ that string.
 | `LITELLM_MASTER_KEY` known | Exported in the shell **or** present in `~/.codefreedom/.env.proxy.secrets`            |
 | A routable `--host`        | Pass the host VS Code will use to reach the proxy (e.g. `localhost`, LAN IP, DNS name) |
 
-See the full command reference in [Proxy → Generate VS Code Configuration](proxy/index.md#generate-vs-code-configuration).
+See the full command reference in [Proxy → Generate VS Code Configuration](../reference/proxy/index.md#generate-vs-code-configuration).
 
 ## Claude Code Extension (native integration)
 
@@ -356,4 +356,4 @@ not planned by Anthropic), so there's no way to reference a
 | Extension reports `Unauthorized` / `ANTHROPIC_AUTH_TOKEN missing`               | The system env var isn't visible to the extension                        | Fully restart VS Code (env vars are read at launch)                                                                  |
 | `claudeCode.selectedModel` not in fragment                                      | Profile has no `CLAUDE_MODEL` env var                                    | Add `CLAUDE_MODEL: CodeFreedom/Flash` to your profile env                                                            |
 
-See the full command reference in [Claude Code → VS Code settings](claude-code/local.md#vs-code-settings).
+See the full command reference in [Claude Code → VS Code settings](local.md#vs-code-settings).

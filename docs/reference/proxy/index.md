@@ -51,7 +51,7 @@ The proxy routes to any combination of these providers. Each provider is a YAML 
 | [Anthropic Compatible](providers/anthropic-compatible/index.md) | Any `/v1/messages` endpoint                      | [Default](providers/anthropic-compatible/default.md)                                                                                                                                                                                                                                                                                              |
 | [Local](providers/local/index.md)                               | Self-hosted (Ollama, vLLM, etc.)                 | [Qwen3.6-27B](providers/local/qwen3.6-27b.md) · [Qwen3.6-35B-A3B](providers/local/qwen3.6-35b-a3b.md)                                                                                                                                                                                                                                             |
 
-Looking for free models to start with? See [Free Models](../free-models.md) for setup guides and rate-limit notes.
+Looking for free models to start with? See [Free Models](../../getting-started/free-models.md) for setup guides and rate-limit notes.
 
 The proxy is available at `http://localhost:4000`.
 
@@ -247,7 +247,7 @@ you create the secret).
 | 1         | Network failure or invalid response from `/v1/model/info`   |
 
 For end-to-end instructions (creating the file, restarting VS Code,
-verifying models appear), see [VS Code Integration → Built-in](../vscode.md#built-in-chatlanguagemodelsjson-no-extension-required).
+verifying models appear), see [VS Code Integration → Built-in](../../guides/vscode.md#built-in-chatlanguagemodelsjson-no-extension-required).
 
 ## Endpoints
 

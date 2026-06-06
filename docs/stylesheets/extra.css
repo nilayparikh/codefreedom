@@ -117,3 +117,43 @@
 .md-copyright {
   font-size: 0.75rem;
 }
+
+/* ── Slimmer top tab bar ────────────────────────────────────────── */
+.md-tabs__link {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* ── More compact left navigation ───────────────────────────────── */
+.md-nav {
+  font-size: 0.75rem;
+}
+.md-nav__link {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+}
+
+/* ── Section index pages: tighter hero-style heading ────────────── */
+.md-typeset h1:not(.cf-hero h1) {
+  font-size: 2rem;
+  margin-top: 0;
+  margin-bottom: 0.8rem;
+  font-weight: 600;
+}
+
+/* ── Content: max width for readability on large screens ────────── */
+.md-grid {
+  max-width: 64rem;
+}
+
+/* ── Section index page description ──────────────────────────────── */
+.section-description {
+  font-size: 1.05rem;
+  color: var(--md-default-fg-color--light);
+  margin-bottom: 1.5rem;
+}

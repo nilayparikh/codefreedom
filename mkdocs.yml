@@ -11,6 +11,8 @@ theme:
   logo: assets/logo.svg
   favicon: assets/logo.svg
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.instant
     - navigation.tracking
     - navigation.sections
@@ -26,7 +28,6 @@ theme:
     - content.tabs.link
     - content.tooltips
     - content.action.edit
-    - content.action.view
   icon:
     repo: fontawesome/brands/github
   font:
@@ -105,71 +106,78 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Environment: environment.md
-  - Architecture: architecture.md
-  - Proxy:
-      - Overview: proxy/index.md
-      - Configuration: proxy/config.md
-      - Database: proxy/database.md
-      - Docker Mode: proxy/docker.md
-      - Web Search Interception: proxy/websearch-interception.md
-      - Providers:
-          - Overview: proxy/providers/index.md
-          - DeepSeek:
-              - Overview: proxy/providers/deepseek/index.md
-              - DeepSeek-V4-Flash: proxy/providers/deepseek/deepseek-v4-flash.md
-              - DeepSeek-V4-Pro: proxy/providers/deepseek/deepseek-v4-pro.md
-          - Azure Foundry:
-              - Overview: proxy/providers/azure-foundry/index.md
-              - GPT-5.4: proxy/providers/azure-foundry/gpt-5.4.md
-              - GPT-5.4-Mini: proxy/providers/azure-foundry/gpt-5.4-mini.md
-              - GPT-5.4-Nano: proxy/providers/azure-foundry/gpt-5.4-nano.md
-          - NVIDIA:
-              - Overview: proxy/providers/nvidia/index.md
-              - DeepSeek-V4-Flash: proxy/providers/nvidia/deepseek-v4-flash.md
-              - DeepSeek-V4-Pro: proxy/providers/nvidia/deepseek-v4-pro.md
-              - GLM-5.1: proxy/providers/nvidia/glm-5.1.md
-              - Kimi-K2.6: proxy/providers/nvidia/kimi-k2.6.md
-              - Step-3.7-Flash: proxy/providers/nvidia/step-3.7-flash.md
-          - OpenCode Zen:
-              - Overview: proxy/providers/opencode-zen/index.md
-              - MiMo-V2.5-FREE: proxy/providers/opencode-zen/mimo-v2.5.md
-              - Nemotron-3-Super-FREE: proxy/providers/opencode-zen/nemotron-3-super.md
-              - Nemotron-3-Ultra-FREE: proxy/providers/opencode-zen/nemotron-3-ultra.md
-              - DeepSeek-V4-Flash-FREE: proxy/providers/opencode-zen/deepseek-v4-flash.md
-              - Big-Pickle: proxy/providers/opencode-zen/big-pickle.md
-              - MiniMax-M3-FREE: proxy/providers/opencode-zen/minimax-m3.md
-          - OpenRouter:
-              - Overview: proxy/providers/openrouter/index.md
-              - Nemotron-3-Ultra-550B-A55B: proxy/providers/openrouter/nemotron-3-ultra-550b-a55b.md
-              - FreeRouter: proxy/providers/openrouter/freerouter.md
-          - OpenAI Compatible:
-              - Overview: proxy/providers/openai-compatible/index.md
-              - Default: proxy/providers/openai-compatible/default.md
-          - Anthropic Compatible:
-              - Overview: proxy/providers/anthropic-compatible/index.md
-              - Default: proxy/providers/anthropic-compatible/default.md
-          - Local:
-              - Overview: proxy/providers/local/index.md
-              - Qwen3.6-27B: proxy/providers/local/qwen3.6-27b.md
-              - Qwen3.6-35B-A3B: proxy/providers/local/qwen3.6-35b-a3b.md
-  - Free Models: free-models.md
-  - Code Agents:
-      - Overview: claude-code.md
-      - Profiles: claude-code/profiles.md
-      - Sandbox Mode: claude-code/sandbox.md
-      - Sandbox Isolation: claude-code/sandbox-isolation.md
-      - Local Mode: claude-code/local.md
-  - Admin (Backup & Restore): admin.md
-  - Browser Tools:
-      - Overview: tools/index.md
-      - Chrome: tools/chrome.md
-      - Camoufox: tools/web.md
-  - VS Code: vscode.md
-  - FAQ:
-      - Web Search: faq/web-search.md
-  - Troubleshooting: troubleshooting.md
-  - License & Contributions: license-contributions.md
+  - Get Started:
+      - Overview: getting-started/index.md
+      - Install: getting-started/install.md
+      - First run: getting-started/first-run.md
+      - Free models: getting-started/free-models.md
+  - Guides:
+      - Overview: guides/index.md
+      - Code agents: guides/agents.md
+      - Profiles: guides/profiles.md
+      - Sandbox mode: guides/sandbox.md
+      - Sandbox isolation: guides/sandbox-isolation.md
+      - Local mode: guides/local.md
+      - Browser tools:
+          - Overview: guides/tools/index.md
+          - Chrome: guides/tools/chrome.md
+          - Camoufox: guides/tools/web.md
+      - VS Code: guides/vscode.md
+      - Admin: guides/admin.md
+  - Reference:
+      - Overview: reference/index.md
+      - Architecture: reference/architecture.md
+      - Environment: reference/environment.md
+      - Proxy:
+          - Overview: reference/proxy/index.md
+          - Configuration: reference/proxy/config.md
+          - Database: reference/proxy/database.md
+          - Docker mode: reference/proxy/docker.md
+          - Web search interception: reference/proxy/websearch-interception.md
+          - Providers:
+              - Overview: reference/proxy/providers/index.md
+              - DeepSeek:
+                  - Overview: reference/proxy/providers/deepseek/index.md
+                  - DeepSeek-V4-Flash: reference/proxy/providers/deepseek/deepseek-v4-flash.md
+                  - DeepSeek-V4-Pro: reference/proxy/providers/deepseek/deepseek-v4-pro.md
+              - Azure Foundry:
+                  - Overview: reference/proxy/providers/azure-foundry/index.md
+                  - GPT-5.4: reference/proxy/providers/azure-foundry/gpt-5.4.md
+                  - GPT-5.4-Mini: reference/proxy/providers/azure-foundry/gpt-5.4-mini.md
+                  - GPT-5.4-Nano: reference/proxy/providers/azure-foundry/gpt-5.4-nano.md
+              - NVIDIA:
+                  - Overview: reference/proxy/providers/nvidia/index.md
+                  - DeepSeek-V4-Flash: reference/proxy/providers/nvidia/deepseek-v4-flash.md
+                  - DeepSeek-V4-Pro: reference/proxy/providers/nvidia/deepseek-v4-pro.md
+                  - GLM-5.1: reference/proxy/providers/nvidia/glm-5.1.md
+                  - Kimi-K2.6: reference/proxy/providers/nvidia/kimi-k2.6.md
+                  - Step-3.7-Flash: reference/proxy/providers/nvidia/step-3.7-flash.md
+              - OpenCode Zen:
+                  - Overview: reference/proxy/providers/opencode-zen/index.md
+                  - MiMo-V2.5-FREE: reference/proxy/providers/opencode-zen/mimo-v2.5.md
+                  - Nemotron-3-Super-FREE: reference/proxy/providers/opencode-zen/nemotron-3-super.md
+                  - Nemotron-3-Ultra-FREE: reference/proxy/providers/opencode-zen/nemotron-3-ultra.md
+                  - DeepSeek-V4-Flash-FREE: reference/proxy/providers/opencode-zen/deepseek-v4-flash.md
+                  - Big-Pickle: reference/proxy/providers/opencode-zen/big-pickle.md
+                  - MiniMax-M3-FREE: reference/proxy/providers/opencode-zen/minimax-m3.md
+              - OpenRouter:
+                  - Overview: reference/proxy/providers/openrouter/index.md
+                  - Nemotron-3-Ultra-550B-A55B: reference/proxy/providers/openrouter/nemotron-3-ultra-550b-a55b.md
+                  - FreeRouter: reference/proxy/providers/openrouter/freerouter.md
+              - OpenAI Compatible:
+                  - Overview: reference/proxy/providers/openai-compatible/index.md
+                  - Default: reference/proxy/providers/openai-compatible/default.md
+              - Anthropic Compatible:
+                  - Overview: reference/proxy/providers/anthropic-compatible/index.md
+                  - Default: reference/proxy/providers/anthropic-compatible/default.md
+              - Local:
+                  - Overview: reference/proxy/providers/local/index.md
+                  - Qwen3.6-27B: reference/proxy/providers/local/qwen3.6-27b.md
+                  - Qwen3.6-35B-A3B: reference/proxy/providers/local/qwen3.6-35b-a3b.md
+      - FAQ:
+          - Web search: reference/faq/web-search.md
+      - Troubleshooting: reference/troubleshooting.md
+      - License: reference/license.md
 
 extra_css:
   - stylesheets/extra.css

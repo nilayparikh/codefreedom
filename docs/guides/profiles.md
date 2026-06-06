@@ -468,4 +468,4 @@ codefreedom claude --list-profiles
 
 Shows each profile, its description, inheritance status, and which environment variables it sets.
 
-See [Environment Configuration](../environment.md) for the full env chain and [Sandbox Mode](sandbox.md) for container isolation details.
+See [Environment Configuration](../reference/environment.md) for the full env chain and [Sandbox Mode](sandbox.md) for container isolation details.

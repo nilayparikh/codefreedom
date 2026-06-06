@@ -98,7 +98,7 @@ Override the default profile file location:
 export CODEFREEDOM_PROFILES_FILE="/path/to/custom/profiles.json"
 ```
 
-See [Code Agents → Profile System](claude-code.md#profile-system) for details.
+See [Code Agents → Profile System](../guides/agents.md#profile-system) for details.
 
 ## Security
 
@@ -119,4 +119,4 @@ The full variable reference is in the bundled example files:
 
 > **Note:** Variables like `LITELLM_PORT`, `LITELLM_LOG_LEVEL`, and `LITELLM_IMAGE` in `.env.proxy.example` are read by the proxy container at startup. `--port` and `--host` on `codefreedom proxy start` override `LITELLM_PORT` and `LITELLM_BIND_HOST` for that run only (they do not edit `.env.proxy`).
 
-See [Proxy](proxy/index.md) for provider-specific configuration and [Sandbox Mode](claude-code/sandbox.md) for image selection.
+See [Proxy](proxy/index.md) for provider-specific configuration and [Sandbox Mode](../guides/sandbox.md) for image selection.

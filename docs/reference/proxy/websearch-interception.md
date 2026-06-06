@@ -149,5 +149,5 @@ Use this in your own monitoring or compose healthcheck if you want stricter reli
 ## Related
 
 - [Web Search FAQ](../faq/web-search.md) — the legacy MCP + `CLAUDE.md` approach (fallback for non-proxy users)
-- [Camoufox Web Tool](../tools/web.md) — engine and parser configuration
+- [Camoufox Web Tool](../../guides/tools/web.md) — engine and parser configuration
 - [LiteLLM websearch_interception docs](https://docs.litellm.ai/docs/tutorials/claude_code_websearch) — the underlying LiteLLM feature
