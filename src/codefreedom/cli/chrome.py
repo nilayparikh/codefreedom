@@ -42,7 +42,7 @@ from codefreedom.cli.tool_init_utils import (
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
-_DEFAULT_IMAGE = "codefreedom:chrome"
+_DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:chrome-latest"
 _DEFAULT_CONTAINER_NAME = "codefreedom-chrome"
 _DEFAULT_PORT = 9222
 _DEFAULT_DATA_DIR = "~/.codefreedom/sandbox/tools/chrome"

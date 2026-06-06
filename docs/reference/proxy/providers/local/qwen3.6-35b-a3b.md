@@ -63,7 +63,7 @@ Secondary local model. Wired to `LOCAL_S_*` env vars (port 8001). 256K context w
     mode: chat
     context_window: 262144
     max_tokens: 262144
-    max_input_tokens: 229376
+    max_input_tokens: 114688
     max_output_tokens: 16384
     limit:
       context: 262144

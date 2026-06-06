@@ -45,7 +45,7 @@ general_settings:
 
 ```bash
 codefreedom proxy stop
-codefreedom proxy start --docker
+codefreedom proxy start
 ```
 
 LiteLLM runs the Prisma migration automatically on first start — it creates the schema in your PostgreSQL database.

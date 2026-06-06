@@ -20,6 +20,9 @@ services:
   litellm:
     image: docker.io/nilayparikh/codefreedom:litellm-latest
     container_name: litellm-codefreedom
+    profiles:
+      - litellm
+      - all
     ports:
       - "0.0.0.0:4000:4000"
     volumes:
@@ -32,6 +35,9 @@ services:
   web-bridge:
     image: docker.io/nilayparikh/codefreedom:web-bridge
     container_name: codefreedom-web-bridge
+    profiles:
+      - litellm
+      - all
     extra_hosts:
       - host.docker.internal:host-gateway
     networks:

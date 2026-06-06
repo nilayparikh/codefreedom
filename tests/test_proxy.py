@@ -259,7 +259,7 @@ class TestRun:
 
         captured_env: dict[str, str] = {}
 
-        def fake_run(cmd, *_args, **kwargs):
+        def fake_run(_cmd, *_args, **kwargs):
             captured_env.update(kwargs.get("env", {}))
 
             class _R:
@@ -365,7 +365,9 @@ class TestEnsureWebBridgeImage:
 
         monkeypatch.setattr(proxy_mod.subprocess, "run", fake_run)
 
-        rc = proxy_mod._ensure_web_bridge_image()
+        rc = (
+            proxy_mod._ensure_web_bridge_image()
+        )  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         assert rc == 0
         # First call: docker image inspect. No docker build should follow.
         assert any("inspect" in c for c in calls)
@@ -391,7 +393,9 @@ class TestEnsureWebBridgeImage:
         monkeypatch.setattr(proxy_mod.subprocess, "run", fake_run)
         monkeypatch.setattr(proxy_mod, "_web_bridge_build_context", lambda: None)
 
-        rc = proxy_mod._ensure_web_bridge_image()
+        rc = (
+            proxy_mod._ensure_web_bridge_image()
+        )  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         assert rc == 0  # soft-warn, not hard-fail
 
     def test_image_missing_and_build_succeeds(
@@ -427,7 +431,9 @@ class TestEnsureWebBridgeImage:
         # The fake build context doesn't need to exist; the real subprocess
         # call is mocked.
 
-        rc = proxy_mod._ensure_web_bridge_image()
+        rc = (
+            proxy_mod._ensure_web_bridge_image()
+        )  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         assert rc == 0
         # Second call: docker build (after inspect failed).
         build_calls = [c for c in calls if "build" in c]
@@ -457,5 +463,7 @@ class TestEnsureWebBridgeImage:
             proxy_mod, "_web_bridge_build_context", lambda: Path("/tmp/fake-bridge")
         )
 
-        rc = proxy_mod._ensure_web_bridge_image()
+        rc = (
+            proxy_mod._ensure_web_bridge_image()
+        )  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         assert rc == 1

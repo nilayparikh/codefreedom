@@ -6,7 +6,7 @@ description: NVIDIA/Step-3.7-Flash — 262K context, vision, fast variant.
 
 StepFun Step 3.7 Flash routed through NVIDIA AI Endpoints. 262K context window with vision support. Fast-tier variant of the Step-3.7 family.
 
-**LiteLLM model:** `stepfun-ai/step-3.7-flash`
+**LiteLLM model:** `openai/stepfun-ai/step-3.7-flash`
 **Context window:** 262,144 tokens
 **Max output:** 16,384 tokens
 
@@ -25,9 +25,7 @@ StepFun Step 3.7 Flash routed through NVIDIA AI Endpoints. 262K context window w
 ```yaml
 - model_name: NVIDIA/Step-3.7-Flash
   litellm_params:
-    # Note: no openai/ prefix. Step-3.7-Flash uses its own upstream
-    # provider type, registered with LiteLLM directly.
-    model: stepfun-ai/step-3.7-flash
+    model: openai/stepfun-ai/step-3.7-flash
     api_base: os.environ/NVIDIA_BASE_URL
     api_key: os.environ/NVIDIA_API_KEY
     timeout: 300
@@ -73,7 +71,7 @@ StepFun Step 3.7 Flash routed through NVIDIA AI Endpoints. 262K context window w
 ## Notes
 
 - Use for: vision + reasoning at mid-range speed, code generation with image inputs.
-- **`model: stepfun-ai/step-3.7-flash`** — Unlike the other NVIDIA models in this file, this one does not use the `openai/` prefix. StepFun registers its own LiteLLM provider.
+- **`model: openai/stepfun-ai/step-3.7-flash`** — Uses the `openai/` prefix like other NVIDIA models, with the full `stepfun-ai/step-3.7-flash` path as the model identifier.
 - **Flash tier** — Lower latency than the full Step-3.7 model. Suitable for interactive use.
 - Source: [build.nvidia.com/stepfun-ai/step-3.7-flash](https://build.nvidia.com/stepfun-ai/step-3.7-flash/modelcard)
 

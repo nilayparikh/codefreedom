@@ -68,16 +68,6 @@ def main() -> None:
         help="Load a named profile (default: 'default')",
     )
     claude_parser.add_argument(
-        "--stop",
-        action="store_true",
-        help="Stop and remove the persistent Docker container",
-    )
-    claude_parser.add_argument(
-        "--status",
-        action="store_true",
-        help="Show persistent container status and exit",
-    )
-    claude_parser.add_argument(
         "--list-profiles",
         action="store_true",
         help="List available profiles and exit",
@@ -103,6 +93,43 @@ def main() -> None:
             "Initialize Claude Code profiles and .env.claude from bundled"
             " examples into ~/.codefreedom/."
         ),
+    )
+
+    config_parser = claude_subparsers.add_parser(
+        "config",
+        help="Resolve profile env vars for standalone Claude Code use",
+        description=(
+            "Resolve your CodeFreedom profile's environment variables so you can"
+            " run Claude Code directly (without cf cc). Writes export-format"
+            " statements for bash or $env: format for PowerShell. The output"
+            " may contain secrets; use --out to write to a file."
+        ),
+    )
+    config_parser.add_argument(
+        "--profile",
+        type=str,
+        default="default",
+        metavar="NAME",
+        help="Profile to resolve (default: 'default')",
+    )
+    config_parser.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Write to FILE instead of stdout (recommended to avoid leaking secrets)",
+    )
+    config_format = config_parser.add_mutually_exclusive_group()
+    config_format.add_argument(
+        "--bash",
+        action="store_true",
+        help="Output in bash export format (default)",
+    )
+    config_format.add_argument(
+        "--ps",
+        action="store_true",
+        dest="powershell",
+        help="Output in PowerShell $env: format",
     )
 
     # ── admin subcommand ───────────────────────────────────────────────────
@@ -262,6 +289,26 @@ def main() -> None:
 
     build_vscode_parser(vscode_parser)
 
+    # -- update subcommand -----------------------------------------------------------
+    update_parser = subparsers.add_parser(
+        "update",
+        aliases=["upd", "up"],
+        help="Check Docker images and PyPI package for updates",
+        description=(
+            "Check CodeFreedom-managed Docker images and the installed PyPI"
+            " package for available updates. Scans profile configs and local"
+            " Docker cache to discover images, then compares local digests"
+            " against the Docker Hub registry. No auto-pull or container"
+            " lifecycle changes -- read-only status check."
+        ),
+    )
+    update_parser.add_argument(
+        "services",
+        nargs="*",
+        metavar="SERVICE",
+        help="Filter by service: sandbox, chrome, web, proxy, tools, all (default)",
+    )
+
     args, unknown = parser.parse_known_args()
 
     # ── Top-level --init ────────────────────────────────────────────────────
@@ -299,8 +346,6 @@ def main() -> None:
             "--sandbox": "sandbox",
             "--run-as-me": "run_as_me",
             "--native-models": "native_models",
-            "--stop": "stop",
-            "--status": "status",
             "--list-profiles": "list_profiles",
             "--dangerously-skip-permissions": "dangerously_skip_permissions",
         }
@@ -322,6 +367,10 @@ def main() -> None:
             from codefreedom.cli.claude import init_claude
 
             sys.exit(init_claude())
+        elif claude_action == "config":
+            from codefreedom.cli.claude import cmd_config
+
+            sys.exit(cmd_config(args))
 
         # ── Forward everything remaining to claude CLI ─────────────────────
         args.claude_args = forwarded
@@ -404,6 +453,13 @@ def main() -> None:
         else:
             vscode_parser.print_help()
             sys.exit(1)
+    elif args.command in ("update", "upd", "up"):
+        if unknown:
+            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            sys.exit(2)
+        from codefreedom.cli.update import run as update_run
+
+        sys.exit(update_run(args))
     else:
         parser.print_help()
         sys.exit(0)

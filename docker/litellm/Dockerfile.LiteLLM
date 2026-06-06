@@ -1,38 +1,151 @@
-# ── CodeFreedom LiteLLM Proxy Image ──────────────────────────────────────────
-# Self-contained LiteLLM proxy with the WebSearch count display patch
-# baked in at build time.  Replaces the upstream `ghcr.io/berriai/litellm`
-# image so we control the LiteLLM version, the patch lifecycle, and the
-# Trivy CVE surface.
+# ── CodeFreedom LiteLLM + PostgreSQL Image ────────────────────────────────
+# Self-contained, single-image LiteLLM proxy with an embedded, stripped
+# PostgreSQL 18.4 for spend logs, virtual keys, and team / org tables.
 #
-#   Entrypoint:  tini -> litellm  (PID 1 forwards SIGTERM to the proxy)
+#   Entrypoint:  tini -> /usr/local/bin/entrypoint.sh
+#                  ├─ boot PG on the Unix socket
+#                  ├─ run `prisma db push` to create the schema
+#                  └─ exec litellm on :4000
 #   Working dir: /app
 #   Run as:      non-root `codefreedom` user (uid 1000)
 #   Healthcheck: GET /health/liveliness
 #
-# The websearch count patch (see patch_websearch_count.py) is applied
-# DURING the build to /usr/local/lib/python3.13/site-packages/... so the
-# shipped image is self-contained — no entrypoint script, no runtime
-# mutation, no surprises at first start.  See
-# docs/proxy/websearch-interception.md for the architecture.
+# ── Source control ──────────────────────────────────────────────────────
+# LiteLLM is installed from a git FORK (default
+# https://github.com/nilayparikh/litellm.git) at a pinned tag (default
+# v1.87.1), with --no-deps.  Two reasons:
+#   1. The official `litellm[proxy]` extra pulls litellm-enterprise,
+#      litellm-proxy-extras, granian, pyroscope-io, etc.  Installing
+#      the package without its optional-deps skips that resolution
+#      entirely, and the curated requirements.txt below supplies the
+#      minimum we actually need for the proxy + dashboard.
+#   2. Pinning the source to a fork + tag gives us full control over
+#      which build of LiteLLM ships; no surprise upgrades from PyPI.
 #
-# @platform  linux/amd64, linux/arm64
-# @version   v0.1.0
+# Override at build time, e.g. to track upstream BerriAI:
 #
-# Build:
 #   docker build \
+#     --build-arg LITELLM_FORK_URL=https://github.com/nilayparikh/litellm.git \
+#     --build-arg LITELLM_TAG=v1.87.1 \
+#     --build-arg PG_VERSION=18.4 \
+#     --build-arg PG_SOURCE_URL=https://github.com/postgres/postgres.git \
+#     --build-arg PG_TAG=REL_18_4 \
 #     --build-arg IMAGE_VERSION=0.1.0 \
 #     -t docker.io/nilayparikh/codefreedom:litellm-v0.1.0 \
 #     -f docker/litellm/Dockerfile.LiteLLM docker/litellm/
+#
+# @platform  linux/amd64, linux/arm64
+# @version   v0.1.0
 # ─────────────────────────────────────────────────────────────────────────────
 
 ARG IMAGE_VERSION=0.1.0
+ARG LITELLM_FORK_URL=https://github.com/nilayparikh/litellm.git
+ARG LITELLM_TAG=v1.87.1
+ARG PG_VERSION=18.4
+# PG is cloned from the official postgres/postgres repo at the tag
+# pinned by PG_TAG.  Tag names follow the REL_<MAJOR>_<MINOR> convention
+# (REL_18_4 == 18.4.x).  The bz2 tarball on postgresql.org has a
+# misconfigured 301→404 mirror, so the git form is the reliable path.
+ARG PG_SOURCE_URL=https://github.com/postgres/postgres.git
+ARG PG_TAG=REL_18_4
 
-# ── Stage 1: builder ─ install pinned wheels into an isolated prefix ──────
-FROM python:3.13-slim AS builder
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║ Stage 1 — pg-builder: build PostgreSQL 18.4 from source             ║
+# ║ Strips every feature we don't need; keeps ICU + SSL for            ║
+# ║ correctness (collation + per-pod trust auth with TLS fallback).    ║
+# ║                                                                    ║
+# ║ Base MUST match the runtime base's Debian release: PG is linked     ║
+# ║ against libicuuc.so.<N> at build time, and the runtime must ship   ║
+# ║ the same SONAME.  python:3.13-slim is on trixie (libicu76), so     ║
+# ║ this stage uses debian:trixie-slim too.  Mismatching the bases     ║
+# ║ gives a "libicuuc.so.72: cannot open" error at initdb time.        ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+FROM debian:trixie-slim AS pg-builder
 
-# Some LiteLLM extras (e.g. httptools, uvloop for uvicorn) compile C
-# extensions at install time.  Patches the base image for known CVEs
-# before installing anything.
+ARG PG_VERSION
+ARG PG_SOURCE_URL
+ARG PG_TAG
+
+# CFLAGS / LDFLAGS are overridable so CI can swap them in if a
+# regression surfaces.  -O2 (not -O3) keeps the optimizer conservative
+# enough to avoid UB surprises; -march=armv8-a+crypto is the
+# portable ARMv8 baseline that every server core (Graviton, Ampere,
+# Apple, etc.) implements and that the bookworm-slim assembler can
+# actually encode.  -march=native was tried and breaks on this
+# image: gcc emits SHA256 intrinsics (bcax) for src/backend/libpq/
+# ifaddr.c, but the bookworm binutils does not know how to encode
+# them.  The crypto extension covers that and gives a measurable win
+# on crypto-heavy PG workloads.
+#
+# -flto is intentionally NOT used: binutils' lto-wrapper script
+# rejects the GCC LTO bytecode on the bookworm-slim build image we use
+# for pg-builder (the failure mode is `lto-wrapper failed` during the
+# final link of `postgres`).  PG throughput is dominated by query
+# planning + I/O, not raw CPU, so the ~1-2% LTO win is not worth the
+# build-system fragility.  Re-add `-flto` here AND ensure gcc-12-lto /
+# binutils-gold >= 2.39 are both present if you want to experiment.
+ENV PG_CFLAGS="-O2 -march=armv8-a+crypto" \
+    PG_LDFLAGS="-Wl,--as-needed -Wl,-z,now"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        bison \
+        build-essential \
+        ca-certificates \
+        flex \
+        git \
+        libicu-dev \
+        libssl-dev \
+        pkg-config \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone + build + install.  We shallow-clone the official postgres/postgres
+# repo at the tag pinned by PG_TAG (default REL_18_4), configure with a
+# narrow set of features, build with -j$(nproc), and install into
+# /usr/local/pgsql.  --without-* mirrors the user-provided "stripped"
+# build script; the ones we keep (--with-icu, --with-openssl) are
+# load-bearing — see CLAUDE.md for the Unicode / TLS rationale.
+RUN set -eux; \
+    git clone --depth 1 --branch "${PG_TAG}" "${PG_SOURCE_URL}" /tmp/pg-src; \
+    cd /tmp/pg-src; \
+    CFLAGS="${PG_CFLAGS}" LDFLAGS="${PG_LDFLAGS}" ./configure \
+        --prefix=/usr/local/pgsql \
+        --with-icu \
+        --with-openssl \
+        --without-readline \
+        --without-zlib \
+        --without-bonjour \
+        --without-pam \
+        --without-ldap \
+        --without-gssapi \
+        --without-selinux \
+        --without-systemd \
+        --disable-nls \
+        --disable-debug \
+        --disable-coverage \
+        --disable-profiling \
+        --disable-dtrace \
+        --disable-tap-tests \
+    && make -j"$(nproc)" \
+    && make install \
+    && cd /; rm -rf /tmp/pg-src
+
+# Drop the static libs and most docs; keep the binaries and ICU support
+# files.  /usr/local/pgsql is the PG installation root copied into the
+# runtime image as-is.
+RUN find /usr/local/pgsql -name '*.a' -delete \
+    && rm -rf /usr/local/pgsql/share/doc /usr/local/pgsql/share/man
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║ Stage 2 — litellm-builder: install LiteLLM from the git fork        ║
+# ║ at the pinned tag, with --no-deps, then a curated minimal dep set. ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+FROM python:3.13-slim AS litellm-builder
+
+ARG LITELLM_FORK_URL
+ARG LITELLM_TAG
+
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
@@ -40,71 +153,184 @@ RUN apt-get update \
         gcc \
         libffi-dev \
         libssl-dev \
+        git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
+
+# Install LiteLLM from the git fork at the pinned tag, WITHOUT its
+# optional-deps (`[proxy]` extra pulls in granian, litellm-enterprise,
+# etc. — all intentionally excluded).  We install the curated deps from
+# requirements.txt separately.
+#
+# litellm-proxy-extras is intentionally NOT installed.  Two reasons:
+#
+#   1. This is a greenfield project.  There are no existing databases
+#      to evolve — `prisma db push` creates the schema directly from
+#      schema.prisma, which is the correct tool for fresh deployments.
+#      `prisma migrate deploy` (which needs litellm-proxy-extras) is
+#      designed for evolving databases through historical migrations;
+#      we don't have any.
+#
+#   2. Even if we did install it, litellm-proxy-extras ships 124
+#      historical migration SQL files that LiteLLM resolves at startup
+#      (~3 s each × 124 = 6+ min before the proxy is reachable).
+#
+# The entrypoint passes --use_prisma_db_push so LiteLLM takes the
+# `prisma db push` path (a fast no-op — the entrypoint already pushed
+# the schema) instead of `prisma migrate deploy`.  This avoids the
+# litellm_proxy_extras import entirely — no warning is logged.
+RUN pip install --no-cache-dir --prefix=/install --no-deps \
+        "litellm @ git+${LITELLM_FORK_URL}@${LITELLM_TAG}#egg=litellm"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # Apply the WebSearch count patch into the freshly installed litellm so
-# the runtime image does not need an entrypoint wrapper.  litellm was
-# installed under the /install prefix (--prefix=/install above), so we
-# have to point PYTHONPATH at the matching site-packages directory for
-# the patch step to find it.  The runtime stage copies /install to
-# /usr/local, so the ENV does not need to propagate.
-COPY patch_websearch_count.py .
+# the runtime image does not need an entrypoint wrapper.  The patch is
+# idempotent and fails the build loudly if the upstream source shape
+# changes (see patch_websearch_count.py).
 ENV PYTHONPATH=/install/lib/python3.13/site-packages
+COPY patch_websearch_count.py .
 RUN python patch_websearch_count.py
 
-# ── Stage 2: runtime ─ minimal Python + app + pinned wheels only ──────────
+# Install Node.js + npm so we can run the Prisma CLI natively.  The
+# Python prisma CLI wrapper (from requirements.txt) creates only
+# .cache/prisma/.  The native Node.js CLI creates BOTH .cache/prisma/
+# AND .cache/prisma-python/ — and the Prisma Python client (v0.15.0)
+# needs the latter for its query-engine binary resolution at runtime.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Generate the Prisma client + download the query engine using the
+# native Node.js Prisma CLI (not the Python wrapper).  This bakes
+# the ~50 MB engine binary into the image and populates BOTH cache
+# directories that the Prisma Python client needs.
+ENV PATH="/install/bin:/usr/local/bin:${PATH}"
+RUN cd /install/lib/python3.13/site-packages/litellm/proxy \
+    && npx prisma@5.17.0 generate \
+    && HASH=$(find /root/.cache/prisma -maxdepth 4 -name query-engine -type f -path '*-openssl-3*' | head -1 | grep -oP '[0-9a-f]{40}') \
+    && SRC=$(find /root/.cache/prisma -maxdepth 4 -name query-engine -type f -path '*-openssl-3*' | head -1) \
+    && DST="/root/.cache/prisma-python/binaries/5.17.0/$HASH" \
+    && mkdir -p "$DST" \
+    && ENGINE_NAME=$(python3 -c "from prisma.engine.utils import query_engine_name; print(query_engine_name())") \
+    && cp "$SRC" "$DST/$ENGINE_NAME" \
+    && echo "Engines: prisma $(basename "$SRC") → prisma-python $HASH"
+
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║ Stage 3 — runtime: combine PG + LiteLLM + tini + entrypoint        ║
+# ╚══════════════════════════════════════════════════════════════════════╝
 FROM python:3.13-slim AS runtime
 
 ARG IMAGE_VERSION
 
-LABEL org.opencontainers.image.title="CodeFreedom - LiteLLM Proxy" \
-      org.opencontainers.image.description="LiteLLM proxy with the WebSearch count display patch baked in. Self-contained replacement for ghcr.io/berriai/litellm, used by the codefreedom proxy stack." \
+LABEL org.opencontainers.image.title="CodeFreedom - LiteLLM + PostgreSQL" \
+      org.opencontainers.image.description="Self-contained LiteLLM proxy with embedded PostgreSQL 18.4 and the WebSearch count display patch. Replaces ghcr.io/berriai/litellm in the codefreedom proxy stack." \
       org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
       com.codefreedom.platform="LiteLLM" \
       com.codefreedom.arch="linux/arm64,linux/amd64"
 
-# tini is a minimal init that forwards signals and reaps zombies.  We use
-# it as PID 1 so docker stop / docker compose down can shut down LiteLLM
-# cleanly.  No compilers, no headers in the runtime image.
+# tini is a minimal init that forwards signals and reaps zombies.  We
+# use it as PID 1 so `docker stop` / `docker compose down` can shut down
+# the proxy cleanly.  No compilers, no headers, no dev libs in this
+# stage.  The runtime libs PG + LiteLLM need:
+#   - libssl3, libffi8  → already in the python:3.13-slim base
+#   - libicuNN          → NOT in the slim base; PG was built --with-icu
+#                         in the builder stage, so the runtime MUST
+#                         ship the matching libicuuc.so or initdb
+#                         fails with "libicuuc.so.NN: cannot open".
+#                         The base's Debian release changes the NN
+#                         suffix (72 on bookworm, 76 on trixie, ...),
+#                         so we discover the package name at build
+#                         time via apt-cache search instead of hard-
+#                         coding it.  This is the only way the runtime
+#                         stays portable across python:3.13-slim base
+#                         image updates.
+# nodejs + npm are load-bearing: the LiteLLM dashboard UI is a Node.js
+# app, and the Prisma CLI needs a system Node.js to resolve its query
+# engine binary at runtime.  Without them, `prisma db push` downloads
+# an isolated node binary via nodeenv (slower, larger, and the engine
+# binary lands in a non-standard cache path that the Python client
+# can't find).
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        libatomic1 \
+        nodejs \
+        npm \
         tini \
+        $(apt-cache search '^libicu[0-9]+$' | grep -oP 'libicu\d+' | head -1) \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the pinned, patched site-packages from the builder.
-COPY --from=builder /install /usr/local
+# Pull in the prebuilt PG (binaries + ICU support files) and the
+# prebuilt LiteLLM site-packages.
+COPY --from=pg-builder      /usr/local/pgsql /usr/local/pgsql
+COPY --from=litellm-builder /install         /usr/local
 
-WORKDIR /app
+# Copy the prebuilt Prisma caches.  The litellm-builder stage ran
+# `prisma generate` as root, so the caches landed in /root/.cache.
+# The runtime user is codefreedom (HOME at /home/codefreedom), so
+# litellm looks for the caches there.
+#
+# We copy the WHOLE /root/.cache tree: `prisma` holds the query engine
+# binary and `prisma-python` holds the Python client's orchestration
+# layer.  Without prisma-python the proxy fails with "NotConnectedError:
+# Not connected to the query engine" on startup.
+COPY --from=litellm-builder --chown=1000:1000 \
+    /root/.cache/ /home/codefreedom/.cache/
 
-# Non-root user for defense in depth.
+# Make sure both PG and the python wheels are on the path the entrypoint
+# expects.  /usr/local/bin and /usr/local/lib are already on PATH / the
+# dynamic loader path in the python:3.13-slim base; we just need to
+# expose the PG bin dir so the entrypoint can call `initdb` / `pg_ctl`.
+ENV PATH="/usr/local/pgsql/bin:/usr/local/bin:${PATH}" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PGDATA=/var/lib/postgresql/data \
+    PGSOCKET=/var/run/postgresql
+
+# Drop the entrypoint and the supporting files in.  The entrypoint boots
+# PG, runs `prisma db push`, and execs litellm; see entrypoint.sh for
+# the full sequence + the lock-down guarantees (Unix-socket only, no
+# TCP listener, single local-trust row in pg_hba.conf).
+COPY --chown=root:root entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+# A non-root user for defense in depth.  PG and LiteLLM both run as this
+# user.  /var/lib/postgresql and /var/run/postgresql are created here
+# (root) so the entrypoint can chown them for the `codefreedom` user
+# after the bind mount / volume is attached.
 RUN groupadd -g 1000 codefreedom \
     && useradd --create-home --shell /bin/false -u 1000 -g 1000 codefreedom \
-    && chown -R codefreedom:codefreedom /app
+    && mkdir -p /app /var/lib/postgresql /var/lib/postgresql/backup /var/run/postgresql \
+    && chown -R codefreedom:codefreedom /app /var/lib/postgresql /var/run/postgresql \
+    && chown -R codefreedom:codefreedom /home/codefreedom \
+    && chmod 755 /root \
+    && chown -R codefreedom:codefreedom /usr/local/lib/python3.13/site-packages/litellm
+
+WORKDIR /app
 USER codefreedom
 
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PATH="/usr/local/bin:${PATH}"
+# Data + backup volumes.  The /var/run/postgresql dir is intentionally
+# NOT declared as a VOLUME — the PG socket is pure in-process IPC with
+# no persistence value, and a Docker-managed anonymous volume would
+# just orphan itself on every container removal.
+VOLUME ["/var/lib/postgresql/data", "/var/lib/postgresql/backup"]
 
-# Default port matches the compose file.  Override with --port in
-# `litellm --port N` if needed; the compose file passes the value
-# through from LITELLM_PORT.
+# Only the LiteLLM HTTP port is exposed.  PostgreSQL has no TCP listener
+# (locked down in postgresql.conf by the entrypoint); only the in-process
+# Unix socket is reachable.
 EXPOSE 4000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=2)" || exit 1
 
-# tini -> litellm.  The compose file appends `--config /app/...` etc.
-# via the `command:` directive; the entrypoint stays minimal so the
-# image works standalone (docker run ... <image> --help) too.
-ENTRYPOINT ["/usr/bin/tini", "--", "litellm"]
+# tini -> entrypoint.sh -> (PG + prisma) -> litellm.  The compose file
+# appends `--config /app/...` etc. via the `command:` directive;
+# `entrypoint.sh` forwards everything after `--` to the litellm binary.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 CMD ["--host", "0.0.0.0", "--port", "4000"]

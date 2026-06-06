@@ -72,7 +72,7 @@ model_list:
 ### Common Field Notes
 
 - **`model: openai/os.environ/OPENAI_COMPAT_MODEL`** — Special syntax where the value of `OPENAI_COMPAT_MODEL` is substituted at runtime. Change the env var to swap models without restarting the proxy.
-- **`api_key: sk-dummy`** — Many self-hosted servers don't actually validate the key but still require a non-empty value. `sk-dummy` is the conventional placeholder.
+- **`api_key: os.environ/OPENAI_COMPAT_API_KEY`** — Set via `OPENAI_COMPAT_API_KEY` in your secrets file. Many self-hosted servers don't actually validate the key but still require a non-empty value; you can set it to `sk-dummy` as a placeholder.
 - **`max_tokens: 131072` and `max_completion_tokens: 16384`** — Reasonable defaults for a 128K-context local model. Adjust to match your actual model's spec.
 - **Adding more models** — Copy the block, set a unique `model_name`, override `model`/`api_base`/`api_key`, and adjust `model_info` per model.
 
