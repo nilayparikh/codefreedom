@@ -22,10 +22,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -199,7 +197,7 @@ def _fetch_docker_hub_manifest(namespace: str, repo: str, tag: str) -> str | Non
     return _fetch_manifest_digest(url, token, "Docker Hub")
 
 
-def _fetch_manifest_digest(url: str, token: str, label: str) -> str | None:
+def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
     """Make a manifest request and return the raw SHA256 hex digest."""
     req = Request(url)
     req.add_header("Authorization", f"Bearer {token}")
@@ -367,7 +365,8 @@ def discover_images() -> list[dict[str, str]]:
             if indent == 4 and current_service and stripped.startswith("image:"):
                 img_raw = stripped[len("image:"):].strip()
                 img = _parse_compose_image(img_raw)
-                _add_profile(img, "proxy/docker-compose.yaml", current_service)
+                if img:
+                    _add_profile(img, "proxy/docker-compose.yaml", current_service)
 
     # Match pulled images against profile images
     for pulled_img in pulled:
@@ -483,9 +482,14 @@ def check_pypi() -> dict[str, Any] | None:
     """Check the installed codefreedom package version against PyPI."""
     try:
         from importlib.metadata import PackageNotFoundError, version
-        local_version = version(PYPI_PACKAGE)
-    except (PackageNotFoundError, ImportError):
+    except ImportError:
         local_version = "unknown"
+
+    else:
+        try:
+            local_version = version(PYPI_PACKAGE)
+        except PackageNotFoundError:
+            local_version = "unknown"
 
     try:
         with urlopen(PYPI_URL, timeout=10) as resp:
