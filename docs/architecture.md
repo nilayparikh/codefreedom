@@ -37,7 +37,8 @@ graph TD
         PROXY --> UP["docker compose up<br/>localhost:4000"]
         PROXY --> DOWN["docker compose down"]
         PROXY --> VALIDATE["Validate config"]
-        UP --> ROUTER["Model Router"]
+        UP --> LITELLM_IMG["codefreedom:litellm-latest<br/>(patch baked in)"]
+        LITELLM_IMG --> ROUTER["Model Router"]
     end
 
     subgraph "Provider Backends"
@@ -67,9 +68,9 @@ codefreedom / cf
 │   └── --list-profiles # List profiles
 ├── proxy (px)          # Manage LLM proxy
 │   ├── init            # Initialize proxy configs + .env.proxy (clean target only)
-│   ├── start           # Start proxy (native)
-│   ├── start --docker  # Start via Docker Compose
+│   ├── start           # Start proxy (Docker Compose, default)
 │   ├── stop            # Stop proxy
+│   ├── restart         # Restart proxy (preserves state, no image pull)
 │   ├── status          # Proxy status
 │   └── validate        # Validate config
 └── tools               # Manage auxiliary tools
@@ -138,17 +139,53 @@ sequenceDiagram
     Claude-->>User: Result
 ```
 
+## Image Supply Chain
+
+Every published container image goes through a build → sign → verify pipeline before consumers can `docker pull` it.
+
+```mermaid
+flowchart LR
+    A["Dockerfile + build context"] --> B["build job<br/>(push + cosign-sign)"]
+    B --> C["docker.io + ghcr.io<br/>(image@digest)"]
+    C --> D["verify job<br/>(cosign-verify)"]
+    D --> E{"Signature valid<br/>and from this repo?"}
+    E -->|yes| F["CI green"]
+    E -->|no| G["CI red"]
+```
+
+### Composite Actions
+
+The pattern is captured in two reusable composite actions so adding a new image family is a copy-paste of any `docker-*.yml` workflow:
+
+- **`.github/actions/cosign-sign`** — `cosign sign --yes <image@digest>`. Caller logs in first.
+- **`.github/actions/cosign-verify`** — `cosign verify` against the GitHub OIDC issuer and the repo identity regexp. Caller logs in first.
+
+Both install cosign v2.4.1 via the official `sigstore/cosign-installer@v3`. No long-lived private key — the workflow run is the signer.
+
+### Why a separate verify job
+
+Splitting sign (in `build`) from verify (in `needs: build`) means a compromised image can't pass CI: a successful verify proves the published digest is reachable and the signature is valid against the repo's OIDC identity. A bad push fails verify, even though build/push/sign all succeeded.
+
+### Consumer verification
+
+```bash
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/nilayparikh/codefreedom' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  ghcr.io/nilayparikh/codefreedom:cuda-latest
+```
+
 ## Key Design Decisions
 
-| Decision                         | Rationale                                                                    |
-| -------------------------------- | ---------------------------------------------------------------------------- |
-| **Single config home**           | All configuration lives in `~/.codefreedom` — profiles, proxy, sandbox       |
-| **Stateless proxy by default**   | Zero-config startup — no database, no Prisma, no migrations                  |
-| **Profile inheritance**          | Custom profiles only need to override what differs from `default`            |
-| **Ephemeral sandbox containers** | No container-locking from shared reuse — each session gets a fresh container |
-| **Opt-in providers**             | Set an API key to enable; leave empty to disable                             |
-| **Docker is optional**           | Proxy runs natively or via Docker Compose; Docker only required for sandbox  |
-| **Env chain loading**            | `.env` → `.env.secrets` → system env — later overrides earlier               |
+| Decision                         | Rationale                                                                                                                                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Single config home**           | All configuration lives in `~/.codefreedom` — profiles, proxy, sandbox                                                                                                                    |
+| **Stateless proxy by default**   | Zero-config startup — no database, no Prisma, no migrations                                                                                                                               |
+| **Profile inheritance**          | Custom profiles only need to override what differs from `default`                                                                                                                         |
+| **Ephemeral sandbox containers** | No container-locking from shared reuse — each session gets a fresh container                                                                                                              |
+| **Opt-in providers**             | Set an API key to enable; leave empty to disable                                                                                                                                          |
+| **Proxy is Docker-only**         | The proxy always runs via `docker compose` against the self-hosted `codefreedom:litellm-latest` image (with the WebSearch count patch baked in). No host-side `litellm` install required. |
+| **Env chain loading**            | `.env` → `.env.secrets` → system env — later overrides earlier                                                                                                                            |
 
 ## See Also
 

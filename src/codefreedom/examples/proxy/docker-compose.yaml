@@ -1,6 +1,13 @@
 ---
-# ── LiteLLM Proxy (Standalone) ───────────────────────────────────────────────
+# ── LiteLLM Proxy (CodeFreedom image) ───────────────────────────────────────
 # Self-contained LiteLLM deployment for codefreedom.
+#
+# IMAGE:  Uses the published codefreedom:litellm-latest image (also
+#         available on ghcr.io/nilayparikh/codefreedom as a mirror).
+#         The image bakes in the WebSearch count display patch — no
+#         entrypoint wrapper, no runtime mutation, no surprises.
+#         Override LITELLM_IMAGE in .env.proxy to use a different tag
+#         (e.g. a locally-built `codefreedom:litellm-local`).
 #
 # DATABASE: Not configured — runs as a pure stateless proxy.
 #   No DATABASE_URL = no Prisma, no migrations, no persistence.
@@ -23,7 +30,7 @@ name: codefreedom
 
 services:
   litellm:
-    image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:v1.87.0}
+    image: ${LITELLM_IMAGE:-docker.io/nilayparikh/codefreedom:litellm-latest}
     container_name: ${LITELLM_CONTAINER_NAME:-litellm-codefreedom}
     restart: unless-stopped
     profiles:
@@ -31,7 +38,10 @@ services:
       - all
     labels:
       "codefreedom.component": "litellm-proxy"
-    entrypoint: ["/app/patch_websearch_count.sh"]
+    # Entrypoint is tini -> litellm (set in the image). The compose
+    # file just passes the config path and port through. `--port` and
+    # `--host` are passed as args (not the LITELLM_PORT env var) so
+    # they always win over the image's CMD defaults.
     command:
       - --config
       - /app/litellm-config/config.yaml
@@ -128,17 +138,14 @@ services:
       - codefreedom
     volumes:
       - ./config:/app/litellm-config:ro
-      # WebSearch count patch: LiteLLM's short-circuit handler omits
-      # server_tool_use.web_search_requests from the usage object, causing
-      # Claude Code to display "Did 0 searches". This patch adds the missing
-      # field. See docs/proxy/websearch-interception.md.
-      - ./patch_websearch_count.py:/app/patch_websearch_count.py:ro
-      - ./patch_websearch_count.sh:/app/patch_websearch_count.sh:ro
+    # The WebSearch count display patch is baked into the image (see
+    # docker/litellm/Dockerfile.LiteLLM). No volume mounts or entrypoint
+    # wrappers needed here.
 
   # ── Web search bridge (SearXNG-shaped → MCP) ────────────────────────────
   # Replaces Claude Code's native WebSearch with calls to the local Camoufox
   # MCP web_search tool. Started together with the proxy via
-  #   codefreedom proxy start --docker
+  #   codefreedom proxy start
   # Reachable on the shared 'codefreedom' network at http://web-bridge:8500.
   # No host port published — the proxy reaches it via service DNS.
   # Set the two `websearch_interception` and `search_tools` blocks in

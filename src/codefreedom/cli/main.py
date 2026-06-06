@@ -170,10 +170,11 @@ def main() -> None:
         "proxy",
         aliases=["px"],
         help="Manage the LLM proxy (start, stop, status, validate, init)",
-        description="Manage the LLM proxy lifecycle (Docker or native).",
+        description="Manage the LLM proxy lifecycle. The proxy always runs via `docker compose` against ~/.codefreedom/proxy/docker-compose.yaml.",
     )
     proxy_sub = proxy_parser.add_subparsers(
-        dest="action", title="actions",
+        dest="action",
+        title="actions",
     )
     proxy_sub.required = False  # default via set_defaults below
     proxy_sub.add_parser(
@@ -186,50 +187,41 @@ def main() -> None:
     # start
     start_parser = proxy_sub.add_parser(
         "start",
-        help="Start the proxy (native Python by default; --docker for Compose)",
+        help="Start the proxy (Docker Compose)",
         description=(
-            "Start the proxy. Native Python by default; pass --docker to use"
-            " `docker compose up -d` instead."
+            "Start the proxy via `docker compose up -d`. The proxy runs"
+            " inside the `codefreedom:litellm-latest` image which bakes in"
+            " the WebSearch count display patch."
         ),
-    )
-    start_parser.add_argument(
-        "--docker",
-        action="store_true",
-        help="Run via Docker Compose instead of native Python",
     )
     start_parser.add_argument(
         "--port",
         type=int,
         default=4000,
-        help="Port for proxy (default: 4000)",
+        help="Port to publish on the host (sets LITELLM_PORT for this run only; default: 4000)",
     )
     start_parser.add_argument(
         "--host",
         type=str,
         default="0.0.0.0",
-        help="Bind host for proxy (default: 0.0.0.0)",
+        help="Host bind address (sets LITELLM_BIND_HOST for this run only; default: 0.0.0.0)",
     )
 
     # stop
     proxy_sub.add_parser(
         "stop",
         help="Stop the proxy",
-        description="Stop the running proxy (native process or Docker container).",
+        description="Stop the running proxy Docker Compose stack.",
     )
 
     # restart
-    restart_parser = proxy_sub.add_parser(
+    proxy_sub.add_parser(
         "restart",
-        help="Restart the proxy (Docker Compose only)",
+        help="Restart the proxy (Docker Compose)",
         description=(
-            "Restart the proxy. Uses `docker compose restart` (preserves state,"
-            " does not pull a new image). Errors out in native mode."
+            "Restart the proxy via `docker compose restart` (preserves state,"
+            " does not pull a new image)."
         ),
-    )
-    restart_parser.add_argument(
-        "--docker",
-        action="store_true",
-        help="Run via Docker Compose (default and only mode for restart)",
     )
 
     # validate

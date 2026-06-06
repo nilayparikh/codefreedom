@@ -29,8 +29,7 @@ It orchestrates code agents through their **publicly supported interfaces only**
 
 ```bash
 pip install -e ".[dev]"          # editable install with dev deps
-pip install -e ".[litellm]"      # with proxy (LiteLLM) support
-pip install -e ".[all]"          # everything (dev + litellm + docs)
+pip install -e ".[all]"          # everything (dev + docs)
 python -m pytest tests/ -v       # run tests
 ruff check src/ tests/           # lint
 mypy src/                        # type-check
@@ -38,6 +37,10 @@ python -m codefreedom --help     # CLI (no install needed)
 mkdocs serve -a localhost:8080   # local docs preview
 ./scripts/release.sh             # cut a release (bumps version, tags, publishes)
 ```
+
+The proxy is always run via `docker compose` against the self-hosted
+`codefreedom:litellm-latest` image. No host-side `litellm` install is
+required (and the `[litellm]` extra has been removed).
 
 ## Architecture
 
@@ -94,14 +97,13 @@ Use the `arch-docs` skill to keep this current when code changes.
 | `codefreedom claude --dangerously-skip-permissions`        | Skip permission prompts (local mode)                                   |
 | `codefreedom claude vscode`                                | (removed — see `codefreedom vscode claude config` below)               |
 | `codefreedom proxy init`                                   | Initialize proxy configs + .env.proxy                                  |
-| `codefreedom proxy start`                                  | Start LiteLLM proxy (native Python)                                    |
-| `codefreedom proxy start --docker`                         | Start via Docker Compose                                               |
+| `codefreedom proxy start`                                  | Start the proxy (Docker Compose; only mode)                            |
+| `codefreedom proxy start --port PORT`                      | Override `LITELLM_PORT` for this run only (default: 4000)              |
+| `codefreedom proxy start --host HOST`                      | Override `LITELLM_BIND_HOST` for this run only (default: 0.0.0.0)      |
 | `codefreedom proxy stop`                                   | Stop proxy                                                             |
-| `codefreedom proxy restart --docker`                       | Restart proxy (Docker Compose native; preserves state)                 |
+| `codefreedom proxy restart`                                | Restart proxy (Docker Compose; preserves state, no image pull)         |
 | `codefreedom proxy status`                                 | Show proxy status                                                      |
 | `codefreedom proxy validate`                               | Validate proxy config                                                  |
-| `codefreedom proxy --port PORT`                            | Set proxy port (default: 4000)                                         |
-| `codefreedom proxy --host HOST`                            | Set bind host (default: 0.0.0.0)                                       |
 | `codefreedom admin backup`                                 | Backup CodeFreedom config (no secrets)                                 |
 | `codefreedom admin backup --out PATH`                      | Backup to a specific path                                              |
 | `codefreedom admin restore PATH`                           | Restore with interactive diff preview                                  |
@@ -234,27 +236,61 @@ references. Examples:
 
 ### Image Families
 
-Four image families in `docker/` published to `docker.io/nilayparikh/codefreedom` (also available on `ghcr.io/nilayparikh/codefreedom` as a mirror):
+Six image families in `docker/` published to `docker.io/nilayparikh/codefreedom` (also available on `ghcr.io/nilayparikh/codefreedom` as a mirror):
 
-| Image      | Dockerfile                             | Use Case                                                           |
-| ---------- | -------------------------------------- | ------------------------------------------------------------------ |
-| **CUDA**   | `docker/claude-code/Dockerfile.CUDA`   | NVIDIA GPU workloads                                               |
-| **ROCm**   | `docker/claude-code/Dockerfile.ROCm`   | AMD GPU workloads                                                  |
-| **Ubuntu** | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only / general-purpose                                         |
-| **Chrome** | `docker/chrome/Dockerfile.Chrome`      | Headless Chromium for browser automation via CDP port 9222         |
-| **Web**    | `docker/web/Dockerfile.Web`            | Camoufox MCP server for stealth / anti-bot web search and scraping |
+| Image          | Dockerfile                             | Use Case                                                                                                                                                  |
+| -------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CUDA**       | `docker/claude-code/Dockerfile.CUDA`   | NVIDIA GPU workloads                                                                                                                                      |
+| **ROCm**       | `docker/claude-code/Dockerfile.ROCm`   | AMD GPU workloads                                                                                                                                         |
+| **Ubuntu**     | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only / general-purpose                                                                                                                                |
+| **Chrome**     | `docker/chrome/Dockerfile.Chrome`      | Headless Chromium for browser automation via CDP port 9222                                                                                                |
+| **Web**        | `docker/web/Dockerfile.Web`            | Camoufox MCP server for stealth / anti-bot web search and scraping                                                                                        |
+| **LiteLLM**    | `docker/litellm/Dockerfile.LiteLLM`    | Self-hosted LiteLLM proxy image. Replaces `ghcr.io/berriai/litellm` in the proxy compose stack. Bakes in the WebSearch count display patch at build time. |
+| **Web Bridge** | `docker/web-bridge/Dockerfile.Bridge`  | FastAPI SearXNG-shaped sidecar → Camoufox MCP for transparent WebSearch interception                                                                      |
 
-Images are built and published via `publish-docker.yml` GitHub Actions workflow on `v*` tags.
+Images are built, cosign-signed, and published by per-family GitHub Actions workflows (`docker-cuda.yml`, `docker-rocm.yml`, `docker-ubuntu.yml`, `docker-chrome.yml`, `docker-web.yml`, `docker-litellm.yml`, `docker-web-bridge.yml`) on changes to their respective Dockerfiles. Each workflow also runs a `verify` job against both registries — see [Image Supply Chain](#image-supply-chain-cosign) under CI/CD.
 
 ## CI/CD
 
-| Workflow               | Trigger        | Purpose                                                  |
-| ---------------------- | -------------- | -------------------------------------------------------- |
-| `integration-test.yml` | push/PR        | Tests on Python 3.10/11/12 across Ubuntu, Windows, macOS |
-| `publish-docker.yml`   | `v*` tags      | Build & publish CUDA, ROCm, Ubuntu images to `ghcr.io`   |
-| `pipy.yaml`            | `v*` tags      | Publish to PyPI                                          |
-| `publish-docs.yml`     | push to `main` | Build MkDocs site, deploy to GitHub Pages                |
-| `trivy.yml`            | push/PR        | Security scanning with Trivy                             |
+| Workflow                | Trigger                                        | Purpose                                                                        |
+| ----------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| `integration-test.yml`  | push/PR                                        | Tests on Python 3.10/11/12 across Ubuntu, Windows, macOS                       |
+| `docker-cuda.yml`       | `docker/claude-code/Dockerfile.CUDA` changes   | Build, cosign-sign, and publish CUDA image to `docker.io` + `ghcr.io`          |
+| `docker-rocm.yml`       | `docker/claude-code/Dockerfile.ROCm` changes   | Build, cosign-sign, and publish ROCm image to `docker.io` + `ghcr.io`          |
+| `docker-ubuntu.yml`     | `docker/claude-code/Dockerfile.Ubuntu` changes | Build, cosign-sign, and publish Ubuntu image to `docker.io` + `ghcr.io`        |
+| `docker-chrome.yml`     | `docker/chrome/Dockerfile.Chrome` changes      | Build, cosign-sign, and publish Chrome image to `docker.io` + `ghcr.io`        |
+| `docker-web.yml`        | `docker/web/Dockerfile.Web` changes            | Build, cosign-sign, and publish Camoufox web image to `docker.io` + `ghcr.io`  |
+| `docker-litellm.yml`    | `docker/litellm/Dockerfile.LiteLLM` changes    | Build, cosign-sign, and publish LiteLLM proxy image to `docker.io` + `ghcr.io` |
+| `docker-web-bridge.yml` | `docker/web-bridge/Dockerfile.Bridge` changes  | Build, cosign-sign, and publish web-bridge image to `docker.io` + `ghcr.io`    |
+| `gated-checkin.yml`     | push/PR                                        | Release-gate checks on tagged commits                                          |
+| `pipy.yaml`             | `v*` tags                                      | Publish to PyPI                                                                |
+| `publish-docs.yml`      | push to `main`                                 | Build MkDocs site, deploy to GitHub Pages                                      |
+| `trivy.yml`             | push/PR                                        | Security scanning with Trivy                                                   |
+
+### Image Supply Chain (Cosign)
+
+All published images are signed with [Sigstore cosign](https://github.com/sigstore/cosign) using **keyless (OIDC) signing** — the workflow run is the signer, no long-lived private key is required. The pattern lives in two reusable composite actions so adding a new image family is a one-line change per registry:
+
+| Action                          | Purpose                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `.github/actions/cosign-sign`   | Installs cosign and runs `cosign sign --yes <image@digest>`. Caller is responsible for registry login. |
+| `.github/actions/cosign-verify` | Installs cosign and runs `cosign verify` against the GitHub OIDC issuer and the repo identity.         |
+
+Each `docker-*.yml` workflow has the same structure:
+
+1. **`build` job** — builds, pushes to both registries, then calls `cosign-sign` for the Docker Hub and GHCR refs.
+2. **`verify` job** (`needs: build`) — re-logs in and calls `cosign-verify` for both refs, proving the published digest is verifiable by anyone.
+
+Consumer verification (works on any tag):
+
+```bash
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/nilayparikh/codefreedom' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  ghcr.io/nilayparikh/codefreedom:cuda-latest
+```
+
+**Adding a new image family.** Copy any `docker-*.yml`, change the `Dockerfile` path, the `IMAGE_VERSION` arg, the family tag (e.g. `cuda-v…` → `rocm-v…`), and the cache `scope`. The build/sign/verify wiring is already inherited — no cosign knowledge required.
 
 ## Tests
 
@@ -297,6 +333,24 @@ Affected files: `src/codefreedom/cli/claude.py`, `proxy.py`, `tool_init_utils.py
 ### Top-level `--init` must stay in sync with CI
 
 The integration test (`.github/workflows/integration-test.yml`) runs `codefreedom --init` to bootstrap all config files. The handler lives in `src/codefreedom/cli/main.py` before subcommand dispatch. Init is all-or-nothing: if any target file already exists, it skips and directs the user to docs/examples for manual merging.
+
+### Proxy is Docker-only — no native mode
+
+The proxy always runs via `docker compose` against the self-hosted
+`codefreedom:litellm-latest` image. There is no `--docker` flag, no native
+Python path, and no `litellm` extra in `pyproject.toml`. If you add a new
+proxy subcommand, do not reintroduce native-mode logic. The
+`codefreedom:litellm-latest` image bakes in the WebSearch count display
+patch at build time (see `docker/litellm/patch_websearch_count.py`); do
+not re-add volume mounts or entrypoint wrappers for it.
+
+### WebSearch count patch is baked into the LiteLLM image, not a volume
+
+The `patch_websearch_count.py` lives in `docker/litellm/` and is applied
+during the image build (`RUN python patch_websearch_count.py` in
+`Dockerfile.LiteLLM`). Older guides referenced mount-it-at-runtime; that
+pattern is gone. If you change LiteLLM and the patch can no longer find
+its target line, the build fails loudly — do not silently fall back.
 
 ## What to Include vs Exclude
 

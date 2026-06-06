@@ -1,13 +1,18 @@
-"""Proxy subcommand -- manage the LLM routing proxy (Docker or native).
+"""Proxy subcommand -- manage the LLM routing proxy (Docker Compose only).
 
 Usage:
-    codefreedom proxy init                              Initialize proxy configs
-    codefreedom proxy start                            Start the proxy (native, default)
-    codefreedom proxy start --docker                   Start via Docker Compose
-    codefreedom proxy stop                             Stop the proxy
-    codefreedom proxy restart --docker                 Restart the proxy (Docker Compose native)
-    codefreedom proxy status                           Show proxy status
-    codefreedom proxy validate                         Validate configuration
+    codefreedom proxy init                  Initialize proxy configs
+    codefreedom proxy start                Start the proxy (Docker Compose)
+    codefreedom proxy stop                 Stop the proxy
+    codefreedom proxy restart              Restart the proxy (Docker Compose)
+    codefreedom proxy status               Show proxy status
+    codefreedom proxy validate             Validate configuration
+
+The proxy is always run via `docker compose` against
+`~/.codefreedom/proxy/docker-compose.yaml`. The LiteLLM process runs inside
+the `codefreedom:litellm-latest` image (see docker/litellm/Dockerfile.LiteLLM)
+which bakes in the WebSearch count display patch. The web-bridge sidecar is
+started as a sibling service in the same compose stack.
 
 VS Code integration: see `codefreedom vscode proxy config`.
 """
@@ -52,15 +57,6 @@ def init_proxy() -> int:
         (proxy_src / "docker-compose.yaml", proxy_dst / "docker-compose.yaml"),
         (proxy_src / ".env.proxy.example", cf_dir / ".env.proxy"),
         (proxy_src / ".env.proxy.secrets.example", cf_dir / ".env.proxy.secrets"),
-        # WebSearch count display patch (see docs/proxy/websearch-interception.md)
-        (
-            proxy_src / "patch_websearch_count.py",
-            proxy_dst / "patch_websearch_count.py",
-        ),
-        (
-            proxy_src / "patch_websearch_count.sh",
-            proxy_dst / "patch_websearch_count.sh",
-        ),
     ]
 
     providers_src = proxy_src / "config" / "providers"
@@ -142,7 +138,7 @@ def run(args: argparse.Namespace) -> int:
     elif action == "stop":
         return _stop()
     elif action == "restart":
-        return _restart(args)
+        return _restart()
     elif action == "status":
         return _status()
     elif action == "validate":
@@ -192,11 +188,13 @@ def _build_proxy_env() -> Dict[str, str]:
 
 
 def _start(args: argparse.Namespace) -> int:
-    """Start the LiteLLM proxy. Defaults to native; --docker uses Compose."""
-    if args.docker:
-        return _start_compose()
-    else:
-        return _start_native(args)
+    """Start the LiteLLM proxy via `docker compose up -d`.
+
+    --port and --host override LITELLM_PORT / LITELLM_BIND_HOST in the
+    compose process environment for this run only (they do not edit
+    .env.proxy).
+    """
+    return _start_compose(args)
 
 
 def _web_bridge_build_context() -> Optional[Path]:
@@ -293,7 +291,7 @@ def _ensure_web_bridge_image() -> int:
     return 0
 
 
-def _start_compose() -> int:
+def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     """Start LiteLLM via docker compose."""
     compose_file = _find_compose_file()
     if not compose_file:
@@ -309,8 +307,14 @@ def _start_compose() -> int:
 
     eprint(f"[proxy] Starting LiteLLM via Docker Compose ({compose_file})...")
 
-    # Build merged environment (proxy files override system env).
+    # Build merged environment: proxy files override system env, then CLI
+    # flags override everything for this run only.
     merged_env = _build_proxy_env()
+    if args is not None:
+        if getattr(args, "port", None):
+            merged_env["LITELLM_PORT"] = str(args.port)
+        if getattr(args, "host", None):
+            merged_env["LITELLM_BIND_HOST"] = args.host
 
     result = subprocess.run(
         [
@@ -329,66 +333,11 @@ def _start_compose() -> int:
         check=False,
     )
     if result.returncode == 0:
-        eprint("[proxy] [OK] Proxy started at http://localhost:4000")
+        port = merged_env.get("LITELLM_PORT", "4000")
+        eprint(f"[proxy] [OK] Proxy started at http://localhost:{port}")
     else:
         eprint("[proxy] [FAIL] Failed to start. Check docker logs.")
     return result.returncode
-
-
-def _start_native(args: argparse.Namespace) -> int:
-    """Start LiteLLM directly as a Python process."""
-    try:
-        __import__("litellm")
-    except ImportError:
-        eprint("[ERROR] litellm package not installed.")
-        eprint("   Install: pip install codefreedom[litellm]")
-        eprint("   This installs litellm with proxy extras (websockets, etc.).")
-        eprint("   Or use --docker to run via Docker Compose instead.")
-        return 1
-
-    litellm_bin = shutil.which("litellm")
-    if not litellm_bin:
-        eprint("[ERROR] litellm CLI not found on PATH.")
-        eprint("   Ensure litellm is installed: pip install codefreedom[litellm]")
-        return 1
-
-    config_file = _find_config_file()
-    if not config_file:
-        eprint("[ERROR] Could not find ~/.codefreedom/proxy/config/config.yaml")
-        eprint("   Run: codefreedom proxy init")
-        return 1
-
-    port = args.port or 4000
-    host = args.host or "0.0.0.0"
-
-    eprint(f"[proxy] Starting natively on {host}:{port}...")
-    eprint(f"[proxy] Config: {config_file}")
-
-    cmd = [
-        litellm_bin,
-        "--config",
-        str(config_file),
-        "--port",
-        str(port),
-        "--host",
-        host,
-    ]
-
-    # Build merged environment (proxy files override system env).
-    merged_env = _build_proxy_env()
-
-    try:
-        proc = subprocess.Popen(cmd, env=merged_env)
-        eprint(f"[proxy] [OK] Proxy starting (PID: {proc.pid})")
-        eprint("[proxy]   Press Ctrl+C to stop.")
-        proc.wait()
-        return proc.returncode
-    except KeyboardInterrupt:
-        eprint("\n[proxy] Proxy stopped.")
-        return 0
-    except FileNotFoundError:
-        eprint("[ERROR] Could not find litellm executable.")
-        return 1
 
 
 # ── Stop ─────────────────────────────────────────────────────────────────────
@@ -417,25 +366,13 @@ def _stop() -> int:
 # ── Restart ───────────────────────────────────────────────────────────────────
 
 
-def _restart(args: argparse.Namespace) -> int:
+def _restart() -> int:
     """Restart the LiteLLM proxy.
 
-    Docker mode: uses `docker compose restart` (compose's native capability —
-    fast, preserves container state, picks up compose-file changes; does not
+    Uses `docker compose restart` (compose's native capability — fast,
+    preserves container state, picks up compose-file changes; does not
     pull a new image).
-
-    Native mode: errors out cleanly. The native proxy has no stop path
-    (it runs in the foreground and exits on Ctrl+C), so there is nothing
-    to restart. Use `codefreedom proxy start` directly, or pass --docker.
     """
-    if not args.docker:
-        eprint(
-            "[proxy] 'restart' is only supported in Docker mode."
-            " Use: codefreedom proxy start --docker"
-        )
-        eprint("   (Native mode runs in the foreground and exits on Ctrl+C.)")
-        return 1
-
     compose_file = _find_compose_file()
     if not compose_file:
         eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")

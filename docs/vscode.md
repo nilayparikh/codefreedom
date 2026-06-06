@@ -86,8 +86,7 @@ ready-to-paste entry — no third-party extension needed.
 ### 1. Start the proxy
 
 ```bash
-codefreedom proxy start             # native
-codefreedom proxy start --docker    # Docker Compose
+codefreedom proxy start             # Docker Compose (only mode)
 codefreedom proxy status            # confirm it's up
 ```
 

@@ -39,14 +39,13 @@ classifiers = [
 ]
 
 # ── Optional Dependencies ───────────────────────────────────────────────────
-#   litellm[proxy]  — LiteLLM proxy with all extras (websockets, gunicorn, etc.)
-#                     Required for: codefreedom proxy start (native mode)
-#                     Not needed for Docker Compose mode.
-#   dev             — Development extras (type checking, linting, testing)
-#                     httpx + fastapi are needed to import the web-bridge
-#                     module (docker/web-bridge/app/bridge.py) in tests.
+#   dev    — Development extras (type checking, linting, testing)
+#            httpx + fastapi are needed to import the web-bridge module
+#            (docker/web-bridge/app/bridge.py) in tests.
+#   The proxy is always run via `docker compose` against the
+#   `codefreedom:litellm-latest` image (docker/litellm/Dockerfile.LiteLLM).
+#   No host-side litellm install is required.
 [project.optional-dependencies]
-litellm = ["litellm[proxy]>=1.50", "prometheus-client>=0.25.0"]
 dev = [
     "mypy>=1.0",
     "ruff>=0.1",
@@ -58,8 +57,8 @@ dev = [
 docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2"]
 camoufox = ["beautifulsoup4>=4.14.3"]
 encrypt = ["cryptography>=42.0"]
-ci = ["codefreedom[litellm,dev,docs,camoufox,encrypt]"]
-all = ["codefreedom[litellm,dev,camoufox,encrypt]"]
+ci = ["codefreedom[dev,docs,camoufox,encrypt]"]
+all = ["codefreedom[dev,camoufox,encrypt]"]
 
 [project.scripts]
 codefreedom = "codefreedom.cli.main:main"
@@ -101,10 +100,9 @@ codefreedom = [
     "examples/proxy/config/providers/openai-compatible.yaml",
     "examples/proxy/config/providers/opencode-zen.yaml",
     "examples/proxy/config/providers/openrouter.yaml",
-    # WebSearch count display patch — mounted into the proxy container
-    # (see docs/proxy/websearch-interception.md)
-    "examples/proxy/patch_websearch_count.py",
-    "examples/proxy/patch_websearch_count.sh",
+    # WebSearch count display patch is baked into the litellm image
+    # (see docker/litellm/Dockerfile.LiteLLM and docs/proxy/websearch-interception.md)
+    # — no host-side copy needed.
     # Browser tools — copied by `codefreedom tools <tool> init`
     "examples/tools/chrome/chrome.json",
     "examples/tools/chrome/chrome.schema.json",

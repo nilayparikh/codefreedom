@@ -1,0 +1,42 @@
+name: cosign-verify
+description: >
+  Verify a keyless cosign signature for a container image against the
+  GitHub OIDC issuer. Exits non-zero if the signature is missing,
+  invalid, or was issued by a workflow outside the expected identity
+  regexp. Caller is responsible for any registry login (cosign reads
+  the local Docker config at ~/.docker/config.json).
+
+inputs:
+  image:
+    description: Image ref to verify (tag or @sha256:... digest).
+    required: true
+  identity-regexp:
+    description: >
+      Regexp matched against the Fulcio certificate identity SAN. The
+      default matches any workflow file in this repository.
+    required: false
+    default: "https://github.com/nilayparikh/codefreedom"
+  oidc-issuer:
+    description: Expected OIDC issuer URL.
+    required: false
+    default: "https://token.actions.githubusercontent.com"
+  cosign-release:
+    description: Cosign release tag to install.
+    required: false
+    default: "v2.4.1"
+
+runs:
+  using: composite
+  steps:
+    - name: Install cosign
+      uses: sigstore/cosign-installer@v3
+      with:
+        cosign-release: ${{ inputs.cosign-release }}
+
+    - name: Verify image signature
+      shell: bash
+      run: |
+        cosign verify \
+          --certificate-identity-regexp "${{ inputs.identity-regexp }}" \
+          --certificate-oidc-issuer "${{ inputs.oidc-issuer }}" \
+          "${{ inputs.image }}" >/dev/null

@@ -117,6 +117,6 @@ The full variable reference is in the bundled example files:
 | `.env.proxy.secrets.example` | `LITELLM_MASTER_KEY`, provider API keys (`DEEPSEEK_API_KEY`, `MICROSOFT_FOUNDRY_API_KEY`, `NVIDIA_API_KEY`, `OPENCODE_ZEN_API_KEY`) |
 | `CODEFREEDOM_PROFILES_FILE`  | Override profile file location (system env)                                                                                         |
 
-> **Note:** Variables like `LITELLM_PORT`, `LITELLM_LOG_LEVEL`, and `LITELLM_IMAGE` in `.env.proxy.example` only apply when running the proxy via Docker Compose (`codefreedom proxy start --docker`). Native mode (`codefreedom proxy start`) reads these from CLI flags and `config.yaml` instead.
+> **Note:** Variables like `LITELLM_PORT`, `LITELLM_LOG_LEVEL`, and `LITELLM_IMAGE` in `.env.proxy.example` are read by the proxy container at startup. `--port` and `--host` on `codefreedom proxy start` override `LITELLM_PORT` and `LITELLM_BIND_HOST` for that run only (they do not edit `.env.proxy`).
 
 See [Proxy](proxy/index.md) for provider-specific configuration and [Sandbox Mode](claude-code/sandbox.md) for image selection.

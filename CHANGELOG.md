@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Proxy is Docker-only — native mode removed.** `codefreedom proxy start` now always runs via `docker compose` against `~/.codefreedom/proxy/docker-compose.yaml`. The `--docker` flag has been removed (it was the default; the only other path was native Python, which is gone). The `litellm` extra (`codefreedom[litellm]`) and the `prometheus-client` dependency have been removed from `pyproject.toml` — the proxy image bundles everything it needs. Users upgrading should:
+  1. Re-run `codefreedom proxy init` (it will refuse if you already have a config — merge the new `docker-compose.yaml` from the bundled example).
+  2. Use `codefreedom proxy start` (no flag).
+  3. `codefreedom proxy restart` no longer needs `--docker`.
+  4. `pip uninstall codefreedom[litellm]` if you previously installed the extra.
+     See `docs/proxy/docker.md` for the architecture.
+- **Self-hosted LiteLLM image (`codefreedom:litellm-latest`).** The proxy compose stack no longer pulls `ghcr.io/berriai/litellm`. We now build and publish our own LiteLLM image from `docker/litellm/Dockerfile.LiteLLM`. The image bakes in the WebSearch count display patch at build time — no entrypoint wrapper, no volume mount, no runtime mutation. Tags follow the pattern `litellm-v{MAJOR.MINOR.PATCH}` and `litellm-latest`. Override `LITELLM_IMAGE` in `.env.proxy` to pin a specific version or use a locally-built image. Published via the new `docker-litellm.yml` GitHub Actions workflow.
+- **`patch_websearch_count.{py,sh}` removed from bundled examples.** The patch now ships inside the `codefreedom:litellm-latest` image — `codefreedom proxy init` no longer copies these files into `~/.codefreedom/proxy/`. Existing files in `~/.codefreedom/proxy/` are harmless (the new compose file doesn't reference them) but can be deleted.
 - **Chrome v0.3.0 — headless refactor.** The Chrome container was rewritten from "Xvfb + stealth + SYS_ADMIN" to plain headless Chrome. This removes `--ipc=host`, `--cap-add=SYS_ADMIN`, Xvfb, PulseAudio, and font packages. The image version bumped from `v0.1.0` to `v0.3.0`. Existing Chrome containers will continue running until restarted, but new `start` commands will use the headless image. For stealth / anti-bot browsing, use the `web` tool (Camoufox) instead.
 - **`codefreedom claude vscode` removed.** The old path has been replaced with the dedicated `codefreedom vscode` subcommand. Migrate:
   - `codefreedom claude vscode` → `codefreedom vscode claude config`
@@ -37,7 +45,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **VS Code config moved to a dedicated subcommand.** `codefreedom claude
-  vscode` and `codefreedom proxy vscode generate` have been moved to a
+vscode` and `codefreedom proxy vscode generate` have been moved to a
   top-level `codefreedom vscode {claude,proxy} config` command. The old paths
   are no longer recognised. Use `codefreedom vscode claude config` and
   `codefreedom vscode proxy config --host HOST` respectively. All VS Code

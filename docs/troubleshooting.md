@@ -2,23 +2,6 @@
 
 ## Proxy Won't Start
 
-### "litellm package not installed"
-
-```
-[ERROR] litellm package not installed.
-   Install: pip install codefreedom[litellm]
-```
-
-**Cause:** Running `codefreedom proxy start` (native mode) without the LiteLLM dependency.
-
-**Fix:**
-
-```bash
-pip install codefreedom[litellm]
-```
-
-Or use Docker Compose mode instead: `codefreedom proxy start --docker`.
-
 ### "Could not find docker-compose.yaml"
 
 ```

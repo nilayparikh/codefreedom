@@ -27,12 +27,14 @@ codefreedom proxy init
 # Set your API keys in ~/.codefreedom/.env.proxy.secrets
 # (copy from ~/.codefreedom/.env.proxy.example)
 
-# Start the proxy (native Python)
+# Start the proxy (Docker Compose)
 codefreedom proxy start
-
-# Or start via Docker Compose
-codefreedom proxy start --docker
 ```
+
+The proxy always runs via `docker compose` against the self-hosted
+`codefreedom:litellm-latest` image. The image bakes in the WebSearch
+count display patch — no host-side `litellm` install is required.
+See [Docker Mode](docker.md) for the architecture and override knobs.
 
 ## Providers
 
@@ -68,26 +70,25 @@ Copies `config.yaml`, provider YAMLs, `docker-compose.yaml`, and `.env` examples
 ### Start
 
 ```bash
-codefreedom proxy start             # Native Python (requires litellm package)
-codefreedom proxy start --docker    # Docker Compose
-codefreedom proxy start --port 4001 # Custom port
-codefreedom proxy start --host 127.0.0.1  # Bind to localhost only
+codefreedom proxy start                # Start via Docker Compose
+codefreedom proxy start --port 4001    # Override port for this run (sets LITELLM_PORT)
+codefreedom proxy start --host 127.0.0.1  # Bind to localhost only (sets LITELLM_BIND_HOST)
 ```
 
-| Flag       | Default   | Description                               |
-| ---------- | --------- | ----------------------------------------- |
-| `--port`   | `4000`    | Proxy listen port                         |
-| `--host`   | `0.0.0.0` | Bind address (`127.0.0.1` for local-only) |
-| `--docker` | off       | Use Docker Compose instead of native      |
+| Flag     | Default   | Description                                                         |
+| -------- | --------- | ------------------------------------------------------------------- |
+| `--port` | `4000`    | Port to publish on the host (sets `LITELLM_PORT` for this run only) |
+| `--host` | `0.0.0.0` | Bind address (sets `LITELLM_BIND_HOST` for this run only)           |
+
+The proxy is always run via `docker compose`; there is no native Python mode.
 
 ### Stop & Status
 
 ```bash
-codefreedom proxy stop              # Stop Docker Compose container
+codefreedom proxy stop              # `docker compose down` against the stack
 codefreedom proxy status            # Show Docker Compose container status
+codefreedom proxy restart           # `docker compose restart` (preserves state, no image pull)
 ```
-
-These only work for Docker Compose mode. For native mode, stop with `Ctrl+C` or kill the process.
 
 ### Validate
 
