@@ -25,8 +25,8 @@ pip install codefreedom
 </div>
 
 <div class="cf-hero__buttons" markdown>
-[:material-rocket-launch: Get started](environment.md){ .md-button .md-button--primary }
-[:material-book-open-variant: Architecture](architecture.md){ .md-button }
+[:material-rocket-launch: Get started](getting-started/install.md){ .md-button .md-button--primary }
+[:material-book-open-variant: Reference](reference/index.md){ .md-button }
 [:material-github: GitHub](https://github.com/nilayparikh/codefreedom){ .md-button }
 </div>
 
@@ -42,7 +42,7 @@ pip install codefreedom
 
   DeepSeek for drafting, Azure for reasoning, OpenCode Zen for free-tier exploration. Same CLI, different profile. No agent code changes.
 
-  [:octicons-arrow-right-24: Profile system](claude-code/profiles.md)
+  [:octicons-arrow-right-24: Profile system](guides/profiles.md)
 
 - :material-shield-check:{ .lg .middle } **Isolated, reproducible sandboxes**
 
@@ -50,7 +50,7 @@ pip install codefreedom
 
   CUDA, ROCm, or plain Ubuntu Docker images. Every session gets a fresh ephemeral container — no state leaks between runs.
 
-  [:octicons-arrow-right-24: Sandbox mode](claude-code/sandbox.md)
+  [:octicons-arrow-right-24: Sandbox mode](guides/sandbox.md)
 
 - :material-graph-outline:{ .lg .middle } **Self-hosted proxy**
 
@@ -58,7 +58,7 @@ pip install codefreedom
 
   LiteLLM at `http://localhost:4000`. Provider failover, spend tracking, model aliases — all opt-in.
 
-  [:octicons-arrow-right-24: Proxy setup](proxy/index.md)
+  [:octicons-arrow-right-24: Proxy setup](reference/proxy/index.md)
 
 - :material-toolbox-outline:{ .lg .middle } **Browser tools that just work**
 
@@ -66,7 +66,7 @@ pip install codefreedom
 
   Headless Chrome via CDP for automation. Stealth Camoufox for anti-bot sites. Lifecycle managed automatically per session.
 
-  [:octicons-arrow-right-24: Browser tools](tools/index.md)
+  [:octicons-arrow-right-24: Browser tools](guides/tools/index.md)
 
 </div>
 
@@ -139,7 +139,7 @@ graph LR
 
   The full `.env` chain, profile inheritance, and `${VAR}` interpolation.
 
-  [:octicons-arrow-right-24: Environment](environment.md)
+  [:octicons-arrow-right-24: Environment](reference/environment.md)
 
 - :material-graph-outline:{ .lg .middle } **Architecture**
 
@@ -147,7 +147,7 @@ graph LR
 
   How the CLI, profiles, sandbox, and proxy fit together.
 
-  [:octicons-arrow-right-24: Architecture](architecture.md)
+  [:octicons-arrow-right-24: Architecture](reference/architecture.md)
 
 - :material-help-circle-outline:{ .lg .middle } **Troubleshooting**
 
@@ -155,7 +155,7 @@ graph LR
 
   Common issues, Docker quirks, and proxy debugging.
 
-  [:octicons-arrow-right-24: Troubleshooting](troubleshooting.md)
+  [:octicons-arrow-right-24: Troubleshooting](reference/troubleshooting.md)
 
 - :material-scale-balance:{ .lg .middle } **License**
 
@@ -163,6 +163,6 @@ graph LR
 
   Apache 2.0 — see the NOTICE file for attributions.
 
-  [:octicons-arrow-right-24: License](license-contributions.md)
+  [:octicons-arrow-right-24: License](reference/license.md)
 
 </div>

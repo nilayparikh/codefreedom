@@ -1,0 +1,110 @@
+# ── CodeFreedom LiteLLM Proxy Image ──────────────────────────────────────────
+# Self-contained LiteLLM proxy with the WebSearch count display patch
+# baked in at build time.  Replaces the upstream `ghcr.io/berriai/litellm`
+# image so we control the LiteLLM version, the patch lifecycle, and the
+# Trivy CVE surface.
+#
+#   Entrypoint:  tini -> litellm  (PID 1 forwards SIGTERM to the proxy)
+#   Working dir: /app
+#   Run as:      non-root `codefreedom` user (uid 1000)
+#   Healthcheck: GET /health/liveliness
+#
+# The websearch count patch (see patch_websearch_count.py) is applied
+# DURING the build to /usr/local/lib/python3.13/site-packages/... so the
+# shipped image is self-contained — no entrypoint script, no runtime
+# mutation, no surprises at first start.  See
+# docs/proxy/websearch-interception.md for the architecture.
+#
+# @platform  linux/amd64, linux/arm64
+# @version   v0.1.0
+#
+# Build:
+#   docker build \
+#     --build-arg IMAGE_VERSION=0.1.0 \
+#     -t docker.io/nilayparikh/codefreedom:litellm-v0.1.0 \
+#     -f docker/litellm/Dockerfile.LiteLLM docker/litellm/
+# ─────────────────────────────────────────────────────────────────────────────
+
+ARG IMAGE_VERSION=0.1.0
+
+# ── Stage 1: builder ─ install pinned wheels into an isolated prefix ──────
+FROM python:3.13-slim AS builder
+
+# Some LiteLLM extras (e.g. httptools, uvloop for uvicorn) compile C
+# extensions at install time.  Patches the base image for known CVEs
+# before installing anything.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        gcc \
+        libffi-dev \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Apply the WebSearch count patch into the freshly installed litellm so
+# the runtime image does not need an entrypoint wrapper.  litellm was
+# installed under the /install prefix (--prefix=/install above), so we
+# have to point PYTHONPATH at the matching site-packages directory for
+# the patch step to find it.  The runtime stage copies /install to
+# /usr/local, so the ENV does not need to propagate.
+COPY patch_websearch_count.py .
+ENV PYTHONPATH=/install/lib/python3.13/site-packages
+RUN python patch_websearch_count.py
+
+# ── Stage 2: runtime ─ minimal Python + app + pinned wheels only ──────────
+FROM python:3.13-slim AS runtime
+
+ARG IMAGE_VERSION
+
+LABEL org.opencontainers.image.title="CodeFreedom - LiteLLM Proxy" \
+      org.opencontainers.image.description="LiteLLM proxy with the WebSearch count display patch baked in. Self-contained replacement for ghcr.io/berriai/litellm, used by the codefreedom proxy stack." \
+      org.opencontainers.image.version="v${IMAGE_VERSION}" \
+      org.opencontainers.image.vendor="nilayparikh" \
+      org.opencontainers.image.authors="Nilay Parikh" \
+      com.codefreedom.platform="LiteLLM" \
+      com.codefreedom.arch="linux/arm64,linux/amd64"
+
+# tini is a minimal init that forwards signals and reaps zombies.  We use
+# it as PID 1 so docker stop / docker compose down can shut down LiteLLM
+# cleanly.  No compilers, no headers in the runtime image.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        tini \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the pinned, patched site-packages from the builder.
+COPY --from=builder /install /usr/local
+
+WORKDIR /app
+
+# Non-root user for defense in depth.
+RUN groupadd -g 1000 codefreedom \
+    && useradd --create-home --shell /bin/false -u 1000 -g 1000 codefreedom \
+    && chown -R codefreedom:codefreedom /app
+USER codefreedom
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/usr/local/bin:${PATH}"
+
+# Default port matches the compose file.  Override with --port in
+# `litellm --port N` if needed; the compose file passes the value
+# through from LITELLM_PORT.
+EXPOSE 4000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=2)" || exit 1
+
+# tini -> litellm.  The compose file appends `--config /app/...` etc.
+# via the `command:` directive; the entrypoint stays minimal so the
+# image works standalone (docker run ... <image> --help) too.
+ENTRYPOINT ["/usr/bin/tini", "--", "litellm"]
+CMD ["--host", "0.0.0.0", "--port", "4000"]

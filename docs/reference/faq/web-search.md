@@ -48,13 +48,13 @@ Use it only when the proxy path isn't available.
 
 You may find suggestions to intercept tool calls with shell scripts that parse JSON via `grep`/`sed` and reject native tools. This approach has fundamental flaws:
 
-| Issue | Why it matters |
-|-------|---------------|
+| Issue                | Why it matters                                                            |
+| -------------------- | ------------------------------------------------------------------------- |
 | Fragile JSON parsing | `grep -o '"tool"'` breaks on escaped quotes, newlines, multi-line strings |
-| Latency | Spawns a subprocess on **every** tool call just to reject it |
-| No fallback | If the MCP container isn't running, the hook still blocks native tools |
-| Manual setup | `chmod +x`, edit `settings.json` by hand — different on every machine |
-| No validation | Doesn't check if the MCP server is actually reachable |
+| Latency              | Spawns a subprocess on **every** tool call just to reject it              |
+| No fallback          | If the MCP container isn't running, the hook still blocks native tools    |
+| Manual setup         | `chmod +x`, edit `settings.json` by hand — different on every machine     |
+| No validation        | Doesn't check if the MCP server is actually reachable                     |
 
 ### Disabling tools via CLI flags
 
@@ -79,12 +79,12 @@ codefreedom tools web status
 
 This starts an MCP server at `http://127.0.0.1:8420/mcp` exposing two tools:
 
-| Tool | Description |
-|------|-------------|
+| Tool                | Description                                               |
+| ------------------- | --------------------------------------------------------- |
 | `web_search(query)` | Search via configured engines, returns structured results |
-| `web_fetch(url)` | Fetch a webpage (bypasses anti-bot detection) |
+| `web_fetch(url)`    | Fetch a webpage (bypasses anti-bot detection)             |
 
-See [Camoufox Web Tool](../tools/web.md) for container configuration, search engine setup, and parser registry details.
+See [Camoufox Web Tool](../../guides/tools/web.md) for container configuration, search engine setup, and parser registry details.
 
 ---
 
@@ -234,19 +234,19 @@ Requires running the Brave Search MCP server locally with a Brave API key.
 
 ### Why CodeFreedom's Container is Preferred
 
-| Feature | CodeFreedom web | External MCP |
-|---------|----------------|--------------|
-| Self-hosted | Yes, runs on your machine | Depends on third-party API |
-| Anti-bot evasion | Camoufox stealth browser | Standard HTTP requests |
-| Search engine config | User-configured via profile | Fixed by provider |
-| Cost | Free (your own hardware) | API key required, may have limits |
-| Privacy | Queries stay on your machine | Queries go to third-party |
+| Feature              | CodeFreedom web              | External MCP                      |
+| -------------------- | ---------------------------- | --------------------------------- |
+| Self-hosted          | Yes, runs on your machine    | Depends on third-party API        |
+| Anti-bot evasion     | Camoufox stealth browser     | Standard HTTP requests            |
+| Search engine config | User-configured via profile  | Fixed by provider                 |
+| Cost                 | Free (your own hardware)     | API key required, may have limits |
+| Privacy              | Queries stay on your machine | Queries go to third-party         |
 
 ---
 
 ## Troubleshooting
 
-### "web__web_search is not available"
+### "web\_\_web_search is not available"
 
 1. Check the container is running: `codefreedom tools web status`
 2. Check the MCP endpoint: `curl -s http://127.0.0.1:8420/mcp`
@@ -300,7 +300,7 @@ If port 8420 is in use, change it in the web profile:
 
 ## Path Reference
 
-| Mode | settings.json | CLAUDE.md |
-|------|---------------|-----------|
-| Local | `~/.claude/settings.json` | `~/.claude/CLAUDE.md` or project `CLAUDE.md` |
+| Mode    | settings.json                                            | CLAUDE.md                                            |
+| ------- | -------------------------------------------------------- | ---------------------------------------------------- |
+| Local   | `~/.claude/settings.json`                                | `~/.claude/CLAUDE.md` or project `CLAUDE.md`         |
 | Sandbox | `~/.codefreedom/sandbox/<profile>/.claude/settings.json` | `~/.codefreedom/sandbox/<profile>/.claude/CLAUDE.md` |

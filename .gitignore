@@ -11,8 +11,10 @@ venv/
 .env
 .env.secrets
 
-# LiteLLM runtime config (copy from litellm.examples/ to get started)
-litellm/
+# LiteLLM runtime config (copy from litellm.examples/ to get started).
+# Anchored to repo root so the docker/litellm/ build context is NOT
+# matched (that path holds the self-hosted proxy image source).
+/litellm/
 
 # IDE
 .vscode/
