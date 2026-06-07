@@ -59,6 +59,8 @@ src/codefreedom/
 │   ├── web.py             # 'codefreedom tools web' — init, start/stop/status (Camoufox)
 │   ├── docker_utils.py    # Shared Docker helpers (start/stop/status/ephemeral names)
 │   ├── init_utils.py      # Shared init bootstrap (bundled examples, all-or-nothing copy)
+│   ├── update.py          # 'codefreedom update' — Docker image + PyPI version checks
+│   ├── vscode.py          # 'codefreedom vscode' — VS Code config fragment generation
 │   └── tool_init_utils.py # Shared acceptance prompt, notices, tool metadata
 ├── profiles.py      # Profile JSON loading, ${VAR} resolution, inheritance
 ├── tool_registry.py # Reference-counted tool lifecycle via ~/.codefreedom/proc/
@@ -67,6 +69,8 @@ src/codefreedom/
 └── examples/        # Bundled into package, copied by init commands
     ├── claude/      # profiles + .env.claude.example, .env.claude.secrets.example
     ├── proxy/       # config.yaml, docker-compose.yaml, providers/, env files
+    │   └── config/
+    │       └── plugins/  # reasoning-efforts mapping YAML config (plugin .py baked in image)
     └── tools/       # chrome/ and web/ profile + schema files
 ```
 
@@ -82,61 +86,67 @@ Use the `arch-docs` skill to keep this current when code changes.
 
 ### CLI Commands
 
-| Command                                | Description                                   |
-| -------------------------------------- | --------------------------------------------- |
-| `codefreedom claude init`              | Initialize Claude Code profiles + .env.claude |
-| `codefreedom claude`                   | Launch Claude Code (alias: `cf cc`)           |
-| `codefreedom claude --sandbox`         | Launch in Docker container with GPU           |
-| `codefreedom claude --cuda`            | Use CUDA GPU image (with --sandbox)           |
-| `codefreedom claude --rocm`            | Use ROCm GPU image (with --sandbox)           |
-| `codefreedom claude --native-models`   | Bypass proxy, use Anthropic `/login`          |
-| `codefreedom claude --profile PROFILE` | Use a specific profile (default: "default")   |
-| `codefreedom claude --list-profiles`   | List available profiles                       |
-
-| `codefreedom claude --dangerously-skip-permissions` | Skip permission prompts (local mode) |
-| `codefreedom claude vscode` | (removed — see `codefreedom vscode claude config` below) |
-| `codefreedom proxy init` | Initialize proxy configs + .env.proxy |
-| `codefreedom proxy start` | Start the proxy (Docker Compose; only mode) |
-| `codefreedom proxy start --port PORT` | Override `LITELLM_PORT` for this run only (default: 4000) |
-| `codefreedom proxy start --host HOST` | Override `LITELLM_BIND_HOST` for this run only (default: 0.0.0.0) |
-| `codefreedom proxy stop` | Stop proxy |
-| `codefreedom proxy restart` | Restart proxy (Docker Compose; preserves state, no image pull) |
-| `codefreedom proxy status` | Show proxy status |
-| `codefreedom proxy validate` | Validate proxy config |
-| `codefreedom admin backup` | Backup CodeFreedom config (no secrets) |
-| `codefreedom admin backup --out PATH` | Backup to a specific path |
-| `codefreedom admin restore PATH` | Restore with interactive diff preview |
-| `codefreedom admin restore PATH --dry-run` | Preview restore without making changes |
-| `codefreedom admin restore PATH --force` | Restore without confirmation prompt |
-| `codefreedom admin list-backups` | List all available backups |
-| `codefreedom admin inspect PATH` | Show manifest contents of a backup archive |
-| `codefreedom admin prune --keep N` | Keep N most recent backups, delete rest |
-| `codefreedom admin prune --older-than 30d` | Delete backups older than duration |
-| `codefreedom update` | Check all CodeFreedom Docker images and PyPI for updates (alias: `cf upd`) |
-| `codefreedom update sandbox` | Check only sandbox images |
-| `codefreedom update chrome` | Check only Chrome tool image |
-| `codefreedom update web` | Check only Web tool image |
-| `codefreedom update proxy` | Check only proxy images (litellm + web-bridge) |
-| `codefreedom vscode claude config` | Print a VS Code `settings.json` fragment for the Claude Code extension |
-| `codefreedom vscode claude config --profile PROFILE` | Render the fragment for a specific profile |
-| `codefreedom vscode claude config --host HOST --port PORT` | Override `ANTHROPIC_BASE_URL` host/port in the fragment |
-| `codefreedom vscode claude config --out PATH` | Write the fragment to a file instead of stdout |
-| `codefreedom vscode proxy config --host H` | Generate a VS Code `chatLanguageModels.json` entry from the proxy |
-| `codefreedom tools chrome init` | Initialize Chrome tool profile (requires acceptance) |
-| `codefreedom tools chrome start` | Start Chrome browser container (Xvfb + Chromium) |
-| `codefreedom tools chrome stop` | Stop Chrome container |
-| `codefreedom tools chrome restart` | Restart Chrome container (preserves state, no image pull) |
-| `codefreedom tools chrome status` | Show Chrome container status |
-| `codefreedom tools chrome url` | Print CDP debug URL for agent connection |
-| `codefreedom tools web init` | Initialize Camoufox tool profile (requires acceptance) |
-| `codefreedom tools web start` | Start Camoufox container (MCP server on port 8420) |
-| `codefreedom tools web stop` | Stop Camoufox container |
-| `codefreedom tools web restart` | Restart Camoufox container (preserves state, no image pull) |
-| `codefreedom tools web status` | Show Camoufox container status |
-| `cf cc` | Alias for `codefreedom claude` |
-| `cf px` | Alias for `codefreedom proxy` |
-| `cf adm` | Alias for `codefreedom admin` |
-| `cf upd` / `cf up` | Alias for `codefreedom update` |
+| Command                                                    | Description                                                                |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `codefreedom claude init`                                  | Initialize Claude Code profiles + .env.claude                              |
+| `codefreedom claude`                                       | Launch Claude Code (alias: `cf cc`)                                        |
+| `codefreedom claude --sandbox`                             | Launch in Docker container with GPU                                        |
+| `codefreedom claude --cuda`                                | Use CUDA GPU image (with --sandbox)                                        |
+| `codefreedom claude --rocm`                                | Use ROCm GPU image (with --sandbox)                                        |
+| `codefreedom claude --run-as-me`                           | Run sandbox as host user (uid/gid match)                                   |
+| `codefreedom claude --native-models`                       | Bypass proxy, use Anthropic `/login`                                       |
+| `codefreedom claude --profile PROFILE`                     | Use a specific profile (default: "default")                                |
+| `codefreedom claude --list-profiles`                       | List available profiles                                                    |
+| `codefreedom claude config`                                | Resolve profile env vars for standalone use                                |
+| `codefreedom claude --dangerously-skip-permissions`        | Skip permission prompts (local mode)                                       |
+| `codefreedom proxy init`                                   | Initialize proxy configs + .env.proxy                                      |
+| `codefreedom proxy start`                                  | Start the proxy (Docker Compose; only mode)                                |
+| `codefreedom proxy start --port PORT`                      | Override `LITELLM_PORT` for this run only (default: 4000)                  |
+| `codefreedom proxy start --host HOST`                      | Override `LITELLM_BIND_HOST` for this run only (default: 0.0.0.0)          |
+| `codefreedom proxy stop`                                   | Stop proxy                                                                 |
+| `codefreedom proxy restart`                                | Restart proxy (Docker Compose; preserves state, no image pull)             |
+| `codefreedom proxy status`                                 | Show proxy status                                                          |
+| `codefreedom proxy validate`                               | Validate proxy config                                                      |
+| `codefreedom admin backup`                                 | Backup CodeFreedom config (no secrets)                                     |
+| `codefreedom admin backup --out PATH`                      | Backup to a specific path                                                  |
+| `codefreedom admin restore PATH`                           | Restore with interactive diff preview                                      |
+| `codefreedom admin restore PATH --dry-run`                 | Preview restore without making changes                                     |
+| `codefreedom admin restore PATH --force`                   | Restore without confirmation prompt                                        |
+| `codefreedom admin list-backups`                           | List all available backups (alias: `ls`)                                   |
+| `codefreedom admin inspect PATH`                           | Show manifest contents of a backup archive                                 |
+| `codefreedom admin prune --keep N`                         | Keep N most recent backups, delete rest                                    |
+| `codefreedom admin prune --older-than 30d`                 | Delete backups older than duration                                         |
+| `codefreedom update`                                       | Check all CodeFreedom Docker images and PyPI for updates (alias: `cf upd`) |
+| `codefreedom update sandbox`                               | Check only sandbox images                                                  |
+| `codefreedom update chrome`                                | Check only Chrome tool image                                               |
+| `codefreedom update web`                                   | Check only Web tool image                                                  |
+| `codefreedom update proxy`                                 | Check only proxy images (litellm + web-bridge)                             |
+| `codefreedom vscode claude config`                         | Print a VS Code `settings.json` fragment for the Claude Code extension     |
+| `codefreedom vscode claude config --profile PROFILE`       | Render the fragment for a specific profile                                 |
+| `codefreedom vscode claude config --host HOST --port PORT` | Override `ANTHROPIC_BASE_URL` host/port in the fragment                    |
+| `codefreedom vscode claude config --out PATH`              | Write the fragment to a file instead of stdout                             |
+| `codefreedom vscode proxy config --host H`                 | Generate a VS Code `chatLanguageModels.json` entry from the proxy          |
+| `codefreedom tools chrome init`                            | Initialize Chrome tool profile (requires acceptance)                       |
+| `codefreedom tools chrome start`                           | Start Chrome browser container (Xvfb + Chromium)                           |
+| `codefreedom tools chrome stop`                            | Stop Chrome container                                                      |
+| `codefreedom tools chrome restart`                         | Restart Chrome container (preserves state, no image pull)                  |
+| `codefreedom tools chrome status`                          | Show Chrome container status                                               |
+| `codefreedom tools chrome url`                             | Print CDP debug URL for agent connection                                   |
+| `codefreedom tools web init`                               | Initialize Camoufox tool profile (requires acceptance)                     |
+| `codefreedom tools web start`                              | Start Camoufox container (MCP server on port 8420)                         |
+| `codefreedom tools web stop`                               | Stop Camoufox container                                                    |
+| `codefreedom tools web restart`                            | Restart Camoufox container (preserves state, no image pull)                |
+| `codefreedom tools web status`                             | Show Camoufox container status                                             |
+| `codefreedom tools github init`                            | Initialize GitHub MCP tool profile (requires acceptance)                   |
+| `codefreedom tools github start`                           | Pull image + validate token (ephemeral stdio, no long-running container)   |
+| `codefreedom tools github stop`                            | No-op (container is per-session ephemeral)                                 |
+| `codefreedom tools github restart`                         | No-op (ephemeral)                                                          |
+| `codefreedom tools github status`                          | Show image availability + token status                                     |
+| `cf cc`                                                    | Alias for `codefreedom claude`                                             |
+| `cf px`                                                    | Alias for `codefreedom proxy`                                              |
+| `cf adm`                                                   | Alias for `codefreedom admin`                                              |
+| `cf upd` / `cf up`                                         | Alias for `codefreedom update`                                             |
+| `cf vsc`                                                   | Alias for `codefreedom vscode`                                             |
 
 ## Key Patterns
 
@@ -158,18 +168,15 @@ Tools (chrome browser, web/camoufox) load settings from `~/.codefreedom/profiles
 Generated by `codefreedom tools <tool> init` from bundled `src/codefreedom/examples/tools/<tool>/`.
 Tool init requires user acceptance (typing "I understand"). Tools refuse to start without successful init.
 
-| Setting          | Default                               | Profile override                                                                                                                       |
-| ---------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Setting          | Default                                           | Profile override                                                                            |
+| ---------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `image`          | `docker.io/nilayparikh/codefreedom:chrome-latest` | Change to a different tag or registry (also on `ghcr.io/nilayparikh/codefreedom` as mirror) |
-| `container_name` | `codefreedom-tools-chrome`            | Custom container name                                                                                                                  |
-| `port`           | `9222`                                | CDP debug port                                                                                                                         |
-| `data_dir`       | `~/.codefreedom/sandbox/tools/chrome` | Persistent data mount                                                                                                                  |
-| `env`            | `CHROME_DEBUG_PORT=9222`              | Extra env vars forwarded to container                                                                                                  |
+| `container_name` | `codefreedom-tools-chrome`                        | Custom container name                                                                       |
+| `port`           | `9222`                                            | CDP debug port                                                                              |
+| `data_dir`       | `~/.codefreedom/sandbox/tools/chrome`             | Persistent data mount                                                                       |
+| `env`            | `CHROME_DEBUG_PORT=9222`                          | Extra env vars forwarded to container                                                       |
 
 Chrome runs headless. For stealth / anti-bot browsing, use the `web` tool (Camoufox) instead.
-
-- All other profiles inherit from `default`. Profile's own `env` merges on top.
-- Mode-specific overrides (`sandbox.env`, `local.env`) also inherit: custom profile gets `default`'s mode env first, then its own.
 
 ### Environment Variable Chain
 
@@ -217,6 +224,42 @@ Only `pyproject.toml` holds the version. `__init__.py` derives `__version__` fro
 - Provider config: `~/.codefreedom/proxy/config/providers/*.yaml` — opt-in via API key env vars.
 - Model aliases controlled by env vars: `LITELLM_MODEL_ALIAS_ULTRA`, `LITELLM_MODEL_ALIAS_PRO`, `LITELLM_MODEL_ALIAS_FLASH`, `LITELLM_MODEL_ALIAS_AIR`.
 
+#### Reasoning-efforts mapping plugin (v2)
+
+The proxy ships a CustomLogger plugin that translates reasoning-effort signals
+across provider standards using **rule-based mapping**. Claude Code emits
+Anthropic's `output_config.effort` (low / medium / high / xhigh / max) but
+DeepSeek and OpenAI expect `reasoning_effort` (none / low / medium / high /
+xhigh). The plugin resolves a rule per model and applies it on every request.
+
+**Two rule types:**
+
+- **`mapping`** — maps incoming reasoning-level strings to values the downstream
+  model accepts via a `values` dict (direct incoming→outgoing map).
+- **`thinking_budget`** — maps reasoning-level strings to a numeric thinking-token
+  budget, written to a dotted-path field (e.g. `extra_body.max_thinking_tokens`).
+
+A model may have exactly one rule (inline via `model_info`, or named from YAML).
+No rule → pure field rename (`output_config.effort` ↔ `reasoning_effort`) using
+the provider's native output type.
+
+**Files:**
+| File | Purpose |
+|------|---------|
+| `docker/litellm/plugins/reasoning_efforts_mapping.py` | Plugin module — baked into Docker image |
+| `src/codefreedom/examples/proxy/config/plugins/reasoning-efforts/reasoning-efforts-mapping.yaml` | YAML config table — copied to host on `proxy init` |
+| `~/.codefreedom/proxy/config/plugins/reasoning-efforts/reasoning-efforts-mapping.yaml` | User-editable override |
+| `tests/test_reasoning_efforts_mapping.py` | Unit tests |
+
+**Key facts:**
+
+- The plugin runs on `async_pre_request_hook` (Anthropic `/v1/messages`) and `async_log_pre_api_call` (OpenAI `/v1/chat/completions`).
+- Rules are resolved from `model_info.codefreedom.plugins.reasoning-efforts` (inline) or the YAML config (named). Fallback is `auto` — pure field rename based on provider detection.
+- The `.py` module is baked into the LiteLLM image at `/app/litellm-plugins/`. The entrypoint copies it into the host-mounted config directory at container start.
+- The YAML config lives on the host (user-editable). Cached by mtime — edits take effect on the next request without a proxy restart.
+- Wired in `config.yaml` via `callbacks: ["plugins.reasoning-efforts.reasoning_efforts_mapping.instance"]` — the lowercase `instance` is a module-level singleton (not the class) to match LiteLLM's callback dispatch.
+- The `proxy init` flow copies the YAML config alongside the rest of the proxy config.
+
 ### Sandbox Containers
 
 - Ephemeral: `codefreedom-XXXX` (random 4-hex name), auto-removed on exit via `--rm` + `finally` fallback.
@@ -241,7 +284,7 @@ references. Examples:
 
 ### Image Families
 
-Six image families in `docker/` published to `docker.io/nilayparikh/codefreedom` (also available on `ghcr.io/nilayparikh/codefreedom` as a mirror):
+Seven image families in `docker/` published to `docker.io/nilayparikh/codefreedom` (also available on `ghcr.io/nilayparikh/codefreedom` as a mirror). The **GitHub MCP Server** tool uses the official `ghcr.io/github/github-mcp-server` image (not built by CodeFreedom):
 
 | Image          | Dockerfile                             | Use Case                                                                                                                                                  |
 | -------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -250,10 +293,11 @@ Six image families in `docker/` published to `docker.io/nilayparikh/codefreedom`
 | **Ubuntu**     | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only / general-purpose                                                                                                                                |
 | **Chrome**     | `docker/chrome/Dockerfile.Chrome`      | Headless Chromium for browser automation via CDP port 9222                                                                                                |
 | **Web**        | `docker/web/Dockerfile.Web`            | Camoufox MCP server for stealth / anti-bot web search and scraping                                                                                        |
+| **GitHub MCP** | `docker/github/Dockerfile.Github`      | stdio-to-HTTP bridge over `ghcr.io/github/github-mcp-server`, exposes GitHub API tools via HTTP MCP on port 8082                                           |
 | **LiteLLM**    | `docker/litellm/Dockerfile.LiteLLM`    | Self-hosted LiteLLM proxy image. Replaces `ghcr.io/berriai/litellm` in the proxy compose stack. Bakes in the WebSearch count display patch at build time. |
 | **Web Bridge** | `docker/web-bridge/Dockerfile.Bridge`  | FastAPI SearXNG-shaped sidecar → Camoufox MCP for transparent WebSearch interception                                                                      |
 
-Images are built, cosign-signed, and published by per-family GitHub Actions workflows (`docker-cuda.yml`, `docker-rocm.yml`, `docker-ubuntu.yml`, `docker-chrome.yml`, `docker-web.yml`, `docker-litellm.yml`, `docker-web-bridge.yml`) on changes to their respective Dockerfiles. Each workflow also runs a `verify` job against both registries — see [Image Supply Chain](#image-supply-chain-cosign) under CI/CD.
+Images are built, cosign-signed, and published by per-family GitHub Actions workflows (`docker-cuda.yml`, `docker-rocm.yml`, `docker-ubuntu.yml`, `docker-chrome.yml`, `docker-web.yml`, `docker-github.yml`, `docker-litellm.yml`, `docker-web-bridge.yml`) on changes to their respective Dockerfiles. Each workflow also runs a `verify` job against both registries — see [Image Supply Chain](#image-supply-chain-cosign) under CI/CD.
 
 ## CI/CD
 
@@ -265,6 +309,7 @@ Images are built, cosign-signed, and published by per-family GitHub Actions work
 | `docker-ubuntu.yml`     | `docker/claude-code/Dockerfile.Ubuntu` changes | Build, cosign-sign, and publish Ubuntu image to `docker.io` + `ghcr.io`        |
 | `docker-chrome.yml`     | `docker/chrome/Dockerfile.Chrome` changes      | Build, cosign-sign, and publish Chrome image to `docker.io` + `ghcr.io`        |
 | `docker-web.yml`        | `docker/web/Dockerfile.Web` changes            | Build, cosign-sign, and publish Camoufox web image to `docker.io` + `ghcr.io`  |
+| `docker-github.yml`     | `docker/github/Dockerfile.Github` changes     | Build, cosign-sign, and publish GitHub MCP bridge image to `docker.io` + `ghcr.io`  |
 | `docker-litellm.yml`    | `docker/litellm/Dockerfile.LiteLLM` changes    | Build, cosign-sign, and publish LiteLLM proxy image to `docker.io` + `ghcr.io` |
 | `docker-web-bridge.yml` | `docker/web-bridge/Dockerfile.Bridge` changes  | Build, cosign-sign, and publish web-bridge image to `docker.io` + `ghcr.io`    |
 | `gated-checkin.yml`     | push/PR                                        | Release-gate checks on tagged commits                                          |
@@ -299,18 +344,25 @@ cosign verify \
 
 ## Tests
 
-Eight test modules in `tests/`, all using `pytest` with `tmp_path` fixtures and `monkeypatch` for path isolation — never touching real `~/.codefreedom/` during tests.
+Fifteen test modules in `tests/`, all using `pytest` with `tmp_path` fixtures and `monkeypatch` for path isolation — never touching real `~/.codefreedom/` during tests.
 
-| File                   | Coverage                                                              |
-| ---------------------- | --------------------------------------------------------------------- |
-| `test_admin.py`        | Backup, restore, list, inspect, prune, sha256, categorization         |
-| `test_env_loader.py`   | `.env` parsing, component-aware chain precedence, `${VAR}` resolution |
-| `test_profiles.py`     | Profile loading, inheritance, env resolution                          |
-| `test_proxy.py`        | Path resolution, config validation, Docker Compose discovery          |
-| `test_init_claude.py`  | Claude `--init` bootstrap, file creation, skip/force logic            |
-| `test_init_proxy.py`   | Proxy `--init` bootstrap, file creation, skip/force logic             |
-| `test_docker_utils.py` | Docker container lifecycle helpers (start/stop/status)                |
-| `test_init_utils.py`   | Bundled examples resolution, all-or-nothing file copy                 |
+| File                                | Coverage                                                              |
+| ----------------------------------- | --------------------------------------------------------------------- |
+| `test_admin.py`                     | Backup, restore, list, inspect, prune, sha256, categorization         |
+| `test_chrome.py`                    | Chrome tool container lifecycle (start/stop/status/url)               |
+| `test_docker_utils.py`              | Docker container lifecycle helpers (start/stop/status)                |
+| `test_env_loader.py`                | `.env` parsing, component-aware chain precedence, `${VAR}` resolution |
+| `test_init_claude.py`               | Claude `--init` bootstrap, file creation, skip/force logic            |
+| `test_init_proxy.py`                | Proxy `--init` bootstrap, file creation, skip/force logic             |
+| `test_init_utils.py`                | Bundled examples resolution, all-or-nothing file copy                 |
+| `test_mcp_endpoints.py`             | MCP endpoint configuration and validation                             |
+| `test_profiles.py`                  | Profile loading, inheritance, env resolution                          |
+| `test_proxy.py`                     | Path resolution, config validation, Docker Compose discovery          |
+| `test_reasoning_efforts_mapping.py` | Reasoning-efforts plugin: normalisation, config, translation          |
+| `test_vscode_claude.py`             | VS Code Claude Code config fragment generation                        |
+| `test_vscode_proxy.py`              | VS Code proxy config fragment generation                              |
+| `test_web.py`                       | Web (Camoufox) tool container lifecycle                               |
+| `test_web_bridge.py`                | Web bridge (SearXNG → Camoufox MCP) integration                       |
 
 CI runs tests on Python 3.10/11/12 across Ubuntu, Windows, and macOS via `integration-test.yml`.
 
@@ -344,18 +396,28 @@ The integration test (`.github/workflows/integration-test.yml`) runs `codefreedo
 The proxy always runs via `docker compose` against the self-hosted
 `codefreedom:litellm-latest` image. There is no `--docker` flag, no native
 Python path, and no `litellm` extra in `pyproject.toml`. If you add a new
-proxy subcommand, do not reintroduce native-mode logic. The
-`codefreedom:litellm-latest` image bakes in the WebSearch count display
-patch at build time (see `docker/litellm/patch_websearch_count.py`); do
-not re-add volume mounts or entrypoint wrappers for it.
+proxy subcommand, do not reintroduce native-mode logic. The image bakes in
+patches at build time from `docker/litellm/patches/`
+(`patch_websearch_count.py`, `patch_responses_azure.py`); do not re-add
+volume mounts or entrypoint wrappers for them.
 
-### WebSearch count patch is baked into the LiteLLM image, not a volume
+### CustomLogger callbacks: reference `instance`, not the class
 
-The `patch_websearch_count.py` lives in `docker/litellm/` and is applied
-during the image build (`RUN python patch_websearch_count.py` in
-`Dockerfile.LiteLLM`). Older guides referenced mount-it-at-runtime; that
-pattern is gone. If you change LiteLLM and the patch can no longer find
-its target line, the build fails loudly — do not silently fall back.
+LiteLLM's `get_instance_fn` does `getattr(module, name)` and stores the
+result directly in `litellm.callbacks`. If a callback is a **class**
+(not an instance), `isinstance(Callback, CustomLogger)` returns `False`,
+and the class object ends up in callbacks — then `callback.method(...)`
+fails with missing `self`. Always reference a module-level singleton
+instance (lowercase `instance`) from `config.yaml`, e.g.
+`plugins.reasoning_efforts_mapping.instance`.
+
+### Patches are baked into the LiteLLM image, not mounted at runtime
+
+Patches in `docker/litellm/patches/` are applied during the image build
+(`COPY patches/...` + `RUN python patch_*.py` in `Dockerfile.LiteLLM`).
+Older guides referenced mount-it-at-runtime; that pattern is gone.
+If you change LiteLLM and a patch can no longer find its target, the
+build fails loudly — do not silently fall back.
 
 ## What to Include vs Exclude
 

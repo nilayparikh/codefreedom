@@ -92,7 +92,7 @@ See the [Getting Started guide](https://nilayparikh.github.io/codefreedom/) for 
 
 | Feature             | Details                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------- |
-| LLM proxy           | Stateless model routing (self-hosted `codefreedom:litellm-latest` image via Docker Compose) |
+| LLM proxy           | Self-hosted `codefreedom:litellm-latest` image (embedded PostgreSQL, multi-provider routing) |
 | Code agent launcher | `codefreedom claude` CLI -- local + sandbox modes                                           |
 | Sandboxing          | Pre-configured containers (CUDA, ROCm, Ubuntu)                                              |
 | Profile management  | Model switching, env inheritance, isolation                                                 |

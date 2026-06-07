@@ -2,6 +2,15 @@
 # ── NVIDIA AI Endpoints Provider ──────────────────────────────────────────────
 # Routes to NVIDIA's API catalog (nvidia.com).
 # Set NVIDIA_API_KEY to enable.
+#
+# DISCLAIMER:
+#   - This config is provided AS-IS with no warranty of any kind.
+#   - Example/template only — uncomment and adapt to your environment.
+#   - Validate pricing, rate limits, and model capabilities with your
+#     provider before relying on them in production.
+#   - Model specs (context window, max tokens, vision support) and costs
+#     change over time — verify against current provider documentation.
+#   - Leaving API keys empty disables a provider — nothing phones home.
 # ──────────────────────────────────────────────────────────────────────────────
 
 # model_list:

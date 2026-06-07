@@ -51,7 +51,7 @@ The container mounts only specific host paths -- nothing else is accessible:
 The sandbox uses **host networking** (`--network host`):
 
 - The container shares the host's network namespace.
-- Tool containers (Chrome on port 9222, Camoufox on port 8420) are reachable via `localhost`.
+- Tool containers (Chrome on port 9222, web search on port 8420) are reachable via `localhost`.
 - The proxy at `http://localhost:4000` is directly accessible.
 
 This is a deliberate trade-off: host networking enables tool communication and proxy routing. If you need stricter network isolation, use Docker bridge networks with explicit port mappings.
@@ -79,7 +79,7 @@ codefreedom claude --sandbox --profile pro
   |-- 2. Resolve profile "pro" (inherit from "default")
   |-- 3. Get sandbox image from profile (or env vars)
   |-- 4. Generate session ID: "codefreedom-a1b2"
-  |-- 5. Acquire tools (start Chrome, Camoufox containers)
+  |-- 5. Acquire tools (start Chrome, web containers)
   |-- 6. Ensure sandbox dirs exist (~/.codefreedom/sandbox/pro/.claude/)
   |-- 7. docker run -d --rm --name codefreedom-a1b2 ... sleep infinity
   |-- 8. docker exec -it codefreedom-a1b2 claude ...
@@ -109,7 +109,7 @@ Each profile gets its own isolated `.claude` directory:
 │       └── .claude.json    # Independent of "default"
 └── tools/
     ├── chrome/             # Shared Chrome data
-    ├── web/                # Shared Camoufox data
+    ├── web/                # Shared web tool data
     └── .cache/             # Shared cache
 ```
 
@@ -120,7 +120,7 @@ This means:
 
 ## Tool Container Isolation
 
-Tool containers (Chrome, Camoufox) are shared across sessions but isolated from the host:
+Tool containers (Chrome, web) are shared across sessions but isolated from the host:
 
 ### Chrome Container
 
@@ -129,7 +129,7 @@ Tool containers (Chrome, Camoufox) are shared across sessions but isolated from 
 - `--restart unless-stopped` (persists across session restarts).
 - Persistent data at `~/.codefreedom/sandbox/tools/chrome/` (browser profiles, cache).
 
-### Camoufox (Web) Container
+### Web (Camoufox) Container
 
 - Runs on **bridge network** with port mapping (`-p 8420:8420`).
 - Persistent data at `~/.codefreedom/sandbox/tools/web/`.

@@ -50,12 +50,25 @@ Details on env chain layers and profile inheritance: see `CLAUDE.md` > Key Patte
 | --------------- | --------------------------- | ------------------------------------------------------------------------------- |
 | `docker_images` | `docker/`                   | CUDA, ROCm, Ubuntu, Chrome, Camoufox, LiteLLM image families                    |
 | `web-bridge`    | `docker/web-bridge/`        | FastAPI sidecar — SearXNG → Camoufox MCP translation for WebSearch interception |
-| `litellm`       | `docker/litellm/`           | Self-hosted LiteLLM proxy image (pinned, with WebSearch count patch baked in)   |
-| `proxy_config`  | `~/.codefreedom/proxy/`     | LiteLLM routing, provider YAML, model aliases                                   |
+| `litellm`       | `docker/litellm/`           | Self-hosted LiteLLM proxy image with embedded PostgreSQL 18.4                    |
+| `litellm_patches` | `docker/litellm/patches/` | Build-time patches applied into the LiteLLM image                                |
+| `litellm_plugins` | `docker/litellm/plugins/` | LiteLLM callbacks baked into the image (reasoning-efforts mapping)               |
+| `proxy_config`  | `~/.codefreedom/proxy/`     | LiteLLM routing, provider YAML, model aliases, plugin configs                   |
 | `examples`      | `src/codefreedom/examples/` | Bundled configs copied by init commands                                         |
 | `tool_profiles` | `~/.codefreedom/profiles/`  | Per-tool JSON settings (chrome, web)                                            |
 
-**litellm component.** The `docker/litellm/` directory contains `Dockerfile.LiteLLM`, `requirements.txt`, and `patch_websearch_count.py`. It builds the `codefreedom:litellm-latest` image (also `litellm-v0.1.0` and `litellm-v0.1`), published on `docker.io` and `ghcr.io`. Replaces the upstream `ghcr.io/berriai/litellm` image so we control the LiteLLM version, the WebSearch count display patch lifecycle, and the Trivy CVE surface. The patch is applied at build time (not runtime) so the image is self-contained — no entrypoint wrapper, no volume mounts, no surprises at first start. See `docs/proxy/websearch-interception.md`.
+**litellm component.** The `docker/litellm/` directory contains a multi-stage Dockerfile (`Dockerfile.LiteLLM`) that builds a self-contained LiteLLM proxy image with embedded PostgreSQL 18.4 (built from source), Prisma schema management, and the WebSearch count display patch. The image installs LiteLLM from a git fork at a pinned tag (default `nilayparikh/litellm.git` at `v1.87.1`) with `--no-deps`, then layers a curated minimal dependency set. Patches in `docker/litellm/patches/` are applied at build time:
+
+- `patch_websearch_count.py` — injects `server_tool_use.web_search_requests` into LiteLLM WebSearch responses so Claude Code TUI displays "Did N searches" (covers short-circuit, typed-plan, and legacy agentic-loop paths).
+- `patch_responses_azure.py` — disables LiteLLM's auto-routing of GPT-5.x through the Azure Responses API (Azure Foundry does not reliably serve the Responses API yet).
+
+Plugins in `docker/litellm/plugins/` are baked into the image and deployed by the entrypoint at container start:
+
+- `reasoning_efforts_mapping.py` — v2 CustomLogger that translates reasoning-effort signals across provider standards using rule-based mapping (`mapping` and `thinking_budget` rule types). Reads its config from a YAML file on the host (user-editable).
+
+The entrypoint (`entrypoint.sh`) orchestrates: PG cluster init, `prisma db push`, plugin deployment, and LiteLLM startup. It uses tini as PID 1 for clean signal forwarding. The image runs as non-root user `codefreedom` (uid 1000).
+
+Replaces the upstream `ghcr.io/berriai/litellm` image so we control the LiteLLM version, patches, and the Trivy CVE surface. Published on `docker.io` and `ghcr.io`.
 
 **web-bridge component.** The `docker/web-bridge/` directory contains `Dockerfile.Bridge`, `requirements.txt`, and `app/bridge.py`. It builds the `codefreedom:web-bridge` image, published on `docker.io` and `ghcr.io`. The bridge runs as a sibling service in the proxy `docker-compose.yaml` on the shared `codefreedom` network — no host port is published. LiteLLM reaches it via service DNS at `http://web-bridge:8500`. The bridge translates SearXNG-shaped `/search` requests into JSON-RPC calls against the Camoufox MCP `web_search` tool, enabling LiteLLM's `websearch_interception` callback to transparently replace Claude Code's native `WebSearch` with a local stealth browser. See `docker/web-bridge/README.md` and `docs/proxy/websearch-interception.md`.
 
@@ -100,9 +113,11 @@ main.py (parse)
     -> config.py (get_codefreedom_dir for proxy path)
     -> env_loader.py (load_dotenv for proxy env files)
     -> docker compose up -d starts:
-       - litellm (:4000)         — codefreedom:litellm-latest (patch baked in)
+       - litellm (:4000)         — codefreedom:litellm-latest (embedded PG, patches baked in)
        - web-bridge (:8500)      — codefreedom:web-bridge   -->  Camoufox MCP (:8420/mcp)
 ```
+
+The LiteLLM container entrypoint handles: PG cluster init (first run), `prisma db push`, plugin deployment (reasoning-efforts mapping `.py` into the host-mounted config dir), and LiteLLM startup. The embedded PG listens on localhost:5432 only (no host port exposed).
 
 The web-bridge is a FastAPI sidecar (`docker/web-bridge/`) that translates
 SearXNG-shaped `/search` requests into JSON-RPC calls against the Camoufox

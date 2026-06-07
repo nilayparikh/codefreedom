@@ -1,0 +1,69 @@
+# ── CodeFreedom GitHub MCP Bridge Image ─────────────────────────────────
+# Wraps ghcr.io/github/github-mcp-server with a Python stdio↔HTTP bridge
+# so coding agents can connect via a clean HTTP MCP endpoint on port 8082.
+#
+# Multi-stage design:
+#   Stage 1 (server): copies the github-mcp-server Go binary from the
+#                     official ghcr.io/github/github-mcp-server image.
+#   Stage 2 (runtime): python:3.13-slim base running bridge.py which:
+#     1. Spawns /app/github-mcp-server stdio with the PAT from env
+#     2. Listens on :8082 for HTTP JSON-RPC requests /mcp
+#     3. Bridges requests/responses between HTTP and stdio
+#
+# Port:
+#   8082 — HTTP MCP endpoint (/mcp)
+#
+# Healthcheck:
+#   Bridge exposes /healthz; check passes when the HTTP listener starts.
+#
+# @platform  python:3.13-slim
+# @version   v0.1.0
+# @arch      linux/amd64, linux/arm64
+#
+# Build:
+#   docker build \
+#     -t docker.io/nilayparikh/codefreedom:github-latest \
+#     -f docker/github/Dockerfile.Github docker/github/
+#
+# Run:
+#   docker run -d --name codefreedom-tools-github \
+#     -p 8082:8082 \
+#     -e GITHUB_PERSONAL_ACCESS_TOKEN=ghp_... \
+#     docker.io/nilayparikh/codefreedom:github-latest
+#
+# ──────────────────────────────────────────────────────────────────────────
+
+ARG IMAGE_VERSION=0.1.0
+
+# ── Stage 1: extract github-mcp-server binary ────────────────────────────
+FROM ghcr.io/github/github-mcp-server:latest AS server
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────
+FROM python:3.13-slim
+
+ARG IMAGE_VERSION
+
+LABEL org.opencontainers.image.title="CodeFreedom - GitHub MCP Bridge" \
+      org.opencontainers.image.description="HTTP MCP bridge over github-mcp-server stdio — exposes GitHub API tools (issues, PRs, repos, search) as an HTTP MCP server on port 8082" \
+      org.opencontainers.image.version="v${IMAGE_VERSION}" \
+      org.opencontainers.image.vendor="nilayparikh" \
+      org.opencontainers.image.authors="Nilay Parikh" \
+      com.codefreedom.platform="GitHub MCP" \
+      com.codefreedom.arch="linux/amd64,linux/arm64"
+
+# Patch known vulnerabilities in base image
+RUN apt-get update && apt-get -y dist-upgrade && rm -rf /var/lib/apt/lists/*
+
+# Copy github-mcp-server binary from the official image
+COPY --from=server /server/github-mcp-server /app/github-mcp-server
+
+# Copy the bridge
+COPY bridge.py /app/bridge.py
+
+# Healthcheck — bridge exposes /healthz
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/healthz')" || exit 1
+
+EXPOSE 8082
+
+ENTRYPOINT ["python3", "/app/bridge.py"]

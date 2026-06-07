@@ -53,7 +53,8 @@
                 "type": "string",
                 "enum": [
                   "chrome",
-                  "web"
+                  "web",
+                  "github"
                 ]
               }
             },

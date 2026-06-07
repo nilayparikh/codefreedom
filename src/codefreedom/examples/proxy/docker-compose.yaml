@@ -139,7 +139,7 @@ services:
     networks:
       - codefreedom
     volumes:
-      - ./config:/app/litellm-config:ro
+      - ./config:/app/litellm-config
 
       # ── Embedded PostgreSQL 18.4 (no TCP, Unix-socket only) ──────────
       # The entrypoint auto-initialises the cluster, generates the Prisma

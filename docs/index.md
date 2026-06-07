@@ -64,7 +64,7 @@ pip install codefreedom
 
   ***
 
-  Headless Chrome via CDP for automation. Stealth Camoufox for anti-bot sites. Lifecycle managed automatically per session.
+  Headless Chrome via CDP for automation. Web search for stealth browsing. Lifecycle managed automatically per session.
 
   [:octicons-arrow-right-24: Browser tools](guides/tools/index.md)
 

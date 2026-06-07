@@ -1,4 +1,4 @@
-"""Web search tool — run Camoufox in Docker for stealth web search/scraping.
+"""Web search tool — headless browser in Docker for web search/scraping.
 
 Usage:
     codefreedom tools web init     Initialize tool profile (requires acceptance)

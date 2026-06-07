@@ -122,6 +122,7 @@ nav:
           - Overview: guides/tools/index.md
           - Chrome: guides/tools/chrome.md
           - Camoufox: guides/tools/web.md
+          - GitHub MCP: guides/tools/github.md
       - VS Code: guides/vscode.md
       - Admin: guides/admin.md
   - Reference:

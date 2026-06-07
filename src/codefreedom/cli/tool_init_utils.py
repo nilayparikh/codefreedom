@@ -16,8 +16,7 @@ TOOL_INFO: Dict[str, dict] = {
         "name": "Chrome Browser (Headless)",
         "description": (
             "Headless Google Chrome for browser automation. "
-            "Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222. "
-            "For stealth / anti-bot browsing, use the 'web' tool (Camoufox) instead."
+            "Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222."
         ),
         "third_party": [
             ("Google Chrome / Chromium", "Google LLC"),
@@ -27,9 +26,9 @@ TOOL_INFO: Dict[str, dict] = {
         "profile_name": "chrome.json",
     },
     "web": {
-        "name": "Camoufox Web Search (MCP)",
+        "name": "Web Search (MCP)",
         "description": (
-            "Camoufox stealth browser for web search and scraping. "
+            "Web search and scraping via a headless browser. "
             "Runs an MCP server on port 8420 with web_search and web_fetch tools. "
             "Search engines are user-configured via the profile."
         ),
@@ -38,12 +37,29 @@ TOOL_INFO: Dict[str, dict] = {
             ("Firefox", "Mozilla Foundation"),
         ],
         "warning": (
-            "The Camoufox scraping tool is designed for internal websites "
+            "The web scraping tool is designed for internal websites "
             "or permissible public infrastructure. "
             "DO NOT USE or REPURPOSE the tool beyond permissible use cases."
         ),
         "docs_url": "https://nilayparikh.github.io/codefreedom/tools/web/",
         "profile_name": "web.json",
+    },
+    "github": {
+        "name": "GitHub MCP Server",
+        "description": (
+            "GitHub MCP Server running the official ghcr.io/github/github-mcp-server "
+            "image. Provides GitHub API tools for issues, PRs, repos, and more "
+            "via the Model Context Protocol. Requires GITHUB_PERSONAL_ACCESS_TOKEN."
+        ),
+        "third_party": [
+            ("GitHub MCP Server", "GitHub, Inc."),
+        ],
+        "warning": (
+            "This tool requires a GITHUB_PERSONAL_ACCESS_TOKEN with appropriate "
+            "repository permissions. Store the token securely in the profile's env section."
+        ),
+        "docs_url": "https://nilayparikh.github.io/codefreedom/tools/github/",
+        "profile_name": "github.json",
     },
 }
 
@@ -64,6 +80,7 @@ _THIRD_PARTY_NOTICE = (
 _TAG_MAP: Dict[str, str] = {
     "chrome": "CHROME",
     "web": "WEB",
+    "github": "GITHUB",
 }
 
 
@@ -97,7 +114,7 @@ def prompt_acceptance(tool_name: str) -> bool:
     """Prompt user to accept understanding of tool contents.
 
     Prints tool description, third-party components, and requires
-    the user to type 'I understand' to proceed.
+    the user to confirm with 'y' to proceed. Default is 'n' (decline).
 
     Returns True if accepted, False otherwise.
     """
@@ -120,14 +137,14 @@ def prompt_acceptance(tool_name: str) -> bool:
     print("Documentation: " + info["docs_url"])
     print()
     try:
-        response = input("Type 'I understand' to continue: ").strip()
+        response = input("Continue? [y/N]: ").strip()
     except (EOFError, KeyboardInterrupt):
         print()
         eprint("[init] Init aborted.")
         return False
 
-    if response.lower() == "i understand":
+    if response.lower() == "y":
         return True
 
-    eprint("[init] Init aborted -- you must type 'I understand' to proceed.")
+    eprint("[init] Init aborted.")
     return False

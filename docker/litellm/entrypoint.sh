@@ -129,6 +129,28 @@ cleanup() {
 }
 trap cleanup EXIT TERM INT
 
+# ── Plugin bootstrap ────────────────────────────────────────────────────────
+# The reasoning-efforts mapping plugin .py is baked into the image at
+# /app/litellm-plugins/.  LiteLLM's callback loader resolves paths
+# relative to the config file's directory, which is bind-mounted from
+# the host at /app/litellm-config/.  Copy the baked .py into the
+# mounted directory at container start so LiteLLM can find it.
+#
+# The plugin's YAML config lives on the host (user-editable); the .py
+# code is immutable (baked into the image).  Failures here are non-fatal
+# -- LiteLLM will start without the plugin if the mount is read-only.
+PLUGIN_SRC="/app/litellm-plugins/reasoning_efforts_mapping.py"
+PLUGIN_DST="/app/litellm-config/plugins/reasoning-efforts/reasoning_efforts_mapping.py"
+if [ -f "$PLUGIN_SRC" ]; then
+    mkdir -p "$(dirname "$PLUGIN_DST")" 2>/dev/null || true
+    if cp "$PLUGIN_SRC" "$PLUGIN_DST" 2>/dev/null; then
+        echo "[entrypoint] Plugin .py deployed to $PLUGIN_DST"
+    else
+        echo "[entrypoint] WARNING: Could not deploy plugin .py (read-only mount?)."
+        echo "              The reasoning-efforts mapper will be unavailable."
+    fi
+fi
+
 # ── Start LiteLLM ───────────────────────────────────────────────────────────
 echo "[entrypoint] Starting LiteLLM on $LITELLM_BIND_HOST:$LITELLM_PORT..."
 # --use_prisma_db_push: we already ran `prisma db push` above; tells LiteLLM

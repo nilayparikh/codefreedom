@@ -8,6 +8,15 @@
 #   - Free-tier models (e.g., Nemotron, Groq via OpenRouter)
 #   - Automatic model routing via OpenRouter's "free" endpoint
 #
+# DISCLAIMER:
+#   - This config is provided AS-IS with no warranty of any kind.
+#   - Example/template only — uncomment and adapt to your environment.
+#   - Validate pricing, rate limits, and model capabilities with your
+#     provider before relying on them in production.
+#   - Model specs (context window, max tokens, vision support) and costs
+#     change over time — verify against current provider documentation.
+#   - Leaving API keys empty disables a provider — nothing phones home.
+#
 # ── HOW TO CONFIGURE ───────────────────────────────────────────────────────
 # Set these in your .env or .env.secrets:
 #

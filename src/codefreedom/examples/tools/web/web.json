@@ -23,26 +23,22 @@
     "env": {},
     "search_cooldown_seconds": 10.0,
     "search_engines": {
-      "brave": {
+      "engine1": {
         "url": "http://yoursearchengine1/search?q={q}",
         "parser": "standard"
       },
-      "bing": {
+      "engine2": {
         "url": "http://yoursearchengine2/search?q={q}",
         "parser": "standard"
       }
     },
     "parser_registry": {
       "standard": {
-        "result_selectors": "[data-type='web'], .b_algo, #res .g, .result, .search-result, li:has(h2 a[href]), li:has(h3 a[href])",
-        "link_selector": "h2 a[href], h3 a[href], a[href]",
-        "snippet_selectors": ".b_caption p, .b_lineclamp2, .generic-snippet .content, .snippet, .description, .st, span.st",
+        "result_selectors": "#",
+        "link_selector": "#",
+        "snippet_selectors": "#",
         "ai_selectors": [
-          ".chatllm-content",
-          ".b_ans",
-          ".rai_content",
-          "[data-attrid='wa_description']",
-          ".knowledge-panel"
+          "#"
         ]
       }
     }

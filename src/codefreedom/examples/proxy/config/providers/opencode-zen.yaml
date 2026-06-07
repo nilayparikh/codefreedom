@@ -2,6 +2,15 @@
 # ── OpenCode Zen Provider — MNP Key ──────────────────────────────────────────
 # Free-tier models from OpenCode Zen, routed through the MNP API key.
 # Set OPENCODE_ZEN_API_KEY to enable.
+#
+# DISCLAIMER:
+#   - This config is provided AS-IS with no warranty of any kind.
+#   - Example/template only — uncomment and adapt to your environment.
+#   - Free-tier models may have rate limits, usage caps, or availability
+#     restrictions — check with your provider before relying on them.
+#   - Model specs (context window, max tokens, vision support) and costs
+#     change over time — verify against current provider documentation.
+#   - Leaving API keys empty disables a provider — nothing phones home.
 # ──────────────────────────────────────────────────────────────────────────────
 
 # model_list:

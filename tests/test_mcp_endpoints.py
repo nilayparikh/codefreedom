@@ -131,6 +131,94 @@ class TestLoadToolMcpEndpoints:
         assert len(servers) == 1
         assert "chrome-devtools" in servers
 
+    def test_github_with_defaults(self, monkeypatch):
+        """GitHub returns HTTP endpoint (port=8082 fallback, /mcp) when profile missing and no container running."""
+        monkeypatch.setattr(
+            "codefreedom.tool_registry._github_mapped_port",
+            lambda _: None,
+        )
+        endpoints = load_tool_mcp_endpoints(["github"])
+        servers = endpoints["mcpServers"]
+        assert servers == {
+            "github": {
+                "type": "http",
+                "url": "http://127.0.0.1:8082/mcp",
+            }
+        }
+
+    def test_github_with_custom_port(self, monkeypatch):
+        """GitHub reads port from profile."""
+        _write_tool_profile(
+            "github",
+            {
+                "github": {
+                    "image": "codefreedom:github",
+                    "container_name": "codefreedom-github",
+                    "port": 9090,
+                    "data_dir": "~/sandbox/github",
+                    "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "test"},
+                }
+            },
+        )
+
+        endpoints = load_tool_mcp_endpoints(["github"])
+        assert endpoints["mcpServers"]["github"]["url"] == (
+            "http://127.0.0.1:9090/mcp"
+        )
+
+    def test_all_tools_merged(self, monkeypatch):
+        """Chrome, Web, and GitHub MCP all produce distinct entries."""
+        monkeypatch.setattr(
+            "codefreedom.tool_registry._github_mapped_port",
+            lambda _: None,
+        )
+        _write_tool_profile(
+            "chrome",
+            {
+                "chrome": {
+                    "image": "codefreedom:chrome",
+                    "container_name": "codefreedom-chrome",
+                    "port": 9222,
+                    "mcp_port": 9223,
+                    "mcp_path": "/mcp",
+                    "data_dir": "~/sandbox/chrome",
+                    "env": {},
+                }
+            },
+        )
+        _write_tool_profile(
+            "web",
+            {
+                "web": {
+                    "image": "codefreedom:web",
+                    "container_name": "codefreedom-web",
+                    "port": 8420,
+                    "mcp_path": "/mcp",
+                    "data_dir": "~/sandbox/web",
+                    "env": {},
+                }
+            },
+        )
+        _write_tool_profile(
+            "github",
+            {
+                "github": {
+                    "image": "ghcr.io/github/github-mcp-server",
+                    "container_name": "codefreedom-github",
+                    "port": 8082,
+                    "data_dir": "~/sandbox/github",
+                    "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "test"},
+                }
+            },
+        )
+
+        endpoints = load_tool_mcp_endpoints(["chrome", "web", "github"])
+        servers = endpoints["mcpServers"]
+        assert len(servers) == 3
+        assert servers["chrome-devtools"]["url"] == "http://127.0.0.1:9223/mcp"
+        assert servers["web"]["url"] == "http://127.0.0.1:8420/mcp"
+        assert servers["github"]["url"] == "http://127.0.0.1:8082/mcp"
+
     def test_empty_list_returns_no_servers(self):
         """Empty acquired list returns mcpServers: {}."""
         endpoints = load_tool_mcp_endpoints([])
