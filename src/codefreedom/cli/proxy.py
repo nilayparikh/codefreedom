@@ -65,6 +65,20 @@ def init_proxy() -> int:
         for provider_file in sorted(providers_src.glob("*.yaml")):
             pairs.append((provider_file, providers_dst / provider_file.name))
 
+    # Bundled LiteLLM plugins live under config/plugins/ alongside
+    # config.yaml.  Each plugin has its own subfolder (e.g.
+    # plugins/reasoning-efforts/) containing a .yaml config table.
+    # The .py module is baked into the Docker image (see
+    # docker/litellm/Dockerfile.LiteLLM and entrypoint.sh) -- we
+    # only copy the user-editable YAML to the host config directory.
+    plugins_src = proxy_src / "config" / "plugins"
+    plugins_dst = proxy_dst / "config" / "plugins"
+    if plugins_src.exists():
+        for plugin_file in sorted(plugins_src.rglob("*")):
+            if plugin_file.is_file() and plugin_file.suffix == ".yaml":
+                rel = plugin_file.relative_to(plugins_src)
+                pairs.append((plugin_file, plugins_dst / rel))
+
     # All-or-nothing check: if any destination file exists, skip everything
     existing = [dst for _, dst in pairs if dst.exists()]
     if existing:

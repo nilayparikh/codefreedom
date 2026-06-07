@@ -76,7 +76,7 @@ codefreedom / cf
 └── tools               # Manage auxiliary tools
     ├── chrome          # Chrome browser (Xvfb + CDP)
     │   └── init|start|stop|status|url
-    └── web             # Camoufox stealth browser (MCP)
+    └── web             # Web search tool (MCP)
         └── init|start|stop|status
 ```
 
@@ -194,4 +194,4 @@ cosign verify \
 - [Proxy Configuration](proxy/config.md) — model aliases, retry policy, fallbacks
 - [Profiles](../guides/profiles.md) — Claude Code profile schema and inheritance
 - [Code Agents](../guides/agents.md) — local vs sandbox mode
-- [Browser Tools](../guides/tools/index.md) — Chrome and Camoufox tool profiles
+- [Browser Tools](../guides/tools/index.md) — Chrome and web tool profiles

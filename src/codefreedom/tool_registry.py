@@ -36,12 +36,18 @@ from codefreedom.cli.web import (  # noqa: E402
     start as web_start,
     stop as web_stop,
 )
+from codefreedom.cli.github import (  # noqa: E402
+    _load_profile as github_load_profile,
+    start as github_start,
+    stop as github_stop,
+)
 
 _KNOWN_TOOLS: dict[
     str, tuple[Callable[[], dict], Callable[[dict], int], Callable[[dict], int]]
 ] = {
     "chrome": (chrome_load_profile, chrome_start, chrome_stop),
     "web": (web_load_profile, web_start, web_stop),
+    "github": (github_load_profile, github_start, github_stop),
 }
 
 # ── Session / lock paths ──────────────────────────────────────────────────────
@@ -287,7 +293,26 @@ def _now_iso() -> str:
 _TOOL_MCP_SERVER_NAMES: dict[str, str] = {
     "chrome": "chrome-devtools",
     "web": "web",
+    "github": "github",
 }
+
+
+def _github_mapped_port(container_name: str) -> int | None:
+    """Return host port mapped to container 8082, or None."""
+    import subprocess
+
+    result = subprocess.run(
+        ["docker", "port", container_name, "8082"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        line = result.stdout.strip().split("\n")[0]
+        if ":" in line:
+            return int(line.rsplit(":", 1)[-1])
+    return None
 
 
 def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
@@ -315,9 +340,7 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
             )
             continue
         except json.JSONDecodeError as exc:
-            eprint(
-                f"[MCP] Tool '{tool_name}' profile is malformed — {exc}."
-            )
+            eprint(f"[MCP] Tool '{tool_name}' profile is malformed — {exc}.")
             continue
 
         server_name = _TOOL_MCP_SERVER_NAMES.get(tool_name, tool_name)
@@ -328,6 +351,13 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
         elif tool_name == "web":
             port = settings.get("port", 8420)
             path = settings.get("mcp_path", "/mcp")
+        elif tool_name == "github":
+            port = settings.get("port", 0)
+            container = settings.get("container_name", "codefreedom-tools-github")
+            if port == 0:
+                # Resolve actual mapped port from running container
+                port = _github_mapped_port(container) or 8082
+            path = "/mcp"
         else:
             eprint(
                 f"[MCP] Tool '{tool_name}' has no MCP endpoint mapping —"

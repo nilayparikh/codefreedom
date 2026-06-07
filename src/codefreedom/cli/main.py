@@ -147,7 +147,7 @@ def main() -> None:
     tools_parser = subparsers.add_parser(
         "tools",
         help="Manage auxiliary tools (chrome browser, web search, etc.)",
-        description="Manage auxiliary tools used by coding agents (headless Chrome browser, Camoufox web search, etc.).",
+        description="Manage auxiliary tools used by coding agents (headless Chrome browser, web search, etc.).",
     )
     tools_subparsers = tools_parser.add_subparsers(dest="tool", title="tools")
 
@@ -155,7 +155,7 @@ def main() -> None:
     chrome_parser = tools_subparsers.add_parser(
         "chrome",
         help="Headless Chrome browser for automation (CDP at port 9222)",
-        description="Start/stop/manage a headless Chrome browser container for browser automation. Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222. For stealth / anti-bot browsing, use the 'web' tool (Camoufox) instead.",
+        description="Start/stop/manage a headless Chrome browser container for browser automation. Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222.",
     )
     chrome_parser.add_argument(
         "action",
@@ -174,9 +174,8 @@ def main() -> None:
     # ── web tool ────────────────────────────────────────────────────────
     web_parser = tools_subparsers.add_parser(
         "web",
-        aliases=["camoufox"],
-        help="Web search and scraping via Camoufox stealth browser (MCP)",
-        description="Start/stop/manage a Camoufox browser container for stealth web search and scraping. The container runs an MCP-only server on port 8420 with web_search and web_fetch tools.",
+        help="Web search and scraping tool (MCP)",
+        description="Start/stop/manage a web search container. The container runs an MCP server on port 8420 with web_search and web_fetch tools.",
     )
     web_parser.add_argument(
         "action",
@@ -190,6 +189,30 @@ def main() -> None:
         type=int,
         default=8420,
         help="MCP server port (default: 8420)",
+    )
+
+    # ── github tool ──────────────────────────────────────────────────────
+    github_parser = tools_subparsers.add_parser(
+        "github",
+        help="GitHub MCP Server (ghcr.io/github/github-mcp-server)",
+        description=(
+            "Start/stop/manage a GitHub MCP Server container. "
+            "Provides GitHub API tools (issues, PRs, repos, etc.) via MCP. "
+            "Requires GITHUB_PERSONAL_ACCESS_TOKEN in the profile."
+        ),
+    )
+    github_parser.add_argument(
+        "action",
+        nargs="?",
+        default="status",
+        choices=["start", "stop", "restart", "status", "init"],
+        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/. 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
+    )
+    github_parser.add_argument(
+        "--port",
+        type=int,
+        default=0,
+        help="HTTP MCP server port (0 = auto-pick random free port)",
     )
 
     # ── proxy subcommand ───────────────────────────────────────────────────
@@ -406,7 +429,7 @@ def main() -> None:
             from codefreedom.cli.chrome import run as chrome_run
 
             sys.exit(chrome_run(args))
-        elif args.tool in ("web", "camoufox"):
+        elif args.tool == "web":
             if getattr(args, "action", None) == "init":
                 if unknown:
                     eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
@@ -420,12 +443,26 @@ def main() -> None:
             from codefreedom.cli.web import run as web_run
 
             sys.exit(web_run(args))
+        elif args.tool == "github":
+            if getattr(args, "action", None) == "init":
+                if unknown:
+                    eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+                    sys.exit(2)
+                from codefreedom.cli.github import init_tool
+
+                sys.exit(init_tool())
+            if unknown:
+                eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+                sys.exit(2)
+            from codefreedom.cli.github import run as github_run
+
+            sys.exit(github_run(args))
         elif args.tool is None:
             tools_parser.print_help()
             sys.exit(0)
         else:
             eprint(f"[ERROR] Unknown tool: {args.tool}")
-            eprint("   Available tools: chrome, web (camoufox)")
+            eprint("   Available tools: chrome, web, github")
             sys.exit(1)
     elif args.command in ("vscode", "vsc"):
         if unknown:

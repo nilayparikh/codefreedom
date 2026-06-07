@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "github.schema.json",
+  "title": "GitHub MCP Server Tool Profile",
+  "description": "Schema for github.json — configures the GitHub MCP Server container image, container name, and environment variables.",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Description of the profile"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Usage notes"
+    },
+    "github": {
+      "type": "object",
+      "description": "GitHub MCP Server container settings",
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "Docker image tag (e.g. ghcr.io/github/github-mcp-server)"
+        },
+        "container_name": {
+          "type": "string",
+          "description": "Docker container name"
+        },
+        "port": {
+          "type": "integer",
+          "description": "HTTP MCP server port",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "data_dir": {
+          "type": "string",
+          "description": "Host path for persistent data (~ is expanded to $HOME)"
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables forwarded to the container. GITHUB_PERSONAL_ACCESS_TOKEN is required.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": ["image"]
+    }
+  },
+  "required": ["github"]
+}

@@ -18,10 +18,9 @@ minimal Docker container:
 - **stderr is filtered** to drop harmless warnings from xkbcomp,
   GCM, Vulkan, and friends
 
-> For **stealth / anti-bot / headed** browsing, use the
-> [Camoufox web tool](web.md) instead. That tool runs a Firefox-based
-> stealth browser with realistic fingerprinting via MCP. Chrome here is
-> a plain automation target: simple, fast, and quiet.
+> For **web search and scraping**, use the
+> [web tool](web.md) instead. Chrome here is a plain automation target:
+> simple, fast, and quiet.
 
 ## Usage
 

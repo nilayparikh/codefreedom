@@ -39,6 +39,7 @@ from __future__ import annotations
 import os
 import sys
 
+
 # ── Shared helper ────────────────────────────────────────────────────────────
 _INJECT_SEARCH_COUNT_METHOD = '''    @staticmethod
     def _inject_search_count(response: Any, count: int) -> Any:
@@ -93,10 +94,10 @@ _INJECT_SEARCH_COUNT_METHOD = '''    @staticmethod
 # Anchor: the existing `_inject_native_blocks` static method. The new
 # `_inject_search_count` is inserted just before it so the two injection
 # helpers sit side-by-side in the class.
-_INJECT_NATIVE_BLOCKS_ANCHOR = """    @staticmethod
+_INJECT_NATIVE_BLOCKS_ANCHOR = '''    @staticmethod
     def _inject_native_blocks(
         response: Any, native_blocks: List[Dict[str, Any]]
-    ) -> Any:"""
+    ) -> Any:'''
 
 
 def patch_handler() -> bool:
@@ -142,7 +143,8 @@ def patch_handler() -> bool:
     # We only fail loudly if NEITHER the old pattern NOR an already-patched
     # form is found, which would mean LiteLLM changed the response shape.
     short_circuit_already_patched = (
-        '"usage": {"input_tokens": 0, "output_tokens": 0, "server_tool_use":' in content
+        '"usage": {"input_tokens": 0, "output_tokens": 0, "server_tool_use":'
+        in content
     )
     patched_short_circuit = short_circuit_already_patched
     if not short_circuit_already_patched:
@@ -165,11 +167,11 @@ def patch_handler() -> bool:
     # ── Patch 2: record search count in agentic-loop plan metadata ──────
     # The typed-plan path threads the count through `plan.metadata` so the
     # post-hook can read it back and inject it into the final response.
-    old2 = """        metadata: Dict[str, Any] = {
+    old2 = '''        metadata: Dict[str, Any] = {
             "tool_type": "websearch",
             "response_format": "anthropic",
-        }"""
-    new2 = """        metadata: Dict[str, Any] = {
+        }'''
+    new2 = '''        metadata: Dict[str, Any] = {
             "tool_type": "websearch",
             "response_format": "anthropic",
             # codefreedom: search count for the post-hook to inject into
@@ -177,7 +179,7 @@ def patch_handler() -> bool:
             # "Did N searches". The LLM's own usage doesn't include this
             # because the LLM didn't perform the search — we did.
             "websearch_count": len(tool_calls),
-        }"""
+        }'''
     if old2 not in content:
         print(
             "[patch] ERROR: Could not find metadata dict in "
@@ -191,11 +193,11 @@ def patch_handler() -> bool:
     # The post-hook runs after the agentic loop's follow-up call returns.
     # We add a search-count injection alongside the existing native-block
     # injection. Both run unconditionally when the hook is invoked.
-    old3 = """        native_blocks = plan.metadata.get(WEBSEARCH_NATIVE_BLOCKS_METADATA_KEY)
+    old3 = '''        native_blocks = plan.metadata.get(WEBSEARCH_NATIVE_BLOCKS_METADATA_KEY)
         if not native_blocks:
             return response
-        return self._inject_native_blocks(response, native_blocks)"""
-    new3 = """        native_blocks = plan.metadata.get(WEBSEARCH_NATIVE_BLOCKS_METADATA_KEY)
+        return self._inject_native_blocks(response, native_blocks)'''
+    new3 = '''        native_blocks = plan.metadata.get(WEBSEARCH_NATIVE_BLOCKS_METADATA_KEY)
         if native_blocks:
             response = self._inject_native_blocks(response, native_blocks)
         # codefreedom: inject the search count into usage so Claude Code's
@@ -204,7 +206,7 @@ def patch_handler() -> bool:
         count = plan.metadata.get("websearch_count", 0)
         if count:
             response = self._inject_search_count(response, count)
-        return response"""
+        return response'''
     if old3 not in content:
         print(
             "[patch] ERROR: Could not find async_post_agentic_loop_response_hook"
@@ -218,7 +220,7 @@ def patch_handler() -> bool:
     # The legacy path runs the follow-up call directly (bypassing the typed
     # plan dispatcher) and must inject the count itself to keep behavior
     # identical to the typed path.
-    old4 = """        # Legacy path: the new path goes through the typed plan + core
+    old4 = '''        # Legacy path: the new path goes through the typed plan + core
         # dispatcher which runs the post-hook automatically. Mirror the
         # native-block injection here so both paths behave identically.
         if kwargs.get(WEBSEARCH_EMIT_NATIVE_BLOCKS_KEY):
@@ -228,8 +230,8 @@ def patch_handler() -> bool:
             )
             response = self._inject_native_blocks(response, native_blocks)
 
-        return response"""
-    new4 = """        # Legacy path: the new path goes through the typed plan + core
+        return response'''
+    new4 = '''        # Legacy path: the new path goes through the typed plan + core
         # dispatcher which runs the post-hook automatically. Mirror the
         # native-block injection here so both paths behave identically.
         if kwargs.get(WEBSEARCH_EMIT_NATIVE_BLOCKS_KEY):
@@ -243,7 +245,7 @@ def patch_handler() -> bool:
         # path so Claude Code TUI shows "Did N searches".
         response = self._inject_search_count(response, len(tool_calls))
 
-        return response"""
+        return response'''
     if old4 not in content:
         print(
             "[patch] ERROR: Could not find _execute_agentic_loop tail."

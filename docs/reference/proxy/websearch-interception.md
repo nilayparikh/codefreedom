@@ -1,16 +1,16 @@
 ---
-description: Replace Claude Code's native WebSearch with the local Camoufox MCP via the LiteLLM websearch_interception callback.
+description: Replace Claude Code's native WebSearch with the local web tool MCP via the LiteLLM websearch_interception callback.
 ---
 
 # Web Search Interception
 
-The CodeFreedom proxy can transparently replace Claude Code's built-in `WebSearch` tool with calls to the local Camoufox MCP `web_search`. No `CLAUDE.md` instructions, no `~/.claude/settings.json` edits, no per-host configuration.
+The CodeFreedom proxy can transparently replace Claude Code's built-in `WebSearch` tool with calls to the local web tool's MCP `web_search`. No `CLAUDE.md` instructions, no `~/.claude/settings.json` edits, no per-host configuration.
 
 This is the recommended setup. The legacy workaround (MCP server registration + `CLAUDE.md` prompt) is preserved in the [Web Search FAQ](../faq/web-search.md) as a fallback.
 
 ## Why
 
-Claude Code's `WebSearch` requires Anthropic's internal login/credentials. For most users it silently fails or returns empty results. By intercepting the call on the proxy and routing it to a local Camoufox browser, the search works for **any model** connected to the proxy — not just Anthropic-native models.
+Claude Code's `WebSearch` requires Anthropic's internal login/credentials. For most users it silently fails or returns empty results. By intercepting the call on the proxy and routing it to a local web tool browser, the search works for **any model** connected to the proxy — not just Anthropic-native models.
 
 ## Architecture
 
@@ -18,13 +18,13 @@ Claude Code's `WebSearch` requires Anthropic's internal login/credentials. For m
 flowchart LR
     A[Claude Code] -->|"ANTHROPIC_BASE_URL<br/>web_search tool_use"| B[LiteLLM Proxy<br/>:4000]
     B -->|"websearch_interception<br/>callback"| C[web-bridge<br/>:8500]
-    C -->|"JSON-RPC<br/>tools/call web_search"| D[Camoufox MCP<br/>:8420/mcp]
-    D -->|"Camoufox browser"| E[(Search engines<br/>Brave, Bing, ...)]
+    C -->|"JSON-RPC<br/>tools/call web_search"| D[Web MCP<br/>:8420/mcp]
+    D -->|"Headless browser"| E[(Search engines<br/>Brave, Bing, ...)]
     D -->|"SearXNG-shaped JSON"| C
     C -->|"Final answer"| A
 ```
 
-The proxy intercepts the native `web_search` tool, calls the bridge (a SearXNG-shaped HTTP front), which in turn calls the existing Camoufox MCP `web_search` tool. From Claude Code's perspective `WebSearch` "just works".
+The proxy intercepts the native `web_search` tool, calls the bridge (a SearXNG-shaped HTTP front), which in turn calls the existing web tool MCP `web_search` tool. From Claude Code's perspective `WebSearch` "just works".
 
 ## Prerequisites
 
@@ -36,7 +36,7 @@ The proxy intercepts the native `web_search` tool, calls the bridge (a SearXNG-s
 
 ## Quick Start (4 steps)
 
-### 1. Start the Camoufox MCP container
+### 1. Start the web tool MCP container
 
 ```bash
 codefreedom tools web start
@@ -80,7 +80,7 @@ codefreedom proxy restart
 codefreedom claude
 ```
 
-Ask Claude "what's the latest FastAPI release?" — the proxy logs will show `websearch_interception` triggered, and the answer will come from the local Camoufox browser.
+Ask Claude "what's the latest FastAPI release?" — the proxy logs will show `websearch_interception` triggered, and the answer will come from the local web tool browser.
 
 ## Configuration Reference
 
@@ -89,7 +89,7 @@ Ask Claude "what's the latest FastAPI release?" — the proxy logs will show `we
 | Variable                      | Default                                | Purpose                                                                                                                                                                                                                                                                                                               |
 | ----------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WEB_BRIDGE_CONTAINER_NAME`   | `codefreedom-web-bridge`               | Docker container name                                                                                                                                                                                                                                                                                                 |
-| `MCP_WEB_URL`                 | `http://host.docker.internal:8420/mcp` | Where the bridge finds the Camoufox MCP                                                                                                                                                                                                                                                                               |
+| `MCP_WEB_URL`                 | `http://host.docker.internal:8420/mcp` | Where the bridge finds the web tool MCP                                                                                                                                                                                                                                                                                 |
 | `WEB_BRIDGE_COOLDOWN_SECONDS` | `2.0`                                  | Per-bridge cooldown. Rapid `/search` calls within this window return HTTP 429.                                                                                                                                                                                                                                        |
 | `MCP_TIMEOUT_SECONDS`         | `60`                                   | Per-call MCP HTTP timeout. Should be larger than the MCP's own 10s default cooldown plus browser-render time.                                                                                                                                                                                                         |
 | `SEARXNG_API_BASE`            | `http://web-bridge:8500`               | **Required**. Set in `docker-compose.yaml` (litellm service). Tells LiteLLM's SearXNG provider where to find the web-bridge. The `search_tools` block in `config.yaml` also sets this via `litellm_params.api_base`, but LiteLLM's handler doesn't pass it through — the env var is the fallback that actually works. |
@@ -127,7 +127,7 @@ To remove the bridge entirely from the stack, delete the `web-bridge:` service f
 | Symptom                                                     | Likely cause                                                                                                                                            | Fix                                                                                                                                                                                                 |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Proxy logs show `websearch_interception` not triggered      | The two config blocks are not both uncommented, or the model is not in `enabled_providers`                                                              | Re-check `config.yaml`; add the provider to `enabled_providers`                                                                                                                                     |
-| Bridge container restart-loops                              | Camoufox MCP not running                                                                                                                                | `codefreedom tools web start`                                                                                                                                                                       |
+| Bridge container restart-loops                              | Web tool MCP not running                                                                                                                                | `codefreedom tools web start`                                                                                                                                                                       |
 | `/search` returns HTTP 502 `mcp_unreachable`                | Bridge can't reach `MCP_WEB_URL`                                                                                                                        | Check `MCP_WEB_URL`; on Linux Docker, the `host.docker.internal:host-gateway` extra_hosts mapping must be present (it is, in the example compose)                                                   |
 | `/search` returns HTTP 429 `cooldown`                       | The 2-second bridge cooldown is active. Normal — Claude Code will retry.                                                                                | If too aggressive, raise `WEB_BRIDGE_COOLDOWN_SECONDS` in `.env.proxy` and restart the proxy                                                                                                        |
 | Claude Code says "WebSearch is not available"               | The interception is disabled in `config.yaml`                                                                                                           | Re-enable the `websearch_interception` callback                                                                                                                                                     |
@@ -149,5 +149,5 @@ Use this in your own monitoring or compose healthcheck if you want stricter reli
 ## Related
 
 - [Web Search FAQ](../faq/web-search.md) — the legacy MCP + `CLAUDE.md` approach (fallback for non-proxy users)
-- [Camoufox Web Tool](../../guides/tools/web.md) — engine and parser configuration
+- [Web Tool](../../guides/tools/web.md) — engine and parser configuration
 - [LiteLLM websearch_interception docs](https://docs.litellm.ai/docs/tutorials/claude_code_websearch) — the underlying LiteLLM feature

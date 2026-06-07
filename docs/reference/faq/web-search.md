@@ -11,13 +11,13 @@ You end up with a tool that Claude tries to use, but silently fails or hangs.
 
 ## The Recommended Solution: Proxy Interception
 
-If you're running Claude Code through the CodeFreedom proxy, the **recommended** approach is to enable the [Web Search Interception](../proxy/websearch-interception.md) pipeline. The proxy transparently replaces Claude Code's `WebSearch` with calls to the local Camoufox MCP `web_search` tool. No `CLAUDE.md` instructions, no per-host configuration — it just works for any model behind the proxy.
+If you're running Claude Code through the CodeFreedom proxy, the **recommended** approach is to enable the [Web Search Interception](../proxy/websearch-interception.md) pipeline. The proxy transparently replaces Claude Code's `WebSearch` with calls to the local web tool MCP `web_search` tool. No `CLAUDE.md` instructions, no per-host configuration — it just works for any model behind the proxy.
 
 ```mermaid
 flowchart LR
     A[Claude Code] --> B[LiteLLM Proxy]
     B --> C[web-bridge]
-    C --> D[Camoufox MCP]
+    C --> D[Web MCP]
     D --> C
     C --> A
 ```
@@ -64,7 +64,7 @@ Claude Code has no public flag to disable built-in tools. Workarounds rely on in
 
 ## Step 1: Start the Web MCP Container
 
-CodeFreedom ships a Camoufox-based web container with a built-in MCP server:
+CodeFreedom ships a web container with a built-in MCP server:
 
 ```bash
 # Initialize the tool profile (one-time, requires acceptance)
@@ -84,7 +84,7 @@ This starts an MCP server at `http://127.0.0.1:8420/mcp` exposing two tools:
 | `web_search(query)` | Search via configured engines, returns structured results |
 | `web_fetch(url)`    | Fetch a webpage (bypasses anti-bot detection)             |
 
-See [Camoufox Web Tool](../../guides/tools/web.md) for container configuration, search engine setup, and parser registry details.
+See [Web Tool](../../guides/tools/web.md) for container configuration, search engine setup, and parser registry details.
 
 ---
 
@@ -237,7 +237,7 @@ Requires running the Brave Search MCP server locally with a Brave API key.
 | Feature              | CodeFreedom web              | External MCP                      |
 | -------------------- | ---------------------------- | --------------------------------- |
 | Self-hosted          | Yes, runs on your machine    | Depends on third-party API        |
-| Anti-bot evasion     | Camoufox stealth browser     | Standard HTTP requests            |
+| Anti-bot evasion     | Stealth browser              | Standard HTTP requests            |
 | Search engine config | User-configured via profile  | Fixed by provider                 |
 | Cost                 | Free (your own hardware)     | API key required, may have limits |
 | Privacy              | Queries stay on your machine | Queries go to third-party         |

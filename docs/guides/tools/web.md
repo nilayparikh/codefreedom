@@ -1,19 +1,18 @@
-# Camoufox Web Search Tool
+# Web Search Tool
 
-A stealth browser container based on **Camoufox** (a Firefox fork without
-Chrome DevTools Protocol) for undetectable web search and scraping. Runs an
+A headless browser container for web search and scraping. Runs an
 **MCP server on port 8420** exposing `web_search` and `web_fetch` tools.
 
 ## Overview
 
-The Camoufox web tool combines a stealth Firefox-based browser with an MCP
-server for reliable web automation:
+The web tool combines a headless browser with an MCP server for reliable
+web automation:
 
-- **Camoufox** -- Firefox fork without CDP, presenting a standard Firefox
-  profile to websites (no automation fingerprints)
+- **Headless browser** -- runs without CDP, presenting a standard browser
+  profile to websites
 - **Xvfb** -- virtual display at 1920x1080x24 for headed mode
 - **PyAutoGUI** -- OS-level mouse/keyboard emulation for complex interactions
-- **Camoufox** -- built-in fingerprint generation for undetectable automation
+- **Built-in fingerprint generation** -- for undetectable automation
 - **MCP Streamable HTTP server** -- exposes `web_search` and `web_fetch` tools
   on port 8420
 
@@ -53,10 +52,10 @@ Once the container is running, coding agents can use:
 The container image is based on `python:3.13-slim` (multi-arch: `linux/arm64`,
 `linux/amd64`). It includes:
 
-- Camoufox stealth browser (Firefox fork) -- [Dockerfile](https://github.com/nilayparikh/codefreedom/blob/main/docker/web/Dockerfile.Web)
+- Headless browser (Firefox fork) -- [Dockerfile](https://github.com/nilayparikh/codefreedom/blob/main/docker/web/Dockerfile.Web)
 - Xvfb (X virtual framebuffer)
 - PyAutoGUI (OS-level input automation)
-- Camoufox (browser profile generation built-in)
+- Built-in fingerprint generation (browser profile)
 - MCP Python SDK (Streamable HTTP server)
 
 ### Profile and Schema
@@ -115,7 +114,7 @@ Browser profile data (cookies, sessions, storage) persists in
 
 This container includes:
 
-- Camoufox -- stealth browser (daijro)
+- Headless browser -- stealth browser (daijro)
 - Firefox -- browser engine (Mozilla Foundation)
 
 CodeFreedom is not responsible for the behavior, security, or privacy

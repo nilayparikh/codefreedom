@@ -12,9 +12,9 @@ Also checks the installed PyPI package version.
 Services (filter which images to check):
     sandbox    Ubuntu, CUDA, and ROCm sandbox images
     chrome     Chrome browser tool image
-    web        Camoufox web search tool image
+    web        Web search tool image
     proxy      LiteLLM proxy and web-bridge images
-    tools      Chrome + Web tool images (shortcut)
+    tools      Chrome + Web + GitHub MCP tool images (shortcut)
     all        Everything (default)
 """
 
@@ -49,6 +49,7 @@ _SERVICE_DESCRIPTIONS: dict[str, str] = {
     "sandbox (rocm)": "sandbox (rocm)",
     "chrome": "tool: chrome",
     "web": "tool: web",
+    "github": "tool: github",
     "litellm": "proxy: litellm",
     "web-bridge": "proxy: web-bridge",
 }
@@ -337,7 +338,16 @@ def discover_images() -> list[dict[str, str]]:
     if web_data:
         _add_profile(web_data.get("web", {}).get("image", ""), "profiles/web.json", "web")
 
-    # 4. proxy docker-compose.yaml
+    # 4. github.json profile
+    github_data = _read_json(cf_dir / "profiles" / "github.json")
+    if github_data:
+        _add_profile(
+            github_data.get("github", {}).get("image", ""),
+            "profiles/github.json",
+            "github",
+        )
+
+    # 5. proxy docker-compose.yaml
     compose_path = cf_dir / "proxy" / "docker-compose.yaml"
     if compose_path.exists():
         try:
@@ -643,7 +653,7 @@ def _filter_by_service(
         "litellm": ["litellm"],
         "web-bridge": ["web-bridge"],
         "proxy": ["litellm", "web-bridge"],
-        "tools": ["chrome", "web"],
+        "tools": ["chrome", "web", "github"],
     }
 
     matched = []

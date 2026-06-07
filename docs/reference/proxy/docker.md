@@ -7,7 +7,7 @@ description: Docker Compose stack — the proxy image, host.docker.internal, and
 The proxy always runs via `docker compose` against `~/.codefreedom/proxy/docker-compose.yaml`. The stack brings up two services on a private `codefreedom` bridge network:
 
 - `litellm` — the proxy itself, in the self-hosted `codefreedom:litellm-latest` image (with the WebSearch count display patch baked in)
-- `web-bridge` — a FastAPI SearXNG-shaped sidecar that talks to the Camoufox MCP (see [Web Search Interception](websearch-interception.md))
+- `web-bridge` — a FastAPI SearXNG-shaped sidecar that talks to the web tool MCP (see [Web Search Interception](websearch-interception.md))
 
 Docker is therefore a hard prerequisite for the proxy — there is no native Python mode.
 
@@ -52,7 +52,9 @@ services:
 
 **`host.docker.internal`** — The `extra_hosts` entry maps `host.docker.internal` to the host machine. This lets the proxy reach local inference servers (e.g., `http://host.docker.internal:8000/v1`) running on your machine. Without this, the container can't see host ports.
 
-**Patch baked in** — The WebSearch count display patch is applied during the image build (see `docker/litellm/patch_websearch_count.py` and the `RUN python patch_websearch_count.py` step in `Dockerfile.LiteLLM`). No entrypoint wrapper, no volume mount, no runtime mutation. Rebuild the image to pick up LiteLLM or patch changes — not on every container start.
+**Patch baked in** — The WebSearch count display patch is applied during the image build (see `docker/litellm/patches/patch_websearch_count.py` and the `RUN python patch_websearch_count.py` step in `Dockerfile.LiteLLM`). No entrypoint wrapper, no volume mount, no runtime mutation. Rebuild the image to pick up LiteLLM or patch changes — not on every container start.
+
+**Plugin baked in** — The reasoning-efforts mapping plugin `.py` module is baked into the image at `/app/litellm-plugins/`. The entrypoint copies it into the mounted config directory at container start so LiteLLM's callback loader can find it. The YAML config table is user-editable on the host.
 
 **Environment merging** — Docker Compose interpolates `${VAR}` from `.env.proxy` (lowest priority). System environment variables override `.env.proxy` values. `.env.proxy.secrets` is loaded at runtime by the CodeFreedom CLI.
 

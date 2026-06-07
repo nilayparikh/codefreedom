@@ -12,6 +12,17 @@
 #
 # Provider fragments live under providers/. Each YAML file defines model_list
 # entries for a specific provider. YAML anchors do NOT span files.
+#
+# DISCLAIMER:
+#   - This config is provided AS-IS with no warranty of any kind.
+#   - Example/template only — adapt to your environment and threat model.
+#   - Validate pricing, rate limits, and model capabilities with your
+#     providers before relying on them in production.
+#   - Model specs (context window, max tokens, vision support) and costs
+#     change over time — verify against current provider documentation.
+#   - Leaving API keys empty disables a provider — nothing phones home.
+#   - For production use, enable auth for the /metrics/ endpoint and
+#     consider enabling the database for spend tracking and key management.
 # ──────────────────────────────────────────────────────────────────────────────
 # ── DISABLING PROVIDERS ─────────────────────────────────────────────────────
 # Comment out any include line below to disable that provider entirely.
@@ -64,8 +75,8 @@ general_settings:
 # Router Settings
 # ═══════════════════════════════════════════════════════════════════════════════
 router_settings:
-  num_retries: os.environ/LITELLM_NUM_RETRIES
-  retry_after: os.environ/LITELLM_RETRY_AFTER
+  num_retries: 5
+  retry_after: 0
   allowed_fails: 3
 
   # ── Model Group Aliases ──────────────────────────────────────────────────
@@ -124,6 +135,16 @@ litellm_settings:
     # Transparently replaces Claude Code's native WebSearch with calls to
     # the local Camoufox MCP. See docs/proxy/websearch-interception.md.
     - websearch_interception
+    # ── Reasoning-efforts mapping ─────────────────────────────────────────
+    # Custom plugin that normalises output_config.effort (Anthropic) and
+    # reasoning_effort (OpenAI / DeepSeek) across providers.  The plugin
+    # lives at config/plugins/reasoning-efforts/ and reads its
+    # table from config/plugins/reasoning-efforts/reasoning-efforts-mapping.yaml.
+    # Note the lowercase `instance` -- LiteLLM's callback loader stores
+    # whatever `getattr(module, name)` returns, so a module-level singleton
+    # instance (not the class) is what we reference here.  See
+    # docs/proxy/reasoning-efforts.md.
+    - plugins.reasoning-efforts.reasoning_efforts_mapping.instance
 
   websearch_interception_params:
     enabled_providers:

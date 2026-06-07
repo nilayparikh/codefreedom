@@ -13,7 +13,7 @@ All CodeFreedom state lives under `~/.codefreedom/` (configurable via `CODEFREED
 │   ├── claude-code.schema.json    # JSON Schema for editor validation
 │   ├── chrome.json                # Chrome browser tool settings
 │   ├── chrome.schema.json         # JSON Schema for chrome.json
-│   ├── web.json                   # Camoufox web tool settings
+│   ├── web.json                   # Web tool settings
 │   └── web.schema.json            # JSON Schema for web.json
 ├── proxy/                         # LiteLLM proxy configuration
 │   ├── config/
@@ -30,7 +30,7 @@ All CodeFreedom state lives under `~/.codefreedom/` (configurable via `CODEFREED
 │   │       └── .claude.json       # Fresh config on each launch
 │   └── tools/                     # Shared tool data
 │       ├── chrome/                # Chrome persistent data (user-data-dir)
-│       ├── web/                   # Camoufox persistent data
+│       ├── web/                   # Web tool persistent data
 │       └── .cache/                # Shared cache directory
 ├── proc/                          # Runtime process tracking (tool lifecycle)
 │   ├── sessions/                  # Per-session tracking files
@@ -66,7 +66,7 @@ Every profile file comes with a companion `.schema.json` for editor validation a
 | --------------------------- | ---------------------------------- | ----------------------------------------------------------- |
 | `profiles/claude-code.json` | `profiles/claude-code.schema.json` | Claude Code profiles (model routing, tools, sandbox images) |
 | `profiles/chrome.json`      | `profiles/chrome.schema.json`      | Chrome browser tool settings                                |
-| `profiles/web.json`         | `profiles/web.schema.json`         | Camoufox web tool settings                                  |
+| `profiles/web.json`         | `profiles/web.schema.json`         | Web tool settings                                         |
 
 Each `*.json` file references its schema via the `$schema` property, so compatible editors apply validation automatically.
 

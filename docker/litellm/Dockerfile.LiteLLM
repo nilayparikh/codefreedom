@@ -161,6 +161,11 @@ FROM python:3.13-slim AS litellm-builder
 
 ARG LITELLM_FORK_URL
 ARG LITELLM_TAG
+# TARGETARCH is injected by docker buildx during multi-platform builds
+# (linux/arm64 → "arm64", linux/amd64 → "amd64").  Drives the
+# PRISMA_CLI_BINARY_TARGETS selection so npx prisma downloads the
+# correct query-engine binary for the target platform.
+ARG TARGETARCH
 
 RUN apt-get update \
     && apt-get upgrade -y \
@@ -207,8 +212,28 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # idempotent and fails the build loudly if the upstream source shape
 # changes (see patch_websearch_count.py).
 ENV PYTHONPATH=/install/lib/python3.13/site-packages
-COPY patch_websearch_count.py .
+COPY patches/patch_websearch_count.py .
 RUN python patch_websearch_count.py
+
+# Apply a defensive type-cast patch for _calculate_retry_after's
+# min_timeout parameter.  The os.environ/ config resolver returns all
+# values as strings, but Router.__init__ expects int/float for
+# numeric settings like retry_after.  This wraps the comparison in
+# float() so a string doesn't cause TypeError at runtime.
+# (see patch_retry_after_type.py)
+COPY patches/patch_retry_after_type.py .
+RUN python patch_retry_after_type.py
+
+# ── Bake the reasoning-efforts mapping plugin into the image ───────────────
+# The .py module must be findable by LiteLLM's callback loader at
+# /app/litellm-config/plugins/reasoning-efforts/reasoning_efforts_mapping.py
+# (the path relative to config.yaml's directory).  The compose file
+# bind-mounts the host config directory over /app/litellm-config at
+# runtime which shadows any baked files, so the entrypoint copies this
+# module into place on every container start.  The YAML config table
+# lives on the host (user-editable); the .py code is immutable (baked
+# into the image).
+COPY plugins/reasoning_efforts_mapping.py /app/litellm-plugins/reasoning_efforts_mapping.py
 
 # Install Node.js + npm so we can run the Prisma CLI natively.  The
 # Python prisma CLI wrapper (from requirements.txt) creates only
@@ -224,7 +249,22 @@ RUN apt-get update \
 # the ~50 MB engine binary into the image and populates BOTH cache
 # directories that the Prisma Python client needs.
 ENV PATH="/install/bin:/usr/local/bin:${PATH}"
-RUN cd /install/lib/python3.13/site-packages/litellm/proxy \
+# PRISMA_CLI_BINARY_TARGETS tells npx prisma which platform's engine
+# binary to download.  Without this, npx detects the build host's arch,
+# not the TARGETARCH that docker buildx sets — leading to Exec format
+# error when the image runs on a different CPU architecture.
+#
+#   arm64 → linux-arm64-openssl-3.0.x   (Graviton, Ampere, Apple Silicon)
+#   amd64 → debian-openssl-3.0.x        (Intel/AMD x86-64)
+#   *     → native                      (fallback for single-arch builds)
+RUN case "${TARGETARCH}" in \
+      arm64) PT=linux-arm64-openssl-3.0.x ;; \
+      amd64) PT=debian-openssl-3.0.x ;; \
+      *)     PT=native ;; \
+    esac \
+    && export PRISMA_CLI_BINARY_TARGETS="$PT" \
+    && echo "[prisma] TARGETARCH=${TARGETARCH} → PRISMA_CLI_BINARY_TARGETS=${PRISMA_CLI_BINARY_TARGETS}" \
+    && cd /install/lib/python3.13/site-packages/litellm/proxy \
     && npx prisma@5.17.0 generate \
     && HASH=$(find /root/.cache/prisma -maxdepth 4 -name query-engine -type f -path '*-openssl-3*' | head -1 | grep -oP '[0-9a-f]{40}') \
     && SRC=$(find /root/.cache/prisma -maxdepth 4 -name query-engine -type f -path '*-openssl-3*' | head -1) \
@@ -286,6 +326,12 @@ RUN apt-get update \
 # prebuilt LiteLLM site-packages.
 COPY --from=pg-builder      /usr/local/pgsql /usr/local/pgsql
 COPY --from=litellm-builder /install         /usr/local
+
+# Pull in the baked reasoning-efforts mapping plugin.  The entrypoint
+# copies this into the host-mounted config directory at container start
+# so LiteLLM's callback loader can find it.
+COPY --from=litellm-builder --chown=1000:1000 \
+    /app/litellm-plugins/ /app/litellm-plugins/
 
 # Copy the prebuilt Prisma caches.  The litellm-builder stage ran
 # `prisma generate` as root, so the caches landed in /root/.cache.

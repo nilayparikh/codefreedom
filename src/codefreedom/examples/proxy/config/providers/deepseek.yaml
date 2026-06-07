@@ -3,70 +3,88 @@
 # Native DeepSeek API — V4 Pro (reasoning) and V4 Flash (fast)
 # ──────────────────────────────────────────────────────────────────────────────
 
-# model_list:
-#   - model_name: DeepSeek/DeepSeek-V4-Flash
-#     litellm_params:
-#       model: deepseek/deepseek-v4-flash
-#       api_base: os.environ/DEEPSEEK_BASE_URL
-#       api_key: os.environ/DEEPSEEK_API_KEY
-#       timeout: 300
-#       drop_params: true
-#     model_info:
-#       id: "deepseek-openai-deepseek-v4-flash"
-#       db_model: false
-#       supports_reasoning: true
-#       mode: chat
-#       context_window: 1000000
-#       max_tokens: 1000000
-#       max_input_tokens: 616000
-#       max_output_tokens: 384000
-#       limit:
-#         context: 1000000
-#         output: 384000
-#       supports_system_messages: true
-#       supports_native_streaming: true
-#       supports_streaming: true
-#       supports_vision: false
-#       input_cost_per_token: 0.00000014
-#       output_cost_per_token: 0.00000028
-#       supported_openai_params: &deepseek_supported_openai_params
-#         - tools
-#         - tool_choice
-#         - parallel_tool_calls
-#         - max_tokens
-#         - max_completion_tokens
-#         - stream
-#         - stream_options
-#         - temperature
-#         - top_p
-#         - stop
-#         - thinking
-#         - reasoning_effort
-#         - response_format
-#
-#   - model_name: DeepSeek/DeepSeek-V4-Pro
-#     litellm_params:
-#       model: deepseek/deepseek-v4-pro
-#       api_base: os.environ/DEEPSEEK_BASE_URL
-#       api_key: os.environ/DEEPSEEK_API_KEY
-#       timeout: 300
-#       drop_params: true
-#     model_info:
-#       id: "deepseek-openai-deepseek-v4-pro"
-#       db_model: false
-#       supports_reasoning: true
-#       mode: chat
-#       context_window: 1000000
-#       max_tokens: 1000000
-#       max_input_tokens: 616000
-#       max_output_tokens: 384000
-#       limit:
-#         context: 1000000
-#         output: 384000
-#       supports_system_messages: true
-#       supports_native_streaming: true
-#       supports_streaming: true
-#       supports_vision: false
-#       input_cost_per_token: 0.00000174
-#       output_cost_per_token: 0.00000348
-#       supported_openai_params: *deepseek_supported_openai_params
+model_list:
+  - model_name: DeepSeek/DeepSeek-V4-Flash
+    litellm_params:
+      model: deepseek/deepseek-v4-flash
+      api_base: os.environ/DEEPSEEK_BASE_URL
+      api_key: os.environ/DEEPSEEK_API_KEY
+      timeout: 300
+      drop_params: true
+      modify_params: true
+    model_info:
+      id: "deepseek-openai-deepseek-v4-flash"
+      db_model: false
+      supports_reasoning: true
+      mode: chat
+      context_window: 1000000
+      max_tokens: 1000000
+      max_input_tokens: 616000
+      max_output_tokens: 384000
+      limit:
+        context: 1000000
+        output: 384000
+      supports_system_messages: true
+      supports_native_streaming: true
+      supports_streaming: true
+      supports_vision: false
+      input_cost_per_token: 0.00000014
+      output_cost_per_token: 0.00000028
+      cached_input_cost_per_token: 0.0000000028
+      supported_openai_params: &deepseek_supported_openai_params
+        - tools
+        - tool_choice
+        - parallel_tool_calls
+        - max_tokens
+        - max_completion_tokens
+        - stream
+        - stream_options
+        - temperature
+        - top_p
+        - stop
+        - thinking
+        - reasoning_effort
+        # response_format removed — DeepSeek V4 family returns
+        # "This response_format type is unavailable now" for json_schema
+        # and json_object types. With drop_params: true, any stray
+        # response_format in the request is stripped before reaching
+        # the DeepSeek API, preventing the 400 error. Add back when
+        # DeepSeek re-enables support.
+        # - response_format
+
+    codefreedom:
+      plugins:
+        reasoning-efforts:
+          rule: deepseek-v4-flash
+  - model_name: DeepSeek/DeepSeek-V4-Pro
+    litellm_params:
+      model: deepseek/deepseek-v4-pro
+      api_base: os.environ/DEEPSEEK_BASE_URL
+      api_key: os.environ/DEEPSEEK_API_KEY
+      timeout: 300
+      drop_params: true
+      modify_params: true
+    model_info:
+      id: "deepseek-openai-deepseek-v4-pro"
+      db_model: false
+      supports_reasoning: true
+      mode: chat
+      context_window: 1000000
+      max_tokens: 1000000
+      max_input_tokens: 616000
+      max_output_tokens: 384000
+      limit:
+        context: 1000000
+        output: 384000
+      supports_system_messages: true
+      supports_native_streaming: true
+      supports_streaming: true
+      supports_vision: false
+      input_cost_per_token: 0.000000435
+      output_cost_per_token: 0.00000087
+      cached_input_cost_per_token: 0.000000003625
+      supported_openai_params: *deepseek_supported_openai_params
+    codefreedom:
+      plugins:
+        reasoning-efforts:
+          rule: deepseek-v4-pro

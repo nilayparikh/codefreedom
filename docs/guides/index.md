@@ -55,7 +55,7 @@ Everything you need to use CodeFreedom day-to-day. The pages here assume the pro
 
   ***
 
-  Headless Chrome for automation. Camoufox for stealth web search.
+  Headless Chrome for automation. Web search for stealth browsing.
 
   [:octicons-arrow-right-24: Browser tools](tools/index.md)
 
