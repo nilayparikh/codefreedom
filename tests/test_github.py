@@ -2,8 +2,6 @@
 
 import argparse
 
-import pytest
-
 from codefreedom.cli.github import restart, run
 
 

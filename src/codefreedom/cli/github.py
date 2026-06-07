@@ -63,9 +63,9 @@ def _find_free_port() -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if s.connect_ex(("127.0.0.1", port)) != 0:
                 return port
-    # Fallback — let OS pick
+    # Fallback — let OS pick, localhost only
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
+        s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
@@ -109,6 +109,7 @@ def _resolve_env_vars(env: dict) -> dict:
     result = {}
     for key, val in env.items():
         if isinstance(val, str):
+
             def _expand(m: _re.Match) -> str:
                 name = m.group(1)
                 default_val = m.group(2)
@@ -117,6 +118,7 @@ def _resolve_env_vars(env: dict) -> dict:
                 if default_val is not None:
                     return default_val
                 return ""
+
             result[key] = _VAR_RE.sub(_expand, val)
         else:
             result[key] = val
@@ -209,9 +211,7 @@ def start(settings: dict) -> int:
     if not profile_path.exists():
         eprint("[github] Tool not initialized.")
         eprint("         Run:  codefreedom tools github init")
-        eprint(
-            "         Docs: https://nilayparikh.github.io/codefreedom/tools/github/"
-        )
+        eprint("         Docs: https://nilayparikh.github.io/codefreedom/tools/github/")
         return 1
 
     # ── Third-party notice on every start ────────────────────────────────
@@ -286,7 +286,7 @@ def start(settings: dict) -> int:
             "--restart",
             "unless-stopped",
             "-p",
-            f"{host_port}:8082",
+            f"127.0.0.1:{host_port}:8082",
             "-v",
             f"{resolved_data}:/data",
             *env_flags,
