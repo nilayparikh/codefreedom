@@ -13,66 +13,66 @@ Everything you need to use CodeFreedom day-to-day. The pages here assume the pro
 
 - :material-account-multiple:{ .lg .middle } **Code agents**
 
-  ***
+    ***
 
-  Launch Claude Code in local or sandbox mode. Quick reference for every flag.
+    Launch Claude Code in local or sandbox mode. Quick reference for every flag.
 
-  [:octicons-arrow-right-24: Code agents](agents.md)
+    [:octicons-arrow-right-24: Code agents](agents.md)
 
 - :material-tune:{ .lg .middle } **Profiles**
 
-  ***
+    ***
 
-  Switch models with one flag. Built-in profiles, custom profiles, and inheritance.
+    Switch models with one flag. Built-in profiles, custom profiles, and inheritance.
 
-  [:octicons-arrow-right-24: Profiles](profiles.md)
+    [:octicons-arrow-right-24: Profiles](profiles.md)
 
 - :material-docker:{ .lg .middle } **Sandbox mode**
 
-  ***
+    ***
 
-  Run Claude Code in an isolated Docker container with GPU passthrough.
+    Run Claude Code in an isolated Docker container with GPU passthrough.
 
-  [:octicons-arrow-right-24: Sandbox mode](sandbox.md)
+    [:octicons-arrow-right-24: Sandbox mode](sandbox.md)
 
 - :material-shield-lock:{ .lg .middle } **Sandbox isolation**
 
-  ***
+    ***
 
-  What's actually isolated — process, file system, network, and GPU.
+    What's actually isolated — process, file system, network, and GPU.
 
-  [:octicons-arrow-right-24: Sandbox isolation](sandbox-isolation.md)
+    [:octicons-arrow-right-24: Sandbox isolation](sandbox-isolation.md)
 
 - :material-laptop:{ .lg .middle } **Local mode**
 
-  ***
+    ***
 
-  Run Claude Code directly on the host. No Docker, no isolation.
+    Run Claude Code directly on the host. No Docker, no isolation.
 
-  [:octicons-arrow-right-24: Local mode](local.md)
+    [:octicons-arrow-right-24: Local mode](local.md)
 
 - :material-web:{ .lg .middle } **Browser tools**
 
-  ***
+    ***
 
-  Headless Chrome for automation. Web search for stealth browsing.
+    Headless Chrome for automation. Web search for stealth browsing.
 
-  [:octicons-arrow-right-24: Browser tools](tools/index.md)
+    [:octicons-arrow-right-24: Browser tools](tools/index.md)
 
 - :material-microsoft-visual-studio-code:{ .lg .middle } **VS Code**
 
-  ***
+    ***
 
-  Use the proxy as your OpenAI-compatible endpoint inside VS Code.
+    Use the proxy as your OpenAI-compatible endpoint inside VS Code.
 
-  [:octicons-arrow-right-24: VS Code](vscode.md)
+    [:octicons-arrow-right-24: VS Code](vscode.md)
 
 - :material-archive:{ .lg .middle } **Admin**
 
-  ***
+    ***
 
-  Backup and restore your `~/.codefreedom` configuration.
+    Backup and restore your `~/.codefreedom` configuration.
 
-  [:octicons-arrow-right-24: Admin](admin.md)
+    [:octicons-arrow-right-24: Admin](admin.md)
 
 </div>
