@@ -595,7 +595,8 @@ details {
 .grid.cards > ol > li > hr {
   width: 100%;
   margin: 0;
-  border-bottom-color: var(--cf-border);
+  border: none;
+  border-bottom: var(--cf-border-width) solid var(--cf-border);
 }
 
 .grid.cards > ul > li > p:not(:first-child):not(:last-child),

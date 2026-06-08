@@ -39,4 +39,4 @@ Four pages to get from `pip install` to a working session. No proxy, no provider
 
 ## After this section
 
-When you're up and running, the next stop is **[Guides](../guides/index.md)** — profiles, sandbox mode, browser tools, and VS Code integration. For deep configuration, see **[Reference](../reference/index.md)**.
+When you're up and running, the next stop is **[Reference](../reference/index.md)** for deep configuration details.

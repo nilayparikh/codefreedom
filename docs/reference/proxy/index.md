@@ -246,8 +246,7 @@ you create the secret).
 | 1         | Proxy returned `401`/`403` (rejected the master key)        |
 | 1         | Network failure or invalid response from `/v1/model/info`   |
 
-For end-to-end instructions (creating the file, restarting VS Code,
-verifying models appear), see [VS Code Integration → Built-in](../../guides/vscode.md#built-in-chatlanguagemodelsjson-no-extension-required).
+For end-to-end VS Code integration instructions, see the [OpenAI Compatible provider](./providers/openai-compatible/default.md) page.
 
 ## Endpoints
 
