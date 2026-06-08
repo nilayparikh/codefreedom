@@ -50,6 +50,7 @@ Merge modes (``merge`` field in files):
 from __future__ import annotations
 
 import json
+import secrets
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -105,7 +106,7 @@ def list_recipes() -> int:
     for name in recipes:
         print(f"           {name}")
     print()
-    print("  Use:  cf init --recipe <name>")
+    print("  Use:  cf init recipe --plan <name>")
     print(f"  Repo: https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}")
     return 0
 
@@ -130,7 +131,7 @@ def init_recipe(name: str) -> int:
     manifest, files = _resolve_recipe(name)
     if manifest is None:
         print(f"[recipe] Recipe '{name}' not found.")
-        print("         Run 'cf init --list-recipes' to see available recipes.")
+        print("         Run 'cf init recipe --list' to see available recipes.")
         print(f"         Repo: https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}")
         return 1
 
@@ -152,6 +153,240 @@ def init_recipe(name: str) -> int:
     # ── 3. What's Next summary ──────────────────────────────────────────
     _print_summary(manifest, cf_dir)
     return 0
+
+
+def plan_recipe(name: str) -> int:
+    """Preview recipe changes without applying them.
+
+    Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
+    showing exactly what would be created or modified.
+
+    Returns exit code 0 on success.
+    """
+    cf_dir = get_codefreedom_dir()
+
+    # ── 1. Resolve recipe ──────────────────────────────────────────────
+    manifest, files = _resolve_recipe(name)
+    if manifest is None:
+        print(f"[plan] Recipe '{name}' not found.")
+        print("       Run 'cf init recipe --list' to see available recipes.")
+        return 1
+
+    # ── 2. Resolve extends chain ───────────────────────────────────────
+    plan_entries: list[dict] = []
+
+    def _collect(man: dict, fdict: dict, source_label: str) -> None:
+        for entry in man.get("files", []):
+            src = entry.get("path", "")
+            target = entry.get("target", src)
+            content = fdict.get(target) or fdict.get(src)
+            if content is None:
+                continue
+            plan_entries.append({
+                "target": target,
+                "content": content,
+                "merge": entry.get("merge", "auto"),
+                "source": source_label,
+            })
+
+    extends = manifest.get("extends")
+    if extends:
+        base_man, base_files = _resolve_recipe(extends)
+        if base_man is not None:
+            _collect(base_man, base_files, extends)
+
+    _collect(manifest, files, name)
+
+    # ── 3. Compute what would happen to each file ──────────────────────
+    plan_id = _generate_plan_id()
+    plans_dir = cf_dir / "plans" / plan_id
+    plans_dir.mkdir(parents=True, exist_ok=True)
+
+    summary: dict[str, int] = {"create": 0, "merge": 0, "same": 0}
+    patch_files: list[dict] = []
+
+    for entry in plan_entries:
+        dst = cf_dir / entry["target"]
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        if not dst.exists():
+            # CREATE
+            patch_path = plans_dir / f"create-{entry['target'].replace('/', '-')}.new"
+            patch_path.write_text(entry["content"], encoding="utf-8")
+            patch_files.append({
+                "target": entry["target"],
+                "action": "create",
+                "patch": patch_path.name,
+                "source": entry["source"],
+            })
+            summary["create"] += 1
+            continue
+
+        existing = dst.read_text(encoding="utf-8")
+        if existing == entry["content"]:
+            # SAME
+            patch_files.append({
+                "target": entry["target"],
+                "action": "same",
+                "patch": None,
+                "source": entry["source"],
+            })
+            summary["same"] += 1
+            continue
+
+        # MERGE — write unified diff
+        diff = _make_diff(existing, entry["content"], entry["target"])
+        patch_name = f"merge-{entry['target'].replace('/', '-')}.diff"
+        (plans_dir / patch_name).write_text(diff, encoding="utf-8")
+        patch_files.append({
+            "target": entry["target"],
+            "action": "merge",
+            "patch": patch_name,
+            "source": entry["source"],
+        })
+        summary["merge"] += 1
+
+    # ── 4. Write plan.yaml ─────────────────────────────────────────────
+    plan_meta = {
+        "plan_id": plan_id,
+        "recipe": name,
+        "extends": extends,
+        "summary": summary,
+        "files": patch_files,
+    }
+    (plans_dir / "plan.yaml").write_text(
+        yaml.dump(plan_meta, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    # ── 5. Print summary ──────────────────────────────────────────────
+    print(f"[plan] Recipe: {name}" + (f" (extends {extends})" if extends else ""))
+    print(f"[plan] Plan ID: {plan_id}")
+    print(f"[plan] Files:   {plans_dir}/")
+    print("[plan]")
+    print(f"[plan]   {summary['create']} create  — new files to be written")
+    print(f"[plan]   {summary['merge']} merge   — existing files to be patched")
+    print(f"[plan]   {summary['same']} same    — already identical, skipped")
+    print("[plan]")
+    print("[plan] Files:")
+    for pf in patch_files:
+        action = pf["action"].upper().ljust(6)
+        src_label = pf["source"][:12].ljust(12)
+        print(f"[plan]   {action} {src_label} {pf['target']}")
+    print("[plan]")
+    print(f"[plan] To apply:  cf init recipe --apply {plan_id}")
+    print(f"[plan] To review: cat {plans_dir}/<patch-file>.diff")
+    return 0
+
+
+def apply_plan(plan_id: str) -> int:
+    """Apply a previously generated plan by ID.
+
+    Reads ``~/.codefreedom/plans/<plan_id>/plan.yaml`` and applies
+    each file change.
+    """
+    cf_dir = get_codefreedom_dir()
+    plans_dir = cf_dir / "plans" / plan_id
+    plan_path = plans_dir / "plan.yaml"
+
+    if not plan_path.exists():
+        print(f"[apply] Plan '{plan_id}' not found at {plans_dir}")
+        return 1
+
+    try:
+        plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        print(f"[apply] Invalid plan.yaml: {e}")
+        return 1
+
+    if not isinstance(plan, dict):
+        print("[apply] Invalid plan format")
+        return 1
+
+    print(f"[apply] Applying plan {plan_id}...")
+    count = 0
+
+    for pf in plan.get("files", []):
+        target = pf.get("target", "")
+        action = pf.get("action", "")
+        patch_name = pf.get("patch")
+
+        dst = cf_dir / target
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        if action == "create":
+            patch_file = plans_dir / patch_name
+            if patch_file.exists():
+                dst.write_text(patch_file.read_text(encoding="utf-8"), encoding="utf-8")
+                print(f"  [CREATE] {target}")
+                count += 1
+
+        elif action == "merge":
+            patch_file = plans_dir / patch_name
+            if not patch_file.exists():
+                print(f"  [SKIP]  {target} (patch file missing)")
+                continue
+
+            patch_text = patch_file.read_text(encoding="utf-8")
+            existing = dst.read_text(encoding="utf-8") if dst.exists() else ""
+
+            # Determine merge mode from file extension
+            if target.endswith(".env") or ".env." in target:
+                merged = _merge_env(existing, patch_text)
+                if merged != existing:
+                    dst.write_text(merged, encoding="utf-8")
+                    print(f"  [MERGE] {target}")
+                    count += 1
+                else:
+                    print(f"  [SAME]  {target}")
+            elif _is_yaml_or_json(target):
+                merged = _deepdiff_merge(existing, patch_text, target)
+                if merged is not None:
+                    dst.write_text(merged, encoding="utf-8")
+                    print(f"  [MERGE] {target}")
+                    count += 1
+                else:
+                    print(f"  [SAME]  {target}")
+            else:
+                dst.write_text(patch_text, encoding="utf-8")
+                print(f"  [UPDATE] {target}")
+                count += 1
+
+        elif action == "same":
+            print(f"  [SAME]  {target}")
+
+    if count:
+        print(f"\n[apply] Plan applied — {count} file(s) updated.")
+    else:
+        print("\n[apply] No files were changed.")
+    return 0
+
+
+def _generate_plan_id() -> str:
+    """Generate a random 10-character alphanumeric plan ID."""
+    import string
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(10))
+
+
+def _make_diff(existing: str, incoming: str, path: str) -> str:
+    """Generate a unified diff between existing and incoming content."""
+    import difflib
+    import datetime
+
+    existing_lines = existing.splitlines(keepends=True)
+    incoming_lines = incoming.splitlines(keepends=True)
+    timestamp = datetime.datetime.now().isoformat(timespec="seconds")
+
+    diff = difflib.unified_diff(
+        existing_lines,
+        incoming_lines,
+        fromfile=f"a/{path}",
+        tofile=f"b/{path}",
+        fromfiledate=timestamp,
+        tofiledate=timestamp,
+    )
+    return "".join(diff)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

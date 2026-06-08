@@ -22,25 +22,41 @@ def main() -> None:
     # ── init subcommand ─────────────────────────────────────────────────────
     init_parser = subparsers.add_parser(
         "init",
-        help="Initialize CodeFreedom config (bundled examples or recipe)",
+        help="Initialize CodeFreedom config (bundled examples or recipes)",
         description=(
-            "Initialize CodeFreedom configuration. Without flags, bootstraps"
+            "Initialize CodeFreedom configuration. Without subcommand, bootstraps"
             " bundled examples (profiles, proxy configs, env files) into"
-            " ~/.codefreedom/.  Use --recipe to bootstrap from a predefined"
-            " recipe on github.com/nilayparikh/codefreedom-recipes."
+            " ~/.codefreedom/.  Use `cf init recipe` for recipe-based setup."
         ),
     )
-    init_parser.add_argument(
-        "--recipe",
-        type=str,
-        default=None,
-        metavar="NAME",
-        help="Bootstrap from a recipe (e.g. opencode-free)",
+    init_sub = init_parser.add_subparsers(dest="init_action", title="init actions")
+
+    # ── init recipe subcommand ──────────────────────────────────────────────
+    recipe_parser = init_sub.add_parser(
+        "recipe",
+        help="Manage configuration recipes",
+        description=(
+            "Plan, apply, or list configuration recipes from"
+            " github.com/nilayparikh/codefreedom-recipes."
+        ),
     )
-    init_parser.add_argument(
-        "--list-recipes",
+    recipe_group = recipe_parser.add_mutually_exclusive_group(required=True)
+    recipe_group.add_argument(
+        "--plan",
+        type=str,
+        metavar="NAME",
+        help="Preview a recipe: generate .patch files without applying (e.g. opencode-free)",
+    )
+    recipe_group.add_argument(
+        "--apply",
+        type=str,
+        metavar="PLAN_ID",
+        help="Apply a previously generated plan by ID (e.g. aB3xK9mZ2q)",
+    )
+    recipe_group.add_argument(
+        "--list",
         action="store_true",
-        help="List available recipes from github.com/nilayparikh/codefreedom-recipes",
+        help="List all available recipes from the repository",
     )
 
     # ── claude subcommand ──────────────────────────────────────────────────
@@ -359,15 +375,27 @@ def main() -> None:
             eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
             sys.exit(2)
 
-        if args.list_recipes:
-            from codefreedom.cli.recipe import list_recipes
+        init_action = getattr(args, "init_action", None)
 
-            sys.exit(list_recipes())
+        if init_action == "recipe":
+            if args.list:
+                from codefreedom.cli.recipe import list_recipes
 
-        if args.recipe:
-            from codefreedom.cli.recipe import init_recipe
+                sys.exit(list_recipes())
 
-            sys.exit(init_recipe(args.recipe))
+            if args.apply:
+                from codefreedom.cli.recipe import apply_plan
+
+                sys.exit(apply_plan(args.apply))
+
+            if args.plan:
+                from codefreedom.cli.recipe import plan_recipe
+
+                sys.exit(plan_recipe(args.plan))
+
+            # Should not reach here (mutually exclusive group is required)
+            recipe_parser.print_help()
+            sys.exit(1)
 
         # Plain `cf init` — bootstrap bundled examples
         from codefreedom.cli.claude import init_claude
