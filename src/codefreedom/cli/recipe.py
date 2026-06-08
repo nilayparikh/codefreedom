@@ -142,7 +142,9 @@ def init_recipe(name: str) -> int:
         print(f"  [EXTENDS] Installing base recipe '{extends}' first...")
         base_manifest, base_files = _resolve_recipe(extends)
         if base_manifest is None:
-            print(f"  [WARN] Base recipe '{extends}' not found — continuing without it.")
+            print(
+                f"  [WARN] Base recipe '{extends}' not found — continuing without it."
+            )
         else:
             _install_recipe_files(base_manifest, base_files, cf_dir)
 
