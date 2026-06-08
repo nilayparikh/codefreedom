@@ -13,42 +13,42 @@ Lookup material. Read these when you need to understand how something works or s
 
 - :material-graph-outline:{ .lg .middle } **Architecture**
 
-    ***
+  ***
 
-    How the CLI, profiles, sandbox, and proxy fit together. Read this if you want the full picture.
+  How the CLI, profiles, sandbox, and proxy fit together. Read this if you want the full picture.
 
-    [:octicons-arrow-right-24: Architecture](architecture.md)
+  [:octicons-arrow-right-24: Architecture](architecture.md)
 
 - :material-cog-outline:{ .lg .middle } **Environment**
 
-    ***
+  ***
 
-    The full `.env` chain — load order, file conventions, `${VAR}` interpolation, per-project overrides.
+  The full `.env` chain — load order, file conventions, `${VAR}` interpolation, per-project overrides.
 
-    [:octicons-arrow-right-24: Environment](environment.md)
+  [:octicons-arrow-right-24: Environment](environment.md)
 
 - :material-server-network:{ .lg .middle } **Proxy**
 
-    ***
+  ***
 
-    LiteLLM configuration, Docker stack, database, and the full provider catalog.
+  LiteLLM configuration, Docker stack, database, and the full provider catalog.
 
-    [:octicons-arrow-right-24: Proxy](proxy/index.md)
+  [:octicons-arrow-right-24: Proxy](proxy/index.md)
 
 - :material-help-circle-outline:{ .lg .middle } **FAQ**
 
-    ***
+  ***
 
-    Known issues and recommended workarounds. Currently: Web Search.
+  Known issues and recommended workarounds. Currently: Web Search.
 
-    [:octicons-arrow-right-24: FAQ](faq/web-search.md)
+  [:octicons-arrow-right-24: FAQ](faq/web-search.md)
 
 - :material-scale-balance:{ .lg .middle } **License**
 
-    ***
+  ***
 
-    Apache 2.0 — see the NOTICE file for attributions.
+  Apache 2.0 — see the NOTICE file for attributions.
 
-    [:octicons-arrow-right-24: License](../license.md)
+  [:octicons-arrow-right-24: License](../license.md)
 
 </div>
