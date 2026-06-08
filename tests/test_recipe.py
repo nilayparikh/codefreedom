@@ -38,7 +38,7 @@ from codefreedom.cli.recipe import (
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.fixture
+@pytest.fixture(name="manifest_fixture")
 def recipe_manifest() -> Dict[str, Any]:
     return {
         "name": "test-recipe",
@@ -469,7 +469,7 @@ class TestGitHubFetch:
             ]
         }
 
-        def mock_fetch(url: str, timeout: int = 15) -> str:
+        def mock_fetch(url: str, _timeout: int = 15) -> str:
             if "cfg.yaml" in url:
                 return "key: val\n"
             if ".env" in url:
@@ -527,23 +527,23 @@ class TestLocalResolution:
 class TestSummary:
     """Tests for What's Next summary printing."""
 
-    def test_prints_required_secrets(self, capsys, recipe_manifest):
+    def test_prints_required_secrets(self, capsys, manifest_fixture):
         """Required secrets are printed in the summary."""
-        _print_summary(recipe_manifest, Path("/tmp"))
+        _print_summary(manifest_fixture, Path("/tmp"))
         captured = capsys.readouterr()
         assert "TEST_API_KEY" in captured.out
         assert "Test API key" in captured.out
 
-    def test_prints_optional_config(self, capsys, recipe_manifest):
+    def test_prints_optional_config(self, capsys, manifest_fixture):
         """Optional config with defaults are printed."""
-        _print_summary(recipe_manifest, Path("/tmp"))
+        _print_summary(manifest_fixture, Path("/tmp"))
         captured = capsys.readouterr()
         assert "TEST_OPTION" in captured.out
         assert "default-value" in captured.out
 
-    def test_prints_next_steps(self, capsys, recipe_manifest):
+    def test_prints_next_steps(self, capsys, manifest_fixture):
         """Next steps section is printed."""
-        _print_summary(recipe_manifest, Path("/tmp"))
+        _print_summary(manifest_fixture, Path("/tmp"))
         captured = capsys.readouterr()
         assert "NEXT STEPS" in captured.out
         assert "cf proxy start" in captured.out

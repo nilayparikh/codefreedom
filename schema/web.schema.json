@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "web.schema.json",
+  "title": "Web Search Tool Profile",
+  "description": "Schema for web.json \u2014 configures the web browser container image, ports, data directory, and environment.",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Description of the profile"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Usage notes"
+    },
+    "web": {
+      "type": "object",
+      "description": "Web browser container settings",
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "Docker image tag (e.g. codefreedom:web or docker.io/nilayparikh/codefreedom:web-latest)"
+        },
+        "container_name": {
+          "type": "string",
+          "description": "Docker container name"
+        },
+        "port": {
+          "type": "integer",
+          "description": "Host port to map to container port 8420"
+        },
+        "data_dir": {
+          "type": "string",
+          "description": "Host data directory (mounted to /userdata)"
+        },
+        "env": {
+          "type": "object",
+          "description": "Extra environment variables"
+        },
+        "search_cooldown_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum seconds between web_search calls. Set to 0 to disable. Defaults to 10.0."
+        },
+        "search_engines": {
+          "type": "object",
+          "description": "Map of search engine name to config. Each value is {url: string, parser: string}. Use {q} as the query placeholder in url.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Search URL template with {q} placeholder"
+              },
+              "parser": {
+                "type": "string",
+                "description": "Parser name from the server's parser registry",
+                "default": "standard"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          }
+        },
+        "parser_registry": {
+          "type": "object",
+          "description": "Named parser configurations. Each parser defines CSS selectors for extracting search results from HTML.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "result_selectors": {
+                "type": "string",
+                "description": "CSS selector for search result containers"
+              },
+              "link_selector": {
+                "type": "string",
+                "description": "CSS selector for the primary link within a result"
+              },
+              "snippet_selectors": {
+                "type": "string",
+                "description": "CSS selector for text snippets/descriptions"
+              },
+              "ai_selectors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "CSS selectors for AI summary/answer blocks (tried in order)"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

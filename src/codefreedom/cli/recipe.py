@@ -132,12 +132,22 @@ def init_recipe(name: str) -> int:
     manifest, files = _resolve_recipe(name)
     if manifest is None:
         print(f"[recipe] Recipe '{name}' not found.")
-        print(f"         Run 'cf init --list-recipes' to see available recipes.")
+        print("         Run 'cf init --list-recipes' to see available recipes.")
         print(f"         Repo: https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}")
         return 1
 
+    # ── 1b. If recipe extends a base, resolve and install it first ──────
+    extends = manifest.get("extends")
+    if extends:
+        print(f"  [EXTENDS] Installing base recipe '{extends}' first...")
+        base_manifest, base_files = _resolve_recipe(extends)
+        if base_manifest is None:
+            print(f"  [WARN] Base recipe '{extends}' not found — continuing without it.")
+        else:
+            _install_recipe_files(base_manifest, base_files, cf_dir)
+
     # ── 2. Install / merge each file ─────────────────────────────────────
-    installed = _install_recipe_files(manifest, files, cf_dir)
+    _install_recipe_files(manifest, files, cf_dir)
 
     # ── 3. What's Next summary ──────────────────────────────────────────
     _print_summary(manifest, cf_dir)
@@ -304,12 +314,13 @@ def _fetch_available_recipes() -> List[str]:
         for item in items:
             if item.get("type") == "dir":
                 name = item["name"]
-                # Probe for recipe.yaml
+                if name.startswith("_"):
+                    continue  # Skip private/base recipes
                 try:
                     _fetch_text(_raw_url(name, "recipe.yaml"))
                     candidates.append(name)
                 except RecipeError:
-                    pass  # No recipe.yaml — skip
+                    pass
         return sorted(candidates)
     except (RecipeError, json.JSONDecodeError) as e:
         eprint(f"  [WARN] Could not list recipes: {e}")
@@ -460,9 +471,9 @@ def _deepdiff_merge(
     """
     try:
         from deepdiff import DeepDiff
-    except ImportError as e:
+    except ImportError:
         eprint(
-            f"  [WARN] deepdiff not installed — falling back to overwrite "
+            "  [WARN] deepdiff not installed — falling back to overwrite "
             f"for {display_path}"
         )
         return incoming
@@ -487,7 +498,7 @@ def _deepdiff_merge(
         diff = DeepDiff(existing_obj, incoming_obj)
         if not diff:
             return None  # No structural changes
-    except Exception:
+    except (TypeError, ValueError):
         pass  # Diff diagnostic is best-effort
 
     # Apply safe recursive merge (never deletes existing keys)
@@ -633,12 +644,12 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     for env_file in env_secrets_files:
         print(f"    1. Edit {env_file} and add your API keys")
     if env_secrets_files:
-        print(f"    2. Start the proxy:  cf proxy start")
-        print(f"    3. Launch the agent: cf cc")
+        print("    2. Start the proxy:  cf proxy start")
+        print("    3. Launch the agent: cf cc")
     else:
-        print(f"    1. Start the proxy:  cf proxy start")
-        print(f"    2. Launch the agent: cf cc")
-    print(f"    4. Customize:         cf proxy start --port 4000")
+        print("    1. Start the proxy:  cf proxy start")
+        print("    2. Launch the agent: cf cc")
+    print("    4. Customize:         cf proxy start --port 4000")
     print("  " + "─" * 55)
     print()
 
