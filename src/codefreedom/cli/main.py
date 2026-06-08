@@ -22,6 +22,18 @@ def main() -> None:
         action="store_true",
         help="Initialize all profiles, proxy configs, and env files in ~/.codefreedom/",
     )
+    parser.add_argument(
+        "--recipe",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help="Bootstrap from a recipe: cf init --recipe <name> (e.g. opencode-free)",
+    )
+    parser.add_argument(
+        "--list-recipes",
+        action="store_true",
+        help="List available recipes from github.com/nilayparikh/codefreedom-recipes",
+    )
     subparsers = parser.add_subparsers(dest="command", title="commands")
 
     # ── claude subcommand ──────────────────────────────────────────────────
@@ -333,6 +345,25 @@ def main() -> None:
     )
 
     args, unknown = parser.parse_known_args()
+
+    # ── Treat `cf init ...` as `cf --init ...` for convenience ─────────────
+    if unknown and unknown[0] == "init":
+        args.init = True
+        unknown = unknown[1:]
+
+    # ── Top-level --list-recipes ────────────────────────────────────────────
+    if args.list_recipes:
+        from codefreedom.cli.recipe import list_recipes
+
+        sys.exit(list_recipes())
+
+    # ── Top-level --recipe ──────────────────────────────────────────────────
+    if args.recipe:
+        from codefreedom.cli.recipe import init_recipe
+
+        if args.init:
+            print("[init] Using --recipe mode (--init implied).")
+        sys.exit(init_recipe(args.recipe))
 
     # ── Top-level --init ────────────────────────────────────────────────────
     if args.init:
