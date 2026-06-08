@@ -17,24 +17,31 @@ def main() -> None:
         prog="codefreedom",
         description="CodeFreedom -- Single wrapper for all code agents. Simple LLM routing, sandboxing, profile management, and isolation. All config in ~/.codefreedom.",
     )
-    parser.add_argument(
-        "--init",
-        action="store_true",
-        help="Initialize all profiles, proxy configs, and env files in ~/.codefreedom/",
+    subparsers = parser.add_subparsers(dest="command", title="commands")
+
+    # ── init subcommand ─────────────────────────────────────────────────────
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Initialize CodeFreedom config (bundled examples or recipe)",
+        description=(
+            "Initialize CodeFreedom configuration. Without flags, bootstraps"
+            " bundled examples (profiles, proxy configs, env files) into"
+            " ~/.codefreedom/.  Use --recipe to bootstrap from a predefined"
+            " recipe on github.com/nilayparikh/codefreedom-recipes."
+        ),
     )
-    parser.add_argument(
+    init_parser.add_argument(
         "--recipe",
         type=str,
         default=None,
         metavar="NAME",
-        help="Bootstrap from a recipe: cf init --recipe <name> (e.g. opencode-free)",
+        help="Bootstrap from a recipe (e.g. opencode-free)",
     )
-    parser.add_argument(
+    init_parser.add_argument(
         "--list-recipes",
         action="store_true",
         help="List available recipes from github.com/nilayparikh/codefreedom-recipes",
     )
-    subparsers = parser.add_subparsers(dest="command", title="commands")
 
     # ── claude subcommand ──────────────────────────────────────────────────
     claude_parser = subparsers.add_parser(
@@ -346,28 +353,23 @@ def main() -> None:
 
     args, unknown = parser.parse_known_args()
 
-    # ── Treat `cf init ...` as `cf --init ...` for convenience ─────────────
-    if unknown and unknown[0] == "init":
-        args.init = True
-        unknown = unknown[1:]
+    # ── init subcommand ────────────────────────────────────────────────────
+    if args.command == "init":
+        if unknown:
+            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            sys.exit(2)
 
-    # ── Top-level --list-recipes ────────────────────────────────────────────
-    if args.list_recipes:
-        from codefreedom.cli.recipe import list_recipes
+        if args.list_recipes:
+            from codefreedom.cli.recipe import list_recipes
 
-        sys.exit(list_recipes())
+            sys.exit(list_recipes())
 
-    # ── Top-level --recipe ──────────────────────────────────────────────────
-    if args.recipe:
-        from codefreedom.cli.recipe import init_recipe
+        if args.recipe:
+            from codefreedom.cli.recipe import init_recipe
 
-        if args.init:
-            print("[init] Using --recipe mode (--init implied).")
-        sys.exit(init_recipe(args.recipe))
+            sys.exit(init_recipe(args.recipe))
 
-    # ── Top-level --init ────────────────────────────────────────────────────
-    if args.init:
-
+        # Plain `cf init` — bootstrap bundled examples
         from codefreedom.cli.claude import init_claude
         from codefreedom.cli.proxy import init_proxy
 
