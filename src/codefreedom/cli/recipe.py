@@ -665,5 +665,9 @@ def _find_env_secrets_targets(
         if ".secrets" in target:
             dst = cf_dir / target
             if dst.exists():
-                targets.append(str(dst))
+                try:
+                    display_target = str(dst.relative_to(cf_dir))
+                except ValueError:
+                    display_target = dst.name
+                targets.append(display_target)
     return targets
