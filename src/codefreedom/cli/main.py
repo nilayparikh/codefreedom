@@ -40,11 +40,6 @@ def main() -> None:
             " github.com/nilayparikh/codefreedom-recipes."
         ),
     )
-    recipe_parser.add_argument(
-        "--reset",
-        action="store_true",
-        help="With --plan: mark existing files for replacement instead of merge",
-    )
     recipe_group = recipe_parser.add_mutually_exclusive_group(required=True)
     recipe_group.add_argument(
         "--plan",
@@ -396,7 +391,7 @@ def main() -> None:
             if args.plan:
                 from codefreedom.cli.recipe import plan_recipe
 
-                sys.exit(plan_recipe(args.plan, reset=args.reset))
+                sys.exit(plan_recipe(args.plan))
 
             # Should not reach here (mutually exclusive group is required)
             recipe_parser.print_help()

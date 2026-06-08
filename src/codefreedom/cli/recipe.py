@@ -155,16 +155,14 @@ def init_recipe(name: str) -> int:
     return 0
 
 
-def plan_recipe(name: str, reset: bool = False) -> int:
+def plan_recipe(name: str, reset: bool = True) -> int:
     """Preview recipe changes without applying them.
 
     Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
-    showing exactly what would be created or modified.
+    showing exactly what would be created or replaced.
 
-    When *reset* is ``True``, existing files are flagged for
-    replacement instead of structural merge (``--reset`` mode).
-
-    Returns exit code 0 on success.
+    All files are replaced (not merged). The plan shows the diff
+    between existing content and the new recipe content.
     """
     cf_dir = get_codefreedom_dir()
 
@@ -207,7 +205,7 @@ def plan_recipe(name: str, reset: bool = False) -> int:
     plans_dir = cf_dir / "plans" / plan_id
     plans_dir.mkdir(parents=True, exist_ok=True)
 
-    summary: dict[str, int] = {"create": 0, "merge": 0, "same": 0}
+    summary: dict[str, int] = {"create": 0, "replace": 0, "same": 0}
     patch_files: list[dict] = []
 
     for entry in plan_entries:
@@ -215,7 +213,6 @@ def plan_recipe(name: str, reset: bool = False) -> int:
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         if not dst.exists():
-            # CREATE — unified diff from /dev/null
             diff = _make_diff("", entry["content"], entry["target"], from_devnull=True)
             patch_name = f"create-{entry['target'].replace('/', '-')}.diff"
             (plans_dir / patch_name).write_text(diff, encoding="utf-8")
@@ -232,7 +229,6 @@ def plan_recipe(name: str, reset: bool = False) -> int:
 
         existing = dst.read_text(encoding="utf-8")
         if existing == entry["content"]:
-            # SAME
             patch_files.append(
                 {
                     "target": entry["target"],
@@ -244,27 +240,25 @@ def plan_recipe(name: str, reset: bool = False) -> int:
             summary["same"] += 1
             continue
 
-        # MERGE — write unified diff
+        # REPLACE — diff between existing and new recipe content
         diff = _make_diff(existing, entry["content"], entry["target"])
-        patch_name = f"merge-{entry['target'].replace('/', '-')}.diff"
+        patch_name = f"replace-{entry['target'].replace('/', '-')}.diff"
         (plans_dir / patch_name).write_text(diff, encoding="utf-8")
         patch_files.append(
             {
                 "target": entry["target"],
-                "action": "merge",
+                "action": "replace",
                 "patch": patch_name,
                 "source": entry["source"],
-                "reset": reset,
             }
         )
-        summary["merge"] += 1
+        summary["replace"] += 1
 
     # ── 4. Write plan.yaml ─────────────────────────────────────────────
     plan_meta = {
         "plan_id": plan_id,
         "recipe": name,
         "extends": extends,
-        "reset": reset,
         "summary": summary,
         "files": patch_files,
     }
@@ -275,16 +269,16 @@ def plan_recipe(name: str, reset: bool = False) -> int:
 
     # ── 5. Print summary ──────────────────────────────────────────────
     print(f"[plan] Recipe: {name}" + (f" (extends {extends})" if extends else ""))
-    print(f"[plan] Plan ID: {plan_id}" + (" (--reset)" if reset else " (--merge)"))
+    print(f"[plan] Plan ID: {plan_id}")
     print(f"[plan] Files:   {plans_dir}/")
     print("[plan]")
-    print(f"[plan]   {summary['create']} create  — new files to be written")
-    print(f"[plan]   {summary['merge']} merge   — existing files to be patched")
-    print(f"[plan]   {summary['same']} same    — already identical, skipped")
+    print(f"[plan]   {summary['create']} new files")
+    print(f"[plan]   {summary['replace']} files to replace")
+    print(f"[plan]   {summary['same']} unchanged (skipped)")
     print("[plan]")
     print("[plan] Files:")
     for pf in patch_files:
-        action = pf["action"].upper().ljust(6)
+        action = pf["action"].upper().ljust(8)
         src_label = pf["source"][:12].ljust(12)
         print(f"[plan]   {action} {src_label} {pf['target']}")
     print("[plan]")
@@ -328,64 +322,27 @@ def apply_plan(plan_id: str) -> int:
         dst = cf_dir / target
         dst.parent.mkdir(parents=True, exist_ok=True)
 
-        if action == "create":
-            patch_file = plans_dir / patch_name
-            if patch_file.exists():
-                content = _extract_content_from_diff(
-                    patch_file.read_text(encoding="utf-8")
-                )
-                dst.write_text(content, encoding="utf-8")
-                print(f"  [CREATE] {target}")
-                count += 1
-
-        elif action == "merge":
-            patch_file = plans_dir / patch_name
-            if not patch_file.exists():
-                print(f"  [SKIP]  {target} (patch file missing)")
-                continue
-
-            patch_text = patch_file.read_text(encoding="utf-8")
-            # Extract the actual incoming content from the unified diff
-            incoming = _extract_content_from_diff(patch_text)
-            existing = dst.read_text(encoding="utf-8") if dst.exists() else ""
-
-            # If reset flag is set, just overwrite
-            if pf.get("reset"):
-                if incoming != existing:
-                    dst.write_text(incoming, encoding="utf-8")
-                    print(f"  [UPDATE] {target}")
-                    count += 1
-                else:
-                    print(f"  [SAME]  {target}")
-                continue
-
-            # Structural merge based on file type
-            if target.endswith(".env") or ".env." in target:
-                merged = _merge_env(existing, incoming)
-                if merged != existing:
-                    dst.write_text(merged, encoding="utf-8")
-                    print(f"  [MERGE] {target}")
-                    count += 1
-                else:
-                    print(f"  [SAME]  {target}")
-            elif _is_yaml_or_json(target):
-                merged = _deepdiff_merge(existing, incoming, target)
-                if merged is not None:
-                    dst.write_text(merged, encoding="utf-8")
-                    print(f"  [MERGE] {target}")
-                    count += 1
-                else:
-                    print(f"  [SAME]  {target}")
-            else:
-                if incoming != existing:
-                    dst.write_text(incoming, encoding="utf-8")
-                    print(f"  [UPDATE] {target}")
-                    count += 1
-                else:
-                    print(f"  [SAME]  {target}")
-
-        elif action == "same":
+        if action == "same":
             print(f"  [SAME]  {target}")
+            continue
+
+        if not patch_name:
+            print(f"  [SKIP]  {target} (no patch file)")
+            continue
+
+        patch_file = plans_dir / patch_name
+        if not patch_file.exists():
+            print(f"  [SKIP]  {target} (patch file missing)")
+            continue
+
+        # Extract content from unified diff and write directly
+        content = _extract_content_from_diff(
+            patch_file.read_text(encoding="utf-8")
+        )
+        dst.write_text(content, encoding="utf-8")
+        label = "CREATE" if action == "create" else "REPLACE"
+        print(f"  [{label}] {target}")
+        count += 1
 
     if count:
         print(f"\n[apply] Plan applied — {count} file(s) updated.")
