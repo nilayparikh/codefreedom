@@ -436,8 +436,13 @@ def _extract_content_from_diff(diff: str) -> str:
     """Extract the resulting content from a unified diff.
 
     For a new-file diff (``/dev/null → b/path``), returns all lines
-    that appear in the target (those prefixed with ``+`` or context lines).
-    For standard diffs, returns the post-patch content.
+    that appear in the target. For standard diffs, returns the
+    post-patch content.
+
+    Handles unified diff format where:
+    - ``+prefix`` → content added (strip ``+``)
+    - `` prefix`` → context/unchanged (strip the leading space)
+    - ``-prefix`` → content removed (skip)
     """
     lines: list[str] = []
     in_hunk = False
@@ -447,14 +452,13 @@ def _extract_content_from_diff(diff: str) -> str:
             continue
         if not in_hunk:
             continue
-        if line.startswith("---") or line.startswith("+++"):
-            continue
         if line.startswith("-"):
             continue
         if line.startswith("+"):
             lines.append(line[1:])
-        else:
-            lines.append(line)
+        elif line.startswith(" "):
+            # Context line: strip the leading space that difflib adds
+            lines.append(line[1:])
     return "".join(lines)
 
 
