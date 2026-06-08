@@ -527,8 +527,21 @@ def _validate() -> int:
                 errors.append(f"Missing provider file: {inc}")
 
     general = config.get("general_settings", {})
-    if not general.get("database_url"):
+    database_url_in_config = general.get("database_url")
+    database_url_in_env = _env_is_set("DATABASE_URL", proxy_env)
+    if not database_url_in_config and not database_url_in_env:
         eprint("  [WARN]  database_url not set (stateless mode)")
+        eprint(
+            "         LiteLLP runs w/out Prisma persistence unless DATABASE_URL is set."
+        )
+        eprint(
+            "         The codefreedom litellm image (default) auto-sets DATABASE_URL"
+        )
+        eprint(
+            "         inside the container — no host-side config needed for DB features."
+        )
+    elif not database_url_in_config and database_url_in_env:
+        eprint("  [OK]  DATABASE_URL found in environment (config.yaml not required)")
 
     router = config.get("router_settings", {})
     aliases = router.get("model_group_alias", {})

@@ -155,11 +155,14 @@ def init_recipe(name: str) -> int:
     return 0
 
 
-def plan_recipe(name: str) -> int:
+def plan_recipe(name: str, reset: bool = False) -> int:
     """Preview recipe changes without applying them.
 
     Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
     showing exactly what would be created or modified.
+
+    When *reset* is ``True``, existing files are flagged for
+    replacement instead of structural merge (``--reset`` mode).
 
     Returns exit code 0 on success.
     """
@@ -251,6 +254,7 @@ def plan_recipe(name: str) -> int:
                 "action": "merge",
                 "patch": patch_name,
                 "source": entry["source"],
+                "reset": reset,
             }
         )
         summary["merge"] += 1
@@ -260,6 +264,7 @@ def plan_recipe(name: str) -> int:
         "plan_id": plan_id,
         "recipe": name,
         "extends": extends,
+        "reset": reset,
         "summary": summary,
         "files": patch_files,
     }
@@ -270,7 +275,7 @@ def plan_recipe(name: str) -> int:
 
     # ── 5. Print summary ──────────────────────────────────────────────
     print(f"[plan] Recipe: {name}" + (f" (extends {extends})" if extends else ""))
-    print(f"[plan] Plan ID: {plan_id}")
+    print(f"[plan] Plan ID: {plan_id}" + (" (--reset)" if reset else " (--merge)"))
     print(f"[plan] Files:   {plans_dir}/")
     print("[plan]")
     print(f"[plan]   {summary['create']} create  — new files to be written")
@@ -340,11 +345,23 @@ def apply_plan(plan_id: str) -> int:
                 continue
 
             patch_text = patch_file.read_text(encoding="utf-8")
+            # Extract the actual incoming content from the unified diff
+            incoming = _extract_content_from_diff(patch_text)
             existing = dst.read_text(encoding="utf-8") if dst.exists() else ""
 
-            # Determine merge mode from file extension
+            # If reset flag is set, just overwrite
+            if pf.get("reset"):
+                if incoming != existing:
+                    dst.write_text(incoming, encoding="utf-8")
+                    print(f"  [UPDATE] {target}")
+                    count += 1
+                else:
+                    print(f"  [SAME]  {target}")
+                continue
+
+            # Structural merge based on file type
             if target.endswith(".env") or ".env." in target:
-                merged = _merge_env(existing, patch_text)
+                merged = _merge_env(existing, incoming)
                 if merged != existing:
                     dst.write_text(merged, encoding="utf-8")
                     print(f"  [MERGE] {target}")
@@ -352,7 +369,7 @@ def apply_plan(plan_id: str) -> int:
                 else:
                     print(f"  [SAME]  {target}")
             elif _is_yaml_or_json(target):
-                merged = _deepdiff_merge(existing, patch_text, target)
+                merged = _deepdiff_merge(existing, incoming, target)
                 if merged is not None:
                     dst.write_text(merged, encoding="utf-8")
                     print(f"  [MERGE] {target}")
@@ -360,9 +377,12 @@ def apply_plan(plan_id: str) -> int:
                 else:
                     print(f"  [SAME]  {target}")
             else:
-                dst.write_text(patch_text, encoding="utf-8")
-                print(f"  [UPDATE] {target}")
-                count += 1
+                if incoming != existing:
+                    dst.write_text(incoming, encoding="utf-8")
+                    print(f"  [UPDATE] {target}")
+                    count += 1
+                else:
+                    print(f"  [SAME]  {target}")
 
         elif action == "same":
             print(f"  [SAME]  {target}")
@@ -382,7 +402,9 @@ def _generate_plan_id() -> str:
     return "".join(secrets.choice(alphabet) for _ in range(10))
 
 
-def _make_diff(existing: str, incoming: str, path: str, from_devnull: bool = False) -> str:
+def _make_diff(
+    existing: str, incoming: str, path: str, from_devnull: bool = False
+) -> str:
     """Generate a unified diff between existing and incoming content.
 
     When *from_devnull* is ``True``, the diff shows the incoming content

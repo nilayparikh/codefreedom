@@ -69,8 +69,10 @@ services:
       NO_REDOC: ${LITELLM_NO_REDOC:-True}
 
       # ── Database ───────────────────────────────────────────────────────
-      # No DATABASE_URL set — runs as stateless proxy (no Prisma, no DB).
-      # To enable database features, set DATABASE_URL in .env:
+      # DATABASE_URL is NOT set here — the codefreedom litellm image (default)
+      # auto-sets it via its embedded PG entrypoint before launching LiteLLM.
+      # If you override LITELLM_IMAGE to a non-codefreedom image, set
+      # DATABASE_URL in .env to re-enable Prisma persistence:
       #   DATABASE_URL=postgresql://user:pass@host:5432/dbname
 
       # ── LiteLLM Router Settings ─────────────────────────────────────────
