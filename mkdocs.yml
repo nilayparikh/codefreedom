@@ -111,6 +111,16 @@ nav:
       - Install: getting-started/install.md
       - First run: getting-started/first-run.md
       - Free models: getting-started/free-models.md
+  - Features:
+      - Overview: features/claude-code.md
+      - Proxy: features/proxy.md
+      - Tools:
+          - Overview: features/tools.md
+          - Chrome: features/chrome.md
+          - Web: features/web.md
+          - GitHub: features/github.md
+      - VS Code: features/vscode.md
+      - Backup: features/backup.md
   - Guides:
       - Overview: guides/index.md
       - Code agents: guides/agents.md
@@ -125,6 +135,13 @@ nav:
           - GitHub MCP: guides/tools/github.md
       - VS Code: guides/vscode.md
       - Admin: guides/admin.md
+  - Recipes:
+      - Overview: recipes/index.md
+      - OpenCode Zen: recipes/opencode-zen.md
+      - NVIDIA: recipes/nvidia.md
+      - Azure Foundry: recipes/azure.md
+      - OpenAI Compatible: recipes/openai-compatible.md
+      - Anthropic Compatible: recipes/anthropic-compatible.md
   - Reference:
       - Overview: reference/index.md
       - Architecture: reference/architecture.md
@@ -135,6 +152,7 @@ nav:
           - Database: reference/proxy/database.md
           - Docker mode: reference/proxy/docker.md
           - Web search interception: reference/proxy/websearch-interception.md
+          - Reasoning-efforts mapping: reference/proxy/reasoning-efforts.md
           - Providers:
               - Overview: reference/proxy/providers/index.md
               - DeepSeek:
@@ -177,8 +195,9 @@ nav:
                   - Qwen3.6-35B-A3B: reference/proxy/providers/local/qwen3.6-35b-a3b.md
       - FAQ:
           - Web search: reference/faq/web-search.md
-      - Troubleshooting: reference/troubleshooting.md
-      - License: reference/license.md
+  - Help: help.md
+  - Contribute: contribute.md
+  - License: license.md
 
 extra_css:
   - stylesheets/extra.css

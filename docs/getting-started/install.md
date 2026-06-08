@@ -1,20 +1,22 @@
 ---
 title: Install
-description: Install the CodeFreedom CLI and its prerequisites.
+description: Install CodeFreedom in under a minute.
 ---
 
 # Install
 
-Two prerequisites, one command. The whole install takes about a minute.
+Two prerequisites, one command.
 
 ## Prerequisites
 
-| What         | Required For                                 | How to Check                                          |
-| ------------ | -------------------------------------------- | ----------------------------------------------------- |
-| Python 3.10+ | CLI                                          | `python3 --version`                                   |
-| Docker       | Sandbox + proxy (hard prerequisite for both) | [docker.com](https://docs.docker.com/engine/install/) |
+| What | Why You Need It | Check |
+|------|----------------|-------|
+| Python 3.10+ | Runs the CLI | `python3 --version` |
+| Docker | Sandbox + proxy | `docker --version` |
 
-> **Docker is required for the proxy.** The proxy always runs via `docker compose` against the self-hosted `codefreedom:litellm-latest` image — no host-side `litellm` install is needed.
+**Docker is required for the proxy.** The proxy runs in a Docker container — no host-side `litellm` install needed.
+
+[Install Docker →](https://docs.docker.com/engine/install/)
 
 ## Install the CLI
 
@@ -38,6 +40,15 @@ Two prerequisites, one command. The whole install takes about a minute.
     pip install -e ".[all]"
     ```
 
+### What It Looks Like
+
+```bash
+$ pip install codefreedom
+Resolved 3 packages in 320ms
+Installed 1 package in 3ms
+ + codefreedom==0.1.6
+```
+
 ## Verify
 
 ```bash
@@ -45,8 +56,14 @@ codefreedom --version
 codefreedom --help
 ```
 
-You should see the version and the top-level command list (`claude`, `proxy`, `tools`, `admin`, `vscode`).
+You should see the version and a list of commands: `claude`, `proxy`, `tools`, `admin`, `vscode`, `update`.
 
-## Next step
+## Upgrade
 
-[First run →](first-run.md)
+```bash
+pip install --upgrade codefreedom
+```
+
+## Next Step
+
+[First run →](first-run.md) — initialize config, start the proxy, launch your first session.

@@ -172,4 +172,4 @@ CodeFreedom makes switching trivial -- change the provider YAML, update your env
 
 - [Providers Overview](../reference/proxy/providers/index.md) -- enabling, disabling, and adding providers.
 - [Proxy Configuration](../reference/proxy/config.md) -- LiteLLM proxy setup.
-- [Troubleshooting](../reference/troubleshooting.md) -- common issues with proxy and model routing.
+- [Help](../help.md) -- common issues with proxy and model routing.

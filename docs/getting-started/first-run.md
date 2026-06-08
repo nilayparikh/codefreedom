@@ -1,70 +1,95 @@
 ---
 title: First Run
-description: Initialize CodeFreedom, start the proxy, and launch your first code agent session.
-hide:
-  - toc
+description: Three commands to get Claude Code talking to an AI model.
 ---
 
-# First run
+# First Run
 
-Three commands, zero configuration needed. You should have Claude Code talking to a model in under five minutes.
+Three commands. No editing required — defaults work out of the box.
 
-## 1. Initialize `~/.codefreedom`
+## Step 1: Initialize Config
 
 ```bash
 codefreedom --init
 ```
 
-This writes the default profile, `.env.claude` / `.env.claude.secrets`, and the proxy configs. **You don't need to edit anything yet** — defaults are wired to a free model.
+This creates config files in `~/.codefreedom/`. You don't need to edit anything yet.
 
-## 2. Start the proxy
+**Output:**
+
+```
+[claude init] [CREATE] ~/.codefreedom/profiles/claude-code.json
+[claude init] [CREATE] ~/.codefreedom/profiles/claude-code.schema.json
+[claude init] [CREATE] ~/.codefreedom/.env.claude
+[claude init] [CREATE] ~/.codefreedom/.env.claude.secrets
+
+[claude init] Done -- 4 created.
+[proxy init] [CREATE] ~/.codefreedom/proxy/config/config.yaml
+[proxy init] [CREATE] ~/.codefreedom/proxy/docker-compose.yaml
+[proxy init] [CREATE] ~/.codefreedom/.env.proxy
+[proxy init] [CREATE] ~/.codefreedom/.env.proxy.secrets
+...
+
+[proxy init] Done -- 12 created.
+[init] Done.
+```
+
+If you run it again, it skips (won't overwrite existing files):
+
+```
+[claude init] Config already exists — init only bootstraps clean directories.
+```
+
+## Step 2: Start the Proxy
 
 ```bash
 codefreedom proxy start
 ```
 
-This pulls and starts the `codefreedom:litellm-latest` image. On first run it also pulls the `codefreedom:web-bridge` image. Wait for the `[OK] Proxy ready at http://localhost:4000` line.
+This pulls and starts the proxy Docker container. First run takes a moment to pull the image.
 
-Verify it works:
+Wait for:
+
+```
+[OK] Proxy ready at http://localhost:4000
+```
+
+Check it's running:
 
 ```bash
 codefreedom proxy status
 ```
 
-## 3. Launch the code agent
+## Step 3: Launch Claude Code
 
 ```bash
 codefreedom claude
 ```
 
-You're now in Claude Code, routed through the proxy. Try a model switch:
+You're now in Claude Code, routed through your proxy. Try switching models:
 
 ```bash
-codefreedom claude --profile ultra    # the strongest model
-codefreedom claude --profile air      # the smallest, fastest
-codefreedom claude --list-profiles    # see all built-in profiles
+codefreedom claude --profile ultra    # strongest model
+codefreedom claude --profile air      # fastest, lightweight
+codefreedom claude --list-profiles    # see all profiles
 ```
 
-## What just happened
+## What Happened
 
-```mermaid
-graph LR
-    CC["<b>codefreedom claude</b>"] --> Proxy["<b>LiteLLM Proxy</b><br/>:4000"]
-    Proxy --> Model["Default model<br/>(configured by profile)"]
-```
+- `codefreedom --init` wrote profile and proxy config files
+- `codefreedom proxy start` brought up the proxy container
+- `codefreedom claude` loaded your profile, pointed Claude Code at `localhost:4000`
 
-- `codefreedom --init` wrote `~/.codefreedom/profiles/claude-code.json` and `.env.claude*`.
-- `codefreedom proxy start` brought up the proxy via `docker compose`.
-- `codefreedom claude` read your profile, set the right env vars, and launched Claude Code pointed at `localhost:4000`.
-
-## Stop the proxy when done
+## Stop the Proxy
 
 ```bash
 codefreedom proxy stop
 ```
 
-The proxy is independent of any `codefreedom claude` session — you can leave it running between sessions or stop it to free resources.
+The proxy is independent of Claude Code sessions. Leave it running between sessions, or stop it to free resources.
 
-## Next step
+## Next Steps
 
-You've used the default profile. Now learn how **[profiles](../guides/profiles.md)** work, and try a **[free model](free-models.md)** if you want to explore without spending on API credits.
+- **[Profiles](../features/claude-code.md#profiles)** — switch models with one flag
+- **[Free models](../recipes/opencode-zen.md)** — try models without spending credits
+- **[Sandbox mode](../features/claude-code.md#sandbox-mode)** — isolated Docker containers
