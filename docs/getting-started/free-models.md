@@ -20,56 +20,56 @@ Free endpoints lower the barrier to experimentation. They're great for:
 
 [OpenRouter](https://openrouter.ai/) offers a selection of free-tier models alongside its paid catalog. Free models are marked with `:free` in the model identifier.
 
-| Model                                                                                               | Identifier                                          | Notes                                    |
-| --------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------- |
-| [Nemotron-3-Ultra-550B-A55B](../reference/proxy/providers/openrouter/nemotron-3-ultra-550b-a55b.md) | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | Large context, vision support            |
-| [FreeRouter](../reference/proxy/providers/openrouter/freerouter.md)                                 | `openrouter/openrouter/free`                        | Auto-routes to best available free model |
+| Model                                                                  | Identifier                                          | Notes                                    |
+| ---------------------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------- |
+| [Nemotron-3-Ultra-550B-A55B](../recipes/providers/openrouter/index.md) | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | Large context, vision support            |
+| [FreeRouter](../recipes/providers/openrouter/index.md)                 | `openrouter/openrouter/free`                        | Auto-routes to best available free model |
 
 **Setup:** Requires a free OpenRouter account and API key. Set `OPENROUTER_API_KEY` in `~/.codefreedom/.env.proxy.secrets`.
 
-**CodeFreedom config:** See [OpenRouter provider docs](../reference/proxy/providers/openrouter/index.md).
+**CodeFreedom config:** See [OpenRouter provider docs](../recipes/providers/openrouter/index.md).
 
 ### OpenCode Zen
 
 [OpenCode Zen](https://opencode.ai/zen) provides free-tier models through an OpenAI-compatible API. You need a free account and API key — sign up at [opencode.ai/auth](https://opencode.ai/auth). Free models are subject to quota and rate limiting.
 
-| Model                                                                                    | Identifier                      | Notes                                             |
-| ---------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------- |
-| [MiMo-V2.5-FREE](../reference/proxy/providers/opencode-zen/mimo-v2.5.md)                 | `openai/mimo-v2.5-free`         | Xiaomi, 1M context, vision + reasoning            |
-| [Nemotron-3-Super-FREE](../reference/proxy/providers/opencode-zen/nemotron-3-super.md)   | `openai/nemotron-3-super-free`  | NVIDIA, 262K, text-only                           |
-| [Nemotron-3-Ultra-FREE](../reference/proxy/providers/opencode-zen/nemotron-3-ultra.md)   | `openai/nemotron-3-ultra-free`  | NVIDIA, 1M context, vision                        |
-| [DeepSeek-V4-Flash-FREE](../reference/proxy/providers/opencode-zen/deepseek-v4-flash.md) | `openai/deepseek-v4-flash-free` | 1M context, 384K output, fast inference           |
-| [Big-Pickle](../reference/proxy/providers/opencode-zen/big-pickle.md)                    | `openai/big-pickle`             | 262K, general purpose, text-only                  |
-| [MiniMax-M3-FREE](../reference/proxy/providers/opencode-zen/minimax-m3.md)               | `minimax/minimax-m3-free`       | 512K context, vision + reasoning, internal parser |
+| Model                                                                | Identifier                      | Notes                                             |
+| -------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------- |
+| [MiMo-V2.5-FREE](../recipes/providers/opencode-zen/index.md)         | `openai/mimo-v2.5-free`         | Xiaomi, 1M context, vision + reasoning            |
+| [Nemotron-3-Super-FREE](../recipes/providers/opencode-zen/index.md)  | `openai/nemotron-3-super-free`  | NVIDIA, 262K, text-only                           |
+| [Nemotron-3-Ultra-FREE](../recipes/providers/opencode-zen/index.md)  | `openai/nemotron-3-ultra-free`  | NVIDIA, 1M context, vision                        |
+| [DeepSeek-V4-Flash-FREE](../recipes/providers/opencode-zen/index.md) | `openai/deepseek-v4-flash-free` | 1M context, 384K output, fast inference           |
+| [Big-Pickle](../recipes/providers/opencode-zen/index.md)             | `openai/big-pickle`             | 262K, general purpose, text-only                  |
+| [MiniMax-M3-FREE](../recipes/providers/opencode-zen/index.md)        | `minimax/minimax-m3-free`       | 512K context, vision + reasoning, internal parser |
 
 **Setup:** Sign up at [opencode.ai/auth](https://opencode.ai/auth), copy your API key, and set `OPENCODE_ZEN_API_KEY` in `~/.codefreedom/.env.proxy.secrets`. Free models don't require a paid balance but are subject to rate limits and quotas.
 
-**CodeFreedom config:** See [OpenCode Zen provider docs](../reference/proxy/providers/opencode-zen/index.md).
+**CodeFreedom config:** See [OpenCode Zen provider docs](../recipes/providers/opencode-zen/index.md).
 
 ### NVIDIA Free Endpoints
 
 [NVIDIA](https://build.nvidia.com/explore/discover) offers free serverless API endpoints for select foundation models. You need a free NVIDIA account and API key from [build.nvidia.com](https://build.nvidia.com) — no billing required to access free endpoints.
 
-| Model                                                                         | Identifier                             | Notes                         |
-| ----------------------------------------------------------------------------- | -------------------------------------- | ----------------------------- |
-| [DeepSeek-V4-Flash](../reference/proxy/providers/nvidia/deepseek-v4-flash.md) | `openai/deepseek-ai/deepseek-v4-flash` | 1M context, 384K output       |
-| [DeepSeek-V4-Pro](../reference/proxy/providers/nvidia/deepseek-v4-pro.md)     | `openai/deepseek-ai/deepseek-v4-pro`   | 1M context, strong reasoning  |
-| [GLM-5.1](../reference/proxy/providers/nvidia/glm-5.1.md)                     | `openai/z-ai/glm-5.1`                  | 204K, multilingual, reasoning |
-| [Kimi-K2.6](../reference/proxy/providers/nvidia/kimi-k2.6.md)                 | `openai/moonshotai/kimi-k2.6`          | 256K, vision, thinking mode   |
-| [Step-3.7-Flash](../reference/proxy/providers/nvidia/step-3.7-flash.md)       | `stepfun-ai/step-3.7-flash`            | 262K, vision, fast            |
+| Model                                                     | Identifier                             | Notes                         |
+| --------------------------------------------------------- | -------------------------------------- | ----------------------------- |
+| [DeepSeek-V4-Flash](../recipes/providers/nvidia/index.md) | `openai/deepseek-ai/deepseek-v4-flash` | 1M context, 384K output       |
+| [DeepSeek-V4-Pro](../recipes/providers/nvidia/index.md)   | `openai/deepseek-ai/deepseek-v4-pro`   | 1M context, strong reasoning  |
+| [GLM-5.1](../recipes/providers/nvidia/index.md)           | `openai/z-ai/glm-5.1`                  | 204K, multilingual, reasoning |
+| [Kimi-K2.6](../recipes/providers/nvidia/index.md)         | `openai/moonshotai/kimi-k2.6`          | 256K, vision, thinking mode   |
+| [Step-3.7-Flash](../recipes/providers/nvidia/index.md)    | `stepfun-ai/step-3.7-flash`            | 262K, vision, fast            |
 
 **Setup:** Sign up at [build.nvidia.com](https://build.nvidia.com), get your free API key, and set `NVIDIA_API_KEY` in `~/.codefreedom/.env.proxy.secrets`. Free endpoints are subject to rate limits.
 
-**CodeFreedom config:** See [NVIDIA provider docs](../reference/proxy/providers/nvidia/index.md).
+**CodeFreedom config:** See [NVIDIA provider docs](../recipes/providers/nvidia/index.md).
 
 ### Local Models
 
 Running models locally is the ultimate in privacy and control. No data leaves your machine. The two pre-configured entries in `local.yaml` map to `CodeFreedom/Pro` and `CodeFreedom/Air`.
 
-| Model                                                                    | Port | Identifier               | Notes                   |
-| ------------------------------------------------------------------------ | ---- | ------------------------ | ----------------------- |
-| [Qwen3.6-27B](../reference/proxy/providers/local/qwen3.6-27b.md)         | 8000 | `openai/qwen3.6_27b`     | Primary, 131K context   |
-| [Qwen3.6-35B-A3B](../reference/proxy/providers/local/qwen3.6-35b-a3b.md) | 8001 | `openai/qwen3.6_35b_a3b` | Secondary, 262K context |
+| Model                                                  | Port | Identifier               | Notes                   |
+| ------------------------------------------------------ | ---- | ------------------------ | ----------------------- |
+| [Qwen3.6-27B](../recipes/providers/local/index.md)     | 8000 | `openai/qwen3.6_27b`     | Primary, 131K context   |
+| [Qwen3.6-35B-A3B](../recipes/providers/local/index.md) | 8001 | `openai/qwen3.6_35b_a3b` | Secondary, 262K context |
 
 **Inference servers** (any of these works with the local provider):
 
@@ -79,7 +79,7 @@ Running models locally is the ultimate in privacy and control. No data leaves yo
 | [LM Studio](https://lmstudio.ai/) | GUI for local models with API server              |
 | [vLLM](https://docs.vllm.ai/)     | High-throughput serving for self-hosted models    |
 
-**Setup:** Point CodeFreedom's local provider at your inference server. See [Local provider docs](../reference/proxy/providers/local/index.md).
+**Setup:** Point CodeFreedom's local provider at your inference server. See [Local provider docs](../recipes/providers/local/index.md).
 
 ## What to Watch Out For
 
@@ -144,7 +144,7 @@ Free models use the same provider YAML pattern as paid providers. The only diffe
 3. **Start the proxy** -- `codefreedom proxy start` or `codefreedom proxy start --docker`.
 4. **Launch** -- `codefreedom claude` routes through your configured free models.
 
-See [Providers](../reference/proxy/providers/index.md) for the full provider configuration guide.
+See [Providers](../recipes/providers/index.md) for the full provider configuration guide.
 
 ## When to Upgrade to Paid
 
@@ -170,6 +170,5 @@ CodeFreedom makes switching trivial -- change the provider YAML, update your env
 
 ## See Also
 
-- [Providers Overview](../reference/proxy/providers/index.md) -- enabling, disabling, and adding providers.
-- [Proxy Configuration](../reference/proxy/config.md) -- LiteLLM proxy setup.
-- [Help](../help.md) -- common issues with proxy and model routing.
+- [Providers Overview](../recipes/providers/index.md) -- enabling, disabling, and adding providers.
+- [Proxy Configuration](../features/proxy.md) -- LiteLLM proxy setup.

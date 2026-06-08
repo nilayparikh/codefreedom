@@ -4,6 +4,7 @@ description: One CLI for every code agent — switch models, isolate environment
 hide:
   - navigation
   - toc
+  - path
 ---
 
 <div class="cf-hero">
@@ -33,15 +34,11 @@ CodeFreedom gives you that.
 
 - :material-swap-horizontal:{ .lg .middle } **Switch models instantly**
 
-  ***
-
   DeepSeek for drafting, GPT for reasoning, free models for testing. Same command, different profile. No code changes.
 
   [:octicons-arrow-right-24: Claude Code](features/claude-code.md)
 
 - :material-docker:{ .lg .middle } **Isolated sandboxes**
-
-  ***
 
   Every session runs in a fresh Docker container. CUDA, ROCm, or plain Ubuntu. Clean slate every time.
 
@@ -49,15 +46,11 @@ CodeFreedom gives you that.
 
 - :material-graph-outline:{ .lg .middle } **Self-hosted proxy**
 
-  ***
-
   One local endpoint (`localhost:4000`) routes to any LLM provider. Add API keys, switch backends, track spend.
 
   [:octicons-arrow-right-24: Proxy](features/proxy.md)
 
 - :material-toolbox-outline:{ .lg .middle } **Browser and API tools**
-
-  ***
 
   Headless Chrome, web search, GitHub API — all as Docker containers your code agent can use.
 

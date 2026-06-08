@@ -1,45 +1,75 @@
 ---
 title: Recipes
-description: Step-by-step guides for setting up AI providers with CodeFreedom.
-hide:
-  - toc
+description: Configuration examples and provider setup guides for CodeFreedom.
 ---
 
 # Recipes
 
-Step-by-step guides for adding AI providers to your proxy. Pick a provider, follow the steps, start coding.
+Step-by-step configuration guides for every supported provider. Each recipe covers API keys, model aliases, proxy routing, and profile setup.
 
-## Free to Start
+## Provider Reference
 
-| Recipe                          | What You Get                                    | Cost      |
-| ------------------------------- | ----------------------------------------------- | --------- |
-| [OpenCode Zen](opencode-zen.md) | Multiple free models (MiMo, Nemotron, DeepSeek) | Free      |
-| [NVIDIA](nvidia.md)             | Free serverless endpoints (DeepSeek, GLM, Kimi) | Free tier |
+Detailed YAML configuration reference for each provider — env vars, model tables, and setup steps.
 
-## Paid Providers
+<div class="grid cards" markdown>
 
-| Recipe                                          | What You Get                      |
-| ----------------------------------------------- | --------------------------------- |
-| [Azure Foundry](azure.md)                       | GPT-5.4 family (GPT, Mini, Nano)  |
-| [OpenAI Compatible](openai-compatible.md)       | Any OpenAI-compatible endpoint    |
-| [Anthropic Compatible](anthropic-compatible.md) | Any Anthropic-compatible endpoint |
+- :material-flask:{ .lg .middle } **DeepSeek**
 
-## How All Recipes Work
+  V4-Flash and V4-Pro via DeepSeek API. Enable reasoning, configure profiles.
 
-Every recipe follows the same pattern:
+  [:octicons-arrow-right-24: DeepSeek](providers/deepseek/index.md)
 
-1. **Get an API key** from the provider
-2. **Add the key** to `~/.codefreedom/.env.proxy.secrets`
-3. **Enable the provider** in `~/.codefreedom/proxy/config/config.yaml`
-4. **Restart** the proxy: `codefreedom proxy restart`
+- :material-microsoft-azure:{ .lg .middle } **Azure Foundry**
 
-## First Time?
+  GPT-5.4 family via Microsoft Foundry. Deploy, configure, and route.
 
-If you haven't set up the proxy yet, do this first:
+  [:octicons-arrow-right-24: Azure Foundry](providers/azure-foundry/index.md)
 
-```bash
-codefreedom --init              # Creates all config files
-codefreedom proxy start         # Start the proxy
-```
+- :material-nvidia:{ .lg .middle } **NVIDIA**
 
-Then pick a recipe above and follow along.
+  DeepSeek, GLM, Kimi, Step via NVIDIA AI Endpoints. Zero-cost players.
+
+  [:octicons-arrow-right-24: NVIDIA](providers/nvidia/index.md)
+
+- :material-cloud-braces:{ .lg .middle } **OpenCode Zen**
+
+  Free-tier models — Mimo, Nemotron, DeepSeek, MiniMax-M3. Test without spending.
+
+  [:octicons-arrow-right-24: OpenCode Zen](providers/opencode-zen/index.md)
+
+- :material-swap-horizontal-bold:{ .lg .middle } **OpenRouter**
+
+  Aggregated models via OpenRouter. One API key, many providers.
+
+  [:octicons-arrow-right-24: OpenRouter](providers/openrouter/index.md)
+
+- :material-api:{ .lg .middle } **OpenAI Compatible**
+
+  Any OpenAI-compatible `/v1/chat/completions` endpoint. Bring your own backend.
+
+  [:octicons-arrow-right-24: OpenAI Compatible](providers/openai-compatible/index.md)
+
+- :material-chat:{ .lg .middle } **Anthropic Compatible**
+
+  Any Anthropic-compatible `/v1/messages` endpoint. Claude API and beyond.
+
+  [:octicons-arrow-right-24: Anthropic Compatible](providers/anthropic-compatible/index.md)
+
+- :material-server:{ .lg .middle } **Local**
+
+  Self-hosted inference servers on two ports. Run models on your own hardware.
+
+  [:octicons-arrow-right-24: Local](providers/local/index.md)
+
+</div>
+
+## What's in a Recipe
+
+Each provider page covers:
+
+- **Provider YAML** — the `model_list` entries for LiteLLM proxy config
+- **Environment variables** — API keys, base URLs, and optional overrides
+- **Profile setup** — how to add the provider to your `profiles.json`
+- **Quick start** — minimal steps from API key to working session
+
+For the full YAML reference, see the [Provider Configuration Reference](providers/index.md).
