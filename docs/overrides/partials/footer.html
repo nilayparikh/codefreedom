@@ -1,49 +1,51 @@
 {#-
-  Custom footer for CodeFreedom docs.
+Custom footer for CodeFreedom docs.
 -#}
 <footer class="md-footer">
   {% if "navigation.footer" in features %}
-    {% if page.previous_page or page.next_page %}
-      {% if page.meta and page.meta.hide %}
-        {% set hidden = "hidden" if "footer" in page.meta.hide %}
-      {% endif %}
-      <nav class="md-footer__inner md-grid" aria-label="{{ lang.t('footer') }}" {{ hidden }}>
-        {% if page.previous_page %}
-          {% set direction = lang.t("footer.previous") %}
-          <a href="{{ page.previous_page.url | url }}" class="md-footer__link md-footer__link--prev" aria-label="{{ direction }}: {{ page.previous_page.title | e }}">
-            <div class="md-footer__button md-icon">
-              {% set icon = config.theme.icon.previous or "material/arrow-left" %}
-              {% include ".icons/" ~ icon ~ ".svg" %}
-            </div>
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                {{ direction }}
-              </span>
-              <div class="md-ellipsis">
-                {{ page.previous_page.title }}
-              </div>
-            </div>
-          </a>
-        {% endif %}
-        {% if page.next_page %}
-          {% set direction = lang.t("footer.next") %}
-          <a href="{{ page.next_page.url | url }}" class="md-footer__link md-footer__link--next" aria-label="{{ direction }}: {{ page.next_page.title | e }}">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                {{ direction }}
-              </span>
-              <div class="md-ellipsis">
-                {{ page.next_page.title }}
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              {% set icon = config.theme.icon.next or "material/arrow-right" %}
-              {% include ".icons/" ~ icon ~ ".svg" %}
-            </div>
-          </a>
-        {% endif %}
-      </nav>
+  {% if page.previous_page or page.next_page %}
+  {% if page.meta and page.meta.hide %}
+  {% set hidden = "hidden" if "footer" in page.meta.hide %}
+  {% endif %}
+  <nav class="md-footer__inner md-grid" aria-label="{{ lang.t('footer') }}" {{ hidden }}>
+    {% if page.previous_page %}
+    {% set direction = lang.t("footer.previous") %}
+    <a href="{{ page.previous_page.url | url }}" class="md-footer__link md-footer__link--prev"
+      aria-label="{{ direction }}: {{ page.previous_page.title | e }}">
+      <div class="md-footer__button md-icon">
+        {% set icon = config.theme.icon.previous or "material/arrow-left" %}
+        {% include ".icons/" ~ icon ~ ".svg" %}
+      </div>
+      <div class="md-footer__title">
+        <span class="md-footer__direction">
+          {{ direction }}
+        </span>
+        <div class="md-ellipsis">
+          {{ page.previous_page.title }}
+        </div>
+      </div>
+    </a>
     {% endif %}
+    {% if page.next_page %}
+    {% set direction = lang.t("footer.next") %}
+    <a href="{{ page.next_page.url | url }}" class="md-footer__link md-footer__link--next"
+      aria-label="{{ direction }}: {{ page.next_page.title | e }}">
+      <div class="md-footer__title">
+        <span class="md-footer__direction">
+          {{ direction }}
+        </span>
+        <div class="md-ellipsis">
+          {{ page.next_page.title }}
+        </div>
+      </div>
+      <div class="md-footer__button md-icon">
+        {% set icon = config.theme.icon.next or "material/arrow-right" %}
+        {% include ".icons/" ~ icon ~ ".svg" %}
+      </div>
+    </a>
+    {% endif %}
+  </nav>
+  {% endif %}
   {% endif %}
 
   <div class="md-footer-meta md-typeset">
@@ -52,26 +54,26 @@
         <a href="{{ nav.homepage.url | url }}" class="cf-site-footer__brand-link">{{ config.site_name }}</a>
         <p class="cf-site-footer__tagline">{{ config.site_description }}</p>
         {% if config.copyright %}
-          <p class="cf-site-footer__copy">{{ config.copyright }}</p>
+        <p class="cf-site-footer__copy">{{ config.copyright }}</p>
         {% endif %}
       </div>
 
       {% if config.extra.legal %}
-        <div class="cf-site-footer__section">
-          <p class="cf-site-footer__heading">Legal</p>
-          <div class="cf-site-footer__links">
-            {% for item in config.extra.legal %}
-              <a href="{{ item.link | url }}" class="cf-site-footer__link">{{ item.label }}</a>
-            {% endfor %}
-          </div>
+      <div class="cf-site-footer__section">
+        <p class="cf-site-footer__heading">Legal</p>
+        <div class="cf-site-footer__links">
+          {% for item in config.extra.legal %}
+          <a href="{{ item.link | url }}" class="cf-site-footer__link">{{ item.label }}</a>
+          {% endfor %}
         </div>
+      </div>
       {% endif %}
 
       {% if config.extra.social %}
-        <div class="cf-site-footer__section cf-site-footer__section--social">
-          <p class="cf-site-footer__heading">Follow</p>
-          {% include "partials/social.html" %}
-        </div>
+      <div class="cf-site-footer__section cf-site-footer__section--social">
+        <p class="cf-site-footer__heading">Follow</p>
+        {% include "partials/social.html" %}
+      </div>
       {% endif %}
     </div>
   </div>

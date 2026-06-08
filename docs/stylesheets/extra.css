@@ -4,10 +4,10 @@
  */
 
 :root {
-  --cf-radius-2xl: 2rem;
-  --cf-radius-xl: 1.5rem;
-  --cf-radius-lg: 1.125rem;
-  --cf-radius-md: 0.875rem;
+  --cf-radius-2xl: 0.2rem;
+  --cf-radius-xl: 0.15rem;
+  --cf-radius-lg: 0.12rem;
+  --cf-radius-md: 0.08rem;
   --cf-border-width: 1px;
   --cf-backdrop: saturate(180%) blur(22px);
   --cf-shadow-soft: 0 18px 50px rgba(var(--cf-shadow-rgb), 0.12);
@@ -139,8 +139,8 @@ body::after {
 .md-header,
 .md-tabs {
   background: rgba(var(--cf-bg-rgb), 0.68);
-  backdrop-filter: var(--cf-backdrop);
-  -webkit-backdrop-filter: var(--cf-backdrop);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .md-header {
@@ -176,9 +176,9 @@ body::after {
 .md-search__form,
 .md-source {
   border: var(--cf-border-width) solid var(--cf-border);
-  border-radius: 999px;
-  background: var(--cf-surface);
-  box-shadow: var(--cf-shadow-soft), var(--cf-inset-highlight);
+  border-radius: var(--cf-radius-md);
+  background: transparent;
+  box-shadow: none;
 }
 
 .md-search__input {
@@ -201,14 +201,12 @@ body::after {
 .md-content__inner {
   margin: 1.2rem 0 2rem;
   padding: clamp(1.35rem, 2vw, 2.25rem);
-  border-radius: calc(var(--cf-radius-2xl) + 0.2rem);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 12rem),
-    var(--cf-surface);
-  border: var(--cf-border-width) solid var(--cf-border);
-  box-shadow: var(--cf-shadow-strong), var(--cf-inset-highlight);
-  backdrop-filter: var(--cf-backdrop);
-  -webkit-backdrop-filter: var(--cf-backdrop);
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .md-content {
@@ -220,14 +218,12 @@ body::after {
 }
 
 .md-sidebar__scrollwrap {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 8rem),
-    var(--cf-surface);
-  border: var(--cf-border-width) solid var(--cf-border);
-  border-radius: var(--cf-radius-2xl);
-  box-shadow: var(--cf-shadow-soft), var(--cf-inset-highlight);
-  backdrop-filter: var(--cf-backdrop);
-  -webkit-backdrop-filter: var(--cf-backdrop);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .md-sidebar__inner {
@@ -246,28 +242,30 @@ body::after {
 
 .md-nav--primary > .md-nav__list,
 .md-nav--secondary > .md-nav__list {
-  padding: 0.5rem;
+  padding: 0;
 }
 
 .md-nav__link {
   margin-top: 0.12rem;
   margin-bottom: 0.12rem;
-  padding: 0.42rem 0.7rem;
-  border-radius: 0.85rem;
+  padding: 0.42rem 0.25rem 0.42rem 0.8rem;
+  border-left: 2px solid transparent;
+  border-radius: 0;
   transition:
     background-color 160ms ease,
     color 160ms ease,
-    transform 160ms ease;
+    border-color 160ms ease;
 }
 
 .md-nav__link:hover {
-  background: rgba(127, 156, 214, 0.12);
-  transform: translateX(2px);
+  background: transparent;
+  border-left-color: rgba(127, 156, 214, 0.24);
 }
 
 .md-nav__link--active,
 .md-nav__item .md-nav__link--active {
-  background: rgba(91, 132, 241, 0.14);
+  background: transparent;
+  border-left-color: var(--md-primary-fg-color);
   color: var(--md-primary-fg-color);
   font-weight: 700;
 }
@@ -286,18 +284,18 @@ body::after {
   display: inline-flex;
   align-items: center;
   padding: 0.18rem 0.55rem;
-  border-radius: 999px;
-  background: var(--cf-surface-muted);
+  border-radius: 0;
+  background: transparent;
   border: var(--cf-border-width) solid var(--cf-border);
 }
 
 .md-content__button {
   margin-top: 0;
   padding: 0.45rem;
-  border-radius: 999px;
-  background: var(--cf-surface-muted);
+  border-radius: 0;
+  background: transparent;
   border: var(--cf-border-width) solid var(--cf-border);
-  box-shadow: var(--cf-shadow-soft);
+  box-shadow: none;
 }
 
 .md-typeset {
@@ -348,7 +346,7 @@ body::after {
 .md-typeset li > code,
 .md-typeset td > code {
   padding: 0.18em 0.5em;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--md-code-bg-color);
   border: var(--cf-border-width) solid var(--cf-border);
   font-size: 0.88em;
@@ -356,9 +354,9 @@ body::after {
 
 .highlight pre,
 .md-typeset pre > code {
-  border-radius: var(--cf-radius-xl);
+  border-radius: 0;
   border: var(--cf-border-width) solid var(--cf-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: none;
 }
 
 .md-typeset__table {
@@ -371,9 +369,9 @@ body::after {
   border-collapse: separate;
   border-spacing: 0;
   border: var(--cf-border-width) solid var(--cf-border);
-  border-radius: var(--cf-radius-xl);
-  background: var(--cf-surface-muted);
-  box-shadow: var(--cf-shadow-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .md-typeset table:not([class]) th {
@@ -390,10 +388,10 @@ body::after {
 .admonition,
 details {
   overflow: hidden;
-  border: none;
-  border-radius: var(--cf-radius-xl);
-  background: var(--cf-surface-muted);
-  box-shadow: var(--cf-shadow-soft), var(--cf-inset-highlight);
+  border: var(--cf-border-width) solid var(--cf-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .cf-hero {
@@ -403,14 +401,14 @@ details {
   margin: -0.2rem auto 3rem;
   padding: clamp(2rem, 4vw, 3.25rem);
   text-align: center;
-  border-radius: 2.25rem;
+  border-radius: 0;
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.18), transparent 40%),
     linear-gradient(135deg, var(--cf-surface-strong), var(--cf-surface));
-  border: var(--cf-border-width) solid var(--cf-border-strong);
-  box-shadow: var(--cf-shadow-strong), var(--cf-inset-highlight);
-  backdrop-filter: var(--cf-backdrop);
-  -webkit-backdrop-filter: var(--cf-backdrop);
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .cf-hero::before {
@@ -476,10 +474,10 @@ details {
 .cf-hero__install pre {
   margin: 0;
   padding: 1rem 1.2rem;
-  border-radius: 1.25rem;
+  border-radius: 0;
   background: var(--cf-command-bg);
   border: var(--cf-border-width) solid var(--cf-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: none;
 }
 
 .cf-hero__install code {
@@ -500,10 +498,10 @@ details {
   margin-top: 0.2rem;
   margin-right: 0.35rem;
   padding: 0.8rem 1.15rem;
-  border-radius: 999px;
+  border-radius: 0;
   border: var(--cf-border-width) solid var(--cf-border-strong);
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: var(--cf-shadow-soft);
+  background: transparent;
+  box-shadow: none;
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,
@@ -512,8 +510,8 @@ details {
 }
 
 .md-typeset .md-button:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--cf-shadow-strong);
+  transform: none;
+  box-shadow: none;
 }
 
 .md-typeset .md-button--primary {
@@ -541,37 +539,30 @@ details {
   overflow: hidden;
   min-height: 100%;
   padding: 1.45rem;
-  border-radius: var(--cf-radius-2xl);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 10rem),
-    var(--cf-surface-muted);
+  border-radius: 0;
+  background: transparent;
   border: var(--cf-border-width) solid var(--cf-border);
-  box-shadow: var(--cf-shadow-soft), var(--cf-inset-highlight);
-  backdrop-filter: var(--cf-backdrop);
-  -webkit-backdrop-filter: var(--cf-backdrop);
+  border-width: 1px 0 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   transition:
-    transform 180ms ease,
+    background-color 180ms ease,
     border-color 180ms ease,
-    box-shadow 180ms ease;
+    color 180ms ease;
 }
 
 .grid.cards > ul > li::before,
 .grid.cards > ol > li::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--md-primary-fg-color), var(--md-accent-fg-color));
-  opacity: 0.8;
+  content: none;
 }
 
 .grid.cards > ul > li:hover,
 .grid.cards > ol > li:hover {
-  transform: translateY(-6px);
+  transform: none;
+  background: rgba(255, 255, 255, 0.02);
   border-color: var(--cf-border-strong);
-  box-shadow: var(--cf-shadow-strong), var(--cf-inset-highlight);
+  box-shadow: none;
 }
 
 .grid.cards > ul > li > p > .lg,
@@ -646,7 +637,7 @@ details {
 .md-footer-meta__inner {
   padding-top: 1rem;
   padding-bottom: 2.2rem;
-  border-top: none;
+  border-top: var(--cf-border-width) solid var(--cf-border);
 }
 
 .md-copyright {
@@ -663,15 +654,13 @@ details {
 
 .cf-site-footer__brand,
 .cf-site-footer__section {
-  padding: 1.35rem;
-  border: var(--cf-border-width) solid var(--cf-border);
-  border-radius: var(--cf-radius-xl);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 10rem),
-    var(--cf-surface-muted);
-  box-shadow: var(--cf-shadow-soft), var(--cf-inset-highlight);
-  backdrop-filter: var(--cf-backdrop);
-  -webkit-backdrop-filter: var(--cf-backdrop);
+  padding: 1.35rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .cf-site-footer__brand-link {
@@ -736,9 +725,9 @@ details {
   height: 2.65rem;
   margin: 0;
   border: var(--cf-border-width) solid var(--cf-border-strong);
-  border-radius: 999px;
-  background: var(--cf-surface);
-  box-shadow: var(--cf-shadow-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   transition:
     transform 160ms ease,
     border-color 160ms ease,
@@ -746,9 +735,9 @@ details {
 }
 
 .cf-site-footer__section--social .md-social__link:hover {
-  transform: translateY(-2px);
+  transform: none;
   border-color: var(--md-primary-fg-color);
-  background: var(--cf-surface-strong);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 @media screen and (max-width: 76.234375em) {
@@ -764,7 +753,7 @@ details {
 
   .md-content__inner {
     margin-top: 0.85rem;
-    border-radius: 1.6rem;
+    border-radius: 0;
   }
 
   .cf-site-footer {
@@ -788,7 +777,7 @@ details {
   .cf-hero {
     margin-bottom: 2rem;
     padding: 1.5rem 1.1rem;
-    border-radius: 1.75rem;
+    border-radius: 0;
   }
 
   .cf-hero > h1 {
