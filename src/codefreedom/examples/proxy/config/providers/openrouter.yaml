@@ -24,61 +24,88 @@
 #   OPENROUTER_API_KEY=sk-or-your-key
 #
 # Model names use the openrouter/ prefix with the full provider/model path.
-# To add more models, copy the block below and adjust model_name and model.
+#
+# ── WHY 1-2 EXAMPLES ─────────────────────────────────────────────────────────
+# This file ships with ONE active model and ONE commented example. OpenRouter
+# hosts hundreds of models — enumerating them all is unrealistic. One active
+# model shows the pattern; one commented example shows a variation (dynamic
+# endpoint). Uncomment and adapt for additional models as needed.
 # ──────────────────────────────────────────────────────────────────────────
 
-# model_list:
-#   - model_name: OpenRouter/Nemotron-3-Ultra-550B-A55B
-#     litellm_params: &openrouter_params
-#       model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
-#       api_base: os.environ/OPENROUTER_BASE_URL
-#       api_key: os.environ/OPENROUTER_API_KEY
-#       timeout: 300
-#       drop_params: true
-#       extra_body:
-#         stream_options:
-#           include_usage: true
-#
-#     model_info: &openrouter_model_info
-#       id: "openrouter-nemotron-3-ultra-550b-a55b"
-#       mode: chat
-#       supports_system_messages: true
-#       supports_native_streaming: true
-#       supports_vision: true
-#       supported_openai_params: &openrouter_supported_openai_params
-#         - tools
-#         - tool_choice
-#         - parallel_tool_calls
-#         - response_format
-#         - max_tokens
-#         - max_completion_tokens
-#         - stream
-#         - stream_options
-#         - temperature
-#         - top_p
-#         - stop
-#         - reasoning_effort
-#
-#   - model_name: OpenRouter/FreeRouter
-#     litellm_params:
-#       <<: *openrouter_params
-#       model: openrouter/openrouter/free
-#
-#     model_info:
-#       <<: *openrouter_model_info
-#       id: "openrouter-freerouter"
-#       # FreeRouter is a dynamic load-balanced endpoint with no native
-#       # reasoning_effort gradient — drop that param to match the
-#       # "only none" capability advertised to VS Code.
-#       supported_openai_params: &openrouter_freerouter_supported_openai_params
-#         - tools
-#         - tool_choice
-#         - parallel_tool_calls
-#         - response_format
-#         - max_tokens
-#         - max_completion_tokens
-#         - stream
-#         - stream_options
-#         - temperature
-#         - top_p
-#         - stop
+model_list:
+  # ── ACTIVE MODEL ──────────────────────────────────────────────────────────
+  # Set OPENROUTER_API_KEY and OPENROUTER_BASE_URL in .env.proxy.secrets.
+  # Works immediately after proxy restart.
+  - model_name: OpenRouter/Nemotron-3-Ultra-550B-A55B
+    litellm_params:
+      model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+      api_base: os.environ/OPENROUTER_BASE_URL
+      api_key: os.environ/OPENROUTER_API_KEY
+      timeout: 300
+      drop_params: true
+      extra_body:
+        stream_options:
+          include_usage: true
+
+    model_info:
+      id: "openrouter-nemotron-3-ultra-550b-a55b"
+      mode: chat
+      supports_system_messages: true
+      supports_native_streaming: true
+      supports_vision: true
+      supported_openai_params: &openrouter_supported_openai_params
+        - tools
+        - tool_choice
+        - parallel_tool_calls
+        - response_format
+        - max_tokens
+        - max_completion_tokens
+        - stream
+        - stream_options
+        - temperature
+        - top_p
+        - stop
+        - reasoning_effort
+
+    codefreedom:
+      plugins:
+        reasoning-efforts:
+          rule: openrouter-nemotron-3-ultra
+
+  # ── EXAMPLE: Dynamic load-balanced endpoint ───────────────────────────────
+  # FreeRouter auto-routes to the best available free model. It has no native
+  # reasoning_effort gradient (all levels map to none), so it's excluded from
+  # the supported params to avoid confusing clients.
+  #
+  # - model_name: OpenRouter/FreeRouter
+  #   litellm_params:
+  #     model: openrouter/openrouter/free
+  #     api_base: os.environ/OPENROUTER_BASE_URL
+  #     api_key: os.environ/OPENROUTER_API_KEY
+  #     timeout: 300
+  #     drop_params: true
+  #     extra_body:
+  #       stream_options:
+  #         include_usage: true
+  #   model_info:
+  #     id: "openrouter-freerouter"
+  #     mode: chat
+  #     supports_system_messages: true
+  #     supports_native_streaming: true
+  #     supports_vision: true
+  #     supported_openai_params:
+  #       - tools
+  #       - tool_choice
+  #       - parallel_tool_calls
+  #       - response_format
+  #       - max_tokens
+  #       - max_completion_tokens
+  #       - stream
+  #       - stream_options
+  #       - temperature
+  #       - top_p
+  #       - stop
+  #   codefreedom:
+  #     plugins:
+  #       reasoning-efforts:
+  #         rule: openrouter-freerouter

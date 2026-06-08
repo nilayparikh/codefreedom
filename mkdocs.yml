@@ -194,7 +194,10 @@ nav:
                       - Web search: reference/faq/web-search.md
       - Help: help.md
       - Contribute: contribute.md
-      - License: license.md
+      - License:
+              - License: license.md
+              - Terms & Conditions: terms.md
+              - Privacy Policy: privacy.md
 
 extra:
       generator: false
