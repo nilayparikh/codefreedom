@@ -32,3 +32,5 @@ site/
 
 # Camoufox tool — tracked for release builds
 .venv-mkdocs/
+# .mcp.json
+.mcp*.json

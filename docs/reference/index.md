@@ -43,20 +43,12 @@ Lookup material. Read these when you need to understand how something works or s
 
   [:octicons-arrow-right-24: FAQ](faq/web-search.md)
 
-- :material-bug-outline:{ .lg .middle } **Troubleshooting**
-
-  ***
-
-  Common errors, Docker quirks, and proxy debugging tips.
-
-  [:octicons-arrow-right-24: Troubleshooting](troubleshooting.md)
-
 - :material-scale-balance:{ .lg .middle } **License**
 
   ***
 
   Apache 2.0 — see the NOTICE file for attributions.
 
-  [:octicons-arrow-right-24: License](license.md)
+  [:octicons-arrow-right-24: License](../license.md)
 
 </div>

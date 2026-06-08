@@ -1,168 +1,87 @@
 ---
 title: CodeFreedom
-description: One CLI for every code agent — simple LLM routing, sandboxing, and profile management. All configuration in ~/.codefreedom.
+description: One CLI for every code agent — switch models, isolate environments, stop fighting config.
 hide:
   - toc
 ---
 
-<div class="cf-hero" markdown>
-
 # CodeFreedom
 
-<div class="cf-hero__tagline" markdown>
-
-**One CLI for every code agent.**  
-Switch LLM providers, isolate environments, and stop fighting config sprawl — all from `~/.codefreedom`.
-
-</div>
-
-<div class="cf-hero__install" markdown>
+**One CLI for every code agent.** Switch LLM providers, isolate environments, and manage everything from `~/.codefreedom`.
 
 ```bash
 pip install codefreedom
 ```
 
-</div>
-
-<div class="cf-hero__buttons" markdown>
-[:material-rocket-launch: Get started](getting-started/install.md){ .md-button .md-button--primary }
-[:material-book-open-variant: Reference](reference/index.md){ .md-button }
+[:material-rocket-launch: Get Started](getting-started/install.md){ .md-button .md-button--primary }
 [:material-github: GitHub](https://github.com/nilayparikh/codefreedom){ .md-button }
-</div>
 
-</div>
+## What Problem Does This Solve
 
-## Why CodeFreedom
+You have code agents (Claude Code, Cursor, etc.). You want to switch between AI models (DeepSeek, GPT, Claude) without reconfiguring everything. You want isolated environments. You want one place for all your settings.
+
+CodeFreedom gives you that.
+
+## What You Get
 
 <div class="grid cards" markdown>
 
-- :material-swap-horizontal:{ .lg .middle } **Switch models, not configs**
+- :material-swap-horizontal:{ .lg .middle } **Switch models instantly**
 
   ***
 
-  DeepSeek for drafting, Azure for reasoning, OpenCode Zen for free-tier exploration. Same CLI, different profile. No agent code changes.
+  DeepSeek for drafting, GPT for reasoning, free models for testing. Same command, different profile. No code changes.
 
-  [:octicons-arrow-right-24: Profile system](guides/profiles.md)
+  [:octicons-arrow-right-24: Claude Code](features/claude-code.md)
 
-- :material-shield-check:{ .lg .middle } **Isolated, reproducible sandboxes**
+- :material-docker:{ .lg .middle } **Isolated sandboxes**
 
   ***
 
-  CUDA, ROCm, or plain Ubuntu Docker images. Every session gets a fresh ephemeral container — no state leaks between runs.
+  Every session runs in a fresh Docker container. CUDA, ROCm, or plain Ubuntu. Clean slate every time.
 
-  [:octicons-arrow-right-24: Sandbox mode](guides/sandbox.md)
+  [:octicons-arrow-right-24: Sandbox](features/claude-code.md#sandbox-mode)
 
 - :material-graph-outline:{ .lg .middle } **Self-hosted proxy**
 
   ***
 
-  LiteLLM at `http://localhost:4000`. Provider failover, spend tracking, model aliases — all opt-in.
+  One local endpoint (`localhost:4000`) routes to any LLM provider. Add API keys, switch backends, track spend.
 
-  [:octicons-arrow-right-24: Proxy setup](reference/proxy/index.md)
+  [:octicons-arrow-right-24: Proxy](features/proxy.md)
 
-- :material-toolbox-outline:{ .lg .middle } **Browser tools that just work**
+- :material-toolbox-outline:{ .lg .middle } **Browser and API tools**
 
   ***
 
-  Headless Chrome via CDP for automation. Web search for stealth browsing. Lifecycle managed automatically per session.
+  Headless Chrome, web search, GitHub API — all as Docker containers your code agent can use.
 
-  [:octicons-arrow-right-24: Browser tools](guides/tools/index.md)
+  [:octicons-arrow-right-24: Tools](features/tools.md)
 
 </div>
 
-## Quick start
+## How It Works
 
-=== "Linux / macOS"
-
-    ```bash
-    pip install codefreedom
-    codefreedom --init
-    codefreedom proxy start
-    codefreedom claude
-    ```
-
-=== "Windows"
-
-    ```powershell
-    py -3 -m pip install codefreedom
-    py -3 -m codefreedom --init
-    py -3 -m codefreedom proxy start
-    py -3 -m codefreedom claude
-    ```
-
-=== "From source"
-
-    ```bash
-    git clone https://github.com/nilayparikh/codefreedom.git
-    cd codefreedom
-    pip install -e ".[all]"
-    codefreedom --init
-    codefreedom proxy start
-    codefreedom claude
-    ```
-
-## Architecture at a glance
-
-CodeFreedom orchestrates code agents through their **publicly supported interfaces only** — environment variables, CLI flags, and API endpoints. No patching, no reverse-engineering.
-
-```mermaid
-graph LR
-    CLI["<b>codefreedom CLI</b>"]
-    CLI --> Claude["Claude Code"]
-    CLI --> Proxy["LiteLLM Proxy<br/>:4000"]
-    Claude --> Proxy
-    Proxy --> DS["DeepSeek"]
-    Proxy --> AZ["Azure Foundry"]
-    Proxy --> NV["NVIDIA"]
-    Proxy --> OZ["OpenCode Zen"]
-    Proxy --> OR["OpenRouter"]
-    Proxy --> Local["Local models"]
+```
+You → codefreedom claude → LiteLLM Proxy → Your chosen AI model
 ```
 
-## Prerequisites
+1. You run `codefreedom claude`
+2. CodeFreedom sets up environment variables from your profile
+3. Claude Code talks to your local proxy at `localhost:4000`
+4. The proxy routes the request to whichever AI model you configured
 
-| What         | Required For                                 | How to Check                                          |
-| ------------ | -------------------------------------------- | ----------------------------------------------------- |
-| Python 3.10+ | CLI                                          | `python3 --version`                                   |
-| Docker       | Sandbox + proxy (hard prerequisite for both) | [docker.com](https://docs.docker.com/engine/install/) |
-| Node.js      | Local Claude Code                            | `npm install -g @anthropic-ai/claude-code`            |
+Change the model? Edit one line in your profile. Done.
 
-> **Docker is required for the proxy.** The proxy always runs via `docker compose` against the self-hosted `codefreedom:litellm-latest` image — no host-side `litellm` install is needed.
+## Quick Start
 
-## What's next?
+Four commands, five minutes:
 
-<div class="grid cards" markdown>
+```bash
+pip install codefreedom          # Install
+codefreedom --init               # Set up config
+codefreedom proxy start          # Start the proxy
+codefreedom claude               # Launch Claude Code
+```
 
-- :material-cog-outline:{ .lg .middle } **Configuration**
-
-  ***
-
-  The full `.env` chain, profile inheritance, and `${VAR}` interpolation.
-
-  [:octicons-arrow-right-24: Environment](reference/environment.md)
-
-- :material-graph-outline:{ .lg .middle } **Architecture**
-
-  ***
-
-  How the CLI, profiles, sandbox, and proxy fit together.
-
-  [:octicons-arrow-right-24: Architecture](reference/architecture.md)
-
-- :material-help-circle-outline:{ .lg .middle } **Troubleshooting**
-
-  ***
-
-  Common issues, Docker quirks, and proxy debugging.
-
-  [:octicons-arrow-right-24: Troubleshooting](reference/troubleshooting.md)
-
-- :material-scale-balance:{ .lg .middle } **License**
-
-  ***
-
-  Apache 2.0 — see the NOTICE file for attributions.
-
-  [:octicons-arrow-right-24: License](reference/license.md)
-
-</div>
+[Get started step by step →](getting-started/install.md)
