@@ -4,6 +4,9 @@
 #   cp -r litellm.examples/config litellm/
 #
 # Then customize litellm/config/config.yaml and providers/ for your setup.
+#
+# New to LiteLLM? Read understanding-litellm.md in this directory for a
+# field-by-field guide to every section of this config and the provider YAMLs.
 # ──────────────────────────────────────────────────────────────────────────────
 # Key concepts:
 #   model_group_alias  → maps CodeFreedom/ names to specific provider models

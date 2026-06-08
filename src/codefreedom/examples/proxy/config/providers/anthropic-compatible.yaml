@@ -21,7 +21,9 @@
 # default API key, no default model name, and no default endpoint. Every
 # deployment is different. The example below shows the full structure; copy,
 # uncomment, and adapt to your backend. See the README.md in this directory
-# for the 1-2 example philosophy used by the other provider files.
+# for the philosophy used by the other provider files.
+#
+# Field-by-field explanations: see ../understanding-litellm.md
 # ──────────────────────────────────────────────────────────────────────────
 
 # ── HOW TO CONFIGURE ───────────────────────────────────────────────────────

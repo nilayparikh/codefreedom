@@ -84,7 +84,7 @@ This starts an MCP server at `http://127.0.0.1:8420/mcp` exposing two tools:
 | `web_search(query)` | Search via configured engines, returns structured results |
 | `web_fetch(url)`    | Fetch a webpage (bypasses anti-bot detection)             |
 
-See [Web Tool](../../guides/tools/web.md) for container configuration, search engine setup, and parser registry details.
+For container configuration, search engine setup, and parser registry details, see the reference documentation on the web tool.
 
 ---
 

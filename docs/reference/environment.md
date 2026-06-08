@@ -100,13 +100,13 @@ export CODEFREEDOM_HOME="/path/to/custom/config"
 
 All component paths resolve under this directory:
 
-| Component | Path under CODEFREEDOM_HOME |
-| --------- | --------------------------- |
-| Claude | `$CODEFREEDOM_HOME/.env.claude` |
-| Proxy | `$CODEFREEDOM_HOME/.env.proxy` |
-| Tools | `$CODEFREEDOM_HOME/profiles/` |
-| Backups | `$CODEFREEDOM_HOME/backup/` |
-| Sandbox | `$CODEFREEDOM_HOME/sandbox/` |
+| Component | Path under CODEFREEDOM_HOME     |
+| --------- | ------------------------------- |
+| Claude    | `$CODEFREEDOM_HOME/.env.claude` |
+| Proxy     | `$CODEFREEDOM_HOME/.env.proxy`  |
+| Tools     | `$CODEFREEDOM_HOME/profiles/`   |
+| Backups   | `$CODEFREEDOM_HOME/backup/`     |
+| Sandbox   | `$CODEFREEDOM_HOME/sandbox/`    |
 
 This is useful for:
 
@@ -124,7 +124,7 @@ Override the default profile file location:
 export CODEFREEDOM_PROFILES_FILE="/path/to/custom/profiles.json"
 ```
 
-See [Code Agents → Profile System](../guides/agents.md#profile-system) for details.
+For profile configuration details, see the bundled example files and the `--help` output for profile-related flags.
 
 ## Security
 
@@ -141,9 +141,9 @@ The full variable reference is in the bundled example files:
 | `.env.claude.example`        | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`, `CLAUDE_CODE_COLUMNS`, `CLAUDE_CODE_LINES`                         |
 | `.env.proxy.example`         | Model aliases (`LITELLM_MODEL_ALIAS_*`), retry settings, privacy flags, provider base URLs                                          |
 | `.env.proxy.secrets.example` | `LITELLM_MASTER_KEY`, provider API keys (`DEEPSEEK_API_KEY`, `MICROSOFT_FOUNDRY_API_KEY`, `NVIDIA_API_KEY`, `OPENCODE_ZEN_API_KEY`) |
-| `CODEFREEDOM_HOME`           | Override the entire config directory (default: `~/.codefreedom`)                                                                  |
+| `CODEFREEDOM_HOME`           | Override the entire config directory (default: `~/.codefreedom`)                                                                    |
 | `CODEFREEDOM_PROFILES_FILE`  | Override profile file location (system env)                                                                                         |
 
 > **Note:** Variables like `LITELLM_PORT`, `LITELLM_LOG_LEVEL`, and `LITELLM_IMAGE` in `.env.proxy.example` are read by the proxy container at startup. `--port` and `--host` on `codefreedom proxy start` override `LITELLM_PORT` and `LITELLM_BIND_HOST` for that run only (they do not edit `.env.proxy`).
 
-See [Proxy](proxy/index.md) for provider-specific configuration and [Sandbox Mode](../guides/sandbox.md) for image selection.
+See [Proxy](proxy/index.md) for provider-specific configuration and sandbox image selection.
