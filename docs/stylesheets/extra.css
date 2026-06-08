@@ -4,15 +4,15 @@
  */
 
 :root {
-  --cf-radius-2xl: 0.2rem;
-  --cf-radius-xl: 0.15rem;
-  --cf-radius-lg: 0.12rem;
-  --cf-radius-md: 0.08rem;
+  --cf-radius-2xl: 16px;
+  --cf-radius-xl: 12px;
+  --cf-radius-lg: 8px;
+  --cf-radius-md: 6px;
   --cf-border-width: 1px;
   --cf-backdrop: saturate(180%) blur(22px);
-  --cf-shadow-soft: 0 18px 50px rgba(var(--cf-shadow-rgb), 0.12);
-  --cf-shadow-strong: 0 28px 88px rgba(var(--cf-shadow-rgb), 0.2);
-  --cf-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --cf-shadow-soft: 0 4px 12px rgba(var(--cf-shadow-rgb), 0.04);
+  --cf-shadow-strong: 0 8px 24px rgba(var(--cf-shadow-rgb), 0.08);
+  --cf-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 body[data-md-color-scheme="default"] {
@@ -249,7 +249,7 @@ body::after {
   margin-top: 0.12rem;
   margin-bottom: 0.12rem;
   padding: 0.42rem 0.25rem 0.42rem 0.8rem;
-  border-left: 2px solid transparent;
+  border-left: 3px solid transparent;
   border-radius: 0;
   transition:
     background-color 160ms ease,
@@ -258,13 +258,13 @@ body::after {
 }
 
 .md-nav__link:hover {
-  background: transparent;
-  border-left-color: rgba(127, 156, 214, 0.24);
+  background: rgba(15, 118, 110, 0.04);
+  border-left-color: rgba(15, 118, 110, 0.15);
 }
 
 .md-nav__link--active,
 .md-nav__item .md-nav__link--active {
-  background: transparent;
+  background: rgba(15, 118, 110, 0.08);
   border-left-color: var(--md-primary-fg-color);
   color: var(--md-primary-fg-color);
   font-weight: 700;
@@ -346,7 +346,7 @@ body::after {
 .md-typeset li > code,
 .md-typeset td > code {
   padding: 0.18em 0.5em;
-  border-radius: 0;
+  border-radius: var(--cf-radius-md);
   background: var(--md-code-bg-color);
   border: var(--cf-border-width) solid var(--cf-border);
   font-size: 0.88em;
@@ -354,7 +354,7 @@ body::after {
 
 .highlight pre,
 .md-typeset pre > code {
-  border-radius: 0;
+  border-radius: var(--cf-radius-lg);
   border: var(--cf-border-width) solid var(--cf-border);
   box-shadow: none;
 }
@@ -369,7 +369,7 @@ body::after {
   border-collapse: separate;
   border-spacing: 0;
   border: var(--cf-border-width) solid var(--cf-border);
-  border-radius: 0;
+  border-radius: var(--cf-radius-lg);
   background: transparent;
   box-shadow: none;
 }
@@ -389,7 +389,7 @@ body::after {
 details {
   overflow: hidden;
   border: var(--cf-border-width) solid var(--cf-border);
-  border-radius: 0;
+  border-radius: var(--cf-radius-lg);
   background: transparent;
   box-shadow: none;
 }
@@ -401,12 +401,12 @@ details {
   margin: -0.2rem auto 3rem;
   padding: clamp(2rem, 4vw, 3.25rem);
   text-align: center;
-  border-radius: 0;
+  border-radius: var(--cf-radius-xl);
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.18), transparent 40%),
     linear-gradient(135deg, var(--cf-surface-strong), var(--cf-surface));
-  border: 0;
-  box-shadow: none;
+  border: var(--cf-border-width) solid var(--cf-border);
+  box-shadow: var(--cf-shadow-soft);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -474,7 +474,7 @@ details {
 .cf-hero__install pre {
   margin: 0;
   padding: 1rem 1.2rem;
-  border-radius: 0;
+  border-radius: var(--cf-radius-md);
   background: var(--cf-command-bg);
   border: var(--cf-border-width) solid var(--cf-border);
   box-shadow: none;
@@ -498,20 +498,19 @@ details {
   margin-top: 0.2rem;
   margin-right: 0.35rem;
   padding: 0.8rem 1.15rem;
-  border-radius: 0;
+  border-radius: var(--cf-radius-md);
   border: var(--cf-border-width) solid var(--cf-border-strong);
   background: transparent;
   box-shadow: none;
   transition:
-    transform 160ms ease,
-    box-shadow 160ms ease,
     background-color 160ms ease,
-    border-color 160ms ease;
+    border-color 160ms ease,
+    color 160ms ease;
 }
 
 .md-typeset .md-button:hover {
-  transform: none;
-  box-shadow: none;
+  background: rgba(15, 118, 110, 0.04);
+  border-color: var(--md-primary-fg-color);
 }
 
 .md-typeset .md-button--primary {
@@ -539,17 +538,17 @@ details {
   overflow: hidden;
   min-height: 100%;
   padding: 1.45rem;
-  border-radius: 0;
-  background: transparent;
+  border-radius: var(--cf-radius-lg);
+  background: var(--cf-surface-muted);
   border: var(--cf-border-width) solid var(--cf-border);
-  border-width: 1px 0 0;
-  box-shadow: none;
+  box-shadow: var(--cf-shadow-soft);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
+    transform 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .grid.cards > ul > li::before,
@@ -559,10 +558,10 @@ details {
 
 .grid.cards > ul > li:hover,
 .grid.cards > ol > li:hover {
-  transform: none;
-  background: rgba(255, 255, 255, 0.02);
-  border-color: var(--cf-border-strong);
-  box-shadow: none;
+  transform: translateY(-4px);
+  background: var(--cf-surface-strong);
+  border-color: var(--md-accent-fg-color);
+  box-shadow: var(--cf-shadow-strong);
 }
 
 .grid.cards > ul > li > p > .lg,
@@ -725,7 +724,7 @@ details {
   height: 2.65rem;
   margin: 0;
   border: var(--cf-border-width) solid var(--cf-border-strong);
-  border-radius: 0;
+  border-radius: 50%;
   background: transparent;
   box-shadow: none;
   transition:
@@ -735,9 +734,9 @@ details {
 }
 
 .cf-site-footer__section--social .md-social__link:hover {
-  transform: none;
+  transform: translateY(-2px);
   border-color: var(--md-primary-fg-color);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(15, 118, 110, 0.08); /* Soft primary tint hover state */
 }
 
 @media screen and (max-width: 76.234375em) {
@@ -777,7 +776,7 @@ details {
   .cf-hero {
     margin-bottom: 2rem;
     padding: 1.5rem 1.1rem;
-    border-radius: 0;
+    border-radius: var(--cf-radius-xl);
   }
 
   .cf-hero > h1 {

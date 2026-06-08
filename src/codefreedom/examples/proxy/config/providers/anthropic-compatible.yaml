@@ -16,6 +16,14 @@
 #   - Third-party proxies or gateways that speak the Anthropic protocol
 #   - Any endpoint that accepts /v1/messages
 #
+# ── WHY THIS IS ALL COMMENTED ────────────────────────────────────────────────
+# Unlike the other provider files, this is a BLANK TEMPLATE — there's no
+# default API key, no default model name, and no default endpoint. Every
+# deployment is different. The example below shows the full structure; copy,
+# uncomment, and adapt to your backend. See the README.md in this directory
+# for the 1-2 example philosophy used by the other provider files.
+# ──────────────────────────────────────────────────────────────────────────
+
 # ── HOW TO CONFIGURE ───────────────────────────────────────────────────────
 # Set these in your .env or .env.secrets:
 #
@@ -23,20 +31,19 @@
 #   ANTHROPIC_COMPAT_API_KEY=sk-your-key
 #   ANTHROPIC_COMPAT_MODEL=claude-sonnet-4-20250514
 #
-# To add more models, copy the model block below and adjust the name/lite_model.
+# Then uncomment the block below and adjust model_info fields.
 # ──────────────────────────────────────────────────────────────────────────
 
 # model_list:
 #   - model_name: Anthropic-Compatible/Default
-#     litellm_params: &anthropic_compat_params
+#     litellm_params:
 #       model: anthropic/os.environ/ANTHROPIC_COMPAT_MODEL
 #       api_base: os.environ/ANTHROPIC_COMPAT_BASE_URL
 #       api_key: os.environ/ANTHROPIC_COMPAT_API_KEY
 #       timeout: 300
 #       drop_params: true
 #       max_tokens: 4096
-
-#     model_info: &anthropic_compat_model_info
+#     model_info:
 #       id: "anthropic-compat-default"
 #       db_model: false
 #       mode: chat

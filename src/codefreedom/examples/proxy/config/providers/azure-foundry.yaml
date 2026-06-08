@@ -2,13 +2,22 @@
 # ── Microsoft Foundry (Azure) Provider ────────────────────────────────────────
 # Routes to Azure AI Foundry / Azure OpenAI deployments.
 # Set MICROSOFT_FOUNDRY_API_BASE and MICROSOFT_FOUNDRY_API_KEY to enable.
+#
+# ── WHY 1-2 EXAMPLES ─────────────────────────────────────────────────────────
+# This file ships with ONE active model and ONE commented example. Model
+# specs, pricing, and capabilities change frequently — a single active + one
+# commented example is enough to show the pattern without becoming a
+# maintenance burden. Uncomment the example and adjust specs when you need it.
+# ──────────────────────────────────────────────────────────────────────────────
 
 # Reference:
 # - https://azure.microsoft.com/en-us/pricing/details/azure-openai/
 # - https://docs.fireworks.ai/serverless/pricing
-# ──────────────────────────────────────────────────────────────────────────────
 
 model_list:
+  # ── ACTIVE MODEL ──────────────────────────────────────────────────────────
+  # Set MICROSOFT_FOUNDRY_API_BASE and MICROSOFT_FOUNDRY_API_KEY in
+  # .env.proxy.secrets. Works immediately after proxy restart.
   - model_name: Azure/GPT-5.4
     litellm_params:
       model: openai/gpt-5.4
@@ -59,102 +68,56 @@ model_list:
       plugins:
         reasoning-efforts:
           rule: azure-gpt-5-4
-  - model_name: Azure/GPT-5.4-Mini
-    litellm_params:
-      model: openai/gpt-5.4-mini
-      api_base: os.environ/MICROSOFT_FOUNDRY_API_BASE
-      api_key: os.environ/MICROSOFT_FOUNDRY_API_KEY
-      timeout: 300
-      drop_params: true
-      extra_body:
-        stream_options:
-          include_usage: true
-    model_info:
-      id: "azure-gpt-5-4-mini"
-      db_model: false
-      supports_reasoning: true
-      mode: chat
-      context_window: 400000
-      max_tokens: 400000
-      max_input_tokens: 272000
-      max_output_tokens: 128000
-      limit:
-        context: 400000
-        output: 128000
-      supports_system_messages: true
-      supports_native_streaming: true
-      supports_vision: true
-      input_cost_per_token: 0.00000100
-      cached_input_cost_per_token: 0.00000008
-      output_cost_per_token: 0.00001500
-      supported_openai_params:
-        - tools
-        - tool_choice
-        - response_format
-        - max_tokens
-        - max_completion_tokens
-        - stream
-        - stream_options
-        - temperature
-        - top_p
-        - stop
-        - presence_penalty
-        - frequency_penalty
-        - logit_bias
-        - logprobs
-        - top_logprobs
-        - reasoning_effort
 
-    codefreedom:
-      plugins:
-        reasoning-efforts:
-          rule: azure-gpt-5-4-mini
-  - model_name: Azure/GPT-5.4-Nano
-    litellm_params:
-      model: openai/gpt-5.4-nano
-      api_base: os.environ/MICROSOFT_FOUNDRY_API_BASE
-      api_key: os.environ/MICROSOFT_FOUNDRY_API_KEY
-      timeout: 300
-      drop_params: true
-      extra_body:
-        stream_options:
-          include_usage: true
-    model_info:
-      id: "azure-gpt-5-4-nano"
-      db_model: false
-      supports_reasoning: true
-      mode: chat
-      context_window: 400000
-      max_tokens: 400000
-      max_input_tokens: 272000
-      max_output_tokens: 128000
-      limit:
-        context: 400000
-        output: 128000
-      supports_system_messages: true
-      supports_native_streaming: true
-      supports_vision: true
-      input_cost_per_token: 0.00000080
-      cached_input_cost_per_token: 0.00000008
-      output_cost_per_token: 0.00001250
-      supported_openai_params:
-        - tools
-        - tool_choice
-        - response_format
-        - max_tokens
-        - max_completion_tokens
-        - stream
-        - stream_options
-        - temperature
-        - top_p
-        - stop
-        - presence_penalty
-        - frequency_penalty
-        - logit_bias
-        - logprobs
-        - top_logprobs
-        - reasoning_effort
-    codefreedom:
-      plugins:
-        reasoning-efforts:
-          rule: azure-gpt-5-4-nano
+  # ── EXAMPLE: Smaller model in the same family ─────────────────────────────
+  # Lower cost, shorter context. Uncomment to enable GPT-5.4-Mini.
+  #
+  # - model_name: Azure/GPT-5.4-Mini
+  #   litellm_params:
+  #     model: openai/gpt-5.4-mini
+  #     api_base: os.environ/MICROSOFT_FOUNDRY_API_BASE
+  #     api_key: os.environ/MICROSOFT_FOUNDRY_API_KEY
+  #     timeout: 300
+  #     drop_params: true
+  #     extra_body:
+  #       stream_options:
+  #         include_usage: true
+  #   model_info:
+  #     id: "azure-gpt-5-4-mini"
+  #     db_model: false
+  #     supports_reasoning: true
+  #     mode: chat
+  #     context_window: 400000
+  #     max_tokens: 400000
+  #     max_input_tokens: 272000
+  #     max_output_tokens: 128000
+  #     limit:
+  #       context: 400000
+  #       output: 128000
+  #     supports_system_messages: true
+  #     supports_native_streaming: true
+  #     supports_vision: true
+  #     input_cost_per_token: 0.00000100
+  #     cached_input_cost_per_token: 0.00000008
+  #     output_cost_per_token: 0.00001500
+  #     supported_openai_params:
+  #       - tools
+  #       - tool_choice
+  #       - response_format
+  #       - max_tokens
+  #       - max_completion_tokens
+  #       - stream
+  #       - stream_options
+  #       - temperature
+  #       - top_p
+  #       - stop
+  #       - presence_penalty
+  #       - frequency_penalty
+  #       - logit_bias
+  #       - logprobs
+  #       - top_logprobs
+  #       - reasoning_effort
+  #   codefreedom:
+  #     plugins:
+  #       reasoning-efforts:
+  #         rule: azure-gpt-5-4-mini

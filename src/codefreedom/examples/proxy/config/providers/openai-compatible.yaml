@@ -16,6 +16,14 @@
 #   - Third-party proxies or gateways
 #   - Any endpoint that accepts /v1/chat/completions
 #
+# ── WHY THIS IS ALL COMMENTED ────────────────────────────────────────────────
+# Unlike the other provider files, this is a BLANK TEMPLATE — there's no
+# default API key, no default model name, and no default endpoint. Every
+# deployment is different. The example below shows the full structure; copy,
+# uncomment, and adapt to your backend. See the README.md in this directory
+# for the 1-2 example philosophy used by the other provider files.
+# ──────────────────────────────────────────────────────────────────────────
+
 # ── HOW TO CONFIGURE ───────────────────────────────────────────────────────
 # Set these in your .env or .env.secrets:
 #
@@ -23,12 +31,12 @@
 #   OPENAI_COMPAT_API_KEY=sk-your-key
 #   OPENAI_COMPAT_MODEL=openai/your-model-name
 #
-# To add more models, copy the model block below and adjust the name/lite_model.
+# Then uncomment the block below and adjust model_info fields.
 # ──────────────────────────────────────────────────────────────────────────
 
 # model_list:
 #   - model_name: OpenAI-Compatible/Default
-#     litellm_params: &openai_compat_params
+#     litellm_params:
 #       model: openai/os.environ/OPENAI_COMPAT_MODEL
 #       api_base: os.environ/OPENAI_COMPAT_BASE_URL
 #       api_key: os.environ/OPENAI_COMPAT_API_KEY
@@ -36,12 +44,10 @@
 #       drop_params: true
 #       max_tokens: 131072
 #       max_completion_tokens: 16384
-
 #       extra_body:
 #         stream_options:
 #           include_usage: true
-
-#     model_info: &openai_compat_model_info
+#     model_info:
 #       id: "openai-compat-default"
 #       db_model: false
 #       mode: chat
