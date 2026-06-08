@@ -7,200 +7,203 @@ edit_uri: edit/main/docs/
 docs_dir: docs
 
 theme:
-  name: material
-  logo: assets/logo.svg
-  favicon: assets/logo.svg
-  features:
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - navigation.instant
-    - navigation.tracking
-    - navigation.sections
-    - navigation.indexes
-    - navigation.path
-    - navigation.top
-    - toc.follow
-    - search.suggest
-    - search.highlight
-    - search.share
-    - content.code.copy
-    - content.code.annotate
-    - content.tabs.link
-    - content.tooltips
-    - content.action.edit
-  icon:
-    repo: fontawesome/brands/github
-  font:
-    text: Roboto
-    code: Roboto Mono
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/nilayparikh/codefreedom
-      name: CodeFreedom on GitHub
-  palette:
-    - media: "(prefers-color-scheme)"
-      toggle:
-        icon: material/brightness-auto
-        name: Switch to light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to system preference
+    name: material
+    logo: assets/logo.svg
+    favicon: assets/logo.svg
+    features:
+        - navigation.tabs
+        - navigation.tabs.sticky
+        - navigation.instant
+        - navigation.tracking
+        - navigation.sections
+        - navigation.indexes
+        - navigation.path
+        - navigation.top
+        - toc.follow
+        - search.suggest
+        - search.highlight
+        - search.share
+        - content.code.copy
+        - content.code.annotate
+        - content.tabs.link
+        - content.tooltips
+        - content.action.edit
+    icon:
+        repo: fontawesome/brands/github
+    font:
+        text: Space Grotesk
+        code: JetBrains Mono
+    social:
+        - icon: fontawesome/brands/github
+          link: https://github.com/nilayparikh/codefreedom
+          name: CodeFreedom on GitHub
+    palette:
+        - media: "(prefers-color-scheme)"
+          toggle:
+              icon: material/brightness-auto
+              name: Switch to light mode
+        - media: "(prefers-color-scheme: light)"
+          scheme: default
+          primary: blue grey
+          accent: cyan
+          toggle:
+              icon: material/brightness-7
+              name: Switch to dark mode
+        - media: "(prefers-color-scheme: dark)"
+          scheme: slate
+          primary: blue grey
+          accent: cyan
+          toggle:
+              icon: material/brightness-4
+              name: Switch to system preference
 
 copyright: >
-  &copy; 2025-2026 Nilay Parikh.
-  Apache 2.0.
-  Trademarks are property of their respective owners.
-  See <a href="https://github.com/nilayparikh/codefreedom/blob/main/NOTICE">NOTICE</a>.
+    &copy; 2025-2026 Nilay Parikh.
+    Apache 2.0.
+    Trademarks are property of their respective owners.
+    See <a href="https://github.com/nilayparikh/codefreedom/blob/main/NOTICE">NOTICE</a>.
 
 plugins:
-  - search
-  - mermaid2
+    - search
+    - mermaid2
 
 markdown_extensions:
-  - admonition
-  - attr_list
-  - md_in_html
-  - pymdownx.details
-  - pymdownx.superfences:
-      # Route ```mermaid``` blocks to the mermaid2 plugin via its
-      # Material-theme formatter. Without this, pymdownx.highlight strips the
-      # language class from the <code> element and the mermaid2 plugin's
-      # `on_post_page` cannot locate the diagrams — they render as plain code.
-      # See: https://github.com/fralau/mkdocs-mermaid2-plugin
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:mermaid2.fence_mermaid_custom
-  - pymdownx.tabbed:
-      alternate_style: true
-  - pymdownx.highlight:
-      anchor_linenums: true
-      line_spans: __span
-      pygments_lang_class: true
-  - pymdownx.inlinehilite
-  - pymdownx.keys
-  - pymdownx.snippets
-  - pymdownx.tasklist:
-      custom_checkbox: true
-  - pymdownx.smartsymbols
-  - pymdownx.caret
-  - pymdownx.mark
-  - pymdownx.tilde
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
-  - toc:
-      permalink: true
-      toc_depth: 3
+    - admonition
+    - attr_list
+    - md_in_html
+    - pymdownx.details
+    - pymdownx.superfences:
+          # Route ```mermaid``` blocks to the mermaid2 plugin via its
+          # Material-theme formatter. Without this, pymdownx.highlight strips the
+          # language class from the <code> element and the mermaid2 plugin's
+          # `on_post_page` cannot locate the diagrams — they render as plain code.
+          # See: https://github.com/fralau/mkdocs-mermaid2-plugin
+          custom_fences:
+              - name: mermaid
+                class: mermaid
+                format: !!python/name:mermaid2.fence_mermaid_custom
+    - pymdownx.tabbed:
+          alternate_style: true
+    - pymdownx.highlight:
+          anchor_linenums: true
+          line_spans: __span
+          pygments_lang_class: true
+    - pymdownx.inlinehilite
+    - pymdownx.keys
+    - pymdownx.snippets
+    - pymdownx.tasklist:
+          custom_checkbox: true
+    - pymdownx.smartsymbols
+    - pymdownx.caret
+    - pymdownx.mark
+    - pymdownx.tilde
+    - pymdownx.emoji:
+          emoji_index: !!python/name:material.extensions.emoji.twemoji
+          emoji_generator: !!python/name:material.extensions.emoji.to_svg
+    - toc:
+          permalink: true
+          toc_depth: 3
 
 nav:
-  - Home: index.md
-  - Get Started:
-      - Overview: getting-started/index.md
-      - Install: getting-started/install.md
-      - First run: getting-started/first-run.md
-      - Free models: getting-started/free-models.md
-  - Features:
-      - Overview: features/claude-code.md
-      - Proxy: features/proxy.md
-      - Tools:
-          - Overview: features/tools.md
-          - Chrome: features/chrome.md
-          - Web: features/web.md
-          - GitHub: features/github.md
-      - VS Code: features/vscode.md
-      - Backup: features/backup.md
-  - Guides:
-      - Overview: guides/index.md
-      - Code agents: guides/agents.md
-      - Profiles: guides/profiles.md
-      - Sandbox mode: guides/sandbox.md
-      - Sandbox isolation: guides/sandbox-isolation.md
-      - Local mode: guides/local.md
-      - Browser tools:
-          - Overview: guides/tools/index.md
-          - Chrome: guides/tools/chrome.md
-          - Camoufox: guides/tools/web.md
-          - GitHub MCP: guides/tools/github.md
-      - VS Code: guides/vscode.md
-      - Admin: guides/admin.md
-  - Recipes:
-      - Overview: recipes/index.md
-      - OpenCode Zen: recipes/opencode-zen.md
-      - NVIDIA: recipes/nvidia.md
-      - Azure Foundry: recipes/azure.md
-      - OpenAI Compatible: recipes/openai-compatible.md
-      - Anthropic Compatible: recipes/anthropic-compatible.md
-  - Reference:
-      - Overview: reference/index.md
-      - Architecture: reference/architecture.md
-      - Environment: reference/environment.md
-      - Proxy:
-          - Overview: reference/proxy/index.md
-          - Configuration: reference/proxy/config.md
-          - Database: reference/proxy/database.md
-          - Docker mode: reference/proxy/docker.md
-          - Web search interception: reference/proxy/websearch-interception.md
-          - Reasoning-efforts mapping: reference/proxy/reasoning-efforts.md
-          - Providers:
-              - Overview: reference/proxy/providers/index.md
-              - DeepSeek:
-                  - Overview: reference/proxy/providers/deepseek/index.md
-                  - DeepSeek-V4-Flash: reference/proxy/providers/deepseek/deepseek-v4-flash.md
-                  - DeepSeek-V4-Pro: reference/proxy/providers/deepseek/deepseek-v4-pro.md
-              - Azure Foundry:
-                  - Overview: reference/proxy/providers/azure-foundry/index.md
-                  - GPT-5.4: reference/proxy/providers/azure-foundry/gpt-5.4.md
-                  - GPT-5.4-Mini: reference/proxy/providers/azure-foundry/gpt-5.4-mini.md
-                  - GPT-5.4-Nano: reference/proxy/providers/azure-foundry/gpt-5.4-nano.md
-              - NVIDIA:
-                  - Overview: reference/proxy/providers/nvidia/index.md
-                  - DeepSeek-V4-Flash: reference/proxy/providers/nvidia/deepseek-v4-flash.md
-                  - DeepSeek-V4-Pro: reference/proxy/providers/nvidia/deepseek-v4-pro.md
-                  - GLM-5.1: reference/proxy/providers/nvidia/glm-5.1.md
-                  - Kimi-K2.6: reference/proxy/providers/nvidia/kimi-k2.6.md
-                  - Step-3.7-Flash: reference/proxy/providers/nvidia/step-3.7-flash.md
-              - OpenCode Zen:
-                  - Overview: reference/proxy/providers/opencode-zen/index.md
-                  - MiMo-V2.5-FREE: reference/proxy/providers/opencode-zen/mimo-v2.5.md
-                  - Nemotron-3-Super-FREE: reference/proxy/providers/opencode-zen/nemotron-3-super.md
-                  - Nemotron-3-Ultra-FREE: reference/proxy/providers/opencode-zen/nemotron-3-ultra.md
-                  - DeepSeek-V4-Flash-FREE: reference/proxy/providers/opencode-zen/deepseek-v4-flash.md
-                  - Big-Pickle: reference/proxy/providers/opencode-zen/big-pickle.md
-                  - MiniMax-M3-FREE: reference/proxy/providers/opencode-zen/minimax-m3.md
-              - OpenRouter:
-                  - Overview: reference/proxy/providers/openrouter/index.md
-                  - Nemotron-3-Ultra-550B-A55B: reference/proxy/providers/openrouter/nemotron-3-ultra-550b-a55b.md
-                  - FreeRouter: reference/proxy/providers/openrouter/freerouter.md
-              - OpenAI Compatible:
-                  - Overview: reference/proxy/providers/openai-compatible/index.md
-                  - Default: reference/proxy/providers/openai-compatible/default.md
-              - Anthropic Compatible:
-                  - Overview: reference/proxy/providers/anthropic-compatible/index.md
-                  - Default: reference/proxy/providers/anthropic-compatible/default.md
-              - Local:
-                  - Overview: reference/proxy/providers/local/index.md
-                  - Qwen3.6-27B: reference/proxy/providers/local/qwen3.6-27b.md
-                  - Qwen3.6-35B-A3B: reference/proxy/providers/local/qwen3.6-35b-a3b.md
-      - FAQ:
-          - Web search: reference/faq/web-search.md
-  - Help: help.md
-  - Contribute: contribute.md
-  - License: license.md
+    - Home: index.md
+    - Get Started:
+          - Overview: getting-started/index.md
+          - Install: getting-started/install.md
+          - First run: getting-started/first-run.md
+          - Free models: getting-started/free-models.md
+    - Features:
+          - Overview: features/claude-code.md
+          - Proxy: features/proxy.md
+          - Tools:
+                - Overview: features/tools.md
+                - Chrome: features/chrome.md
+                - Web: features/web.md
+                - GitHub: features/github.md
+          - VS Code: features/vscode.md
+          - Backup: features/backup.md
+    - Guides:
+          - Overview: guides/index.md
+          - Code agents: guides/agents.md
+          - Profiles: guides/profiles.md
+          - Sandbox mode: guides/sandbox.md
+          - Sandbox isolation: guides/sandbox-isolation.md
+          - Local mode: guides/local.md
+          - Browser tools:
+                - Overview: guides/tools/index.md
+                - Chrome: guides/tools/chrome.md
+                - Camoufox: guides/tools/web.md
+                - GitHub MCP: guides/tools/github.md
+          - VS Code: guides/vscode.md
+          - Admin: guides/admin.md
+    - Recipes:
+          - Overview: recipes/index.md
+          - OpenCode Zen: recipes/opencode-zen.md
+          - NVIDIA: recipes/nvidia.md
+          - Azure Foundry: recipes/azure.md
+          - OpenAI Compatible: recipes/openai-compatible.md
+          - Anthropic Compatible: recipes/anthropic-compatible.md
+    - Reference:
+          - Overview: reference/index.md
+          - Architecture: reference/architecture.md
+          - Environment: reference/environment.md
+          - Proxy:
+                - Overview: reference/proxy/index.md
+                - Configuration: reference/proxy/config.md
+                - Database: reference/proxy/database.md
+                - Docker mode: reference/proxy/docker.md
+                - Web search interception: reference/proxy/websearch-interception.md
+                - Reasoning-efforts mapping: reference/proxy/reasoning-efforts.md
+                - Providers:
+                      - Overview: reference/proxy/providers/index.md
+                      - DeepSeek:
+                            - Overview: reference/proxy/providers/deepseek/index.md
+                            - DeepSeek-V4-Flash: reference/proxy/providers/deepseek/deepseek-v4-flash.md
+                            - DeepSeek-V4-Pro: reference/proxy/providers/deepseek/deepseek-v4-pro.md
+                      - Azure Foundry:
+                            - Overview: reference/proxy/providers/azure-foundry/index.md
+                            - GPT-5.4: reference/proxy/providers/azure-foundry/gpt-5.4.md
+                            - GPT-5.4-Mini: reference/proxy/providers/azure-foundry/gpt-5.4-mini.md
+                            - GPT-5.4-Nano: reference/proxy/providers/azure-foundry/gpt-5.4-nano.md
+                      - NVIDIA:
+                            - Overview: reference/proxy/providers/nvidia/index.md
+                            - DeepSeek-V4-Flash: reference/proxy/providers/nvidia/deepseek-v4-flash.md
+                            - DeepSeek-V4-Pro: reference/proxy/providers/nvidia/deepseek-v4-pro.md
+                            - GLM-5.1: reference/proxy/providers/nvidia/glm-5.1.md
+                            - Kimi-K2.6: reference/proxy/providers/nvidia/kimi-k2.6.md
+                            - Step-3.7-Flash: reference/proxy/providers/nvidia/step-3.7-flash.md
+                      - OpenCode Zen:
+                            - Overview: reference/proxy/providers/opencode-zen/index.md
+                            - MiMo-V2.5-FREE: reference/proxy/providers/opencode-zen/mimo-v2.5.md
+                            - Nemotron-3-Super-FREE: reference/proxy/providers/opencode-zen/nemotron-3-super.md
+                            - Nemotron-3-Ultra-FREE: reference/proxy/providers/opencode-zen/nemotron-3-ultra.md
+                            - DeepSeek-V4-Flash-FREE: reference/proxy/providers/opencode-zen/deepseek-v4-flash.md
+                            - Big-Pickle: reference/proxy/providers/opencode-zen/big-pickle.md
+                            - MiniMax-M3-FREE: reference/proxy/providers/opencode-zen/minimax-m3.md
+                      - OpenRouter:
+                            - Overview: reference/proxy/providers/openrouter/index.md
+                            - Nemotron-3-Ultra-550B-A55B: reference/proxy/providers/openrouter/nemotron-3-ultra-550b-a55b.md
+                            - FreeRouter: reference/proxy/providers/openrouter/freerouter.md
+                      - OpenAI Compatible:
+                            - Overview: reference/proxy/providers/openai-compatible/index.md
+                            - Default: reference/proxy/providers/openai-compatible/default.md
+                      - Anthropic Compatible:
+                            - Overview: reference/proxy/providers/anthropic-compatible/index.md
+                            - Default: reference/proxy/providers/anthropic-compatible/default.md
+                      - Local:
+                            - Overview: reference/proxy/providers/local/index.md
+                            - Qwen3.6-27B: reference/proxy/providers/local/qwen3.6-27b.md
+                            - Qwen3.6-35B-A3B: reference/proxy/providers/local/qwen3.6-35b-a3b.md
+          - FAQ:
+                - Web search: reference/faq/web-search.md
+    - Help: help.md
+    - Contribute: contribute.md
+    - License: license.md
+
+extra:
+    generator: false
 
 extra_css:
-  - stylesheets/extra.css
+    - stylesheets/extra.css
 
 extra_javascript:
-  - js/external-links.js
+    - js/external-links.js

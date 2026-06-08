@@ -2,19 +2,24 @@
 title: CodeFreedom
 description: One CLI for every code agent — switch models, isolate environments, stop fighting config.
 hide:
+  - navigation
   - toc
 ---
 
-# CodeFreedom
-
-**One CLI for every code agent.** Switch LLM providers, isolate environments, and manage everything from `~/.codefreedom`.
-
-```bash
-pip install codefreedom
-```
-
-[:material-rocket-launch: Get Started](getting-started/install.md){ .md-button .md-button--primary }
-[:material-github: GitHub](https://github.com/nilayparikh/codefreedom){ .md-button }
+<div class="cf-hero">
+  <h1>CodeFreedom</h1>
+  <p class="cf-hero__tagline">
+    <strong>One CLI for every code agent.</strong>
+    Switch LLM providers, isolate environments, and manage everything from <code>~/.codefreedom</code>.
+  </p>
+  <div class="cf-hero__install">
+    <pre><code>pip install codefreedom</code></pre>
+  </div>
+  <div class="cf-hero__buttons">
+    <a href="getting-started/install.md" class="md-button md-button--primary">Get Started</a>
+    <a href="https://github.com/nilayparikh/codefreedom" class="md-button">GitHub</a>
+  </div>
+</div>
 
 ## What Problem Does This Solve
 

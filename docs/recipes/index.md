@@ -1,6 +1,8 @@
 ---
 title: Recipes
 description: Step-by-step guides for setting up AI providers with CodeFreedom.
+hide:
+  - toc
 ---
 
 # Recipes
@@ -9,17 +11,17 @@ Step-by-step guides for adding AI providers to your proxy. Pick a provider, foll
 
 ## Free to Start
 
-| Recipe | What You Get | Cost |
-|--------|-------------|------|
-| [OpenCode Zen](opencode-zen.md) | Multiple free models (MiMo, Nemotron, DeepSeek) | Free |
-| [NVIDIA](nvidia.md) | Free serverless endpoints (DeepSeek, GLM, Kimi) | Free tier |
+| Recipe                          | What You Get                                    | Cost      |
+| ------------------------------- | ----------------------------------------------- | --------- |
+| [OpenCode Zen](opencode-zen.md) | Multiple free models (MiMo, Nemotron, DeepSeek) | Free      |
+| [NVIDIA](nvidia.md)             | Free serverless endpoints (DeepSeek, GLM, Kimi) | Free tier |
 
 ## Paid Providers
 
-| Recipe | What You Get |
-|--------|-------------|
-| [Azure Foundry](azure.md) | GPT-5.4 family (GPT, Mini, Nano) |
-| [OpenAI Compatible](openai-compatible.md) | Any OpenAI-compatible endpoint |
+| Recipe                                          | What You Get                      |
+| ----------------------------------------------- | --------------------------------- |
+| [Azure Foundry](azure.md)                       | GPT-5.4 family (GPT, Mini, Nano)  |
+| [OpenAI Compatible](openai-compatible.md)       | Any OpenAI-compatible endpoint    |
 | [Anthropic Compatible](anthropic-compatible.md) | Any Anthropic-compatible endpoint |
 
 ## How All Recipes Work

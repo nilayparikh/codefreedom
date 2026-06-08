@@ -1,159 +1,642 @@
-/* ── CodeFreedom docs: visual polish ────────────────────────────────
+/* CodeFreedom docs: glassmorphism refresh.
  * Loaded after Material's stylesheets via `extra_css` in mkdocs.yml.
- * Keep additions surgical — leverage Material's CSS variables rather
- * than hard-coding colors so the dark/light palettes both work.
+ * Keep the theme declarative in mkdocs.yml and handle visual direction here.
  */
 
-/* ── Hero section on the landing page ────────────────────────────── */
-.cf-hero {
-  text-align: center;
-  padding: 1.5rem 0 2.5rem 0;
-  margin: 0 auto;
-  max-width: 760px;
+:root {
+  --cf-radius-2xl: 2rem;
+  --cf-radius-xl: 1.5rem;
+  --cf-radius-lg: 1.125rem;
+  --cf-radius-md: 0.875rem;
+  --cf-border-width: 1px;
+  --cf-backdrop: saturate(180%) blur(22px);
+  --cf-shadow-soft: 0 18px 50px rgba(var(--cf-shadow-rgb), 0.12);
+  --cf-shadow-strong: 0 28px 88px rgba(var(--cf-shadow-rgb), 0.2);
+  --cf-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
-/* H1 inside the hero gets a brand-tinted gradient. We match by descendant
- * selector (rather than `.cf-hero__title`) so the markdown `# Title` on
- * the home page works without a wrapper div. */
-.cf-hero > h1 {
-  font-size: clamp(2.2rem, 5vw, 3.2rem);
+body[data-md-color-scheme="default"] {
+  --cf-bg: #f4f7ff;
+  --cf-bg-rgb: 244, 247, 255;
+  --cf-shadow-rgb: 35, 52, 92;
+  --cf-surface: rgba(255, 255, 255, 0.6);
+  --cf-surface-strong: rgba(255, 255, 255, 0.78);
+  --cf-surface-muted: rgba(236, 243, 255, 0.72);
+  --cf-border: rgba(76, 109, 180, 0.15);
+  --cf-border-strong: rgba(55, 108, 220, 0.28);
+  --cf-text: #15223f;
+  --cf-text-muted: #5d6d8c;
+  --cf-command-bg: rgba(230, 238, 255, 0.9);
+  --cf-command-fg: #17305d;
+  --cf-glow-primary: rgba(58, 101, 230, 0.24);
+  --cf-glow-secondary: rgba(59, 198, 219, 0.18);
+  --md-default-bg-color: var(--cf-bg);
+  --md-default-fg-color: var(--cf-text);
+  --md-default-fg-color--light: var(--cf-text-muted);
+  --md-default-fg-color--lighter: #7d8daa;
+  --md-default-fg-color--lightest: rgba(93, 109, 140, 0.26);
+  --md-primary-fg-color: #305fdf;
+  --md-primary-fg-color--light: #5b84f1;
+  --md-primary-fg-color--dark: #2047b4;
+  --md-accent-fg-color: #159ac4;
+  --md-typeset-a-color: #225fda;
+  --md-code-bg-color: rgba(232, 239, 254, 0.92);
+  --md-code-fg-color: #17305d;
+  --md-footer-bg-color: transparent;
+  --md-footer-bg-color--dark: transparent;
+}
+
+body[data-md-color-scheme="slate"] {
+  --cf-bg: #09101d;
+  --cf-bg-rgb: 9, 16, 29;
+  --cf-shadow-rgb: 1, 5, 13;
+  --cf-surface: rgba(13, 22, 40, 0.58);
+  --cf-surface-strong: rgba(16, 28, 50, 0.78);
+  --cf-surface-muted: rgba(19, 35, 61, 0.74);
+  --cf-border: rgba(142, 176, 255, 0.14);
+  --cf-border-strong: rgba(126, 183, 255, 0.28);
+  --cf-text: #edf3ff;
+  --cf-text-muted: #9eb2d0;
+  --cf-command-bg: rgba(8, 15, 28, 0.88);
+  --cf-command-fg: #e6efff;
+  --cf-glow-primary: rgba(73, 117, 255, 0.24);
+  --cf-glow-secondary: rgba(73, 220, 211, 0.15);
+  --md-default-bg-color: var(--cf-bg);
+  --md-default-fg-color: var(--cf-text);
+  --md-default-fg-color--light: var(--cf-text-muted);
+  --md-default-fg-color--lighter: #7f95b8;
+  --md-default-fg-color--lightest: rgba(126, 147, 181, 0.25);
+  --md-primary-fg-color: #4f7cff;
+  --md-primary-fg-color--light: #81a3ff;
+  --md-primary-fg-color--dark: #2c57d8;
+  --md-accent-fg-color: #52d7ea;
+  --md-typeset-a-color: #8fb3ff;
+  --md-code-bg-color: rgba(8, 15, 28, 0.92);
+  --md-code-fg-color: #e6efff;
+  --md-footer-bg-color: transparent;
+  --md-footer-bg-color--dark: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: var(--cf-text);
+  font-feature-settings: "cv11" 1, "ss01" 1;
+  background:
+    radial-gradient(circle at top left, var(--cf-glow-primary), transparent 28rem),
+    radial-gradient(circle at top right, var(--cf-glow-secondary), transparent 24rem),
+    linear-gradient(180deg, rgba(var(--cf-bg-rgb), 0.96), var(--cf-bg));
+  background-attachment: fixed;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 999px;
+  filter: blur(110px);
+  opacity: 0.65;
+}
+
+body::before {
+  top: 6rem;
+  left: -6rem;
+  width: 18rem;
+  height: 18rem;
+  background: var(--cf-glow-primary);
+}
+
+body::after {
+  right: -4rem;
+  bottom: 5rem;
+  width: 15rem;
+  height: 15rem;
+  background: var(--cf-glow-secondary);
+}
+
+.md-container,
+.md-header,
+.md-tabs,
+.md-main,
+.md-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.md-grid {
+  max-width: 86rem;
+}
+
+.md-main__inner {
+  gap: 1.35rem;
+  margin-top: 0;
+}
+
+.md-header,
+.md-tabs {
+  background: rgba(var(--cf-bg-rgb), 0.55);
+  backdrop-filter: var(--cf-backdrop);
+  -webkit-backdrop-filter: var(--cf-backdrop);
+}
+
+.md-header {
+  box-shadow: none;
+  border-bottom: var(--cf-border-width) solid var(--cf-border);
+}
+
+.md-header__inner,
+.md-tabs__inner {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.md-tabs {
+  border-bottom: var(--cf-border-width) solid var(--cf-border);
+}
+
+.md-tabs__link {
+  margin-top: 0;
+  padding: 0.9rem 0.95rem 0.85rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  line-height: 1.1;
-  margin: 0 0 1rem 0;
-  background: linear-gradient(
-    135deg,
-    var(--md-primary-fg-color),
-    var(--md-accent-fg-color)
-  );
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.md-tabs__item--active .md-tabs__link,
+.md-tabs__link:hover {
+  opacity: 1;
+}
+
+.md-search__form,
+.md-source {
+  border: var(--cf-border-width) solid var(--cf-border);
+  border-radius: 999px;
+  background: var(--cf-surface);
+  box-shadow: var(--cf-shadow-soft), var(--cf-inset-highlight);
+}
+
+.md-search__input {
+  font-size: 0.85rem;
+}
+
+.md-source:hover {
+  background: var(--cf-surface-strong);
+}
+
+.md-header__topic {
+  font-weight: 700;
+}
+
+.md-logo img,
+.md-nav__button.md-logo img {
+  filter: drop-shadow(0 0.35rem 1rem rgba(var(--cf-shadow-rgb), 0.2));
+}
+
+.md-content__inner {
+  margin: 1.2rem 0 2rem;
+  padding: clamp(1.35rem, 2vw, 2.25rem);
+  border-radius: calc(var(--cf-radius-2xl) + 0.2rem);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 12rem),
+    var(--cf-surface);
+  border: var(--cf-border-width) solid var(--cf-border);
+  box-shadow: var(--cf-shadow-strong), var(--cf-inset-highlight);
+  backdrop-filter: var(--cf-backdrop);
+  -webkit-backdrop-filter: var(--cf-backdrop);
+}
+
+.md-sidebar {
+  padding-top: 1.2rem;
+}
+
+.md-sidebar__scrollwrap {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 8rem),
+    var(--cf-surface);
+  border: var(--cf-border-width) solid var(--cf-border);
+  border-radius: var(--cf-radius-2xl);
+  box-shadow: var(--cf-shadow-soft), var(--cf-inset-highlight);
+  backdrop-filter: var(--cf-backdrop);
+  -webkit-backdrop-filter: var(--cf-backdrop);
+}
+
+.md-sidebar__inner {
+  padding: 0;
+}
+
+.md-nav {
+  font-size: 0.82rem;
+}
+
+.md-nav__title {
+  padding: 1rem 1rem 0.4rem;
+  font-weight: 700;
+  color: var(--cf-text);
+}
+
+.md-nav--primary > .md-nav__list,
+.md-nav--secondary > .md-nav__list {
+  padding: 0.5rem;
+}
+
+.md-nav__link {
+  margin-top: 0.12rem;
+  margin-bottom: 0.12rem;
+  padding: 0.42rem 0.7rem;
+  border-radius: 0.85rem;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.md-nav__link:hover {
+  background: rgba(127, 156, 214, 0.12);
+  transform: translateX(2px);
+}
+
+.md-nav__link--active,
+.md-nav__item .md-nav__link--active {
+  background: rgba(91, 132, 241, 0.14);
+  color: var(--md-primary-fg-color);
+  font-weight: 700;
+}
+
+.md-nav__item--section > .md-nav__link {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.md-path {
+  margin-top: 0.1rem;
+}
+
+.md-path__link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  background: var(--cf-surface-muted);
+  border: var(--cf-border-width) solid var(--cf-border);
+}
+
+.md-content__button {
+  margin-top: 0;
+  padding: 0.45rem;
+  border-radius: 999px;
+  background: var(--cf-surface-muted);
+  border: var(--cf-border-width) solid var(--cf-border);
+  box-shadow: var(--cf-shadow-soft);
+}
+
+.md-typeset {
+  font-size: 0.82rem;
+  line-height: 1.75;
+}
+
+.md-typeset > h1 {
+  margin: 0 0 0.9rem;
+  font-size: clamp(2.05rem, 4vw, 2.9rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+}
+
+.md-typeset > h1 + p {
+  max-width: 52rem;
+  margin-top: 0;
+  margin-bottom: 1.6rem;
+  font-size: 1.04rem;
+  line-height: 1.8;
+  color: var(--cf-text-muted);
+}
+
+.md-typeset h2 {
+  margin-top: 2.6rem;
+  font-size: clamp(1.35rem, 2.2vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.md-typeset h3 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset a {
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+
+.md-typeset hr {
+  margin: 2rem 0;
+  border-bottom-color: var(--cf-border);
+}
+
+.md-typeset p > code,
+.md-typeset li > code,
+.md-typeset td > code {
+  padding: 0.18em 0.5em;
+  border-radius: 999px;
+  background: var(--md-code-bg-color);
+  border: var(--cf-border-width) solid var(--cf-border);
+  font-size: 0.88em;
+}
+
+.highlight pre,
+.md-typeset pre > code {
+  border-radius: var(--cf-radius-xl);
+  border: var(--cf-border-width) solid var(--cf-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.md-typeset__table {
+  margin: 1.5rem 0;
+}
+
+.md-typeset table:not([class]) {
+  width: 100%;
+  overflow: hidden;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: var(--cf-border-width) solid var(--cf-border);
+  border-radius: var(--cf-radius-xl);
+  background: var(--cf-surface-muted);
+  box-shadow: var(--cf-shadow-soft);
+}
+
+.md-typeset table:not([class]) th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 700;
+}
+
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+  padding: 0.9rem 1rem;
+  border-top-color: var(--cf-border);
+}
+
+.admonition,
+details {
+  overflow: hidden;
+  border: none;
+  border-radius: var(--cf-radius-xl);
+  background: var(--cf-surface-muted);
+  box-shadow: var(--cf-shadow-soft), var(--cf-inset-highlight);
+}
+
+.cf-hero {
+  position: relative;
+  overflow: hidden;
+  max-width: 70rem;
+  margin: -0.2rem auto 3rem;
+  padding: clamp(2rem, 4vw, 3.25rem);
+  text-align: center;
+  border-radius: 2.25rem;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.18), transparent 40%),
+    linear-gradient(135deg, var(--cf-surface-strong), var(--cf-surface));
+  border: var(--cf-border-width) solid var(--cf-border-strong);
+  box-shadow: var(--cf-shadow-strong), var(--cf-inset-highlight);
+  backdrop-filter: var(--cf-backdrop);
+  -webkit-backdrop-filter: var(--cf-backdrop);
+}
+
+.cf-hero::before {
+  content: "";
+  position: absolute;
+  bottom: -20%;
+  left: -10%;
+  width: 16rem;
+  height: 16rem;
+  border-radius: 50%;
+  background: var(--cf-glow-primary);
+  filter: blur(70px);
+  opacity: 0.7;
+}
+
+.cf-hero::after {
+  content: "";
+  position: absolute;
+  top: -18%;
+  right: -6%;
+  width: 14rem;
+  height: 14rem;
+  border-radius: 50%;
+  background: var(--cf-glow-secondary);
+  filter: blur(60px);
+  opacity: 0.7;
+}
+
+.cf-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.cf-hero > h1 {
+  margin: 0 0 1rem;
+  font-size: clamp(3rem, 8vw, 5rem);
+  font-weight: 700;
+  letter-spacing: -0.07em;
+  line-height: 0.95;
+  background: linear-gradient(135deg, var(--md-primary-fg-color), var(--md-accent-fg-color));
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   background-clip: text;
   color: transparent;
 }
 
 .cf-hero__tagline {
-  font-size: 1.15rem;
-  line-height: 1.6;
-  color: var(--md-default-fg-color--light);
-  margin: 0 0 1.75rem 0;
+  max-width: 48rem;
+  margin: 0 auto 1.8rem;
+  font-size: 1.12rem;
+  line-height: 1.8;
+  color: var(--cf-text-muted);
+}
+
+.cf-hero__tagline strong {
+  color: var(--cf-text);
 }
 
 .cf-hero__install {
-  margin: 1.25rem 0 1.5rem 0;
+  max-width: 32rem;
+  margin: 0 auto 1.5rem;
 }
 
 .cf-hero__install pre {
-  display: inline-block;
   margin: 0;
-  padding: 0.65rem 1.1rem;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  padding: 1rem 1.2rem;
+  border-radius: 1.25rem;
+  background: var(--cf-command-bg);
+  border: var(--cf-border-width) solid var(--cf-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .cf-hero__install code {
   padding: 0;
   background: transparent;
-  font-size: inherit;
+  color: var(--cf-command-fg);
+  font-size: 0.95rem;
 }
 
 .cf-hero__buttons {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.85rem;
   justify-content: center;
   flex-wrap: wrap;
-  margin-top: 0.5rem;
 }
 
-/* ── Section divider used between major landing-page sections ──── */
-.cf-section-divider {
-  text-align: center;
-  margin: 3rem auto 0.5rem auto;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--md-default-fg-color--light);
-  max-width: 760px;
+.md-typeset .md-button {
+  margin-top: 0.2rem;
+  margin-right: 0.35rem;
+  padding: 0.8rem 1.15rem;
+  border-radius: 999px;
+  border: var(--cf-border-width) solid var(--cf-border-strong);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: var(--cf-shadow-soft);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
 }
 
-/* ── Feature grid: subtle lift for Material's built-in grid cards ── */
+.md-typeset .md-button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--cf-shadow-strong);
+}
+
+.md-typeset .md-button--primary {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--md-primary-fg-color), var(--md-accent-fg-color));
+}
+
 .grid.cards > ul > li,
 .grid.cards > ol > li {
+  position: relative;
+  overflow: hidden;
+  padding: 1.35rem;
+  border-radius: var(--cf-radius-2xl);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 10rem),
+    var(--cf-surface-muted);
+  border: var(--cf-border-width) solid var(--cf-border);
+  box-shadow: var(--cf-shadow-soft), var(--cf-inset-highlight);
+  backdrop-filter: var(--cf-backdrop);
+  -webkit-backdrop-filter: var(--cf-backdrop);
   transition:
-    transform 120ms ease,
-    box-shadow 120ms ease,
-    border-color 120ms ease;
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.grid.cards > ul > li::before,
+.grid.cards > ol > li::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--md-primary-fg-color), var(--md-accent-fg-color));
+  opacity: 0.8;
 }
 
 .grid.cards > ul > li:hover,
 .grid.cards > ol > li:hover {
-  transform: translateY(-2px);
-  border-color: var(--md-accent-fg-color);
+  transform: translateY(-6px);
+  border-color: var(--cf-border-strong);
+  box-shadow: var(--cf-shadow-strong), var(--cf-inset-highlight);
 }
 
-/* ── Make the inline icon prefixes in feature cards a bit larger ── */
 .grid.cards > ul > li > p > .lg,
 .grid.cards > ul > li > hr + p > .lg,
-.grid.cards > ul > li > .lg {
-  font-size: 1.6rem;
-  margin-right: 0.4rem;
+.grid.cards > ul > li > .lg,
+.grid.cards > ol > li > p > .lg,
+.grid.cards > ol > li > hr + p > .lg,
+.grid.cards > ol > li > .lg {
+  margin-right: 0.45rem;
+  font-size: 1.5rem;
   vertical-align: middle;
 }
 
-/* ── Tighter, more readable admonitions ─────────────────────────── */
-.admonition {
-  border-radius: 8px;
+.grid.cards > ul > li > hr,
+.grid.cards > ol > li > hr {
+  border-bottom-color: var(--cf-border);
 }
 
-/* ── Subtle improvement to inline code in regular paragraphs ────── */
-.md-typeset p > code,
-.md-typeset li > code {
-  padding: 0.1em 0.4em;
-  border-radius: 4px;
-  font-size: 0.9em;
+.md-footer {
+  background: transparent;
 }
 
-/* ── Footer attribution: blend with the design ──────────────────── */
+.md-footer-meta {
+  background: transparent;
+}
+
+.md-footer-meta__inner {
+  padding-top: 1rem;
+  padding-bottom: 2rem;
+  border-top: var(--cf-border-width) solid var(--cf-border);
+}
+
 .md-copyright {
+  color: var(--cf-text-muted);
   font-size: 0.75rem;
 }
 
-/* ── Slimmer top tab bar ────────────────────────────────────────── */
-.md-tabs__link {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+@media screen and (max-width: 76.234375em) {
+  .md-header__inner,
+  .md-tabs__inner {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .md-sidebar {
+    padding-top: 0;
+  }
+
+  .md-content__inner {
+    margin-top: 0.85rem;
+    border-radius: 1.6rem;
+  }
 }
 
-/* ── More compact left navigation ───────────────────────────────── */
-.md-nav {
-  font-size: 0.75rem;
-}
-.md-nav__link {
-  margin-top: 0;
-  margin-bottom: 0;
-  padding-top: 0.3rem;
-  padding-bottom: 0.3rem;
-}
+@media screen and (max-width: 44.984375em) {
+  .md-content__inner {
+    padding: 1.1rem;
+  }
 
-/* ── Section index pages: tighter hero-style heading ────────────── */
-.md-typeset h1:not(.cf-hero h1) {
-  font-size: 2rem;
-  margin-top: 0;
-  margin-bottom: 0.8rem;
-  font-weight: 600;
-}
+  .md-typeset > h1 {
+    font-size: 2rem;
+  }
 
-/* ── Content: max width for readability on large screens ────────── */
-.md-grid {
-  max-width: 64rem;
-}
+  .md-typeset > h1 + p {
+    font-size: 0.98rem;
+  }
 
-/* ── Section index page description ──────────────────────────────── */
-.section-description {
-  font-size: 1.05rem;
-  color: var(--md-default-fg-color--light);
-  margin-bottom: 1.5rem;
+  .cf-hero {
+    margin-bottom: 2rem;
+    padding: 1.5rem 1.1rem;
+    border-radius: 1.75rem;
+  }
+
+  .cf-hero > h1 {
+    font-size: clamp(2.5rem, 16vw, 3.5rem);
+  }
+
+  .cf-hero__tagline {
+    font-size: 1rem;
+  }
+
+  .md-typeset .md-button {
+    width: 100%;
+    margin-right: 0;
+  }
 }
