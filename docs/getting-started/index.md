@@ -39,4 +39,4 @@ Four pages to get from `pip install` to a working session. No proxy, no provider
 
 ## After this section
 
-When you're up and running, the next stop is **[Reference](../reference/index.md)** for deep configuration details.
+When you're up and running, the next stop is **[Recipes](../recipes/index.md)** for deep configuration details.
