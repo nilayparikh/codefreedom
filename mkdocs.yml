@@ -7,55 +7,52 @@ edit_uri: edit/main/docs/
 docs_dir: docs
 
 theme:
-    name: material
-    logo: assets/logo.svg
-    favicon: assets/logo.svg
-    features:
-        - navigation.tabs
-        - navigation.tabs.sticky
-        - navigation.instant
-        - navigation.tracking
-        - navigation.sections
-        - navigation.indexes
-        - navigation.path
-        - navigation.top
-        - toc.follow
-        - search.suggest
-        - search.highlight
-        - search.share
-        - content.code.copy
-        - content.code.annotate
-        - content.tabs.link
-        - content.tooltips
-        - content.action.edit
-    icon:
-        repo: fontawesome/brands/github
-    font:
-        text: Space Grotesk
-        code: JetBrains Mono
-    social:
-        - icon: fontawesome/brands/github
-          link: https://github.com/nilayparikh/codefreedom
-          name: CodeFreedom on GitHub
-    palette:
-        - media: "(prefers-color-scheme)"
-          toggle:
-              icon: material/brightness-auto
-              name: Switch to light mode
-        - media: "(prefers-color-scheme: light)"
-          scheme: default
-          primary: blue grey
-          accent: cyan
-          toggle:
-              icon: material/brightness-7
-              name: Switch to dark mode
-        - media: "(prefers-color-scheme: dark)"
-          scheme: slate
-          primary: blue grey
-          accent: cyan
-          toggle:
-              icon: material/brightness-4
-              name: Switch to system preference
+      name: material
+      logo: assets/logo.svg
+      favicon: assets/logo.svg
+      custom_dir: docs/overrides
+      features:
+            - navigation.tabs
+            - navigation.tabs.sticky
+            - navigation.instant
+            - navigation.tracking
+            - navigation.sections
+            - navigation.indexes
+            - navigation.path
+            - navigation.top
+            - toc.follow
+            - search.suggest
+            - search.highlight
+            - search.share
+            - content.code.copy
+            - content.code.annotate
+            - content.tabs.link
+            - content.tooltips
+            - content.action.edit
+      icon:
+            repo: fontawesome/brands/github
+      font:
+            text: Space Grotesk
+            code: JetBrains Mono
+      palette:
+            - media: "(prefers-color-scheme)"
+              toggle:
+                    icon: material/brightness-auto
+                    name: Switch to light mode
+            - media: "(prefers-color-scheme: light)"
+              scheme: default
+              primary: teal
+              accent: light blue
+              toggle:
+                    icon: material/brightness-7
+                    name: Switch to dark mode
+            - media: "(prefers-color-scheme: dark)"
+              scheme: slate
+              primary: teal
+              accent: light blue
+              toggle:
+                    icon: material/brightness-4
+                    name: Switch to system preference
 
 copyright: >
     &copy; 2025-2026 Nilay Parikh.
@@ -201,6 +198,23 @@ nav:
 
 extra:
     generator: false
+    legal:
+        - label: T&C
+          link: terms/
+        - label: Privacy Policy
+          link: privacy/
+        - label: License
+          link: license/
+    social:
+        - icon: fontawesome/brands/youtube
+          link: https://www.youtube.com/@localm_tuts
+          name: YouTube
+        - icon: fontawesome/brands/x-twitter
+          link: https://x.com/localm_tuts
+          name: X
+        - icon: fontawesome/brands/linkedin
+          link: https://www.linkedin.com/in/niparikh/
+          name: LinkedIn
 
 extra_css:
     - stylesheets/extra.css
