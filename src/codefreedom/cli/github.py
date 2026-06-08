@@ -54,6 +54,7 @@ def _default_data_dir() -> str:
     """Return the default data dir, respecting ``CODEFREEDOM_HOME``."""
     return str(get_codefreedom_dir() / "sandbox" / "tools" / "github")
 
+
 # ── Random port helper ────────────────────────────────────────────────────────
 
 _PORT_RANGE_START = 8100
