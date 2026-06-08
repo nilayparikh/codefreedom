@@ -38,9 +38,10 @@ def main() -> None:
         description=(
             "Plan, apply, or list configuration recipes from"
             " github.com/nilayparikh/codefreedom-recipes."
+            " Without flags, installs the _default base recipe."
         ),
     )
-    recipe_group = recipe_parser.add_mutually_exclusive_group(required=True)
+    recipe_group = recipe_parser.add_mutually_exclusive_group()
     recipe_group.add_argument(
         "--plan",
         type=str,
@@ -393,9 +394,10 @@ def main() -> None:
 
                 sys.exit(plan_recipe(args.plan))
 
-            # Should not reach here (mutually exclusive group is required)
-            recipe_parser.print_help()
-            sys.exit(1)
+            # No flags → install _default base recipe
+            from codefreedom.cli.recipe import init_recipe
+
+            sys.exit(init_recipe("_default"))
 
         # Plain `cf init` — bootstrap bundled examples
         from codefreedom.cli.claude import init_claude
