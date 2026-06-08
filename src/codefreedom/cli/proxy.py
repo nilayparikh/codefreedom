@@ -193,9 +193,21 @@ def _build_proxy_env() -> Dict[str, str]:
     Proxy env files override system env so the proxy process sees
     configured values even when system env has empty-string vars
     (e.g. MICROSOFT_FOUNDRY_API_BASE="" in shell).
+
+    Also injects ``POSTGRES_HOST_DATA_DIR`` and
+    ``POSTGRES_HOST_BACKUP_DIR`` from ``CODEFREEDOM_HOME`` so the
+    embedded PostgreSQL always lands inside the correct CodeFreedom
+    directory, even when ``CODEFREEDOM_HOME`` is customised.
     """
     proxy_file_env = _load_proxy_env_files()
-    return {**os.environ, **proxy_file_env}
+    merged = {**os.environ, **proxy_file_env}
+
+    # Inject PostgreSQL data/backup dirs from CODEFREEDOM_HOME
+    cf_dir = get_codefreedom_dir()
+    merged.setdefault("POSTGRES_HOST_DATA_DIR", str(cf_dir / "pg" / "data"))
+    merged.setdefault("POSTGRES_HOST_BACKUP_DIR", str(cf_dir / "pg" / "backup"))
+
+    return merged
 
 
 # ── Start ────────────────────────────────────────────────────────────────────

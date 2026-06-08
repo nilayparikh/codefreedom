@@ -46,9 +46,13 @@ from codefreedom.cli.tool_init_utils import (
 _DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:github-latest"
 _DEFAULT_CONTAINER_NAME = "codefreedom-tools-github"
 _DEFAULT_PORT = 0  # 0 = auto-pick random free port
-_DEFAULT_DATA_DIR = "~/.codefreedom/sandbox/tools/github"
 
 _CODEFREEDOM_DIR = get_codefreedom_dir()
+
+
+def _default_data_dir() -> str:
+    """Return the default data dir, respecting ``CODEFREEDOM_HOME``."""
+    return str(get_codefreedom_dir() / "sandbox" / "tools" / "github")
 
 # ── Random port helper ────────────────────────────────────────────────────────
 
@@ -135,7 +139,7 @@ def _load_profile() -> dict:
         "image": _DEFAULT_IMAGE,
         "container_name": _DEFAULT_CONTAINER_NAME,
         "port": _DEFAULT_PORT,
-        "data_dir": _DEFAULT_DATA_DIR,
+        "data_dir": _default_data_dir(),
         "env": {},
     }
 

@@ -11,8 +11,25 @@ from pathlib import Path
 
 
 def resolve_data_dir(data_dir: str) -> Path:
-    """Resolve ~ to home directory and create the path."""
-    path = Path(data_dir).expanduser()
+    """Resolve data_dir, respecting ``CODEFREEDOM_HOME`` if set.
+
+    When ``CODEFREEDOM_HOME`` points to a custom location (not
+    ``~/.codefreedom``), any ``~/.codefreedom/...`` prefix in *data_dir*
+    is transparently rewritten so tool data always lands inside the
+    correct CodeFreedom home.
+
+    Falls back to ``Path.expanduser()`` if ``CODEFREEDOM_HOME`` is not
+    set or if the path doesn't start with ``~/.codefreedom``.
+    """
+    from codefreedom.config import get_codefreedom_dir
+
+    cf_dir = get_codefreedom_dir()
+    default_cf = Path.home() / ".codefreedom"
+
+    if cf_dir != default_cf and "~/.codefreedom" in data_dir:
+        path = Path(data_dir.replace("~/.codefreedom", str(cf_dir)))
+    else:
+        path = Path(data_dir).expanduser()
     path.mkdir(parents=True, exist_ok=True)
     return path
 
