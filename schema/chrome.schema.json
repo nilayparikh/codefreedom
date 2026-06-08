@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "chrome.schema.json",
+  "title": "Chrome Tool Profile",
+  "description": "Schema for chrome.json — configures the Chrome browser container image, ports, data directory, and environment.",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Description of the profile"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Usage notes"
+    },
+    "chrome": {
+      "type": "object",
+      "description": "Chrome browser container settings",
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "Docker image tag (e.g. codefreedom:chrome or docker.io/nilayparikh/codefreedom:chrome-latest)"
+        },
+        "container_name": {
+          "type": "string",
+          "description": "Docker container name"
+        },
+        "port": {
+          "type": "integer",
+          "description": "CDP debug port",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "data_dir": {
+          "type": "string",
+          "description": "Host path for persistent Chrome profile data (~ is expanded to $HOME)"
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables forwarded to the container",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "mcp_port": {
+          "type": "integer",
+          "description": "HTTP MCP server port (chrome-devtools-mcp proxied via mcp-proxy). Defaults to 9223.",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "mcp_path": {
+          "type": "string",
+          "description": "HTTP MCP endpoint path (e.g. /mcp). Defaults to /mcp.",
+          "default": "/mcp"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "chrome"
+  ]
+}

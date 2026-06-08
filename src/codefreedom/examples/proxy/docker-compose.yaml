@@ -148,8 +148,13 @@ services:
       #
       # The host dirs must be owned by uid 1000 (the in-container
       # 'codefreedom' user). codefreedom proxy init creates them.
+      #
+      # When using `cf proxy start`, the CLI injects POSTGRES_HOST_DATA_DIR
+      # from $CODEFREEDOM_HOME automatically, respecting any custom
+      # CODEFREEDOM_HOME setting.  The fallback below only applies when
+      # running `docker compose` directly (ignore CODEFREEDOM_HOME).
       # Override via .env.proxy: POSTGRES_HOST_DATA_DIR /
-      # POSTGRES_HOST_BACKUP_DIR / POSTGRES_HOST_SOCKET_DIR.
+      # POSTGRES_HOST_BACKUP_DIR.
       - ${POSTGRES_HOST_DATA_DIR:-${HOME}/.codefreedom/pg/data}:/var/lib/postgresql/data
       - ${POSTGRES_HOST_BACKUP_DIR:-${HOME}/.codefreedom/pg/backup}:/var/lib/postgresql/backup
       # /var/run/postgresql (PG's Unix socket dir) is intentionally NOT

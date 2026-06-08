@@ -6,7 +6,8 @@
     "'image' is the Docker image to use — change to 'docker.io/nilayparikh/codefreedom:chrome-latest' for published builds. (Also available on ghcr.io/nilayparikh/codefreedom as a mirror.)",
     "'container_name' is the Docker container name (persistent, restart unless-stopped).",
     "'port' is the CDP debug port exposed to the host.",
-    "'data_dir' is the host path mounted to /data/chrome inside the container.",
+    "'data_dir' (optional) is the host path mounted to /data/chrome inside the container.",
+    "  Default: $CODEFREEDOM_HOME/sandbox/tools/chrome.",
     "'env' are environment variables forwarded to the container.",
     "Chrome runs headless. For stealth / anti-bot browsing, use the 'web' tool (Camoufox) instead."
   ],
@@ -16,7 +17,6 @@
     "port": 9222,
     "mcp_port": 9223,
     "mcp_path": "/mcp",
-    "data_dir": "~/.codefreedom/sandbox/tools/chrome",
     "env": {
       "CHROME_DEBUG_PORT": "9222",
       "MCP_PORT": "9223"

@@ -44,9 +44,13 @@ from codefreedom.cli.tool_init_utils import (
 _DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:chrome-latest"
 _DEFAULT_CONTAINER_NAME = "codefreedom-chrome"
 _DEFAULT_PORT = 9222
-_DEFAULT_DATA_DIR = "~/.codefreedom/sandbox/tools/chrome"
 
 _CODEFREEDOM_DIR = get_codefreedom_dir()
+
+
+def _default_data_dir() -> str:
+    """Return the default data dir, respecting ``CODEFREEDOM_HOME``."""
+    return str(get_codefreedom_dir() / "sandbox" / "tools" / "chrome")
 
 
 def _profile_path() -> Path:
@@ -71,7 +75,7 @@ def _load_profile() -> dict:
         "port": _DEFAULT_PORT,
         "mcp_port": 9223,
         "mcp_path": "/mcp",
-        "data_dir": _DEFAULT_DATA_DIR,
+        "data_dir": _default_data_dir(),
         "env": {},
     }
 

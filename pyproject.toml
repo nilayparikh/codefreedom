@@ -26,7 +26,8 @@ keywords = [
 # ── Dependencies ────────────────────────────────────────────────────────────
 #   PyYAML         — YAML parsing (litellm config validation)
 #   types-PyYAML   — type stubs needed by litellm's config parser at runtime
-dependencies = ["PyYAML>=6.0", "types-PyYAML"]
+#   deepdiff       — structural YAML/JSON diff for recipe merging
+dependencies = ["PyYAML>=6.0", "types-PyYAML", "deepdiff>=7.0"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",

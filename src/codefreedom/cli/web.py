@@ -48,10 +48,14 @@ from codefreedom.cli.tool_init_utils import (
 _DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:web-latest"
 _DEFAULT_CONTAINER_NAME = "codefreedom-web"
 _DEFAULT_PORT = 8420
-_DEFAULT_DATA_DIR = "~/.codefreedom/sandbox/tools/web"
 _DEFAULT_SEARCH_COOLDOWN_SECONDS = 10.0
 
 _CODEFREEDOM_DIR = get_codefreedom_dir()
+
+
+def _default_data_dir() -> str:
+    """Return the default data dir, respecting ``CODEFREEDOM_HOME``."""
+    return str(get_codefreedom_dir() / "sandbox" / "tools" / "web")
 
 
 def _profile_path() -> Path:
@@ -75,7 +79,7 @@ def _load_profile() -> dict:
         "container_name": _DEFAULT_CONTAINER_NAME,
         "port": _DEFAULT_PORT,
         "mcp_path": "/mcp",
-        "data_dir": _DEFAULT_DATA_DIR,
+        "data_dir": _default_data_dir(),
         "env": {},
         "search_engines": {},
         "parser_registry": {},

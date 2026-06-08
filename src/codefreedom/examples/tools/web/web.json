@@ -6,7 +6,8 @@
     "'image' is the Docker image to use \u2014 change to 'docker.io/nilayparikh/codefreedom:web-latest' for published builds. (Also available on ghcr.io/nilayparikh/codefreedom as a mirror.)",
     "'container_name' is the Docker container name (persistent, restart unless-stopped).",
     "'port' is the host port that maps to container port 8420 (MCP server).",
-    "'data_dir' is the host path mounted to /userdata inside the container.",
+    "'data_dir' (optional) is the host path mounted to /userdata inside the container.",
+    "  Default: $CODEFREEDOM_HOME/sandbox/tools/web.",
     "'env' are environment variables forwarded to the container.",
     "'search_engines' is a map of engine name -> {url, parser}. Use {q} for query placeholder. No engines are configured by default.",
     "Each engine entry: 'url' is the search URL template, 'parser' is a key in 'parser_registry'.",
@@ -19,7 +20,6 @@
     "container_name": "codefreedom-web",
     "port": 8420,
     "mcp_path": "/mcp",
-    "data_dir": "~/.codefreedom/sandbox/tools/web",
     "env": {},
     "search_cooldown_seconds": 10.0,
     "search_engines": {
