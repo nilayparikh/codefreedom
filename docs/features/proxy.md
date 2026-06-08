@@ -83,16 +83,16 @@ codefreedom claude --profile pro     # Uses GPT-5.4
 2. Uncomment the provider in `~/.codefreedom/proxy/config/config.yaml`
 3. Restart: `codefreedom proxy restart`
 
-See [Recipes](../recipes/index.md) for step-by-step guides for each provider.
+See [Providers](../recipes/providers/index.md) for step-by-step guides for each provider.
 
 ## Endpoints
 
-| Endpoint | What It Does |
-|----------|-------------|
-| `http://localhost:4000/v1/chat/completions` | OpenAI chat completions |
-| `http://localhost:4000/v1/models` | List available models |
-| `http://localhost:4000/v1/messages` | Anthropic messages (translated) |
-| `http://localhost:4000/metrics/` | Prometheus metrics |
+| Endpoint                                    | What It Does                    |
+| ------------------------------------------- | ------------------------------- |
+| `http://localhost:4000/v1/chat/completions` | OpenAI chat completions         |
+| `http://localhost:4000/v1/models`           | List available models           |
+| `http://localhost:4000/v1/messages`         | Anthropic messages (translated) |
+| `http://localhost:4000/metrics/`            | Prometheus metrics              |
 
 ## Stateless by Default
 

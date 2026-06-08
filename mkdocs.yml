@@ -17,7 +17,6 @@ theme:
             - navigation.instant
             - navigation.tracking
             - navigation.sections
-            - navigation.indexes
             - navigation.path
             - navigation.top
             - toc.follow
@@ -121,12 +120,17 @@ nav:
 
       - Recipes:
               - Overview: recipes/index.md
-              - OpenCode Zen: recipes/opencode-zen.md
-              - NVIDIA: recipes/nvidia.md
-              - Azure Foundry: recipes/azure.md
-              - OpenAI Compatible: recipes/openai-compatible.md
-              - Anthropic Compatible: recipes/anthropic-compatible.md
-      - Contribute: contribute.md
+              - Provider Reference:
+                      - Overview: recipes/providers/index.md
+                      - DeepSeek: recipes/providers/deepseek/index.md
+                      - Azure Foundry: recipes/providers/azure-foundry/index.md
+                      - NVIDIA: recipes/providers/nvidia/index.md
+                      - OpenCode Zen: recipes/providers/opencode-zen/index.md
+                      - OpenRouter: recipes/providers/openrouter/index.md
+                      - OpenAI Compatible: recipes/providers/openai-compatible/index.md
+                      - Anthropic Compatible: recipes/providers/anthropic-compatible/index.md
+                      - Local: recipes/providers/local/index.md
+
       - License:
               - License: license.md
               - Terms & Conditions: terms.md

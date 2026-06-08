@@ -56,6 +56,11 @@ Custom footer for CodeFreedom docs.
         {% if config.copyright %}
         <p class="cf-site-footer__copy">{{ config.copyright }}</p>
         {% endif %}
+        <p class="cf-site-footer__alpha">
+          <strong>Alpha release.</strong> CodeFreedom is under active development — the API and configuration format are
+          still evolving. It's stable enough for daily use, but breaking changes may occur as we work toward a stable
+          release.
+        </p>
       </div>
 
       {% if config.extra.legal %}

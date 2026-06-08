@@ -91,5 +91,5 @@ The proxy is independent of Claude Code sessions. Leave it running between sessi
 ## Next Steps
 
 - **[Profiles](../features/claude-code.md#profiles)** — switch models with one flag
-- **[Free models](../recipes/opencode-zen.md)** — try models without spending credits
+- **[Free models](../recipes/providers/opencode-zen/index.md)** — try models without spending credits
 - **[Sandbox mode](../features/claude-code.md#sandbox-mode)** — isolated Docker containers
