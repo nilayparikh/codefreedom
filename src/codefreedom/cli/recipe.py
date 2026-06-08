@@ -182,12 +182,14 @@ def plan_recipe(name: str) -> int:
             content = fdict.get(target) or fdict.get(src)
             if content is None:
                 continue
-            plan_entries.append({
-                "target": target,
-                "content": content,
-                "merge": entry.get("merge", "auto"),
-                "source": source_label,
-            })
+            plan_entries.append(
+                {
+                    "target": target,
+                    "content": content,
+                    "merge": entry.get("merge", "auto"),
+                    "source": source_label,
+                }
+            )
 
     extends = manifest.get("extends")
     if extends:
@@ -210,27 +212,32 @@ def plan_recipe(name: str) -> int:
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         if not dst.exists():
-            # CREATE
-            patch_path = plans_dir / f"create-{entry['target'].replace('/', '-')}.new"
-            patch_path.write_text(entry["content"], encoding="utf-8")
-            patch_files.append({
-                "target": entry["target"],
-                "action": "create",
-                "patch": patch_path.name,
-                "source": entry["source"],
-            })
+            # CREATE — unified diff from /dev/null
+            diff = _make_diff("", entry["content"], entry["target"], from_devnull=True)
+            patch_name = f"create-{entry['target'].replace('/', '-')}.diff"
+            (plans_dir / patch_name).write_text(diff, encoding="utf-8")
+            patch_files.append(
+                {
+                    "target": entry["target"],
+                    "action": "create",
+                    "patch": patch_name,
+                    "source": entry["source"],
+                }
+            )
             summary["create"] += 1
             continue
 
         existing = dst.read_text(encoding="utf-8")
         if existing == entry["content"]:
             # SAME
-            patch_files.append({
-                "target": entry["target"],
-                "action": "same",
-                "patch": None,
-                "source": entry["source"],
-            })
+            patch_files.append(
+                {
+                    "target": entry["target"],
+                    "action": "same",
+                    "patch": None,
+                    "source": entry["source"],
+                }
+            )
             summary["same"] += 1
             continue
 
@@ -238,12 +245,14 @@ def plan_recipe(name: str) -> int:
         diff = _make_diff(existing, entry["content"], entry["target"])
         patch_name = f"merge-{entry['target'].replace('/', '-')}.diff"
         (plans_dir / patch_name).write_text(diff, encoding="utf-8")
-        patch_files.append({
-            "target": entry["target"],
-            "action": "merge",
-            "patch": patch_name,
-            "source": entry["source"],
-        })
+        patch_files.append(
+            {
+                "target": entry["target"],
+                "action": "merge",
+                "patch": patch_name,
+                "source": entry["source"],
+            }
+        )
         summary["merge"] += 1
 
     # ── 4. Write plan.yaml ─────────────────────────────────────────────
@@ -317,7 +326,10 @@ def apply_plan(plan_id: str) -> int:
         if action == "create":
             patch_file = plans_dir / patch_name
             if patch_file.exists():
-                dst.write_text(patch_file.read_text(encoding="utf-8"), encoding="utf-8")
+                content = _extract_content_from_diff(
+                    patch_file.read_text(encoding="utf-8")
+                )
+                dst.write_text(content, encoding="utf-8")
                 print(f"  [CREATE] {target}")
                 count += 1
 
@@ -365,12 +377,18 @@ def apply_plan(plan_id: str) -> int:
 def _generate_plan_id() -> str:
     """Generate a random 10-character alphanumeric plan ID."""
     import string
+
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(10))
 
 
-def _make_diff(existing: str, incoming: str, path: str) -> str:
-    """Generate a unified diff between existing and incoming content."""
+def _make_diff(existing: str, incoming: str, path: str, from_devnull: bool = False) -> str:
+    """Generate a unified diff between existing and incoming content.
+
+    When *from_devnull* is ``True``, the diff shows the incoming content
+    as a new file (``/dev/null`` → ``b/path``), matching ``git diff``
+    style for new files.
+    """
     import difflib
     import datetime
 
@@ -378,15 +396,44 @@ def _make_diff(existing: str, incoming: str, path: str) -> str:
     incoming_lines = incoming.splitlines(keepends=True)
     timestamp = datetime.datetime.now().isoformat(timespec="seconds")
 
+    fromfile = "/dev/null" if from_devnull else f"a/{path}"
+    tofile = f"b/{path}"
+
     diff = difflib.unified_diff(
         existing_lines,
         incoming_lines,
-        fromfile=f"a/{path}",
-        tofile=f"b/{path}",
+        fromfile=fromfile,
+        tofile=tofile,
         fromfiledate=timestamp,
         tofiledate=timestamp,
     )
     return "".join(diff)
+
+
+def _extract_content_from_diff(diff: str) -> str:
+    """Extract the resulting content from a unified diff.
+
+    For a new-file diff (``/dev/null → b/path``), returns all lines
+    that appear in the target (those prefixed with ``+`` or context lines).
+    For standard diffs, returns the post-patch content.
+    """
+    lines: list[str] = []
+    in_hunk = False
+    for line in diff.splitlines(keepends=True):
+        if line.startswith("@@"):
+            in_hunk = True
+            continue
+        if not in_hunk:
+            continue
+        if line.startswith("---") or line.startswith("+++"):
+            continue
+        if line.startswith("-"):
+            continue
+        if line.startswith("+"):
+            lines.append(line[1:])
+        else:
+            lines.append(line)
+    return "".join(lines)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
