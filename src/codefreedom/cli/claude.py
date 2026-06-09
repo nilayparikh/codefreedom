@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from codefreedom.config import get_codefreedom_dir
+from codefreedom.config import resolve_profiles_path
 from codefreedom.env_loader import eprint, load_env_chain
 from codefreedom.launcher import run_docker, run_local
 from codefreedom.profiles import (
@@ -24,15 +24,6 @@ from codefreedom.profiles import (
     load_profiles,
 )
 from codefreedom.tool_registry import acquire_tools, generate_session_id, release_tools
-
-# Default location for profiles — ~/.codefreedom/profiles/claude-code.yaml
-# Can be overridden with CODEFREEDOM_PROFILES_FILE env var
-import os
-
-
-def _get_cf_dir() -> Path:
-    """Lazy accessor for the CodeFreedom config directory (test-patchable)."""
-    return get_codefreedom_dir()
 
 
 def init_claude() -> int:
@@ -78,7 +69,7 @@ def cmd_config(args: argparse.Namespace) -> int:
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = getattr(args, "profile", None) or "default"
-    profiles_path = _resolve_profiles_path()
+    profiles_path = resolve_profiles_path()
 
     profile_env: dict[str, str] = {}
     if profiles_path.exists():
@@ -179,7 +170,7 @@ def run(args: argparse.Namespace) -> int:
 
     # Fast-path flags (no env loading needed)
     if args.list_profiles:
-        profiles_path = _resolve_profiles_path()
+        profiles_path = resolve_profiles_path()
         profiles = list_profiles(profiles_path)
         if not profiles:
             eprint("[PROFILES] No profiles found.")
@@ -223,7 +214,7 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
-    profiles_path = _resolve_profiles_path()
+    profiles_path = resolve_profiles_path()
 
     profile_env: dict = {}
     sandbox_images: dict[str, str] = {}
@@ -305,9 +296,3 @@ def run(args: argparse.Namespace) -> int:
             release_tools(session_id, acquired_tools)
 
 
-def _resolve_profiles_path() -> Path:
-    """Return the profiles path (~/.codefreedom/profiles/claude-code.yaml)."""
-    override = os.environ.get("CODEFREEDOM_PROFILES_FILE")
-    if override:
-        return Path(override)
-    return _get_cf_dir() / "profiles" / "claude-code.yaml"

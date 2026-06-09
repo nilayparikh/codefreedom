@@ -34,40 +34,21 @@ from codefreedom.env_loader import eprint
 def _find_codefreedom_containers() -> list[str]:
     """Find all Docker containers (running or stopped) owned by CodeFreedom.
 
+    Uses :func:`codefreedom.cli.docker_utils.find_containers_by_base` for
+    strict prefix matching (avoids false positives from containers whose
+    name merely contains ``codefreedom-`` as a substring).
+
     Matches containers whose name starts with known CodeFreedom prefixes:
-    - ``codefreedom-`` (sandbox sessions, legacy containers)
+    - ``codefreedom-`` (sandbox sessions, legacy containers, tools)
     - ``litellm-codefreedom-`` (proxy containers)
 
     Returns container names sorted newest-first.
     """
-    prefixes = ["codefreedom-", "litellm-codefreedom-"]
+    from codefreedom.cli.docker_utils import find_containers_by_base
+
     found: set[str] = set()
-
-    for prefix in prefixes:
-        try:
-            result = subprocess.run(
-                [
-                    "docker",
-                    "ps",
-                    "-a",
-                    "--filter",
-                    f"name={prefix}",
-                    "--format",
-                    "{{.Names}}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-            if result.stdout.strip():
-                for name in result.stdout.strip().split("\n"):
-                    name = name.strip()
-                    if name:
-                        found.add(name)
-        except (subprocess.SubprocessError, FileNotFoundError):
-            continue
-
+    for prefix in ["codefreedom", "litellm-codefreedom"]:
+        found.update(find_containers_by_base(prefix))
     return sorted(found)
 
 

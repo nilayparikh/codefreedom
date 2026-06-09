@@ -24,81 +24,58 @@ class TestFindCodefreedomContainers:
     """Tests for _find_codefreedom_containers."""
 
     def test_no_docker(self, monkeypatch):
-        """Returns empty list when Docker is unavailable."""
+        """Returns empty list when no containers found."""
         monkeypatch.setattr(
-            subprocess,
-            "run",
-            lambda *a, **kw: type("Proc", (object,), {"returncode": 1, "stdout": ""})(),
+            "codefreedom.cli.docker_utils.find_containers_by_base",
+            lambda base_name: [],
         )
         assert _find_codefreedom_containers() == []
 
     def test_empty_output(self, monkeypatch):
         """Returns empty list when no containers match."""
         monkeypatch.setattr(
-            subprocess,
-            "run",
-            lambda *a, **kw: type("Proc", (object,), {"returncode": 0, "stdout": ""})(),
+            "codefreedom.cli.docker_utils.find_containers_by_base",
+            lambda base_name: [],
         )
         assert _find_codefreedom_containers() == []
 
     def test_matches_codefreedom_prefix(self, monkeypatch):
         """Returns containers matching the codefreedom- prefix."""
-        outputs = iter(
-            [
-                type(
-                    "Proc",
-                    (object,),
-                    {"returncode": 0, "stdout": "codefreedom-a1b2\ncodefreedom-c3d4\n"},
-                ),
-                type("Proc", (object,), {"returncode": 0, "stdout": ""}),
-            ]
+        monkeypatch.setattr(
+            "codefreedom.cli.docker_utils.find_containers_by_base",
+            lambda base_name: (
+                ["codefreedom-a1b2", "codefreedom-c3d4"]
+                if base_name == "codefreedom"
+                else []
+            ),
         )
-
-        def fake_run(*a, **kw):
-            return next(outputs)
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
         result = _find_codefreedom_containers()
         assert "codefreedom-a1b2" in result
         assert "codefreedom-c3d4" in result
 
     def test_matches_litellm_prefix(self, monkeypatch):
         """Returns containers matching the litellm-codefreedom- prefix."""
-        outputs = iter(
-            [
-                type("Proc", (object,), {"returncode": 0, "stdout": ""}),
-                type(
-                    "Proc",
-                    (object,),
-                    {"returncode": 0, "stdout": "litellm-codefreedom-0000\n"},
-                ),
-            ]
+        monkeypatch.setattr(
+            "codefreedom.cli.docker_utils.find_containers_by_base",
+            lambda base_name: (
+                ["litellm-codefreedom-0000"]
+                if base_name == "litellm-codefreedom"
+                else []
+            ),
         )
-
-        def fake_run(*a, **kw):
-            return next(outputs)
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
         result = _find_codefreedom_containers()
         assert "litellm-codefreedom-0000" in result
 
     def test_deduplicates(self, monkeypatch):
-        """Returns unique container names even if both prefixes match."""
-        outputs = iter(
-            [
-                type(
-                    "Proc",
-                    (object,),
-                    {"returncode": 0, "stdout": "codefreedom-a1b2\ncodefreedom-a1b2\n"},
-                ),
-                type("Proc", (object,), {"returncode": 0, "stdout": ""}),
-            ]
+        """Returns unique container names."""
+        monkeypatch.setattr(
+            "codefreedom.cli.docker_utils.find_containers_by_base",
+            lambda base_name: (
+                ["codefreedom-a1b2"]
+                if base_name == "codefreedom"
+                else []
+            ),
         )
-
-        def fake_run(*a, **kw):
-            return next(outputs)
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
         result = _find_codefreedom_containers()
         assert result == ["codefreedom-a1b2"]
 

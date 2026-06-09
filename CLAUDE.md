@@ -57,10 +57,15 @@ src/codefreedom/
 │   ├── proxy.py           # 'codefreedom proxy' — lifecycle (start/stop/status)
 │   ├── chrome.py          # 'codefreedom tools chrome' — start/stop/status/url
 │   ├── web.py             # 'codefreedom tools web' — start/stop/status (Camoufox)
+│   ├── github.py          # 'codefreedom tools github' — GitHub MCP server lifecycle
+│   ├── web_bridge.py      # 'codefreedom tools web-bridge' — SearXNG→Camoufox bridge
+│   ├── tools.py           # Unified tool management (start/stop/restart/status all)
 │   ├── docker_utils.py    # Shared Docker helpers (start/stop/status/ephemeral names)
 │   ├── recipe.py          # Recipe system — fetch, plan, apply config recipes
 │   ├── update.py          # 'codefreedom update' — Docker image + PyPI version checks
 │   ├── vscode.py          # 'codefreedom vscode' — VS Code config fragment generation
+│   ├── doctor.py          # 'codefreedom doctor' — environment diagnostic checks
+│   ├── deinit.py          # 'codefreedom deinit' — full teardown (containers + config)
 │   └── tool_init_utils.py # Shared acceptance prompt, notices, tool metadata
 ├── profiles.py      # Profile JSON loading, ${VAR} resolution, inheritance
 ├── tool_registry.py # Reference-counted tool lifecycle via ~/.codefreedom/proc/
@@ -83,7 +88,11 @@ Use the `arch-docs` skill to keep this current when code changes.
 
 | Command                                                    | Description                                                                |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `codefreedom claude init`                                  | Initialize Claude Code profiles + .env.claude                              |
+| `codefreedom init recipe`                                  | Install default base recipe from codefreedom-recipes                       |
+| `codefreedom init recipe --list`                           | List available recipes                                                     |
+| `codefreedom init recipe --plan NAME`                      | Preview a recipe without applying                                          |
+| `codefreedom init recipe --apply PLAN_ID`                  | Apply a previously generated plan                                          |
+| `codefreedom init recipe --store URL_OR_PATH`              | Use a custom recipe store (GitHub URL or local folder)                     |
 | `codefreedom claude`                                       | Launch Claude Code (alias: `cf cc`)                                        |
 | `codefreedom claude --sandbox`                             | Launch in Docker container with GPU                                        |
 | `codefreedom claude --cuda`                                | Use CUDA GPU image (with --sandbox)                                        |
@@ -132,16 +141,30 @@ Use the `arch-docs` skill to keep this current when code changes.
 | `codefreedom tools web stop`                               | Stop Camoufox container                                                    |
 | `codefreedom tools web restart`                            | Restart Camoufox container (preserves state, no image pull)                |
 | `codefreedom tools web status`                             | Show Camoufox container status                                             |
+| `codefreedom tools start`                                  | Start all tools (chrome, web, github, web-bridge)                          |
+| `codefreedom tools stop`                                   | Stop all tools                                                             |
+| `codefreedom tools restart`                                | Restart all tools                                                          |
+| `codefreedom tools status`                                 | Show status of all tools                                                   |
 | `codefreedom tools github init`                            | Initialize GitHub MCP tool profile (requires acceptance)                   |
-| `codefreedom tools github start`                           | Pull image + validate token (ephemeral stdio, no long-running container)   |
-| `codefreedom tools github stop`                            | No-op (container is per-session ephemeral)                                 |
-| `codefreedom tools github restart`                         | No-op (ephemeral)                                                          |
-| `codefreedom tools github status`                          | Show image availability + token status                                     |
+| `codefreedom tools github start`                           | Start GitHub MCP container (stdio-to-HTTP bridge on port 8082)             |
+| `codefreedom tools github stop`                            | Stop GitHub MCP container                                                  |
+| `codefreedom tools github restart`                         | Restart GitHub MCP container (preserves state, no image pull)              |
+| `codefreedom tools github status`                          | Show GitHub MCP container status                                           |
+| `codefreedom tools web-bridge init`                        | Initialize web-bridge tool profile (requires acceptance)                   |
+| `codefreedom tools web-bridge start`                       | Start web-bridge container (SearXNG endpoint on port 8500)                 |
+| `codefreedom tools web-bridge stop`                        | Stop web-bridge container                                                  |
+| `codefreedom tools web-bridge restart`                     | Restart web-bridge container (preserves state, no image pull)              |
+| `codefreedom tools web-bridge status`                      | Show web-bridge container status                                           |
+| `codefreedom doctor`                                       | Run full environment diagnostic (alias: `cf doc`, `cf dr`)                 |
+| `codefreedom doctor --verbose`                             | Show detail messages for all checks                                        |
+| `codefreedom deinit`                                       | Full teardown: stop containers, remove ~/.codefreedom (interactive)        |
+| `codefreedom deinit --force`                               | Full teardown without confirmation prompt                                  |
 | `cf cc`                                                    | Alias for `codefreedom claude`                                             |
 | `cf px`                                                    | Alias for `codefreedom proxy`                                              |
 | `cf adm`                                                   | Alias for `codefreedom admin`                                              |
 | `cf upd` / `cf up`                                         | Alias for `codefreedom update`                                             |
 | `cf vsc`                                                   | Alias for `codefreedom vscode`                                             |
+| `cf doc` / `cf dr`                                         | Alias for `codefreedom doctor`                                             |
 
 ## Key Patterns
 
@@ -157,11 +180,12 @@ Use the `arch-docs` skill to keep this current when code changes.
   tools (deduplicated). Set `"tools": []` to opt out. Tracked via `~/.codefreedom/proc/`.
   Works in both sandbox and local modes.
 
-### Tool Profiles (`~/.codefreedom/profiles/<tool>.json`)
+### Tool Profiles (`~/.codefreedom/profiles/<tool>.yaml`)
 
-Tools (chrome browser, web/camoufox) load settings from `~/.codefreedom/profiles/<tool>.json`.
-Created by `cf init recipe` (see `recipes/` directory).
-Tools refuse to start without a valid profile.
+Tools (chrome, web, github, web-bridge) load settings from
+`~/.codefreedom/profiles/<tool>.yaml`. Created by `cf init recipe`.
+Tools refuse to start without a valid profile. Legacy `.json` profiles
+for chrome/web are still supported for backward compatibility.
 
 | Setting          | Default                                           | Profile override                                                                            |
 | ---------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -175,10 +199,10 @@ Chrome runs headless. For stealth / anti-bot browsing, use the `web` tool (Camou
 
 ### Tools are Shared, Persistent Infrastructure
 
-Tools (chrome, web/camoufox, github) are **shared** — once started they keep
-running until explicitly stopped (`cf tools <name> stop`). Container names
-are **static** (from the profile, e.g. `codefreedom-chrome`). All sessions
-and profiles share the same tool container:
+Tools (chrome, web/camoufox, github, web-bridge) are **shared** — once started
+they keep running until explicitly stopped (`cf tools <name> stop`). Container
+names are **static** (from the profile, e.g. `codefreedom-tools-chrome`). All
+sessions and profiles share the same tool container:
 
 1. First `cf cc` or `cf tools <name> start` creates the container.
 2. Subsequent invocations detect it's already running and are no-ops.
@@ -188,11 +212,12 @@ and profiles share the same tool container:
 Ports are configured in the tool profile and can be overridden via documented
 environment variables (checked at profile load time):
 
-| Tool   | Env var                   | Default    |
-| ------ | ------------------------- | ---------- |
-| Chrome | `CODEFREEDOM_CHROME_PORT` | `9222`     |
-| Web    | `CODEFREEDOM_WEB_PORT`    | `8420`     |
-| GitHub | `CODEFREEDOM_GITHUB_PORT` | `0` (auto) |
+| Tool       | Env var                       | Default    |
+| ---------- | ----------------------------- | ---------- |
+| Chrome     | `CODEFREEDOM_CHROME_PORT`     | `9222`     |
+| Web        | `CODEFREEDOM_WEB_PORT`        | `8420`     |
+| GitHub     | `CODEFREEDOM_GITHUB_PORT`     | `0` (auto) |
+| Web-bridge | `CODEFREEDOM_WEB_BRIDGE_PORT` | `8500`     |
 
 The proxy (`litellm` + `web-bridge`) is **separate** — it gets unique
 container names + project name per instance via `generate_container_name()`
@@ -252,7 +277,7 @@ Only `pyproject.toml` holds the version. `__init__.py` derives `__version__` fro
 - LiteLLM instance routing model requests to providers (DeepSeek, Azure Foundry, NVIDIA, local).
 - Default: **stateless** (no database). Optional PostgreSQL unlocks Admin UI, spend tracking.
 - Provider config: `~/.codefreedom/proxy/config/providers/*.yaml` — opt-in via API key env vars.
-- Model aliases controlled by env vars: `LITELLM_MODEL_ALIAS_ULTRA`, `LITELLM_MODEL_ALIAS_PRO`, `LITELLM_MODEL_ALIAS_FLASH`, `LITELLM_MODEL_ALIAS_AIR`.
+- Model aliases controlled by env vars: `LITELLM_MODEL_ALIAS_BEST`, `LITELLM_MODEL_ALIAS_FABLE`, `LITELLM_MODEL_ALIAS_SONNET`, `LITELLM_MODEL_ALIAS_OPUS`, `LITELLM_MODEL_ALIAS_HAIKU`, `LITELLM_MODEL_ALIAS_SONNET_1M`, `LITELLM_MODEL_ALIAS_OPUS_1M`, `LITELLM_MODEL_ALIAS_OPUSPLAN`.
 
 #### Reasoning-efforts mapping plugin (v2)
 
@@ -373,14 +398,17 @@ cosign verify \
 
 ## Tests
 
-Fifteen test modules in `tests/`, all using `pytest` with `tmp_path` fixtures and `monkeypatch` for path isolation — never touching real `~/.codefreedom/` during tests.
+Nineteen test modules in `tests/`, all using `pytest` with `tmp_path` fixtures and `monkeypatch` for path isolation — never touching real `~/.codefreedom/` during tests.
 
 | File                                | Coverage                                                              |
 | ----------------------------------- | --------------------------------------------------------------------- |
 | `test_admin.py`                     | Backup, restore, list, inspect, prune, sha256, categorization         |
 | `test_chrome.py`                    | Chrome tool container lifecycle (start/stop/status/url)               |
+| `test_deinit.py`                    | Full teardown: stop containers, remove config, preserve .env.user     |
+| `test_doctor.py`                    | Environment diagnostics: config, Docker, ports, permissions           |
 | `test_docker_utils.py`              | Docker container lifecycle helpers (start/stop/status)                |
 | `test_env_loader.py`                | `.env` parsing, component-aware chain precedence, `${VAR}` resolution |
+| `test_github.py`                    | GitHub MCP tool container lifecycle (start/stop/status/restart)       |
 | `test_recipe.py`                    | Recipe system — fetch, plan, apply, merge                             |
 | `test_mcp_endpoints.py`             | MCP endpoint configuration and validation                             |
 | `test_profiles.py`                  | Profile loading, inheritance, env resolution                          |
@@ -414,10 +442,11 @@ Windows terminal defaults to cp1252 encoding, which cannot encode Unicode box-dr
 **Always use plain ASCII in user-facing strings** — replace `───` with `---`, `◆` with `*`, etc.
 Affected files: `src/codefreedom/cli/claude.py`, `proxy.py`, `tool_init_utils.py` (the `_NOTICE`/`_NON_DISCLAIMER` variables).
 
-### `cf init recipe` — configuration via recipes
+### Tool profiles use YAML — not JSON
 
-Configuration is managed via recipes from github.com/nilayparikh/codefreedom-recipes.
-Use `cf init recipe` to list, plan, or apply recipes.
+Tool profiles (`chrome`, `web`, `github`, `web-bridge`) use `.yaml` files at
+`~/.codefreedom/profiles/<tool>.yaml`. Legacy `.json` profiles for chrome/web
+are still supported. The `github` and `web-bridge` tools are YAML-only.
 
 ### Proxy is Docker-only — no native mode
 

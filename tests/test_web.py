@@ -38,8 +38,8 @@ class TestRestart:
 
             return _R()
 
-        monkeypatch.setattr("codefreedom.cli.web.container_exists", lambda name: True)
-        monkeypatch.setattr("codefreedom.cli.web.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.container_exists", lambda name: True)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.subprocess.run", fake_run)
 
         result = restart(_settings(container_name="my-web"))
         assert result == 0
@@ -54,8 +54,8 @@ class TestRestart:
             calls.append(cmd)
             raise AssertionError("subprocess.run should not be called")
 
-        monkeypatch.setattr("codefreedom.cli.web.container_exists", lambda name: False)
-        monkeypatch.setattr("codefreedom.cli.web.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.container_exists", lambda name: False)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.subprocess.run", fake_run)
 
         result = restart(_settings())
         assert result == 1
@@ -71,8 +71,8 @@ class TestRestart:
 
             return _R()
 
-        monkeypatch.setattr("codefreedom.cli.web.container_exists", lambda name: True)
-        monkeypatch.setattr("codefreedom.cli.web.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.container_exists", lambda name: True)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.subprocess.run", fake_run)
 
         result = restart(_settings())
         assert result == 1
@@ -90,8 +90,8 @@ class TestRestart:
 
             return _R()
 
-        monkeypatch.setattr("codefreedom.cli.web.container_exists", lambda name: True)
-        monkeypatch.setattr("codefreedom.cli.web.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.container_exists", lambda name: True)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.subprocess.run", fake_run)
 
         restart(_settings())
         # Exactly one subprocess call, and it must be `docker restart`

@@ -27,30 +27,35 @@ class _R:
 class TestRestart:
 
     def test_restart_existing_container(self, monkeypatch):
-        """restart() calls docker restart, then docker port."""
+        """restart() calls docker restart, then gets mapped port."""
         calls = []
 
         def fake_run(cmd, *a, **kw):
             calls.append(cmd)
+            if cmd[:2] == ["docker", "port"]:
+                return _R(stdout="0.0.0.0:8123\n")
             return _R()
 
-        monkeypatch.setattr("codefreedom.cli.github.container_exists", lambda n: True)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.container_exists", lambda n: True)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.subprocess.run", fake_run)
         monkeypatch.setattr("codefreedom.cli.github.subprocess.run", fake_run)
 
         assert restart(_settings(container_name="gh")) == 0
+        # First call is docker restart (from restart_tool_container)
         assert calls[0] == ["docker", "restart", "gh"]
+        # Second call is docker port (from github.restart wrapper)
         assert calls[1][:2] == ["docker", "port"]
 
     def test_restart_missing_container_returns_1(self, monkeypatch):
-        monkeypatch.setattr("codefreedom.cli.github.container_exists", lambda n: False)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.container_exists", lambda n: False)
         assert restart(_settings()) == 1
 
     def test_restart_docker_failure_propagates(self, monkeypatch):
         def fake_run(cmd, *a, **kw):
             return _R(returncode=1, stderr="err")
 
-        monkeypatch.setattr("codefreedom.cli.github.container_exists", lambda n: True)
-        monkeypatch.setattr("codefreedom.cli.github.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.container_exists", lambda n: True)
+        monkeypatch.setattr("codefreedom.cli.docker_utils.subprocess.run", fake_run)
         assert restart(_settings()) == 1
 
 

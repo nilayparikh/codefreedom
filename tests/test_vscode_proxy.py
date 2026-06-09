@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from codefreedom.cli.vscode import (
+    _STANDARD_REASONING_EFFORT_LEVELS,
     _VSCODE_APIKEY_PLACEHOLDER,
     _build_vscode_entry,
     _check_proxy_live,
@@ -176,6 +177,8 @@ class TestFetchModelInfo:
 class TestModelToVscodeEntry:
     BASE_URL = "http://example:4000/v1"
 
+    STD = list(_STANDARD_REASONING_EFFORT_LEVELS)
+
     def test_basic_model(self):
         out = _model_to_vscode_entry(
             {"model_name": "foo", "model_info": {}}, self.BASE_URL
@@ -189,8 +192,8 @@ class TestModelToVscodeEntry:
         # Defaults applied
         assert out["maxInputTokens"] == 128000
         assert out["maxOutputTokens"] == 16000
-        # Unknown model → empty reasoning-effort list
-        assert out["supportsReasoningEffort"] == []
+        # Unknown model → standard reasoning-effort set (permissive)
+        assert out["supportsReasoningEffort"] == self.STD
 
     def test_explicit_capabilities(self):
         out = _model_to_vscode_entry(
@@ -209,8 +212,8 @@ class TestModelToVscodeEntry:
         assert out["vision"] is True
         assert out["maxInputTokens"] == 200000
         assert out["maxOutputTokens"] == 8000
-        # "bar" doesn't match any hardcoded pattern → empty list
-        assert out["supportsReasoningEffort"] == []
+        # "bar" doesn't match any hardcoded pattern → standard set (permissive)
+        assert out["supportsReasoningEffort"] == self.STD
 
     def test_tool_calling_always_true_even_when_proxy_says_no(self):
         # The whole point of the always-True default: even if LiteLLM
@@ -248,8 +251,8 @@ class TestModelToVscodeEntry:
         # toolCalling is always True even with no model_info.
         assert out["toolCalling"] is True
         assert out["vision"] is False
-        # Unknown model name → empty reasoning-effort list
-        assert out["supportsReasoningEffort"] == []
+        # Unknown model name → standard reasoning-effort set (permissive)
+        assert out["supportsReasoningEffort"] == self.STD
 
     def test_invalid_token_values_fall_back(self):
         out = _model_to_vscode_entry(
@@ -275,15 +278,9 @@ class TestModelToVscodeEntry:
         assert out["id"] == "unknown"
 
     def test_known_model_with_gradient_emits_list(self):
-        # A model that matches a rule with a real gradient gets the list.
+        # A model that supports reasoning gets the full standard set.
         out = _model_to_vscode_entry({"model_name": "Azure/GPT-5.4"}, self.BASE_URL)
-        assert out["supportsReasoningEffort"] == [
-            "none",
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-        ]
+        assert out["supportsReasoningEffort"] == self.STD
 
     def test_known_model_only_none_omits_field(self):
         # A model that matches a rule with `None` (only supports "none")
@@ -317,77 +314,51 @@ class TestModelToVscodeEntry:
 
 
 class TestResolveReasoningEffort:
-    """Hardcoded reasoning-effort lookup for specific model families.
+    """Reasoning-effort lookup — always returns the standard set for any
+    model that supports reasoning.
 
-    The helper has a three-way return contract:
-      * ``list[str]`` — model exposes a real gradient.
-      * ``None`` — model only supports ``"none"`` (no real gradient);
-        the caller should OMIT the field.
-      * ``[]`` — model is unknown; the caller emits an empty list.
+    The helper has a two-way return contract:
+      * ``list[str]`` — model supports reasoning; always the full standard
+        set (``["none", "low", "medium", "high", "xhigh", "max"]``).
+      * ``None`` — model has no real reasoning capability; the caller
+        should OMIT the field.
 
-    Order matters: more specific patterns must come first so they win
+    Models not in the hardcoded table are treated permissively (full standard
+    set).  Order matters: more specific patterns must come first so they win
     over less-specific ones (e.g. ``gpt-5.4-nano`` before ``gpt-5.4``).
     """
 
+    STD = list(_STANDARD_REASONING_EFFORT_LEVELS)
+
     @pytest.mark.parametrize(
-        "model_name,expected",
+        "model_name",
         [
             # ── Native OpenAI Tier (Azure) ──────────────────────────────
-            ("Azure/GPT-5.4", ["none", "low", "medium", "high", "xhigh"]),
-            ("openai/gpt-5.4", ["none", "low", "medium", "high", "xhigh"]),
-            ("Azure/GPT-5.4-Mini", ["none", "low", "medium"]),
-            ("openai/gpt-5.4-mini", ["none", "low", "medium"]),
-            # ── DeepSeek V4 (Pro has xhigh, Flash capped at high) ──────
-            (
-                "DeepSeek/DeepSeek-V4-Pro",
-                ["none", "low", "medium", "high", "xhigh"],
-            ),
-            (
-                "NVIDIA/DeepSeek-V4-Pro",
-                ["none", "low", "medium", "high", "xhigh"],
-            ),
-            (
-                "DeepSeek/DeepSeek-V4-Flash",
-                ["none", "low", "medium", "high"],
-            ),
-            (
-                "NVIDIA/DeepSeek-V4-Flash",
-                ["none", "low", "medium", "high"],
-            ),
-            (
-                "OpenCodeZen/DeepSeek-V4-Flash-FREE",
-                ["none", "low", "medium", "high"],
-            ),
+            "Azure/GPT-5.4",
+            "openai/gpt-5.4",
+            "Azure/GPT-5.4-Mini",
+            "openai/gpt-5.4-mini",
+            # ── DeepSeek V4 ─────────────────────────────────────────────
+            "DeepSeek/DeepSeek-V4-Pro",
+            "NVIDIA/DeepSeek-V4-Pro",
+            "DeepSeek/DeepSeek-V4-Flash",
+            "NVIDIA/DeepSeek-V4-Flash",
+            "OpenCodeZen/DeepSeek-V4-Flash-FREE",
             # ── NVIDIA & Moonshot backends ───────────────────────────────
-            (
-                "OpenRouter/Nemotron-3-Ultra-550B-A55B",
-                ["none", "low", "medium", "high"],
-            ),
-            (
-                "OpenCodeZen/Nemotron-3-Ultra-FREE",
-                ["none", "low", "medium", "high"],
-            ),
+            "OpenRouter/Nemotron-3-Ultra-550B-A55B",
+            "OpenCodeZen/Nemotron-3-Ultra-FREE",
             # ── OpenCodeZen custom models ────────────────────────────────
-            (
-                "OpenCodeZen/MiMo-V2.5-FREE",
-                ["none", "low", "medium", "high"],
-            ),
-            (
-                "OpenCodeZen/Minimax-M3-FREE",
-                ["none", "low", "medium", "high"],
-            ),
+            "OpenCodeZen/MiMo-V2.5-FREE",
+            "OpenCodeZen/Minimax-M3-FREE",
             # ── Alibaba Qwen 3.6 MoE ─────────────────────────────────────
-            (
-                "DGX/Qwen3.6-35B-A3B",
-                ["none", "low", "medium", "high"],
-            ),
+            "DGX/Qwen3.6-35B-A3B",
             # ── CodeFreedom internal fallbacks ───────────────────────────
-            ("CodeFreedom/Ultra", ["none", "low", "medium", "high"]),
-            ("CodeFreedom/Flash", ["none", "low", "medium", "high"]),
+            "CodeFreedom/Ultra",
+            "CodeFreedom/Flash",
         ],
     )
-    def test_known_models_with_gradient(self, model_name, expected):
-        assert _resolve_reasoning_effort(model_name) == expected
+    def test_known_models_with_gradient(self, model_name):
+        assert _resolve_reasoning_effort(model_name) == self.STD
 
     @pytest.mark.parametrize(
         "model_name",
@@ -416,36 +387,22 @@ class TestResolveReasoningEffort:
         # an empty list.  See the helper's docstring.
         assert _resolve_reasoning_effort(model_name) is None
 
-    @pytest.mark.parametrize(
-        "model_name",
-        [
-            # Truly unknown — no hardcoded rule, no match.
+    def test_unknown_models_return_standard_set(self):
+        # Unknown models are treated permissively — get the full standard set.
+        for model_name in [
             "some-org/Some-Random-Model",
             "totally/unknown",
             "foo",
             "NVIDIA/Step-3.7-Flash",  # in nvidia.yaml but not in rules
-            # Edge cases
             "",
             "unknown",
-        ],
-    )
-    def test_unknown_models_return_empty_list(self, model_name):
-        assert _resolve_reasoning_effort(model_name) == []
+        ]:
+            assert _resolve_reasoning_effort(model_name) == self.STD
 
     def test_case_insensitive_match(self):
         # The lookup is case-insensitive on the substring pattern.
-        assert _resolve_reasoning_effort("azure/gpt-5.4") == [
-            "none",
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-        ]
-        assert _resolve_reasoning_effort("AZURE/GPT-5.4-MINI") == [
-            "none",
-            "low",
-            "medium",
-        ]
+        assert _resolve_reasoning_effort("azure/gpt-5.4") == self.STD
+        assert _resolve_reasoning_effort("AZURE/GPT-5.4-MINI") == self.STD
         # The "only none" branch is also case-insensitive.
         assert _resolve_reasoning_effort("azure/gpt-5.4-nano") is None
 
@@ -453,20 +410,11 @@ class TestResolveReasoningEffort:
         # gpt-5.4-nano must NOT fall through to the general gpt-5.4 rule.
         assert _resolve_reasoning_effort("Azure/GPT-5.4-Nano") is None
         # gpt-5.4-mini must NOT fall through to the general gpt-5.4 rule.
-        assert _resolve_reasoning_effort("Azure/GPT-5.4-Mini") == [
-            "none",
-            "low",
-            "medium",
-        ]
+        assert _resolve_reasoning_effort("Azure/GPT-5.4-Mini") == self.STD
         # nemotron-3-super must NOT be shadowed by nemotron-3-ultra
         # (different substrings — verify the order in the rules table).
         assert _resolve_reasoning_effort("OpenCodeZen/Nemotron-3-Super-FREE") is None
-        assert _resolve_reasoning_effort("OpenCodeZen/Nemotron-3-Ultra-FREE") == [
-            "none",
-            "low",
-            "medium",
-            "high",
-        ]
+        assert _resolve_reasoning_effort("OpenCodeZen/Nemotron-3-Ultra-FREE") == self.STD
 
     def test_returned_list_is_fresh(self):
         # Calling twice returns a new list each time (not a shared mutable).
@@ -474,7 +422,7 @@ class TestResolveReasoningEffort:
         b = _resolve_reasoning_effort("Azure/GPT-5.4")
         assert a == b
         a.append("xhigh-extra")
-        assert b == ["none", "low", "medium", "high", "xhigh"]
+        assert b == self.STD
 
 
 # ── _build_vscode_entry ──────────────────────────────────────────────────────

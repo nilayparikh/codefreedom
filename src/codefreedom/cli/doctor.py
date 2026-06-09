@@ -26,16 +26,15 @@ import os
 import shutil
 import stat
 import subprocess
-import sys
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, List, Tuple
 
 from codefreedom.cli.docker_utils import (
     get_codefreedom_container_ports,
     is_port_available,
 )
 from codefreedom.config import get_codefreedom_dir
-from codefreedom.env_loader import eprint as _eprint, load_dotenv
+from codefreedom.env_loader import load_dotenv
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Check result types

@@ -13,25 +13,28 @@ Use `cf init recipe` to initialize.
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 from pathlib import Path
 
-import yaml
-
 from codefreedom.env_loader import eprint
-from codefreedom.interpolate import interpolate_all_strings
 from codefreedom.cli.docker_utils import (
-    check_docker_available,
     container_exists,
     container_is_running,
-    ensure_image,
+    init_tool_redirect,
+    load_tool_profile,
     resolve_data_dir,
+    restart_tool_container,
+    start_tool_docker_guard,
+    start_tool_ensure_image,
+    start_tool_init_gate,
+    start_tool_remove_stopped,
+    stop_tool_container,
+    tool_data_dir,
+    tool_profile_path,
 )
 from codefreedom.cli.tool_init_utils import (
     _print_tool_notice,
 )
-from pydantic import ValidationError
 
 from codefreedom.schemas.chrome import ChromeConfig
 
@@ -42,26 +45,9 @@ _DEFAULT_CONTAINER_NAME = "codefreedom-chrome"
 _DEFAULT_PORT = 9222
 
 
-def _tool_home() -> Path:
-    """Return the tool home directory.
-
-    Defaults to ``~/.codefreedom``, overridable via ``CODEFREEDOM_TOOL_HOME``
-    env var (used by tests for isolation).
-    """
-    override = os.environ.get("CODEFREEDOM_TOOL_HOME")
-    if override:
-        return Path(override)
-    return Path.home() / ".codefreedom"
-
-
-def _default_data_dir() -> str:
-    """Return the default data dir under ~/.codefreedom/sandbox/tools/chrome."""
-    return str(_tool_home() / "sandbox" / "tools" / "chrome")
-
-
 def _profile_path() -> Path:
     """Return the chrome tool profile path (~/.codefreedom/profiles/chrome.yaml)."""
-    return _tool_home() / "profiles" / "chrome.yaml"
+    return tool_profile_path("chrome.yaml")
 
 
 # ── Profile loader ────────────────────────────────────────────────────────────
@@ -73,7 +59,6 @@ def _load_profile() -> dict:
     Returns a flat dict with keys: image, container_name, port, data_dir, env.
     Any missing key falls back to the hardcoded default above.
     """
-    profile_path = _profile_path()
     settings: dict = {
         "image": _DEFAULT_IMAGE,
         "container_name": _DEFAULT_CONTAINER_NAME,
@@ -81,101 +66,25 @@ def _load_profile() -> dict:
         "mcp_port": 9223,
         "mcp_path": "/mcp",
         "cdp_proxy_port": 9220,
-        "data_dir": _default_data_dir(),
+        "data_dir": tool_data_dir("chrome"),
         "env": {},
     }
-
-    if not profile_path.exists():
-        return settings
-
-    try:
-        with open(profile_path, encoding="utf-8") as f:
-            raw = yaml.safe_load(f)
-    except (yaml.YAMLError, OSError) as exc:
-        eprint(f"[CHROME] Warning: failed to read {profile_path}: {exc}")
-        return settings
-
-    if not isinstance(raw, dict):
-        eprint(f"[CHROME] Warning: invalid profile format in {profile_path}")
-        return settings
-
-    # Interpolate ${VAR} references in env values
-    interpolate_all_strings(raw)
-
-    # Validate with Pydantic (non-fatal — warn on failure)
-    try:
-        ChromeConfig.model_validate(raw, strict=False)
-    except ValidationError as exc:
-        eprint(f"[CHROME] Warning: validation issue in profile: {exc}")
-
-    chrome_cfg = raw.get("chrome", {})
-    if not isinstance(chrome_cfg, dict):
-        return settings
-
-    # Merge — profile values override defaults
-    if isinstance(chrome_cfg.get("image"), str) and chrome_cfg["image"]:
-        settings["image"] = chrome_cfg["image"]
-    if (
-        isinstance(chrome_cfg.get("container_name"), str)
-        and chrome_cfg["container_name"]
-    ):
-        settings["container_name"] = chrome_cfg["container_name"]
-    if isinstance(chrome_cfg.get("port"), int) and chrome_cfg["port"] > 0:
-        settings["port"] = chrome_cfg["port"]
-    # Machine env var override (checked at profile load time)
-    env_port = os.environ.get("CODEFREEDOM_CHROME_PORT")
-    if env_port is not None:
-        try:
-            settings["port"] = int(env_port)
-        except (ValueError, TypeError):
-            pass
-    if isinstance(chrome_cfg.get("mcp_port"), int) and chrome_cfg["mcp_port"] > 0:
-        settings["mcp_port"] = chrome_cfg["mcp_port"]
-    if (
-        isinstance(chrome_cfg.get("cdp_proxy_port"), int)
-        and chrome_cfg["cdp_proxy_port"] > 0
-    ):
-        settings["cdp_proxy_port"] = chrome_cfg["cdp_proxy_port"]
-    if isinstance(chrome_cfg.get("mcp_path"), str) and chrome_cfg["mcp_path"]:
-        settings["mcp_path"] = chrome_cfg["mcp_path"]
-    if isinstance(chrome_cfg.get("data_dir"), str) and chrome_cfg["data_dir"]:
-        settings["data_dir"] = chrome_cfg["data_dir"]
-    if isinstance(chrome_cfg.get("env"), dict):
-        settings["env"] = chrome_cfg["env"]
-
-    return settings
+    return load_tool_profile(
+        "chrome",
+        settings,
+        "chrome.yaml",
+        schema_class=ChromeConfig,
+        env_port_var="CODEFREEDOM_CHROME_PORT",
+        extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port"],
+    )
 
 
 # ── Init ────────────────────────────────────────────────────────────────────
 
 
 def init_tool() -> int:
-    """Initialize the chrome tool profile via recipes.
-
-    Tools are auto-initialized when ``cf init recipe`` copies the profile
-    to ``~/.codefreedom/profiles/chrome.yaml``.
-    """
-    profile_path = _profile_path()
-    if profile_path.exists():
-        eprint("[chrome] Profile already exists at ~/.codefreedom/profiles/chrome.yaml")
-        return 0
-    eprint(
-        "[chrome] No profile found. Run 'cf init recipe' to install the default recipe."
-    )
-    from codefreedom.cli.tool_init_utils import print_help_section
-
-    print_help_section(
-        "chrome init",
-        [
-            "Use:  cf init recipe              # install _default base recipe",
-            "      cf init recipe --list        # list available recipes",
-            "      cf init recipe --plan <name> # preview a recipe without applying",
-            "      cf init recipe <name>        # install a specific recipe",
-        ],
-        docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
-        include_disclaimer=True,
-    )
-    return 0
+    """Initialize the chrome tool profile via recipes."""
+    return init_tool_redirect("chrome.yaml")
 
 
 # ── Actions ────────────────────────────────────────────────────────────────────
@@ -183,14 +92,9 @@ def init_tool() -> int:
 
 def start(settings: dict) -> int:
     """Start the Chrome browser container. Returns exit code."""
-    # ── Init gate: refuse to start if tool not initialized ───────────────
-    profile_path = _profile_path()
-    if not profile_path.exists():
-        eprint("[chrome] Tool profile not found.")
-        eprint("         Run:  cf init recipe")
+    if not start_tool_init_gate("chrome.yaml", "chrome"):
         return 1
 
-    # ── Third-party notice on every start ────────────────────────────────
     _print_tool_notice("chrome")
 
     image = settings["image"]
@@ -203,32 +107,16 @@ def start(settings: dict) -> int:
         eprint(f"[CHROME] Container '{container_name}' is already running.")
         return 0
 
-    # Check if Docker is available
-    if not check_docker_available():
-        eprint("[ERROR] Docker not found. Install Docker and try again.")
+    if not start_tool_docker_guard("CHROME"):
         return 1
 
     # Resolve & create data directory
     resolved_data = resolve_data_dir(data_dir)
     eprint(f"[CHROME] Using data dir: {resolved_data}")
 
-    # Remove existing container if stopped
-    if container_exists(container_name):
-        eprint(f"[CHROME] Removing existing container '{container_name}'...")
-        subprocess.run(
-            ["docker", "rm", "-f", container_name],
-            capture_output=True,
-            timeout=15,
-            check=False,
-        )
+    start_tool_remove_stopped(container_name, "CHROME")
 
-    # Ensure image is available
-    if not ensure_image(
-        image,
-        label="CHROME",
-        build_tip="docker build -t codefreedom:chrome -f docker/chrome/Dockerfile.Chrome docker/chrome/",
-        profile_path="~/.codefreedom/profiles/chrome.yaml",
-    ):
+    if not start_tool_ensure_image(settings, "CHROME"):
         return 1
 
     # Build environment flags
@@ -244,10 +132,7 @@ def start(settings: dict) -> int:
     if "MCP_PORT" not in env_vars:
         env_flags.extend(["-e", f"MCP_PORT={mcp_port}"])
 
-    # Set CDP_PROXY_PORT for the socat forwarder.  socat listens on
-    # this port (0.0.0.0) inside the container and forwards to Chrome's
-    # 127.0.0.1:CHROME_DEBUG_PORT.  Using a distinct port avoids
-    # conflict with Chrome's own bind to CHROME_DEBUG_PORT.
+    # Set CDP_PROXY_PORT for the socat forwarder.
     cdp_proxy_port = settings.get("cdp_proxy_port", 9220)
     if "CDP_PROXY_PORT" not in env_vars:
         env_flags.extend(["-e", f"CDP_PROXY_PORT={cdp_proxy_port}"])
@@ -275,9 +160,9 @@ def start(settings: dict) -> int:
             "--restart",
             "unless-stopped",
             "-p",
-            f"127.0.0.1:{port}:{cdp_proxy_port}",
+            f"0.0.0.0:{port}:{cdp_proxy_port}",
             "-p",
-            f"127.0.0.1:{mcp_port}:{mcp_port}",
+            f"0.0.0.0:{mcp_port}:{mcp_port}",
             "-v",
             f"{resolved_data}:/data/chrome",
             *env_flags,
@@ -307,70 +192,20 @@ def start(settings: dict) -> int:
 
 def stop(settings: dict) -> int:
     """Stop and remove the Chrome container. Returns exit code."""
-    container_name = settings["container_name"]
-
-    if not container_exists(container_name):
-        eprint(f"[CHROME] Container '{container_name}' does not exist.")
-        return 0
-
-    eprint(f"[CHROME] Stopping container '{container_name}'...")
-    subprocess.run(
-        ["docker", "stop", container_name],
-        capture_output=True,
-        timeout=30,
-        check=False,
-    )
-    subprocess.run(
-        ["docker", "rm", container_name],
-        capture_output=True,
-        timeout=15,
-        check=False,
-    )
-    eprint("   [OK] Container stopped and removed.")
-    return 0
+    return stop_tool_container(settings, "CHROME")
 
 
 def restart(settings: dict) -> int:
-    """Restart the Chrome container using `docker restart`.
-
-    Preserves the container ID, logs, and network namespace. Does NOT pull
-    a new image — to pick up a new image tag, use `stop` then `start`.
-
-    Returns exit code: 0 on success, 1 if container does not exist or
-    docker restart fails.
-    """
-    container_name = settings["container_name"]
-
-    if not container_exists(container_name):
-        eprint(f"[CHROME] Container '{container_name}' does not exist.")
-        eprint("   Use: cf tools start")
-        return 1
-
-    eprint(f"[CHROME] Restarting container '{container_name}'...")
-    result = subprocess.run(
-        ["docker", "restart", container_name],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-    if result.returncode != 0:
-        eprint("[ERROR] Failed to restart Chrome container.")
-        if result.stderr:
-            eprint(f"   {result.stderr.strip()}")
-        return 1
-
-    port = settings["port"]
-    eprint("   [OK] Container restarted.")
-    eprint(f"   CDP debug URL: http://127.0.0.1:{port}")
-    return 0
+    """Restart the Chrome container using ``docker restart``."""
+    rc = restart_tool_container(settings, "CHROME")
+    if rc == 0:
+        port = settings["port"]
+        eprint(f"   CDP debug URL: http://127.0.0.1:{port}")
+    return rc
 
 
 def status(settings: dict) -> int:
-    """Show Chrome container status. Returns exit code.
-
-    Pattern matches web.status() -- simple container_is_running / exists checks.
-    """
+    """Show Chrome container status. Returns exit code."""
     container_name = settings["container_name"]
     port = settings["port"]
 

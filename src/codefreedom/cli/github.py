@@ -17,27 +17,30 @@ Use `cf init recipe` to initialize.
 from __future__ import annotations
 
 import argparse
-import os
 import random
 import socket
 import subprocess
 from pathlib import Path
 
-import yaml
-
 from codefreedom.env_loader import eprint
-from codefreedom.interpolate import interpolate_all_strings
 from codefreedom.cli.docker_utils import (
-    check_docker_available,
     container_exists,
     container_is_running,
-    ensure_image,
+    init_tool_redirect,
+    load_tool_profile,
     resolve_data_dir,
+    restart_tool_container,
+    start_tool_docker_guard,
+    start_tool_ensure_image,
+    start_tool_init_gate,
+    start_tool_remove_stopped,
+    stop_tool_container,
+    tool_data_dir,
+    tool_profile_path,
 )
 from codefreedom.cli.tool_init_utils import (
     _print_tool_notice,
 )
-from pydantic import ValidationError
 
 from codefreedom.schemas.github import GithubConfig
 
@@ -46,23 +49,6 @@ from codefreedom.schemas.github import GithubConfig
 _DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:github-latest"
 _DEFAULT_CONTAINER_NAME = "codefreedom-tools-github"
 _DEFAULT_PORT = 0  # 0 = auto-pick random free port
-
-
-def _tool_home() -> Path:
-    """Return the tool home directory.
-
-    Defaults to ``~/.codefreedom``, overridable via ``CODEFREEDOM_TOOL_HOME``
-    env var (used by tests for isolation).
-    """
-    override = os.environ.get("CODEFREEDOM_TOOL_HOME")
-    if override:
-        return Path(override)
-    return Path.home() / ".codefreedom"
-
-
-def _default_data_dir() -> str:
-    """Return the default data dir under ~/.codefreedom/sandbox/tools/github."""
-    return str(_tool_home() / "sandbox" / "tools" / "github")
 
 
 # ── Random port helper ────────────────────────────────────────────────────────
@@ -103,7 +89,7 @@ def _get_mapped_port(container_name: str) -> int | None:
 
 def _profile_path() -> Path:
     """Return the github tool profile path (~/.codefreedom/profiles/github.yaml)."""
-    return _tool_home() / "profiles" / "github.yaml"
+    return tool_profile_path("github.yaml")
 
 
 # ── Profile loader ────────────────────────────────────────────────────────────
@@ -119,89 +105,24 @@ def _load_profile() -> dict:
         "image": _DEFAULT_IMAGE,
         "container_name": _DEFAULT_CONTAINER_NAME,
         "port": _DEFAULT_PORT,
-        "data_dir": _default_data_dir(),
+        "data_dir": tool_data_dir("github"),
         "env": {},
     }
-
-    profile_path = _profile_path()
-    if not profile_path.exists():
-        return settings
-
-    try:
-        with open(profile_path, encoding="utf-8") as f:
-            raw = yaml.safe_load(f)
-    except (yaml.YAMLError, OSError) as exc:
-        eprint(f"[GITHUB] Warning: failed to read {profile_path}: {exc}")
-        return settings
-
-    if not isinstance(raw, dict):
-        eprint(f"[GITHUB] Warning: invalid profile format in {profile_path}")
-        return settings
-
-    # Interpolate ${VAR} references in env values
-    interpolate_all_strings(raw)
-
-    # Validate with Pydantic (non-fatal — warn on failure)
-    try:
-        GithubConfig.model_validate(raw, strict=False)
-    except ValidationError as exc:
-        eprint(f"[GITHUB] Warning: validation issue in profile: {exc}")
-
-    cfg = raw.get("github", {})
-    if not isinstance(cfg, dict):
-        return settings
-
-    if isinstance(cfg.get("image"), str) and cfg["image"]:
-        settings["image"] = cfg["image"]
-    if isinstance(cfg.get("container_name"), str) and cfg["container_name"]:
-        settings["container_name"] = cfg["container_name"]
-    if isinstance(cfg.get("port"), int) and cfg["port"] >= 0:
-        settings["port"] = cfg["port"]
-    # Machine env var override (checked at profile load time)
-    env_port = os.environ.get("CODEFREEDOM_GITHUB_PORT")
-    if env_port is not None:
-        try:
-            settings["port"] = int(env_port)
-        except (ValueError, TypeError):
-            pass
-    if isinstance(cfg.get("data_dir"), str) and cfg["data_dir"]:
-        settings["data_dir"] = cfg["data_dir"]
-    if isinstance(cfg.get("env"), dict):
-        settings["env"] = cfg["env"]
-
-    return settings
+    return load_tool_profile(
+        "github",
+        settings,
+        "github.yaml",
+        schema_class=GithubConfig,
+        env_port_var="CODEFREEDOM_GITHUB_PORT",
+    )
 
 
 # ── Init ────────────────────────────────────────────────────────────────────
 
 
 def init_tool() -> int:
-    """Initialize the github tool profile via recipes.
-
-    Tools are auto-initialized when ``cf init recipe`` copies the profile
-    to ``~/.codefreedom/profiles/github.yaml``.
-    """
-    profile_path = _profile_path()
-    if profile_path.exists():
-        eprint("[github] Profile already exists at ~/.codefreedom/profiles/github.yaml")
-        return 0
-    eprint(
-        "[github] No profile found. Run 'cf init recipe' to install the default recipe."
-    )
-    from codefreedom.cli.tool_init_utils import print_help_section
-
-    print_help_section(
-        "github init",
-        [
-            "Use:  cf init recipe              # install _default base recipe",
-            "      cf init recipe --list        # list available recipes",
-            "      cf init recipe --plan <name> # preview a recipe without applying",
-            "      cf init recipe <name>        # install a specific recipe",
-        ],
-        docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
-        include_disclaimer=True,
-    )
-    return 0
+    """Initialize the github tool profile via recipes."""
+    return init_tool_redirect("github.yaml")
 
 
 # ── Actions ────────────────────────────────────────────────────────────────────
@@ -209,14 +130,9 @@ def init_tool() -> int:
 
 def start(settings: dict) -> int:
     """Start the GitHub MCP container. Returns exit code."""
-    # ── Init gate: refuse to start if tool not initialized ───────────────
-    profile_path = _profile_path()
-    if not profile_path.exists():
-        eprint("[github] Tool profile not found.")
-        eprint("         Run:  cf init recipe")
+    if not start_tool_init_gate("github.yaml", "github"):
         return 1
 
-    # ── Third-party notice on every start ────────────────────────────────
     _print_tool_notice("github")
 
     image = settings["image"]
@@ -238,32 +154,16 @@ def start(settings: dict) -> int:
         eprint(f"[GITHUB]   MCP endpoint: http://127.0.0.1:{port}/mcp")
         return 0
 
-    # Check if Docker is available
-    if not check_docker_available():
-        eprint("[ERROR] Docker not found. Install Docker and try again.")
+    if not start_tool_docker_guard("GITHUB"):
         return 1
 
     # Resolve & create data directory
     resolved_data = resolve_data_dir(data_dir)
     eprint(f"[GITHUB] Using data dir: {resolved_data}")
 
-    # Remove existing container if stopped
-    if container_exists(container_name):
-        eprint(f"[GITHUB] Removing existing container '{container_name}'...")
-        subprocess.run(
-            ["docker", "rm", "-f", container_name],
-            capture_output=True,
-            timeout=15,
-            check=False,
-        )
+    start_tool_remove_stopped(container_name, "GITHUB")
 
-    # Ensure image is available
-    if not ensure_image(
-        image,
-        label="GITHUB",
-        build_tip="docker build -t codefreedom:github -f docker/github/Dockerfile.Github docker/github/",
-        profile_path="~/.codefreedom/profiles/github.yaml",
-    ):
+    if not start_tool_ensure_image(settings, "GITHUB"):
         return 1
 
     # Pick port: use explicit setting, or auto-pick from random range
@@ -288,7 +188,7 @@ def start(settings: dict) -> int:
             "--restart",
             "unless-stopped",
             "-p",
-            f"127.0.0.1:{host_port}:8082",
+            f"0.0.0.0:{host_port}:8082",
             "-v",
             f"{resolved_data}:/data",
             *env_flags,
@@ -312,60 +212,16 @@ def start(settings: dict) -> int:
 
 def stop(settings: dict) -> int:
     """Stop and remove the GitHub MCP container. Returns exit code."""
-    container_name = settings["container_name"]
-
-    if not container_exists(container_name):
-        eprint(f"[GITHUB] Container '{container_name}' does not exist.")
-        return 0
-
-    eprint(f"[GITHUB] Stopping container '{container_name}'...")
-    subprocess.run(
-        ["docker", "stop", container_name],
-        capture_output=True,
-        timeout=30,
-        check=False,
-    )
-    subprocess.run(
-        ["docker", "rm", container_name],
-        capture_output=True,
-        timeout=15,
-        check=False,
-    )
-    eprint("   [OK] Container stopped and removed.")
-    return 0
+    return stop_tool_container(settings, "GITHUB")
 
 
 def restart(settings: dict) -> int:
-    """Restart the GitHub MCP container using `docker restart`.
-
-    Preserves the container ID, logs, and network namespace. Does NOT pull
-    a new image — to pick up a new image tag, use `stop` then `start`.
-    """
-    container_name = settings["container_name"]
-
-    if not container_exists(container_name):
-        eprint(f"[GITHUB] Container '{container_name}' does not exist.")
-        eprint("   Use: cf tools start")
-        return 1
-
-    eprint(f"[GITHUB] Restarting container '{container_name}'...")
-    result = subprocess.run(
-        ["docker", "restart", container_name],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-    if result.returncode != 0:
-        eprint("[ERROR] Failed to restart GitHub MCP container.")
-        if result.stderr:
-            eprint(f"   {result.stderr.strip()}")
-        return 1
-
-    port = _get_mapped_port(container_name) or "?"
-    eprint("   [OK] Container restarted.")
-    eprint(f"   MCP endpoint: http://127.0.0.1:{port}/mcp")
-    return 0
+    """Restart the GitHub MCP container using ``docker restart``."""
+    rc = restart_tool_container(settings, "GITHUB")
+    if rc == 0:
+        port = _get_mapped_port(settings["container_name"]) or "?"
+        eprint(f"   MCP endpoint: http://127.0.0.1:{port}/mcp")
+    return rc
 
 
 def status(settings: dict) -> int:

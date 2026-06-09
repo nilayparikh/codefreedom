@@ -64,18 +64,17 @@ Friendly names that map to real models. Change the alias to switch providers:
 
 ```bash
 # In ~/.codefreedom/.env.proxy
-LITELLM_MODEL_ALIAS_ULTRA="DeepSeek/DeepSeek-V4-Pro"
-LITELLM_MODEL_ALIAS_PRO="Azure/GPT-5.4"
-LITELLM_MODEL_ALIAS_FLASH="NVIDIA/DeepSeek-V4-Flash"
-LITELLM_MODEL_ALIAS_AIR="OpenCodeZen/MiMo-V2.5-FREE"
+LITELLM_MODEL_ALIAS_BEST="DeepSeek/DeepSeek-V4-Pro"
+LITELLM_MODEL_ALIAS_FABLE="DeepSeek/DeepSeek-V4-Pro"
+LITELLM_MODEL_ALIAS_SONNET="Azure/GPT-5.4-Mini"
+LITELLM_MODEL_ALIAS_OPUS="DeepSeek/DeepSeek-V4-Pro"
+LITELLM_MODEL_ALIAS_HAIKU="NVIDIA/DeepSeek-V4-Flash"
+LITELLM_MODEL_ALIAS_SONNET_1M="Azure/GPT-5.4-Mini"
+LITELLM_MODEL_ALIAS_OPUS_1M="DeepSeek/DeepSeek-V4-Pro"
+LITELLM_MODEL_ALIAS_OPUSPLAN="DeepSeek/DeepSeek-V4-Pro"
 ```
 
-Then in Claude Code:
-
-```bash
-codefreedom claude --profile ultra   # Uses DeepSeek-V4-Pro
-codefreedom claude --profile pro     # Uses GPT-5.4
-```
+Then in Claude Code, reference these aliases via profile selection (e.g. `codefreedom claude --profile best` or `codefreedom claude --profile sonnet`).
 
 ## Add a Provider
 

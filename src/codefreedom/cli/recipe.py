@@ -41,7 +41,7 @@ containing a ``recipe.yaml`` manifest:
         prompt: "OpenCode Zen API key"
 
     optional_config:
-      - var: LITELLM_MODEL_ALIAS_ULTRA
+      - var: LITELLM_MODEL_ALIAS_BEST
         default: "OpenCode/MiMo-V2.5-FREE"
 
 Merge modes (``merge`` field in files):
@@ -81,6 +81,7 @@ from codefreedom.env_loader import eprint
 from codefreedom.interpolate import interpolate_all_strings
 from pydantic import ValidationError
 
+from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
 from codefreedom.schemas.recipe import RecipeConfig
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -169,7 +170,7 @@ def init_recipe(name: str, store: Optional[str] = None) -> int:
         # Silently skip _default when not found in the store
         if name == "_default":
             source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
-            print(f"[recipe] No '_default' recipe in store — skipping.")
+            print("[recipe] No '_default' recipe in store — skipping.")
             print(f"         Store: {source}")
             return 0
         print(f"[recipe] Recipe '{name}' not found.")
@@ -967,12 +968,7 @@ def _parse_yaml_file(path: Path) -> Dict[str, Any]:
 
 
 # Tool profile files always go to ~/.codefreedom/ (shared across projects).
-_TOOL_PROFILE_PATHS = {
-    "profiles/chrome.yaml",
-    "profiles/web.yaml",
-    "profiles/github.yaml",
-    "profiles/web-bridge.yaml",
-}
+# Uses the canonical set from docker_utils.
 
 
 def _install_recipe_files(
@@ -1306,14 +1302,14 @@ def _ensure_user_env(cf_dir: Path) -> None:
         "#\n"
         "# Use this file for your personal overrides, such as:\n"
         "#   LITELLM_PORT=4001\n"
-        "#   LITELLM_MODEL_ALIAS_ULTRA=my-custom-model\n"
+        "#   LITELLM_MODEL_ALIAS_BEST=my-custom-model\n"
         "#\n"
         "# Syntax: standard KEY=value (no quotes needed, no spaces around =)\n"
         "# Supports ${VAR} and ${VAR:-default} interpolation.\n"
         "# ═══════════════════════════════════════════════════════════════════════════════\n"
     )
     user_env.write_text(header, encoding="utf-8")
-    print(f"  [CREATE] .env.user (user-managed overrides)")
+    print("  [CREATE] .env.user (user-managed overrides)")
 
 
 def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:

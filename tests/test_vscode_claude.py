@@ -667,17 +667,17 @@ class TestDispatchPath:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("CODEFREEDOM_PROFILES_FILE", raising=False)
 
-        from codefreedom.cli.vscode import _resolve_profiles_path
+        from codefreedom.config import resolve_profiles_path
 
-        path = _resolve_profiles_path()
+        path = resolve_profiles_path()
         assert path == tmp_path / "profiles" / "claude-code.yaml"
 
     def test_resolve_profiles_path_env_override(self, monkeypatch, tmp_path: Path):
         custom = tmp_path / "custom-profiles.json"
         monkeypatch.setenv("CODEFREEDOM_PROFILES_FILE", str(custom))
-        from codefreedom.cli.vscode import _resolve_profiles_path
+        from codefreedom.config import resolve_profiles_path
 
-        path = _resolve_profiles_path()
+        path = resolve_profiles_path()
         assert path == custom
 
 

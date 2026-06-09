@@ -3,9 +3,8 @@
 # pyright: reportPrivateUsage = false
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
 
-import pytest
 
 from codefreedom.cli.doctor import (
     CheckResult,

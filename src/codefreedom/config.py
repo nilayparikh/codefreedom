@@ -29,3 +29,15 @@ def get_codefreedom_dir() -> Path:
 def get_backup_dir() -> Path:
     """Return the default backup directory under CodeFreedom home."""
     return get_codefreedom_dir() / "backup"
+
+
+def resolve_profiles_path() -> Path:
+    """Return the Claude Code profiles path (test-patchable).
+
+    Checks ``CODEFREEDOM_PROFILES_FILE`` env var, falls back to
+    ``~/.codefreedom/profiles/claude-code.yaml``.
+    """
+    override = os.environ.get("CODEFREEDOM_PROFILES_FILE")
+    if override:
+        return Path(override)
+    return get_codefreedom_dir() / "profiles" / "claude-code.yaml"

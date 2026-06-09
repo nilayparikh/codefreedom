@@ -17,25 +17,28 @@ Use `cf init recipe` to initialize.
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 from pathlib import Path
 
-import yaml
-
 from codefreedom.env_loader import eprint
-from codefreedom.interpolate import interpolate_all_strings
 from codefreedom.cli.docker_utils import (
-    check_docker_available,
     container_exists,
     container_is_running,
-    ensure_image,
+    init_tool_redirect,
+    load_tool_profile,
     resolve_data_dir,
+    restart_tool_container,
+    start_tool_docker_guard,
+    start_tool_ensure_image,
+    start_tool_init_gate,
+    start_tool_remove_stopped,
+    stop_tool_container,
+    tool_data_dir,
+    tool_profile_path,
 )
 from codefreedom.cli.tool_init_utils import (
     _print_tool_notice,
 )
-from pydantic import ValidationError
 
 from codefreedom.schemas.web_bridge import WebBridgeConfig
 
@@ -46,26 +49,9 @@ _DEFAULT_CONTAINER_NAME = "codefreedom-web-bridge"
 _DEFAULT_PORT = 8500
 
 
-def _tool_home() -> Path:
-    """Return the tool home directory.
-
-    Defaults to ``~/.codefreedom``, overridable via ``CODEFREEDOM_TOOL_HOME``
-    env var (used by tests for isolation).
-    """
-    override = os.environ.get("CODEFREEDOM_TOOL_HOME")
-    if override:
-        return Path(override)
-    return Path.home() / ".codefreedom"
-
-
-def _default_data_dir() -> str:
-    """Return the default data dir under ~/.codefreedom/sandbox/tools/web-bridge."""
-    return str(_tool_home() / "sandbox" / "tools" / "web-bridge")
-
-
 def _profile_path() -> Path:
     """Return the web-bridge tool profile path (~/.codefreedom/profiles/web-bridge.yaml)."""
-    return _tool_home() / "profiles" / "web-bridge.yaml"
+    return tool_profile_path("web-bridge.yaml")
 
 
 # ── Profile loader ────────────────────────────────────────────────────────────
@@ -81,91 +67,24 @@ def _load_profile() -> dict:
         "image": _DEFAULT_IMAGE,
         "container_name": _DEFAULT_CONTAINER_NAME,
         "port": _DEFAULT_PORT,
-        "data_dir": _default_data_dir(),
+        "data_dir": tool_data_dir("web-bridge"),
         "env": {},
     }
-
-    profile_path = _profile_path()
-    if not profile_path.exists():
-        return settings
-
-    try:
-        with open(profile_path, encoding="utf-8") as f:
-            raw = yaml.safe_load(f)
-    except (yaml.YAMLError, OSError) as exc:
-        eprint(f"[WEB-BRIDGE] Warning: failed to read {profile_path}: {exc}")
-        return settings
-
-    if not isinstance(raw, dict):
-        eprint(f"[WEB-BRIDGE] Warning: invalid profile format in {profile_path}")
-        return settings
-
-    # Interpolate ${VAR} references in env values
-    interpolate_all_strings(raw)
-
-    # Validate with Pydantic (non-fatal — warn on failure)
-    try:
-        WebBridgeConfig.model_validate(raw, strict=False)
-    except ValidationError as exc:
-        eprint(f"[WEB-BRIDGE] Warning: validation issue in profile: {exc}")
-
-    cfg = raw.get("web_bridge", {})
-    if not isinstance(cfg, dict):
-        return settings
-
-    if isinstance(cfg.get("image"), str) and cfg["image"]:
-        settings["image"] = cfg["image"]
-    if isinstance(cfg.get("container_name"), str) and cfg["container_name"]:
-        settings["container_name"] = cfg["container_name"]
-    if isinstance(cfg.get("port"), int) and cfg["port"] > 0:
-        settings["port"] = cfg["port"]
-    # Machine env var override (checked at profile load time)
-    env_port = os.environ.get("CODEFREEDOM_WEB_BRIDGE_PORT")
-    if env_port is not None:
-        try:
-            settings["port"] = int(env_port)
-        except (ValueError, TypeError):
-            pass
-    if isinstance(cfg.get("data_dir"), str) and cfg["data_dir"]:
-        settings["data_dir"] = cfg["data_dir"]
-    if isinstance(cfg.get("env"), dict):
-        settings["env"] = cfg["env"]
-
-    return settings
+    return load_tool_profile(
+        "web_bridge",
+        settings,
+        "web-bridge.yaml",
+        schema_class=WebBridgeConfig,
+        env_port_var="CODEFREEDOM_WEB_BRIDGE_PORT",
+    )
 
 
 # ── Init ──────────────────────────────────────────────────────────────────────
 
 
 def init_tool() -> int:
-    """Initialize the web-bridge tool profile via recipes.
-
-    Tools are auto-initialized when ``cf init recipe`` copies the profile
-    to ``~/.codefreedom/profiles/web-bridge.yaml``.
-    """
-    profile_path = _profile_path()
-    if profile_path.exists():
-        eprint(
-            "[web-bridge] Profile already exists at ~/.codefreedom/profiles/web-bridge.yaml"
-        )
-        return 0
-    eprint(
-        "[web-bridge] No profile found. Run 'cf init recipe' to install the default recipe."
-    )
-    from codefreedom.cli.tool_init_utils import print_help_section
-
-    print_help_section(
-        "web-bridge init",
-        [
-            "Use:  cf init recipe              # install _default base recipe",
-            "      cf init recipe --list        # list available recipes",
-            "      cf init recipe --plan <name> # preview a recipe without applying",
-            "      cf init recipe <name>        # install a specific recipe",
-        ],
-        docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
-        include_disclaimer=True,
-    )
-    return 0
+    """Initialize the web-bridge tool profile via recipes."""
+    return init_tool_redirect("web-bridge.yaml")
 
 
 # ── Actions ───────────────────────────────────────────────────────────────────
@@ -173,10 +92,7 @@ def init_tool() -> int:
 
 def start(settings: dict) -> int:
     """Start the web-bridge container. Returns exit code."""
-    profile_path = _profile_path()
-    if not profile_path.exists():
-        eprint("[web-bridge] Tool profile not found.")
-        eprint("         Run:  cf init recipe")
+    if not start_tool_init_gate("web-bridge.yaml", "web-bridge"):
         return 1
 
     _print_tool_notice("web-bridge")
@@ -191,28 +107,15 @@ def start(settings: dict) -> int:
         eprint(f"[WEB-BRIDGE] Container '{container_name}' is already running.")
         return 0
 
-    if not check_docker_available():
-        eprint("[ERROR] Docker not found. Install Docker and try again.")
+    if not start_tool_docker_guard("WEB-BRIDGE"):
         return 1
 
     resolved_data = resolve_data_dir(data_dir)
     eprint(f"[WEB-BRIDGE] Using data dir: {resolved_data}")
 
-    if container_exists(container_name):
-        eprint(f"[WEB-BRIDGE] Removing existing container '{container_name}'...")
-        subprocess.run(
-            ["docker", "rm", "-f", container_name],
-            capture_output=True,
-            timeout=15,
-            check=False,
-        )
+    start_tool_remove_stopped(container_name, "WEB-BRIDGE")
 
-    if not ensure_image(
-        image,
-        label="WEB-BRIDGE",
-        build_tip="docker build -t codefreedom:web-bridge -f docker/web-bridge/Dockerfile.Bridge docker/web-bridge/",
-        profile_path="~/.codefreedom/profiles/web-bridge.yaml",
-    ):
+    if not start_tool_ensure_image(settings, "WEB-BRIDGE"):
         return 1
 
     env_flags: list[str] = []
@@ -254,66 +157,16 @@ def start(settings: dict) -> int:
 
 def stop(settings: dict) -> int:
     """Stop and remove the web-bridge container. Returns exit code."""
-    container_name = settings["container_name"]
-
-    if not container_exists(container_name):
-        eprint(f"[WEB-BRIDGE] No container '{container_name}' found.")
-        return 0
-
-    if not container_is_running(container_name):
-        eprint(f"[WEB-BRIDGE] Container '{container_name}' exists but is not running.")
-        subprocess.run(
-            ["docker", "rm", "-f", container_name],
-            capture_output=True,
-            timeout=15,
-            check=False,
-        )
-        return 0
-
-    eprint(f"[WEB-BRIDGE] Stopping container '{container_name}'...")
-    result = subprocess.run(
-        ["docker", "stop", "-t", "5", container_name],
-        capture_output=True,
-        timeout=15,
-        check=False,
-    )
-    if result.returncode != 0:
-        eprint(f"[ERROR] Failed to stop container: {result.stderr.strip()}")
-        return 1
-
-    eprint(f"[WEB-BRIDGE] Removing container '{container_name}'...")
-    subprocess.run(
-        ["docker", "rm", "-f", container_name],
-        capture_output=True,
-        timeout=15,
-        check=False,
-    )
-    eprint("[WEB-BRIDGE] Container stopped and removed.")
-    return 0
+    return stop_tool_container(settings, "WEB-BRIDGE")
 
 
 def restart(settings: dict) -> int:
     """Restart the web-bridge container. Returns exit code."""
-    container_name = settings["container_name"]
-
-    if not container_exists(container_name):
-        eprint(f"[WEB-BRIDGE] Container '{container_name}' does not exist.")
-        eprint("         Use: cf tools start")
-        return 1
-
-    eprint(f"[WEB-BRIDGE] Restarting container '{container_name}'...")
-    result = subprocess.run(
-        ["docker", "restart", container_name],
-        capture_output=True,
-        timeout=30,
-        check=False,
-    )
-    if result.returncode != 0:
-        eprint(f"[ERROR] Failed to restart container: {result.stderr.strip()}")
-        return 1
-
-    eprint("[WEB-BRIDGE] Container restarted.")
-    return 0
+    rc = restart_tool_container(settings, "WEB-BRIDGE")
+    if rc == 0:
+        port = settings["port"]
+        eprint(f"[WEB-BRIDGE] SearXNG endpoint: http://127.0.0.1:{port}/search")
+    return rc
 
 
 def status(settings: dict) -> int:

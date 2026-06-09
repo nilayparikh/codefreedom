@@ -7,6 +7,7 @@ single source of truth for state — no /proc tracking needed.
 
 from __future__ import annotations
 
+import json
 import secrets
 from typing import Callable
 

@@ -32,14 +32,9 @@ from codefreedom.env_loader import eprint, load_dotenv
 # ── Path resolution ──────────────────────────────────────────────────────────
 
 
-def _get_cf_dir() -> Path:
-    """Lazy accessor for the CodeFreedom config directory (test-patchable)."""
-    return get_codefreedom_dir()
-
-
 def _find_compose_file() -> Optional[Path]:
     """Find the LiteLLM docker-compose file in ~/.codefreedom/proxy/."""
-    candidate = _get_cf_dir() / "proxy" / "docker-compose.yaml"
+    candidate = get_codefreedom_dir() / "proxy" / "docker-compose.yaml"
     if candidate.exists():
         return candidate
     return None
@@ -47,7 +42,7 @@ def _find_compose_file() -> Optional[Path]:
 
 def _find_config_file() -> Optional[Path]:
     """Find the LiteLLM config.yaml in ~/.codefreedom/proxy/config/."""
-    candidate = _get_cf_dir() / "proxy" / "config" / "config.yaml"
+    candidate = get_codefreedom_dir() / "proxy" / "config" / "config.yaml"
     if candidate.exists():
         return candidate
     return None
@@ -88,9 +83,9 @@ def _load_proxy_env_files() -> Dict[str, str]:
     """
     merged: Dict[str, str] = {}
     for env_path in [
-        _get_cf_dir() / ".env.proxy",
-        _get_cf_dir() / ".env.proxy.secrets",
-        _get_cf_dir() / ".env.user",
+        get_codefreedom_dir() / ".env.proxy",
+        get_codefreedom_dir() / ".env.proxy.secrets",
+        get_codefreedom_dir() / ".env.user",
     ]:
         if env_path.exists():
             merged.update(load_dotenv(env_path))

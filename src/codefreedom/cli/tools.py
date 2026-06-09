@@ -37,112 +37,70 @@ from codefreedom.cli.web_bridge import (
     stop as web_bridge_stop,
 )
 
-_TOOLS: list[tuple[str, str, callable, callable]] = [
-    ("chrome", "Chrome browser", chrome_start, chrome_stop),
-    ("web", "Web search", web_start, web_stop),
-    ("github", "GitHub MCP", github_start, github_stop),
-    ("web-bridge", "Web bridge", web_bridge_start, web_bridge_stop),
+_TOOLS: list[tuple[str, str, callable, callable, callable]] = [
+    ("chrome", "Chrome browser", chrome_load_profile, chrome_start, chrome_stop),
+    ("web", "Web search", web_load_profile, web_start, web_stop),
+    ("github", "GitHub MCP", github_load_profile, github_start, github_stop),
+    ("web-bridge", "Web bridge", web_bridge_load_profile, web_bridge_start, web_bridge_stop),
 ]
 
 
-def _load_all_settings() -> list[tuple[str, str, dict]]:
-    """Load settings for all tools. Returns (name, label, settings) tuples."""
-    results: list[tuple[str, str, dict]] = []
-    for name, label, _start, _stop in _TOOLS:
+def _load_all_settings() -> list[tuple[str, str, dict, callable, callable]]:
+    """Load settings for all tools. Returns (name, label, settings, start_fn, stop_fn) tuples."""
+    results: list[tuple[str, str, dict, callable, callable]] = []
+    for name, label, load_fn, start_fn, stop_fn in _TOOLS:
         try:
-            if name == "chrome":
-                settings = chrome_load_profile()
-            elif name == "web":
-                settings = web_load_profile()
-            elif name == "github":
-                settings = github_load_profile()
-            elif name == "web-bridge":
-                settings = web_bridge_load_profile()
-            else:
-                continue
-            results.append((name, label, settings))
+            settings = load_fn()
+            results.append((name, label, settings, start_fn, stop_fn))
         except Exception as exc:
             eprint(f"[tools] Failed to load profile for '{label}': {exc}")
     return results
 
 
-def _run_tool(name: str, label: str, settings: dict, action: str) -> int:
-    """Run a single tool action. Returns 0 on success."""
-    from codefreedom.cli.chrome import start as ch_start, stop as ch_stop
-    from codefreedom.cli.web import start as w_start, stop as w_stop
-    from codefreedom.cli.github import start as gh_start, stop as gh_stop
-    from codefreedom.cli.web_bridge import start as wb_start, stop as wb_stop
-
-    starters = {
-        "chrome": ch_start,
-        "web": w_start,
-        "github": gh_start,
-        "web-bridge": wb_start,
-    }
-    stoppers = {
-        "chrome": ch_stop,
-        "web": w_stop,
-        "github": gh_stop,
-        "web-bridge": wb_stop,
-    }
-
-    if action == "start":
-        return starters[name](settings)
-    elif action == "stop":
-        return stoppers[name](settings)
-    elif action == "restart":
-        stoppers[name](settings)
-        return starters[name](settings)
+def _for_each_tool(action: str) -> int:
+    """Run an action across all tools. Returns exit code (0 if all ok)."""
+    failures = 0
+    verb = action.capitalize().rstrip("e") + "ing"
+    for name, label, settings, start_fn, stop_fn in _load_all_settings():
+        eprint(f"[tools] {verb} {label}...")
+        if action == "start":
+            rc = start_fn(settings)
+        elif action == "stop":
+            rc = stop_fn(settings)
+        elif action == "restart":
+            stop_fn(settings)
+            rc = start_fn(settings)
+        else:
+            rc = 0
+        if rc != 0:
+            eprint(f"[tools]   {label} FAILED")
+            failures += 1
+    if failures:
+        eprint(f"[tools] {failures} tool(s) failed to {action}.")
+        return 1
+    eprint(f"[tools] All tools {action}ed.")
     return 0
 
 
 def start_all() -> int:
     """Start all tools (no-op if already running). Returns exit code."""
-    failures = 0
-    for name, label, settings in _load_all_settings():
-        eprint(f"[tools] Starting {label}...")
-        if _run_tool(name, label, settings, "start") != 0:
-            eprint(f"[tools]   {label} FAILED")
-            failures += 1
-    if failures:
-        eprint(f"[tools] {failures} tool(s) failed to start.")
-        return 1
-    eprint("[tools] All tools started.")
-    return 0
+    return _for_each_tool("start")
 
 
 def stop_all() -> int:
     """Stop all tools. Returns exit code."""
-    failures = 0
-    for name, label, settings in _load_all_settings():
-        eprint(f"[tools] Stopping {label}...")
-        if _run_tool(name, label, settings, "stop") != 0:
-            eprint(f"[tools]   {label} FAILED")
-            failures += 1
-    if failures:
-        return 1
-    eprint("[tools] All tools stopped.")
-    return 0
+    return _for_each_tool("stop")
 
 
 def restart_all() -> int:
     """Restart all tools. Returns exit code."""
-    failures = 0
-    for name, label, settings in _load_all_settings():
-        eprint(f"[tools] Restarting {label}...")
-        if _run_tool(name, label, settings, "restart") != 0:
-            eprint(f"[tools]   {label} FAILED")
-            failures += 1
-    if failures:
-        return 1
-    eprint("[tools] All tools restarted.")
-    return 0
+    return _for_each_tool("restart")
 
 
 def status_all() -> int:
     """Show status of all tools. Returns exit code (1 if any are down)."""
     all_running = True
-    for name, label, settings in _load_all_settings():
+    for name, label, settings, _start_fn, _stop_fn in _load_all_settings():
         container_name = settings.get("container_name", f"codefreedom-{name}")
         if container_is_running(container_name):
             port = settings.get("port", "?")
@@ -160,11 +118,11 @@ def status_all() -> int:
 def ensure_tools() -> int:
     """Ensure all tools are running (start if missing). Used by cf px / cf cc."""
     failures = 0
-    for name, label, settings in _load_all_settings():
+    for name, label, settings, start_fn, _stop_fn in _load_all_settings():
         container_name = settings.get("container_name", f"codefreedom-{name}")
         if not container_is_running(container_name):
             eprint(f"[tools] Auto-starting {label} ({container_name})...")
-            if _run_tool(name, label, settings, "start") != 0:
+            if start_fn(settings) != 0:
                 eprint(f"[tools]   {label} FAILED — continuing.")
                 failures += 1
     if failures:

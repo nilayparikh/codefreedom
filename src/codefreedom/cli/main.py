@@ -341,6 +341,16 @@ def main() -> None:
 
     args, unknown = parser.parse_known_args()
 
+    # ── Helper: lazy-import-and-run pattern used by most subcommands ───────
+    def _dispatch(module: str, fn: str, *fn_args, **fn_kwargs) -> None:
+        if unknown:
+            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            sys.exit(2)
+        import importlib
+
+        mod = importlib.import_module(module)
+        sys.exit(getattr(mod, fn)(*fn_args, **fn_kwargs))
+
     # ── init subcommand ────────────────────────────────────────────────────
     if args.command == "init":
         if unknown:
@@ -356,12 +366,10 @@ def main() -> None:
                 from codefreedom.cli.recipe import list_recipes
 
                 sys.exit(list_recipes(store=store))
-
             if args.apply:
                 from codefreedom.cli.recipe import apply_plan
 
                 sys.exit(apply_plan(args.apply, store=store))
-
             if args.plan:
                 from codefreedom.cli.recipe import plan_recipe
 
@@ -389,8 +397,8 @@ def main() -> None:
         )
         sys.exit(0)
 
+    # ── claude subcommand (needs parse_known_args rescue) ─────────────────
     if args.command in ("claude", "cc"):
-        # ── Rescue known flags swallowed by parse_known_args ────────────────
         _CLAUDE_BOOL_FLAGS = {
             "--cuda": "gpu_cuda",
             "--rocm": "gpu_rocm",
@@ -412,40 +420,20 @@ def main() -> None:
                     forwarded.append(arg)
             else:
                 forwarded.append(arg)
-        # ── claude sub-actions (subparser-based) ───────────────────────────
+
         claude_action = getattr(args, "claude_action", None)
         if claude_action == "config":
             from codefreedom.cli.claude import cmd_config
 
             sys.exit(cmd_config(args))
 
-        # ── Forward everything remaining to claude CLI ─────────────────────
         args.claude_args = forwarded
         from codefreedom.cli.claude import run as claude_run
 
         sys.exit(claude_run(args))
-    elif args.command in ("proxy", "px"):
-        if unknown:
-            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-            sys.exit(2)
-        from codefreedom.cli.proxy import run as proxy_run
 
-        sys.exit(proxy_run(args))
-    elif args.command in ("admin", "adm"):
-        if unknown:
-            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-            sys.exit(2)
-        from codefreedom.cli.admin import run as admin_run
-
-        sys.exit(admin_run(args))
-    elif args.command == "tools":
-        if unknown:
-            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-            sys.exit(2)
-        from codefreedom.cli.tools import run as tools_run
-
-        sys.exit(tools_run(args))
-    elif args.command in ("vscode", "vsc"):
+    # ── vscode subcommand (two-level dispatch) ────────────────────────────
+    if args.command in ("vscode", "vsc"):
         if unknown:
             eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
             sys.exit(2)
@@ -454,47 +442,40 @@ def main() -> None:
             cmd_vscode_proxy_config,
         )
 
-        # Two-level dispatch: `vscode_action` (claude|proxy) and the
-        # `*_config_action` (always "config" for now -- future verbs like
-        # `install` go alongside `config`).
+        action_map = {
+            "claude": cmd_vscode_claude_config,
+            "proxy": cmd_vscode_proxy_config,
+        }
         action = getattr(args, "vscode_action", None)
-        if action == "claude":
-            if getattr(args, "claude_config_action", None) != "config":
-                vscode_parser.print_help()
-                sys.exit(1)
-            sys.exit(cmd_vscode_claude_config(args))
-        elif action == "proxy":
-            if getattr(args, "proxy_config_action", None) != "config":
-                vscode_parser.print_help()
-                sys.exit(1)
-            sys.exit(cmd_vscode_proxy_config(args))
-        else:
+        handler = action_map.get(action)
+        if handler is None:
             vscode_parser.print_help()
             sys.exit(1)
-    elif args.command in ("update", "upd", "up"):
-        if unknown:
-            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-            sys.exit(2)
-        from codefreedom.cli.update import run as update_run
+        sys.exit(handler(args))
 
-        sys.exit(update_run(args))
-    elif args.command in ("doctor", "doc", "dr"):
-        if unknown:
-            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-            sys.exit(2)
-        from codefreedom.cli.doctor import run as doctor_run
+    # ── doctor (needs extra verbose arg) ──────────────────────────────────
+    if args.command in ("doctor", "doc", "dr"):
+        _dispatch("codefreedom.cli.doctor", "run", verbose=args.verbose)
 
-        sys.exit(doctor_run(verbose=args.verbose))
-    elif args.command == "deinit":
-        if unknown:
-            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-            sys.exit(2)
-        from codefreedom.cli.deinit import run as deinit_run
+    # ── Simple subcommands (dispatch table) ───────────────────────────────
+    _SIMPLE_DISPATCH: dict[str, tuple[str, str]] = {
+        "proxy": ("codefreedom.cli.proxy", "run"),
+        "px": ("codefreedom.cli.proxy", "run"),
+        "admin": ("codefreedom.cli.admin", "run"),
+        "adm": ("codefreedom.cli.admin", "run"),
+        "tools": ("codefreedom.cli.tools", "run"),
+        "update": ("codefreedom.cli.update", "run"),
+        "upd": ("codefreedom.cli.update", "run"),
+        "up": ("codefreedom.cli.update", "run"),
+        "deinit": ("codefreedom.cli.deinit", "run"),
+    }
+    dispatch = _SIMPLE_DISPATCH.get(args.command)
+    if dispatch is not None:
+        _dispatch(dispatch[0], dispatch[1], args)
 
-        sys.exit(deinit_run(args))
-    else:
-        parser.print_help()
-        sys.exit(0)
+    # ── Fallback ──────────────────────────────────────────────────────────
+    parser.print_help()
+    sys.exit(0)
 
 
 if __name__ == "__main__":

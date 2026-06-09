@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Dict
 
 _VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-(.*))?\}")
 
