@@ -17,11 +17,14 @@ from codefreedom.admin import (
     _backup_filename,
     _categorize,
     _decrypt_data,
+    _dump_postgresql,
     _encrypt_data,
+    _find_litellm_container,
     _is_encrypted_file,
     _is_secrets_file,
     _manifest_from_dict,
     _manifest_to_dict,
+    _PG_DUMP_PREFIX,
     _read_manifest_from_archive,
     _sha256_file,
     backup as engine_backup,
@@ -533,3 +536,271 @@ class TestEncryption:
         out_path, _manifest = engine_backup(passphrase="inspect-pass")
         with pytest.raises(ValueError, match="passphrase"):
             inspect_backup(out_path)
+
+
+# ── PostgreSQL dump ───────────────────────────────────────────────────────────
+
+
+class TestPostgresDump:
+    def test_pg_dump_prefix(self):
+        """Verify the pg dump prefix constant."""
+        assert _PG_DUMP_PREFIX == "codefreedom-pgdump"
+
+    def test_categorize_pg_backup(self):
+        """PG backup files should be categorized as 'database'."""
+        assert (
+            _categorize("pg/backup/codefreedom-pgdump-20260609-120000.dump")
+            == "database"
+        )
+
+    def test_categorize_pg_data(self):
+        """PG data directory is also categorized as 'database'."""
+        assert _categorize("pg/data/somefile") == "database"
+
+    def test_managed_paths_includes_pg(self, cf_home: Path):
+        """PG backup dir within managed scope should be collected."""
+        # Create a test pg dump file
+        pg_backup = cf_home / "pg" / "backup"
+        pg_backup.mkdir(parents=True, exist_ok=True)
+        (pg_backup / "codefreedom-pgdump-20260609-120000.dump").write_text(
+            "PG_DUMP_CONTENT"
+        )
+
+        _out_path, manifest = engine_backup(profile="pg-test", skip_pg_dump=True)
+        all_paths = set()
+        for entries in manifest.contents.values():
+            for e in entries:
+                all_paths.add(e.path)
+
+        assert "pg/backup/codefreedom-pgdump-20260609-120000.dump" in all_paths
+        assert "database" in manifest.categories
+
+    def test_backup_with_pg_dump_success(self, cf_home: Path, monkeypatch):
+        """Simulate a successful pg_dump and verify the dump is included."""
+        pg_backup = cf_home / "pg" / "backup"
+        pg_backup.mkdir(parents=True, exist_ok=True)
+
+        # Mock docker ps to return a fake container
+        def mock_run_find(*args, **kwargs):
+            import subprocess
+
+            if args and args[0] and "docker" in str(args[0]) and "ps" in str(args[0]):
+                result = subprocess.CompletedProcess(
+                    args, returncode=0, stdout="litellm-codefreedom-0000\n", stderr=""
+                )
+                return result
+            return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+
+        def mock_run_dump(*args, **kwargs):
+            import subprocess
+
+            if "pg_dump" in str(args):
+                # Simulate pg_dump by writing a file to the backup dir
+                dump_path = pg_backup / "codefreedom-pgdump-20260609-120000.dump"
+                dump_path.write_text("SIMULATED_PG_DUMP")
+                return subprocess.CompletedProcess(
+                    args, returncode=0, stdout="", stderr=""
+                )
+            return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+
+        # First call finds the container, second call runs pg_dump
+        call_count = [0]
+
+        def mock_subprocess_run(*args, **kwargs):
+            import subprocess
+
+            nonlocal call_count
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # First call: docker ps (find container)
+                return subprocess.CompletedProcess(
+                    args[0] if args else [],
+                    returncode=0,
+                    stdout="litellm-codefreedom-0000\n",
+                    stderr="",
+                )
+            elif call_count[0] == 2:
+                # Second call: pg_dump
+                dump_path = pg_backup / "codefreedom-pgdump-20260609-120000.dump"
+                dump_path.write_text("SIMULATED_PG_DUMP")
+                return subprocess.CompletedProcess(
+                    args[0] if args else [], returncode=0, stdout="", stderr=""
+                )
+            return subprocess.CompletedProcess(
+                args[0] if args else [], returncode=0, stdout="", stderr=""
+            )
+
+        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_subprocess_run)
+
+        _out_path, manifest = engine_backup(profile="pg-success-test")
+
+        all_paths = set()
+        for entries in manifest.contents.values():
+            for e in entries:
+                all_paths.add(e.path)
+
+        pg_dump_files = [p for p in all_paths if _PG_DUMP_PREFIX in p]
+        assert len(pg_dump_files) == 1, f"Expected 1 pg dump file, got {pg_dump_files}"
+        assert "database" in manifest.categories
+
+    def test_backup_with_skip_pg_dump(self, cf_home: Path, monkeypatch):
+        """skip_pg_dump=True should skip the pg_dump call entirely."""
+        pg_backup = cf_home / "pg" / "backup"
+        pg_backup.mkdir(parents=True, exist_ok=True)
+
+        called = [False]
+
+        def mock_run(*args, **kwargs):
+            called[0] = True
+            return None  # Would be subprocess.CompletedProcess but we just check call
+
+        monkeypatch.setattr("codefreedom.admin._dump_postgresql", mock_run)
+
+        engine_backup(profile="skip-pg-test", skip_pg_dump=True)
+
+        # _dump_postgresql should NOT have been called
+        assert called[0] is False
+
+    def test_backup_without_skip_pg_dump_calls_dump(self, cf_home: Path, monkeypatch):
+        """skip_pg_dump=False (default) should call _dump_postgresql."""
+        called = [False]
+
+        def mock_dump(*args, **kwargs):
+            called[0] = True
+            return None
+
+        monkeypatch.setattr("codefreedom.admin._dump_postgresql", mock_dump)
+
+        engine_backup(profile="call-pg-test")
+
+        assert called[0] is True
+
+    def test_find_litellm_container_no_docker(self, monkeypatch):
+        """_find_litellm_container returns None when docker is not available."""
+
+        def mock_run(*args, **kwargs):
+            raise FileNotFoundError("docker not found")
+
+        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        result = _find_litellm_container()
+        assert result is None
+
+    def test_find_litellm_container_not_running(self, monkeypatch):
+        """_find_litellm_container returns None when no container is running."""
+
+        def mock_run(*args, **kwargs):
+            import subprocess
+
+            return subprocess.CompletedProcess(
+                args[0] if args else [],
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        result = _find_litellm_container()
+        assert result is None
+
+    def test_find_litellm_container_running(self, monkeypatch):
+        """_find_litellm_container returns container name when running."""
+
+        def mock_run(*args, **kwargs):
+            import subprocess
+
+            return subprocess.CompletedProcess(
+                args[0] if args else [],
+                returncode=0,
+                stdout="litellm-codefreedom-0000\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        result = _find_litellm_container()
+        assert result == "litellm-codefreedom-0000"
+
+    def test_dump_postgresql_no_container(self, cf_home: Path, monkeypatch):
+        """_dump_postgresql returns None when no container is running."""
+        monkeypatch.setattr("codefreedom.admin._find_litellm_container", lambda: None)
+        pg_backup = cf_home / "pg" / "backup"
+        result = _dump_postgresql(pg_backup)
+        assert result is None
+
+    def test_dump_postgresql_success(self, cf_home: Path, monkeypatch):
+        """_dump_postgresql returns the dump path on success."""
+        import datetime
+
+        pg_backup = cf_home / "pg" / "backup"
+        pg_backup.mkdir(parents=True, exist_ok=True)
+
+        frozen_now = datetime.datetime(
+            2026, 6, 9, 12, 0, 0, tzinfo=datetime.timezone.utc
+        )
+
+        monkeypatch.setattr(
+            "codefreedom.admin._find_litellm_container",
+            lambda: "litellm-codefreedom-0000",
+        )
+        monkeypatch.setattr(
+            "codefreedom.admin.datetime.datetime",
+            # Mock datetime.now to return frozen time
+            type(
+                "MockDateTime",
+                (),
+                {
+                    "now": staticmethod(lambda tz=None: frozen_now),
+                    "timezone": datetime.timezone,
+                },
+            ),
+        )
+
+        def mock_run(*args, **kwargs):
+            import subprocess
+
+            if args and "pg_dump" in str(args):
+                # Simulate file creation by pg_dump using the same filename pattern
+                dump_filename = f"{_PG_DUMP_PREFIX}-20260609-120000.dump"
+                dump_path = pg_backup / dump_filename
+                dump_path.write_text("PG_DUMP_SIMULATED")
+                return subprocess.CompletedProcess(
+                    args[0] if args else [],
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                )
+            return subprocess.CompletedProcess(
+                args[0] if args else [],
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        result = _dump_postgresql(pg_backup)
+        assert result is not None
+        assert result.exists()
+        assert _PG_DUMP_PREFIX in result.name
+
+    def test_dump_postgresql_failure(self, cf_home: Path, monkeypatch):
+        """_dump_postgresql returns None when pg_dump fails."""
+        pg_backup = cf_home / "pg" / "backup"
+        pg_backup.mkdir(parents=True, exist_ok=True)
+
+        monkeypatch.setattr(
+            "codefreedom.admin._find_litellm_container",
+            lambda: "litellm-codefreedom-0000",
+        )
+
+        def mock_run(*args, **kwargs):
+            import subprocess
+
+            return subprocess.CompletedProcess(
+                args[0] if args else [],
+                returncode=1,
+                stdout="",
+                stderr="pg_dump: error: connection to server failed",
+            )
+
+        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        result = _dump_postgresql(pg_backup)
+        assert result is None

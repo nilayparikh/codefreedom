@@ -293,6 +293,24 @@ def main() -> None:
         help="Show detailed information for all checks (not just failures)",
     )
 
+    # ── deinit subcommand ───────────────────────────────────────────────────
+    deinit_parser = subparsers.add_parser(
+        "deinit",
+        help="Tear down CodeFreedom: stop containers and remove config",
+        description=(
+            "Fully tear down CodeFreedom configuration. Stops all managed"
+            " Docker containers (proxy, tools, sandbox sessions), then"
+            " prompts for confirmation before deleting the entire"
+            " CodeFreedom home directory (~/.codefreedom/)."
+            " Use --force to skip the confirmation prompt."
+        ),
+    )
+    deinit_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Skip confirmation prompt before removing the CodeFreedom directory",
+    )
+
     # -- update subcommand -----------------------------------------------------------
     update_parser = subparsers.add_parser(
         "update",
@@ -456,6 +474,13 @@ def main() -> None:
         from codefreedom.cli.doctor import run as doctor_run
 
         sys.exit(doctor_run(verbose=args.verbose))
+    elif args.command == "deinit":
+        if unknown:
+            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            sys.exit(2)
+        from codefreedom.cli.deinit import run as deinit_run
+
+        sys.exit(deinit_run(args))
     else:
         parser.print_help()
         sys.exit(0)

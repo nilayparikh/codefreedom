@@ -37,6 +37,7 @@ import platform
 import re
 import secrets as secrets_module
 import stat
+import subprocess
 import sys
 import tarfile
 import time
@@ -215,6 +216,7 @@ class FileDiff:
 _MANAGED_PATHS: List[str] = [
     "profiles",
     "proxy",
+    "pg",
     ".env.claude",
     ".env.claude.secrets",
     ".env.proxy",
@@ -374,6 +376,8 @@ def _categorize(rel_path: str) -> str:
         return "sandbox"
     if rel_path.startswith("proc/"):
         return "proc"
+    if rel_path.startswith("pg/"):
+        return "database"
     if rel_path.startswith(".env"):
         return "env"
     return "other"
@@ -386,6 +390,136 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+# ── PostgreSQL dump ───────────────────────────────────────────────────────────
+
+
+_PG_DUMP_PREFIX = "codefreedom-pgdump"
+
+
+def _find_litellm_container() -> Optional[str]:
+    """Find the running LiteLLM proxy container name.
+
+    Uses ``docker ps`` filtered by the ``codefreedom.component=litellm-proxy``
+    label set in docker-compose.yaml. Returns ``None`` if no container is
+    running (non-fatal — the backup continues without a PG dump).
+
+    Returns:
+        The container name string, or None.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "--filter",
+                "label=codefreedom.component=litellm-proxy",
+                "--format",
+                "{{.Names}}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        # Take the first running container
+        return result.stdout.strip().splitlines()[0]
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
+    """Dump the embedded PostgreSQL database from the running LiteLLM container.
+
+    Runs ``pg_dump`` (custom format, compressed) inside the container and
+    writes the dump to the bind-mounted backup directory (``pg/backup/``).
+    The dump is named ``codefreedom-pgdump-<timestamp>.dump``.
+
+    This is a best-effort operation — if the container isn't running or
+    ``pg_dump`` fails, a warning is printed and the backup continues.
+
+    Args:
+        pg_backup_dir: The host directory where PG dumps are written
+            (``~/.codefreedom/pg/backup/``, bind-mounted into the container).
+
+    Returns:
+        The path to the created dump file, or None on failure.
+    """
+    container = _find_litellm_container()
+    if container is None:
+        eprint("[backup] No running LiteLLM container found — skipping PostgreSQL dump")
+        return None
+
+    pg_backup_dir.mkdir(parents=True, exist_ok=True)
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    timestamp = now.strftime("%Y%m%d-%H%M%S")
+    dump_filename = f"{_PG_DUMP_PREFIX}-{timestamp}.dump"
+    container_dump_path = f"/var/lib/postgresql/backup/{dump_filename}"
+
+    eprint(f"[backup] Dumping PostgreSQL database from container '{container}'...")
+
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                container,
+                "pg_dump",
+                "-U",
+                "litellm",
+                "-d",
+                "litellm",
+                "-Fc",  # custom format (compressed, parallel-restore capable)
+                "-f",
+                container_dump_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            if stderr:
+                eprint(f"[backup] [WARN] pg_dump failed: {stderr}")
+            else:
+                eprint(
+                    f"[backup] [WARN] pg_dump failed (exit code {result.returncode})"
+                )
+            return None
+
+        dump_path = pg_backup_dir / dump_filename
+        if dump_path.exists():
+            size = dump_path.stat().st_size
+            eprint(
+                f"[backup] [OK] PostgreSQL dump created: {dump_filename}"
+                f" ({_fmt_size_pg(size)})"
+            )
+            return dump_path
+
+        eprint(
+            f"[backup] [WARN] pg_dump completed but dump file not found at {dump_path}"
+        )
+        return None
+
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        eprint(f"[backup] [WARN] Could not dump PostgreSQL: {exc}")
+        return None
+
+
+def _fmt_size_pg(size: int) -> str:
+    """Format a byte count as a human-readable string (local helper)."""
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    elif size < 1024 * 1024 * 1024:
+        return f"{size / (1024 * 1024):.1f} MB"
+    return f"{size / (1024 * 1024 * 1024):.1f} GB"
 
 
 # ── Naming ────────────────────────────────────────────────────────────────────
@@ -526,10 +660,14 @@ def backup(
     profile: str = "default",
     passphrase: Optional[str] = None,
     redact_secrets: Optional[bool] = None,
+    skip_pg_dump: bool = False,
 ) -> Tuple[Path, BackupManifest]:
     """Backup the CodeFreedom home directory to a ``.tar.gz`` archive.
 
-    Only backs up managed files (``profiles/``, ``proxy/``, ``.env.*``).
+    Only backs up managed files (``profiles/``, ``proxy/``, ``pg/``, ``.env.*``).
+    If the LiteLLM proxy is running, the embedded PostgreSQL database is
+    automatically dumped (``pg_dump -Fc``) into ``pg/backup/`` before the
+    archive is created. Use ``skip_pg_dump=True`` to disable this.
 
     When *passphrase* is provided, secrets are stored with full values
     and the archive is encrypted with AES-256-GCM. Without a passphrase,
@@ -544,6 +682,8 @@ def backup(
         passphrase: If set, encrypt the archive and skip secret redaction.
         redact_secrets: Explicit override.  Defaults to ``True`` when
             *passphrase* is unset, ``False`` when set.
+        skip_pg_dump: If True, skip the PostgreSQL dump even if the
+            LiteLLM container is running.
 
     Returns:
         Tuple of (output_path, manifest).
@@ -565,6 +705,11 @@ def backup(
 
     # Determine redaction: explicit override wins, else default
     should_redact = redact_secrets if redact_secrets is not None else not encrypting
+
+    # Dump PostgreSQL before collecting files (best-effort, non-fatal)
+    if not skip_pg_dump:
+        pg_backup_dir = get_codefreedom_dir() / "pg" / "backup"
+        _dump_postgresql(pg_backup_dir)
 
     # Collect files
     contents, categories = _collect_files(source_dir, redact_secrets=should_redact)

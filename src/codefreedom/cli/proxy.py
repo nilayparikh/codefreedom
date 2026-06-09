@@ -236,6 +236,35 @@ def _ensure_web_bridge_image() -> int:
     return 0
 
 
+def _ensure_codefreedom_network() -> None:
+    """Create the shared ``codefreedom`` bridge network if it doesn't exist.
+
+    All proxy instances (regardless of ``SUFFIX_ID``) attach to this
+    common network so they can communicate with each other and with
+    tools running on the host.
+    """
+    inspect = subprocess.run(
+        ["docker", "network", "inspect", "codefreedom"],
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if inspect.returncode == 0:
+        return  # network already exists
+
+    eprint("[proxy] Creating shared 'codefreedom' Docker network...")
+    create = subprocess.run(
+        ["docker", "network", "create", "codefreedom"],
+        capture_output=True,
+        timeout=15,
+        check=False,
+    )
+    if create.returncode == 0:
+        eprint("   [OK] Network 'codefreedom' created.")
+    else:
+        eprint(f"   [WARN] Could not create network: {create.stderr.strip()}")
+
+
 def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     """Start LiteLLM via docker compose."""
     compose_file = _find_compose_file()
@@ -272,6 +301,11 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     merged_env["LITELLM_CONTAINER_NAME"] = litellm_name
     merged_env["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
 
+    # Ensure the shared `codefreedom` bridge network exists (external network
+    # referenced by docker-compose.yaml).  All proxy instances share this
+    # network regardless of SUFFIX_ID.
+    _ensure_codefreedom_network()
+
     result = subprocess.run(
         [
             "docker",
@@ -299,6 +333,22 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     return result.returncode
 
 
+# ── Compose env helper ────────────────────────────────────────────────────────
+
+
+def _build_compose_env() -> dict[str, str]:
+    """Build the environment dict for docker compose subprocess calls.
+
+    Loads proxy env files (same as ``_build_proxy_env``) and extracts
+    ``COMPOSE_PROJECT_NAME`` from ``SUFFIX_ID`` so that ``stop``, ``restart``,
+    and other compose commands target the same project that ``start`` created.
+    """
+    merged = _build_proxy_env()
+    suffix = merged.get("SUFFIX_ID", "0000")
+    merged["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
+    return merged
+
+
 # ── Stop ─────────────────────────────────────────────────────────────────────
 
 
@@ -311,8 +361,10 @@ def _stop() -> int:
         return 1
 
     eprint("[proxy] Stopping LiteLLM proxy...")
+    compose_env = _build_compose_env()
     result = subprocess.run(
         ["docker", "compose", "-f", str(compose_file), "--profile", "litellm", "down"],
+        env=compose_env,
         capture_output=False,
         timeout=60,
         check=False,
@@ -339,6 +391,7 @@ def _restart() -> int:
         return 1
 
     eprint(f"[proxy] Restarting LiteLLM via Docker Compose ({compose_file})...")
+    compose_env = _build_compose_env()
     result = subprocess.run(
         [
             "docker",
@@ -349,6 +402,7 @@ def _restart() -> int:
             "litellm",
             "restart",
         ],
+        env=compose_env,
         capture_output=False,
         timeout=60,
         check=False,
@@ -374,8 +428,10 @@ def _status() -> int:
         eprint("   Run: codefreedom proxy init")
         return 1
 
+    compose_env = _build_compose_env()
     result = subprocess.run(
         ["docker", "compose", "-f", str(compose_file), "--profile", "litellm", "ps"],
+        env=compose_env,
         capture_output=False,
         timeout=15,
         check=False,

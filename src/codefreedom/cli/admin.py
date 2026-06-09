@@ -43,9 +43,11 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
         "backup",
         help="Create a backup archive of managed config files",
         description=(
-            "Archive managed CodeFreedom config files (profiles, proxy, .env).* "
-            "Secrets are redacted by default. Use --passphrase to encrypt the "
-            "archive with full secret values (requires codefreedom[encrypt])."
+            "Archive managed CodeFreedom config files (profiles, proxy, pg, .env). "
+            "If the LiteLLM proxy is running, the embedded PostgreSQL database is "
+            "automatically dumped before archiving. Secrets are redacted by default. "
+            "Use --passphrase to encrypt the archive with full secret values "
+            "(requires codefreedom[encrypt])."
         ),
     )
     bak.add_argument(
@@ -68,6 +70,12 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
         default=None,
         metavar="PASSPHRASE",
         help="Encrypt the archive with this passphrase. Secrets are stored with full values.",
+    )
+    bak.add_argument(
+        "--skip-pg-dump",
+        action="store_true",
+        default=False,
+        help="Skip the automatic PostgreSQL dump from the running LiteLLM proxy",
     )
 
     # ── restore ─────────────────────────────────────────────────────────
@@ -364,6 +372,7 @@ def _cmd_backup(args: argparse.Namespace) -> int:
         output_path=out_path,
         profile=args.profile,
         passphrase=args.passphrase,
+        skip_pg_dump=args.skip_pg_dump,
     )
     _print_backup_result(result_path, manifest)
     return 0
