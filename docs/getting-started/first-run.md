@@ -7,37 +7,36 @@ description: Three commands to get Claude Code talking to an AI model.
 
 Three commands. No editing required — defaults work out of the box.
 
-## Step 1: Initialize Config
+## Step 1: Install a Recipe
 
 ```bash
-codefreedom --init
+cf init recipe
 ```
 
-This creates config files in `~/.codefreedom/`. You don't need to edit anything yet.
+This applies the **`_default` base recipe** — it creates profiles, proxy config,
+env files, and Docker Compose files in `~/.codefreedom/`.
 
-**Output:**
+Recipes use intelligent structural merging via DeepDiff, so running a recipe
+again (or a different recipe on top) merges changes without overwriting your
+existing settings.
 
-```
-[claude init] [CREATE] ~/.codefreedom/profiles/claude-code.json
-[claude init] [CREATE] ~/.codefreedom/profiles/claude-code.schema.json
-[claude init] [CREATE] ~/.codefreedom/.env.claude
-[claude init] [CREATE] ~/.codefreedom/.env.claude.secrets
-
-[claude init] Done -- 4 created.
-[proxy init] [CREATE] ~/.codefreedom/proxy/config/config.yaml
-[proxy init] [CREATE] ~/.codefreedom/proxy/docker-compose.yaml
-[proxy init] [CREATE] ~/.codefreedom/.env.proxy
-[proxy init] [CREATE] ~/.codefreedom/.env.proxy.secrets
-...
-
-[proxy init] Done -- 12 created.
-[init] Done.
-```
-
-If you run it again, it skips (won't overwrite existing files):
+**Output (first run):**
 
 ```
-[claude init] Config already exists — init only bootstraps clean directories.
+[recipe] Installing recipe '_default'...
+[recipe] [CREATE] ~/.codefreedom/profiles/claude-code.json
+[recipe] [CREATE] ~/.codefreedom/profiles/claude-code.schema.json
+[recipe] [CREATE] ~/.codefreedom/.env.claude
+[recipe] [CREATE] ~/.codefreedom/.env.claude.secrets
+[recipe] [CREATE] ~/.codefreedom/.env.proxy
+[recipe] [CREATE] ~/.codefreedom/.env.proxy.secrets
+[recipe] Done — 6 created.
+```
+
+See available recipes:
+
+```bash
+cf init recipe --list
 ```
 
 ## Step 2: Start the Proxy
@@ -76,7 +75,7 @@ codefreedom claude --list-profiles    # see all profiles
 
 ## What Happened
 
-- `codefreedom --init` wrote profile and proxy config files
+- `cf init recipe` applied the `_default` recipe (profiles, proxy config, env files)
 - `codefreedom proxy start` brought up the proxy container
 - `codefreedom claude` loaded your profile, pointed Claude Code at `localhost:4000`
 

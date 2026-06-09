@@ -21,13 +21,10 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from codefreedom.cli.init_utils import find_bundled_examples
-from codefreedom.cli.tool_init_utils import _print_non_disclaimer
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint, load_dotenv
 
@@ -37,90 +34,6 @@ from codefreedom.env_loader import eprint, load_dotenv
 def _get_cf_dir() -> Path:
     """Lazy accessor for the CodeFreedom config directory (test-patchable)."""
     return get_codefreedom_dir()
-
-
-def init_proxy() -> int:
-    """Initialize proxy configs and .env.proxy from bundled examples.
-
-    Only copies files into an empty target — if any config already exists,
-    directs user to docs and example configs for manual merging.
-    """
-    bundled = find_bundled_examples(__file__)
-    proxy_src = bundled / "proxy"
-
-    cf_dir = _get_cf_dir()
-    proxy_dst = cf_dir / "proxy"
-
-    # Collect all source→destination pairs
-    pairs: list[tuple[Path, Path]] = [
-        (proxy_src / "config" / "config.yaml", proxy_dst / "config" / "config.yaml"),
-        (proxy_src / "docker-compose.yaml", proxy_dst / "docker-compose.yaml"),
-        (proxy_src / ".env.proxy.example", cf_dir / ".env.proxy"),
-        (proxy_src / ".env.proxy.secrets.example", cf_dir / ".env.proxy.secrets"),
-    ]
-
-    providers_src = proxy_src / "config" / "providers"
-    providers_dst = proxy_dst / "config" / "providers"
-    if providers_src.exists():
-        for provider_file in sorted(providers_src.glob("*.yaml")):
-            pairs.append((provider_file, providers_dst / provider_file.name))
-
-    # Bundled LiteLLM plugins live under config/plugins/ alongside
-    # config.yaml.  Each plugin has its own subfolder (e.g.
-    # plugins/reasoning-efforts/) containing a .yaml config table.
-    # The .py module is baked into the Docker image (see
-    # docker/litellm/Dockerfile.LiteLLM and entrypoint.sh) -- we
-    # only copy the user-editable YAML to the host config directory.
-    plugins_src = proxy_src / "config" / "plugins"
-    plugins_dst = proxy_dst / "config" / "plugins"
-    if plugins_src.exists():
-        for plugin_file in sorted(plugins_src.rglob("*")):
-            if plugin_file.is_file() and plugin_file.suffix == ".yaml":
-                rel = plugin_file.relative_to(plugins_src)
-                pairs.append((plugin_file, plugins_dst / rel))
-
-    # All-or-nothing check: if any destination file exists, skip everything
-    existing = [dst for _, dst in pairs if dst.exists()]
-    if existing:
-        print(
-            "[proxy init] Config already exists — init only bootstraps clean directories."
-        )
-        print("             Docs:    https://nilayparikh.github.io/codefreedom/proxy/")
-        print(
-            "             Example: https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/proxy/"
-        )
-        print("             Please merge changes manually.")
-        print()
-        _print_non_disclaimer()
-        return 0
-
-    # Nothing exists -- copy all, with rollback on failure
-    created: list[Path] = []
-    try:
-        for src, dst in pairs:
-            if src.exists():
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-                created.append(dst)
-                print(f"[proxy init] [CREATE] {dst}")
-            else:
-                print(f"[proxy init] [MISSING] Source not found: {src}")
-    except OSError as exc:
-        eprint(f"[proxy init] [ERROR] Copy failed: {exc}. Rolling back.")
-        for path in created:
-            try:
-                path.unlink()
-            except OSError:
-                pass
-        return 1
-
-    # ── Summary ────────────────────────────────────────────────────────
-    print()
-    if created:
-        print(f"[proxy init] Done -- {len(created)} created.")
-    print("             Configure: https://nilayparikh.github.io/codefreedom/proxy/")
-    _print_non_disclaimer()
-    return 0
 
 
 def _find_compose_file() -> Optional[Path]:
@@ -157,14 +70,12 @@ def run(args: argparse.Namespace) -> int:
         return _status()
     elif action == "validate":
         return _validate()
-    elif action == "init":
-        return init_proxy()
     # `vscode` moved to the top-level `codefreedom vscode proxy config`
     # subcommand -- see codefreedom.cli.vscode.
     else:
         eprint(
             "[proxy] No action specified."
-            " Use start, stop, restart, status, validate, or init."
+            " Use start, stop, restart, status, or validate."
         )
         return 1
 
@@ -447,6 +358,62 @@ def _status() -> int:
     return result.returncode
 
 
+# ── Database URL check ───────────────────────────────────────────────────────
+
+_DEFAULT_LITELLM_IMAGE = "docker.io/nilayparikh/codefreedom:litellm-latest"
+_GHCR_LITELLM_IMAGE = "ghcr.io/nilayparikh/codefreedom:litellm-latest"
+
+
+def _warn_database_url(
+    in_config: bool,
+    in_env: bool,
+    proxy_env: Dict[str, str],
+) -> None:
+    """Check database_url and warn if it looks like the DB won't be available.
+
+    The codefreedom litellm image ships an embedded PostgreSQL whose entrypoint
+    auto-sets ``DATABASE_URL`` before launching LiteLLM.  Users of the default
+    image get database features without setting anything on the host.
+
+    Only warn when:
+    - ``database_url`` is missing from both config.yaml *and* the host env,
+      AND
+    - ``LITELLM_IMAGE`` is overridden to a *non*-codefreedom image (meaning
+      the embedded PG is not present).
+    """
+    if in_config or in_env:
+        return  # database_url is explicitly configured — all good
+
+    # Check which litellm image is in use
+    litellm_image = proxy_env.get("LITELLM_IMAGE")
+    if not litellm_image:
+        litellm_image = os.environ.get("LITELLM_IMAGE")
+
+    using_codefreedom_image = (
+        litellm_image is None
+        or _DEFAULT_LITELLM_IMAGE in litellm_image
+        or _GHCR_LITELLM_IMAGE in litellm_image
+        or "nilayparikh/codefreedom:litellm" in litellm_image
+    )
+
+    if using_codefreedom_image:
+        eprint(
+            "  [OK]  database_url not required — embedded PG in"
+            " nilayparikh/codefreedom:litellm image auto-sets it"
+        )
+    else:
+        eprint("  [WARN]  database_url not set (stateless mode)")
+        eprint(
+            "         LiteLLM runs without Prisma persistence unless"
+            " DATABASE_URL is set."
+        )
+        eprint(
+            "         The codefreedom litellm image (default) ships"
+            " embedded PG that auto-sets it."
+        )
+        eprint(f"         You are using: {litellm_image}")
+
+
 # ── Validate ─────────────────────────────────────────────────────────────────
 
 
@@ -529,19 +496,7 @@ def _validate() -> int:
     general = config.get("general_settings", {})
     database_url_in_config = general.get("database_url")
     database_url_in_env = _env_is_set("DATABASE_URL", proxy_env)
-    if not database_url_in_config and not database_url_in_env:
-        eprint("  [WARN]  database_url not set (stateless mode)")
-        eprint(
-            "         LiteLLP runs w/out Prisma persistence unless DATABASE_URL is set."
-        )
-        eprint(
-            "         The codefreedom litellm image (default) auto-sets DATABASE_URL"
-        )
-        eprint(
-            "         inside the container — no host-side config needed for DB features."
-        )
-    elif not database_url_in_config and database_url_in_env:
-        eprint("  [OK]  DATABASE_URL found in environment (config.yaml not required)")
+    _warn_database_url(database_url_in_config, database_url_in_env, proxy_env)
 
     router = config.get("router_settings", {})
     aliases = router.get("model_group_alias", {})

@@ -525,6 +525,7 @@ def backup(
     output_path: Optional[Path] = None,
     profile: str = "default",
     passphrase: Optional[str] = None,
+    redact_secrets: Optional[bool] = None,
 ) -> Tuple[Path, BackupManifest]:
     """Backup the CodeFreedom home directory to a ``.tar.gz`` archive.
 
@@ -534,10 +535,15 @@ def backup(
     and the archive is encrypted with AES-256-GCM. Without a passphrase,
     secrets are redacted and the archive is unencrypted.
 
+    To create an unencrypted backup with full secret values (e.g. for
+    pre-apply rollback snapshots), set ``redact_secrets=False``.
+
     Args:
         output_path: Target file path.
         profile: Profile label stored in manifest and filename.
         passphrase: If set, encrypt the archive and skip secret redaction.
+        redact_secrets: Explicit override.  Defaults to ``True`` when
+            *passphrase* is unset, ``False`` when set.
 
     Returns:
         Tuple of (output_path, manifest).
@@ -557,12 +563,15 @@ def backup(
     if not source_dir.exists():
         raise FileNotFoundError(f"CodeFreedom home directory not found: {source_dir}")
 
-    # Collect files (no redaction when encrypting)
-    contents, categories = _collect_files(source_dir, redact_secrets=not encrypting)
+    # Determine redaction: explicit override wins, else default
+    should_redact = redact_secrets if redact_secrets is not None else not encrypting
 
-    # Build manifest (secrets are not redacted when encrypting)
+    # Collect files
+    contents, categories = _collect_files(source_dir, redact_secrets=should_redact)
+
+    # Build manifest
     manifest = _build_manifest(
-        contents, categories, profile, secrets_redacted=not encrypting
+        contents, categories, profile, secrets_redacted=should_redact
     )
 
     # Resolve output path
@@ -597,7 +606,7 @@ def _write_archive(
         tar.addfile(info, io.BytesIO(manifest_bytes))
 
         # Write all collected files
-        for cat, entries in manifest.contents.items():
+        for _cat, entries in manifest.contents.items():
             for entry in entries:
                 # Redacted files: write the in-memory redacted content
                 if entry.redacted and entry.redacted_content is not None:
@@ -785,7 +794,7 @@ def prune_backups(
                     to_delete.add(p)
             except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
                 # Can't parse? skip from older_than deletion
-                if isinstance(exc, ValueError) and 'passphrase' in str(exc).lower():
+                if isinstance(exc, ValueError) and "passphrase" in str(exc).lower():
                     eprint(f"[WARN] Cannot evaluate encrypted backup: {p.name}")
                 continue
 
@@ -833,7 +842,7 @@ def _compute_diff(manifest: BackupManifest, target_dir: Path) -> List[FileDiff]:
     """
     diffs: List[FileDiff] = []
 
-    for cat, entries in manifest.contents.items():
+    for _cat, entries in manifest.contents.items():
         for entry in entries:
             current_path = target_dir / entry.path
             if not current_path.exists():

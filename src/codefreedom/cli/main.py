@@ -22,11 +22,10 @@ def main() -> None:
     # ── init subcommand ─────────────────────────────────────────────────────
     init_parser = subparsers.add_parser(
         "init",
-        help="Initialize CodeFreedom config (bundled examples or recipes)",
+        help="Initialize CodeFreedom config via recipes",
         description=(
-            "Initialize CodeFreedom configuration. Without subcommand, bootstraps"
-            " bundled examples (profiles, proxy configs, env files) into"
-            " ~/.codefreedom/.  Use `cf init recipe` for recipe-based setup."
+            "Initialize CodeFreedom configuration via recipes. "
+            "Use `cf init recipe` to list, plan, or apply configuration recipes."
         ),
     )
     init_sub = init_parser.add_subparsers(dest="init_action", title="init actions")
@@ -115,20 +114,10 @@ def main() -> None:
     )
 
     # ── claude sub-actions ───────────────────────────────────────────────
-    # `init` is a subparser so --help works correctly and args are
-    # validated.  The dispatch in main() checks args.claude_action.
     # (VS Code config generation was moved to the top-level `vscode`
     # subcommand -- use `codefreedom vscode claude config` instead.)
     claude_subparsers = claude_parser.add_subparsers(
         dest="claude_action", title="actions"
-    )
-    claude_subparsers.add_parser(
-        "init",
-        help="Initialize Claude Code profiles and .env.claude in ~/.codefreedom/",
-        description=(
-            "Initialize Claude Code profiles and .env.claude from bundled"
-            " examples into ~/.codefreedom/."
-        ),
     )
 
     config_parser = claude_subparsers.add_parser(
@@ -197,8 +186,8 @@ def main() -> None:
         "action",
         nargs="?",
         default="status",
-        choices=["start", "stop", "restart", "status", "url", "init"],
-        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/. 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
+        choices=["start", "stop", "restart", "status", "url"],
+        help="Action to perform (default: status). 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
     )
     chrome_parser.add_argument(
         "--port",
@@ -217,8 +206,8 @@ def main() -> None:
         "action",
         nargs="?",
         default="status",
-        choices=["start", "stop", "restart", "status", "init"],
-        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/. 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
+        choices=["start", "stop", "restart", "status"],
+        help="Action to perform (default: status). 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
     )
     web_parser.add_argument(
         "--port",
@@ -241,8 +230,8 @@ def main() -> None:
         "action",
         nargs="?",
         default="status",
-        choices=["start", "stop", "restart", "status", "init"],
-        help="Action to perform (default: status). 'init' copies tool profile to ~/.codefreedom/. 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
+        choices=["start", "stop", "restart", "status"],
+        help="Action to perform (default: status). 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
     )
     github_parser.add_argument(
         "--port",
@@ -317,15 +306,6 @@ def main() -> None:
         description="Validate the proxy configuration file (config.yaml).",
     )
 
-    # init
-    proxy_sub.add_parser(
-        "init",
-        help="Initialize proxy configs into ~/.codefreedom/",
-        description=(
-            "Initialize proxy configs into ~/.codefreedom/."
-            " Copies bundled examples from the package."
-        ),
-    )
     # (VS Code config generation was moved to the top-level `vscode`
     # subcommand -- use `codefreedom vscode proxy config` instead.)
 
@@ -399,30 +379,16 @@ def main() -> None:
 
             sys.exit(init_recipe("_default"))
 
-        # Plain `cf init` — bootstrap bundled examples
-        from codefreedom.cli.claude import init_claude
-        from codefreedom.cli.proxy import init_proxy
-
-        code = init_claude() or init_proxy()
-
-        # Legacy shared .env (placeholder for backward compatibility)
-        from codefreedom.config import get_codefreedom_dir
-
-        env_path = get_codefreedom_dir() / ".env"
-        if env_path.exists():
-            print(f"[init] [SKIP] Already exists: {env_path}")
-        else:
-            env_path.parent.mkdir(parents=True, exist_ok=True)
-            env_path.write_text(
-                "# CodeFreedom — Legacy shared environment\n"
-                "# Prefer component-specific .env files (.env.claude, .env.proxy, etc.)\n"
-            )
-            print(f"[init] [OK]   Created {env_path}")
-
+        # Plain `cf init` — redirect to recipe system
+        print("[init] Use `cf init recipe` to initialize CodeFreedom configuration.")
         print()
-        print("[init] Done.")
-        print("       Docs: https://nilayparikh.github.io/codefreedom/")
-        sys.exit(code)
+        print("  cf init recipe              # install _default base recipe")
+        print("  cf init recipe --list        # list available recipes")
+        print("  cf init recipe --plan <name> # preview a recipe without applying")
+        print("  cf init recipe <name>        # install a specific recipe")
+        print()
+        print("  Docs: https://nilayparikh.github.io/codefreedom/recipes/")
+        sys.exit(0)
 
     if args.command in ("claude", "cc"):
         # ── Rescue known flags swallowed by parse_known_args ────────────────
@@ -449,11 +415,7 @@ def main() -> None:
                 forwarded.append(arg)
         # ── claude sub-actions (subparser-based) ───────────────────────────
         claude_action = getattr(args, "claude_action", None)
-        if claude_action == "init":
-            from codefreedom.cli.claude import init_claude
-
-            sys.exit(init_claude())
-        elif claude_action == "config":
+        if claude_action == "config":
             from codefreedom.cli.claude import cmd_config
 
             sys.exit(cmd_config(args))
@@ -479,13 +441,6 @@ def main() -> None:
         sys.exit(admin_run(args))
     elif args.command == "tools":
         if args.tool == "chrome":
-            if getattr(args, "action", None) == "init":
-                if unknown:
-                    eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-                    sys.exit(2)
-                from codefreedom.cli.chrome import init_tool
-
-                sys.exit(init_tool())
             if unknown:
                 eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
                 sys.exit(2)
@@ -493,13 +448,6 @@ def main() -> None:
 
             sys.exit(chrome_run(args))
         elif args.tool == "web":
-            if getattr(args, "action", None) == "init":
-                if unknown:
-                    eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-                    sys.exit(2)
-                from codefreedom.cli.web import init_tool
-
-                sys.exit(init_tool())
             if unknown:
                 eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
                 sys.exit(2)
@@ -507,13 +455,6 @@ def main() -> None:
 
             sys.exit(web_run(args))
         elif args.tool == "github":
-            if getattr(args, "action", None) == "init":
-                if unknown:
-                    eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-                    sys.exit(2)
-                from codefreedom.cli.github import init_tool
-
-                sys.exit(init_tool())
             if unknown:
                 eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
                 sys.exit(2)

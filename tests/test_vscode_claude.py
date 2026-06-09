@@ -721,18 +721,18 @@ class TestSubprocessDispatch:
         assert "--port" in result.stdout
         assert "--out" in result.stdout
 
-    def test_claude_init_help_succeeds(self):
+    def test_claude_init_rejected(self):
+        """init subcommand was removed — use cf init recipe instead."""
         result = self._run("claude", "init", "--help")
-        assert result.returncode == 0, result.stderr
-        # init subparser has no flags
-        assert "Initialize" in result.stdout or "initialize" in result.stdout
+        assert result.returncode != 0
+        assert "invalid choice" in result.stderr
 
     def test_claude_help_lists_subactions(self):
         result = self._run("claude", "--help")
         assert result.returncode == 0, result.stderr
-        # Only the `init` sub-action remains under `claude` (vscode moved
+        # Only the `config` sub-action remains under `claude` (vscode moved
         # to the top-level `vscode` subcommand).
-        assert "init" in result.stdout
+        assert "config" in result.stdout
         assert "vscode" not in result.stdout
 
     def test_claude_unknown_subaction_fails(self):

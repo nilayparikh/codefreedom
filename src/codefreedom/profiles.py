@@ -14,6 +14,10 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+from pydantic import ValidationError
+
+from codefreedom.schemas.profiles import ClaudeCodeProfiles
+
 # Pre-compiled regex — mirrors env_loader._VAR_REF_RE
 _VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-(.*))?\}")
 
@@ -39,6 +43,12 @@ def load_profiles(profiles_path: Path) -> Dict[str, Any]:
     except json.JSONDecodeError as e:
         eprint(f"[ERROR] Invalid JSON in {profiles_path}: {e}")
         raise ProfileError(f"Invalid JSON in {profiles_path}: {e}") from e
+
+    # Validate with Pydantic (non-fatal — warn on failure, allow extra fields)
+    try:
+        ClaudeCodeProfiles.model_validate(data, strict=False)
+    except ValidationError as exc:
+        eprint(f"[WARN] Profiles validation issue in {profiles_path}: {exc}")
 
     profiles = data.get("profiles", {})
     if not profiles:

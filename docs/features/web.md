@@ -18,7 +18,9 @@ A headless browser container for web search and scraping. Runs an MCP server on 
 ## Usage
 
 ```bash
-codefreedom tools web init      # One-time setup (type "I understand")
+# Install the _default recipe to create the web profile
+cf init recipe
+
 codefreedom tools web start     # Start container
 codefreedom tools web status    # Check status
 codefreedom tools web restart   # Restart (preserves state)
@@ -29,10 +31,10 @@ codefreedom tools web stop      # Stop
 
 Once running, your code agent can use:
 
-| Tool | What It Does |
-|------|-------------|
-| `web_search(query)` | Search the web via configured engines |
-| `web_fetch(url)` | Fetch a webpage (bypasses anti-bot detection) |
+| Tool                | What It Does                                  |
+| ------------------- | --------------------------------------------- |
+| `web_search(query)` | Search the web via configured engines         |
+| `web_fetch(url)`    | Fetch a webpage (bypasses anti-bot detection) |
 
 Connect to `http://127.0.0.1:8420/mcp`.
 
@@ -40,12 +42,12 @@ Connect to `http://127.0.0.1:8420/mcp`.
 
 Settings live in `~/.codefreedom/profiles/web.json`:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `image` | `codefreedom:web` | Docker image |
-| `container_name` | `codefreedom-web` | Container name |
-| `port` | `8420` | MCP server port |
-| `data_dir` | `~/.codefreedom/sandbox/tools/web` | Persistent data |
+| Setting          | Default                            | Description     |
+| ---------------- | ---------------------------------- | --------------- |
+| `image`          | `codefreedom:web`                  | Docker image    |
+| `container_name` | `codefreedom-web`                  | Container name  |
+| `port`           | `8420`                             | MCP server port |
+| `data_dir`       | `~/.codefreedom/sandbox/tools/web` | Persistent data |
 
 ## Data Persistence
 

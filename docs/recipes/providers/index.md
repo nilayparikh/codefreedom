@@ -35,7 +35,7 @@ model_list:
       context_window: 1000000
 ```
 
-Source YAML files live at `~/.codefreedom/proxy/config/providers/` (after init) or in the [codefreedom examples](https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/proxy/config/providers).
+Source YAML files live at `~/.codefreedom/proxy/config/providers/` (after recipe install) or in the [codefreedom-recipes repository](https://github.com/nilayparikh/codefreedom-recipes).
 
 ## Enabling a Provider
 

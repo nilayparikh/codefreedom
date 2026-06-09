@@ -45,6 +45,17 @@ Merge modes (``merge`` field in files):
   - ``env`` — key=value .env-style merge (keeps existing keys)
   - ``auto`` — infer from file extension / name
   - ``overwrite`` — always write the recipe version
+
+Orphan detection:
+  - After a recipe is applied, any file that exists in a managed
+    subdirectory (e.g. ``proxy/config/providers/``) but is NOT listed
+    in the new recipe's ``files`` list is auto-detected as an orphan
+    and deleted.  This handles switching between recipes that have
+    different provider configs (e.g. ``opencode.yaml`` → ``local.yaml``).
+  - The root ``~/.codefreedom/`` directory is NEVER scanned, so
+    top-level user-created files are safe.
+  - Detection is per-directory: only sibling files of managed targets
+    are considered.
 """
 
 from __future__ import annotations
@@ -58,8 +69,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
+from codefreedom.admin import backup as cf_backup
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint
+from pydantic import ValidationError
+
+from codefreedom.schemas.recipe import RecipeConfig
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Constants
@@ -123,7 +138,9 @@ def init_recipe(name: str) -> int:
          - If target does **not** exist → create fresh.
          - If target **does** exist → merge using DeepDiff (YAML) or
            key-by-key (.env), preserving existing values.
-      4. Print a "What's Next" summary with required secrets and next steps.
+      4. Detect and delete orphaned files (files from a previous recipe
+         that aren't in the new recipe's file list).
+      5. Print a "What's Next" summary with required secrets and next steps.
     """
     cf_dir = get_codefreedom_dir()
 
@@ -135,7 +152,16 @@ def init_recipe(name: str) -> int:
         print(f"         Repo: https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}")
         return 1
 
-    # ── 1b. If recipe extends a base, resolve and install it first ──────
+    # ── 1b. Collect all managed targets for orphan detection ────────────
+    all_managed: set[str] = set()
+
+    def _collect_targets(man: dict) -> None:
+        for entry in man.get("files", []):
+            target = entry.get("target", entry.get("path", ""))
+            if target:
+                all_managed.add(target)
+
+    # ── 1c. If recipe extends a base, resolve and install it first ──────
     extends = manifest.get("extends")
     if extends:
         print(f"  [EXTENDS] Installing base recipe '{extends}' first...")
@@ -145,17 +171,22 @@ def init_recipe(name: str) -> int:
                 f"  [WARN] Base recipe '{extends}' not found — continuing without it."
             )
         else:
+            _collect_targets(base_manifest)
             _install_recipe_files(base_manifest, base_files, cf_dir)
 
     # ── 2. Install / merge each file ─────────────────────────────────────
+    _collect_targets(manifest)
     _install_recipe_files(manifest, files, cf_dir)
+
+    # ── 2b. Orphan detection — delete files from previous recipe(s) ────
+    _remove_orphans(all_managed, cf_dir)
 
     # ── 3. What's Next summary ──────────────────────────────────────────
     _print_summary(manifest, cf_dir)
     return 0
 
 
-def plan_recipe(name: str, reset: bool = True) -> int:
+def plan_recipe(name: str) -> int:
     """Preview recipe changes without applying them.
 
     Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
@@ -200,6 +231,13 @@ def plan_recipe(name: str, reset: bool = True) -> int:
 
     _collect(manifest, files, name)
 
+    # ── 2b. Deduplicate by target — keep only the last entry (highest  ──
+    #        priority from the extending recipe).                         ──
+    seen: dict[str, dict] = {}
+    for entry in plan_entries:
+        seen[entry["target"]] = entry  # later entries override earlier
+    plan_entries = list(seen.values())
+
     # ── 3. Compute what would happen to each file ──────────────────────
     plan_id = _generate_plan_id()
     plans_dir = cf_dir / "plans" / plan_id
@@ -214,13 +252,18 @@ def plan_recipe(name: str, reset: bool = True) -> int:
 
         if not dst.exists():
             diff = _make_diff("", entry["content"], entry["target"], from_devnull=True)
-            patch_name = f"create-{entry['target'].replace('/', '-')}.diff"
+            safe_name = entry["target"].replace("/", "-")
+            patch_name = f"create-{safe_name}.diff"
             (plans_dir / patch_name).write_text(diff, encoding="utf-8")
+            # Also store full content for reliable apply
+            content_name = f"create-{safe_name}.content"
+            (plans_dir / content_name).write_text(entry["content"], encoding="utf-8")
             patch_files.append(
                 {
                     "target": entry["target"],
                     "action": "create",
                     "patch": patch_name,
+                    "content_file": content_name,
                     "source": entry["source"],
                 }
             )
@@ -240,19 +283,53 @@ def plan_recipe(name: str, reset: bool = True) -> int:
             summary["same"] += 1
             continue
 
-        # REPLACE — diff between existing and new recipe content
+        # REPLACE — write diff for review + full content for reliable apply
         diff = _make_diff(existing, entry["content"], entry["target"])
-        patch_name = f"replace-{entry['target'].replace('/', '-')}.diff"
-        (plans_dir / patch_name).write_text(diff, encoding="utf-8")
+        safe_name = entry["target"].replace("/", "-")
+        diff_name = f"replace-{safe_name}.diff"
+        (plans_dir / diff_name).write_text(diff, encoding="utf-8")
+        content_name = f"replace-{safe_name}.content"
+        (plans_dir / content_name).write_text(entry["content"], encoding="utf-8")
         patch_files.append(
             {
                 "target": entry["target"],
                 "action": "replace",
-                "patch": patch_name,
+                "patch": diff_name,
+                "content_file": content_name,
                 "source": entry["source"],
             }
         )
         summary["replace"] += 1
+
+    # ── 3b. Orphan detection — delete files that existed from the    ──
+    #        previous recipe but aren't in the new recipe's file list.  ──
+    #        Scans each directory that contains a managed file and      ──
+    #        flags any sibling file not in the managed set.             ──
+    managed_targets = {e["target"] for e in plan_entries}
+    orphan_dirs: set[Path] = set()
+    for e in plan_entries:
+        parent = (cf_dir / e["target"]).parent
+        if parent != cf_dir:  # Skip root cf_dir to avoid false positives
+            orphan_dirs.add(parent)
+
+    for parent_dir in sorted(orphan_dirs):
+        if not parent_dir.is_dir():
+            continue
+        for child in sorted(parent_dir.iterdir()):
+            if not child.is_file():
+                continue
+            rel = child.relative_to(cf_dir).as_posix()
+            if rel not in managed_targets:
+                patch_files.append(
+                    {
+                        "target": rel,
+                        "action": "delete",
+                        "patch": None,
+                        "content_file": None,
+                        "source": "orphan",
+                    }
+                )
+                summary["delete"] = summary.get("delete", 0) + 1
 
     # ── 4. Write plan.yaml ─────────────────────────────────────────────
     plan_meta = {
@@ -268,6 +345,7 @@ def plan_recipe(name: str, reset: bool = True) -> int:
     )
 
     # ── 5. Print summary ──────────────────────────────────────────────
+    delete_count = summary.get("delete", 0)
     print(f"[plan] Recipe: {name}" + (f" (extends {extends})" if extends else ""))
     print(f"[plan] Plan ID: {plan_id}")
     print(f"[plan] Files:   {plans_dir}/")
@@ -275,6 +353,8 @@ def plan_recipe(name: str, reset: bool = True) -> int:
     print(f"[plan]   {summary['create']} new files")
     print(f"[plan]   {summary['replace']} files to replace")
     print(f"[plan]   {summary['same']} unchanged (skipped)")
+    if delete_count:
+        print(f"[plan]   {delete_count} files to delete")
     print("[plan]")
     print("[plan] Files:")
     for pf in patch_files:
@@ -311,13 +391,25 @@ def apply_plan(plan_id: str) -> int:
         print("[apply] Invalid plan format")
         return 1
 
+    # ── 0. Auto-backup before applying ──────────────────────────────────
+    # Full backup (no secret redaction) for rollback, tagged with plan ID.
+    try:
+        backup_path, _ = cf_backup(
+            profile=f"pre-apply-{plan_id}",
+            redact_secrets=False,
+        )
+        print(f"[apply] Backup: {backup_path}")
+    except (FileNotFoundError, OSError, RuntimeError) as e:
+        print(f"[apply] [WARN] Backup failed: {e}")
+        print("[apply] Continuing without backup...")
+
     print(f"[apply] Applying plan {plan_id}...")
     count = 0
 
     for pf in plan.get("files", []):
         target = pf.get("target", "")
         action = pf.get("action", "")
-        patch_name = pf.get("patch")
+        content_name = pf.get("content_file")
 
         dst = cf_dir / target
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -326,19 +418,33 @@ def apply_plan(plan_id: str) -> int:
             print(f"  [SAME]  {target}")
             continue
 
-        if not patch_name:
-            print(f"  [SKIP]  {target} (no patch file)")
+        if action == "delete":
+            if dst.exists():
+                dst.unlink()
+                print(f"  [DELETE] {target}")
+                count += 1
+            else:
+                print(f"  [SAME]  {target} (already gone)")
             continue
 
-        patch_file = plans_dir / patch_name
-        if not patch_file.exists():
-            print(f"  [SKIP]  {target} (patch file missing)")
-            continue
+        if not content_name:
+            # Fallback: extract from patch file (legacy plans)
+            patch_name = pf.get("patch")
+            if not patch_name:
+                print(f"  [SKIP]  {target} (no content or patch file)")
+                continue
+            patch_file = plans_dir / patch_name
+            if not patch_file.exists():
+                print(f"  [SKIP]  {target} (patch file missing)")
+                continue
+            content = _extract_content_from_diff(patch_file.read_text(encoding="utf-8"))
+        else:
+            content_file = plans_dir / content_name
+            if not content_file.exists():
+                print(f"  [SKIP]  {target} (content file missing)")
+                continue
+            content = content_file.read_text(encoding="utf-8")
 
-        # Extract content from unified diff and write directly
-        content = _extract_content_from_diff(
-            patch_file.read_text(encoding="utf-8")
-        )
         dst.write_text(content, encoding="utf-8")
         label = "CREATE" if action == "create" else "REPLACE"
         print(f"  [{label}] {target}")
@@ -620,6 +726,12 @@ def _install_recipe_files(
 
     Returns count of files installed / modified.
     """
+    # Validate manifest with Pydantic (non-fatal — warn on failure)
+    try:
+        RecipeConfig.model_validate(manifest, strict=False)
+    except ValidationError as exc:
+        eprint(f"  [WARN] Recipe validation issue: {exc}")
+
     file_entries = manifest.get("files", [])
     count = 0
 
@@ -650,6 +762,46 @@ def _install_recipe_files(
         print("\n  No files were changed.")
 
     return count
+
+
+def _remove_orphans(
+    managed_targets: set[str],
+    cf_dir: Path,
+) -> None:
+    """Delete files that are not managed by the current recipe.
+
+    Scans each directory that contains a managed file and deletes any
+    sibling file that isn't in ``managed_targets``. This handles the
+    common case of switching from one recipe to another where each
+    recipe has its own provider config (e.g. ``opencode.yaml`` vs
+    ``local.yaml`` in ``proxy/config/providers/``).
+
+    Skips the root ``~/.codefreedom/`` directory to avoid deleting
+    user-created files at the top level.
+    """
+    orphan_dirs: set[Path] = set()
+    for target in managed_targets:
+        parent = (cf_dir / target).parent
+        if parent != cf_dir:
+            orphan_dirs.add(parent)
+
+    deleted = 0
+    for parent_dir in sorted(orphan_dirs):
+        if not parent_dir.is_dir():
+            continue
+        for child in sorted(parent_dir.iterdir()):
+            if not child.is_file():
+                continue
+            rel = child.relative_to(cf_dir).as_posix()
+            if rel not in managed_targets:
+                child.unlink()
+                print(f"  [DELETE] {rel}")
+                deleted += 1
+
+    if deleted:
+        print(f"\n  Removed {deleted} orphaned file(s) from previous recipe.")
+    else:
+        print("\n  No orphaned files to clean up.")
 
 
 def _merge_file(
@@ -735,7 +887,7 @@ def _deepdiff_merge(
     already identical (no merge needed).
     """
     try:
-        from deepdiff import DeepDiff
+        from deepdiff import DeepDiff  # type: ignore
     except ImportError:
         eprint(
             "  [WARN] deepdiff not installed — falling back to overwrite "

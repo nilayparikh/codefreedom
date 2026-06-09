@@ -71,7 +71,7 @@ model_list:
         - seed
 ```
 
-See the [source YAML](https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/proxy/config/providers/local.yaml) for the full file including model-specific fields like `max_thinking_tokens` and `chat_template_kwargs`.
+See the [recipe YAML](https://github.com/nilayparikh/codefreedom-recipes/tree/main/local/proxy/config/providers/local.yaml) for the full file including model-specific fields like `max_thinking_tokens` and `chat_template_kwargs`.
 
 ## Enabling
 
