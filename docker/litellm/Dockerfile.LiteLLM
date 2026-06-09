@@ -390,7 +390,7 @@ VOLUME ["/var/lib/postgresql/data", "/var/lib/postgresql/backup"]
 EXPOSE 4000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=2)" || exit 1
+    CMD python -c "import urllib.request,os; p=os.environ.get('LITELLM_PORT','4000'); urllib.request.urlopen(f'http://127.0.0.1:{p}/health/liveliness', timeout=2)" || exit 1
 
 # tini -> entrypoint.sh -> (PG + prisma) -> litellm.  The compose file
 # appends `--config /app/...` etc. via the `command:` directive;
