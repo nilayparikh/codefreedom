@@ -27,7 +27,13 @@ keywords = [
 #   PyYAML         — YAML parsing (litellm config validation)
 #   types-PyYAML   — type stubs needed by litellm's config parser at runtime
 #   deepdiff       — structural YAML/JSON diff for recipe merging
-dependencies = ["PyYAML>=6.0", "types-PyYAML", "deepdiff>=7.0", "pydantic>=2.0"]
+dependencies = [
+    "PyYAML>=6.0",
+    "types-PyYAML",
+    "deepdiff>=7.0",
+    "pydantic>=2.0",
+    "GitPython>=3.1.43",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",

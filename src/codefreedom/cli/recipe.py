@@ -6,8 +6,12 @@ intelligent structural merging via DeepDiff when a target file already
 exists (second+ recipe or pre-existing config).
 
 Recipe source priority:
-  1. Local submodule at ``recipes/{name}/`` (development / git-clone installs)
-  2. GitHub raw content (pip-installed / fallback)
+  1. Custom store (``--store`` flag) — GitHub URL or local folder
+  2. Local submodule at ``recipes/{name}/`` (development / git-clone installs)
+  3. GitHub raw content (pip-installed / fallback)
+
+``_default`` is silently skipped when not found in a custom store — it's
+only required when using the upstream codefreedom-recipes repository.
 
 Recipe format
 =============
@@ -62,6 +66,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import secrets
 import urllib.error
 import urllib.request
@@ -86,6 +91,7 @@ RECIPE_OWNER = "nilayparikh"
 RECIPE_REPO = "codefreedom-recipes"
 RECIPE_BRANCH = "main"
 
+_OFFICIAL_REPO_URL = f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}.git"
 _RAW_BASE = (
     f"https://raw.githubusercontent.com/"
     f"{RECIPE_OWNER}/{RECIPE_REPO}/{RECIPE_BRANCH}"
@@ -108,15 +114,22 @@ class RecipeError(Exception):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def list_recipes() -> int:
-    """List all available recipes from the GitHub repository.
+def list_recipes(store: Optional[str] = None) -> int:
+    """List all available recipes from the recipe store.
 
     Returns exit code 0 on success, 1 on failure.
     """
-    recipes = _fetch_available_recipes()
+    store_path = _resolve_store(store)
+
+    if store_path:
+        recipes = _list_recipes_from_store(store_path)
+    else:
+        recipes = _fetch_available_recipes()
+
     if not recipes:
+        source = store_path or _GITHUB_API_BASE
         print("[recipe] No recipes found.")
-        print(f"         {_GITHUB_API_BASE}")
+        print(f"         {source}")
         return 1
 
     print(f"[recipe] Available recipes ({len(recipes)}):")
@@ -124,17 +137,19 @@ def list_recipes() -> int:
         print(f"           {name}")
     print()
     print("  Use:  cf init recipe --plan <name>")
-    print(f"  Repo: https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}")
+    source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
+    print(f"  Store: {source}")
     return 0
 
 
-def init_recipe(name: str) -> int:
+def init_recipe(name: str, store: Optional[str] = None) -> int:
     """Fetch and apply a recipe to ``~/.codefreedom/``.
 
     This is the main entry point for ``cf init --recipe <name>``.
 
     Steps:
-      1. Try local submodule ``recipes/{name}/``, fall back to GitHub raw.
+      1. Resolve custom store (if ``--store`` provided), then try
+         local submodule ``recipes/{name}/``, fall back to GitHub raw.
       2. Parse ``recipe.yaml`` manifest.
       3. For each file in the manifest:
          - If target does **not** exist → create fresh.
@@ -148,11 +163,19 @@ def init_recipe(name: str) -> int:
     cf_dir = get_codefreedom_dir()
 
     # ── 1. Recipe source ────────────────────────────────────────────────
-    manifest, files = _resolve_recipe(name)
+    store_path = _resolve_store(store)
+    manifest, files = _resolve_recipe(name, store_path=store_path)
     if manifest is None:
+        # Silently skip _default when not found in the store
+        if name == "_default":
+            source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
+            print(f"[recipe] No '_default' recipe in store — skipping.")
+            print(f"         Store: {source}")
+            return 0
         print(f"[recipe] Recipe '{name}' not found.")
         print("         Run 'cf init recipe --list' to see available recipes.")
-        print(f"         Repo: https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}")
+        source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
+        print(f"         Store: {source}")
         return 1
 
     # ── 1b. Collect all managed targets for orphan detection ────────────
@@ -168,7 +191,7 @@ def init_recipe(name: str) -> int:
     extends = manifest.get("extends")
     if extends:
         print(f"  [EXTENDS] Installing base recipe '{extends}' first...")
-        base_manifest, base_files = _resolve_recipe(extends)
+        base_manifest, base_files = _resolve_recipe(extends, store_path=store_path)
         if base_manifest is None:
             print(
                 f"  [WARN] Base recipe '{extends}' not found — continuing without it."
@@ -192,7 +215,7 @@ def init_recipe(name: str) -> int:
     return 0
 
 
-def plan_recipe(name: str) -> int:
+def plan_recipe(name: str, store: Optional[str] = None) -> int:
     """Preview recipe changes without applying them.
 
     Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
@@ -204,7 +227,8 @@ def plan_recipe(name: str) -> int:
     cf_dir = get_codefreedom_dir()
 
     # ── 1. Resolve recipe ──────────────────────────────────────────────
-    manifest, files = _resolve_recipe(name)
+    store_path = _resolve_store(store)
+    manifest, files = _resolve_recipe(name, store_path=store_path)
     if manifest is None:
         print(f"[plan] Recipe '{name}' not found.")
         print("       Run 'cf init recipe --list' to see available recipes.")
@@ -231,7 +255,7 @@ def plan_recipe(name: str) -> int:
 
     extends = manifest.get("extends")
     if extends:
-        base_man, base_files = _resolve_recipe(extends)
+        base_man, base_files = _resolve_recipe(extends, store_path=store_path)
         if base_man is not None:
             _collect(base_man, base_files, extends)
 
@@ -394,7 +418,7 @@ def plan_recipe(name: str) -> int:
     return 0
 
 
-def apply_plan(plan_id: str) -> int:
+def apply_plan(plan_id: str, store: Optional[str] = None) -> int:
     """Apply a previously generated plan by ID.
 
     Reads ``~/.codefreedom/plans/<plan_id>/plan.yaml`` and applies
@@ -565,13 +589,34 @@ def _extract_content_from_diff(diff: str) -> str:
 
 def _resolve_recipe(
     name: str,
+    store_path: Optional[Path] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Dict[str, str]]:
-    """Resolve a recipe from local submodule or GitHub.
+    """Resolve a recipe from the store or local submodule.
+
+    Priority:
+      1. Store directory (official repo or ``--store``) — always available
+      2. Local submodule at ``recipes/{name}/`` (development convenience)
+
+    Both the official repo and custom ``--store`` paths use the same
+    GitPython sparse checkout mechanism to fetch recipe content.
 
     Returns (manifest, file_contents_dict).
     If the recipe cannot be found, returns (None, {}).
     """
-    # 1. Try local submodule (dev installs with git clone)
+    # 0. Store takes highest priority
+    if store_path is not None:
+        recipe_dir = store_path / name
+        manifest_path = recipe_dir / "recipe.yaml"
+        if manifest_path.exists():
+            try:
+                manifest = _parse_yaml_file(manifest_path)
+                files = _read_local_files(recipe_dir, manifest)
+                return manifest, files
+            except RecipeError as e:
+                eprint(f"  [WARN] Store recipe '{name}' has errors: {e}")
+                return None, {}
+
+    # 1. Try local submodule (dev installs with git clone) as fallback
     local_path = _find_local_recipe(name)
     if local_path is not None:
         manifest_path = local_path / "recipe.yaml"
@@ -583,14 +628,7 @@ def _resolve_recipe(
             except RecipeError as e:
                 eprint(f"  [WARN] Local recipe '{name}' has errors: {e}")
 
-    # 2. Fall back to GitHub raw
-    try:
-        manifest = _fetch_recipe_manifest(name)
-        files = _fetch_recipe_files(name, manifest)
-        return manifest, files
-    except RecipeError as e:
-        eprint(f"  [WARN] Could not fetch recipe '{name}' from GitHub: {e}")
-        return None, {}
+    return None, {}
 
 
 def _find_local_recipe(name: str) -> Optional[Path]:
@@ -631,6 +669,189 @@ def _read_local_files(
         else:
             eprint(f"  [WARN] Local file not found: {file_path}")
     return files
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Store resolution (--store flag)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _resolve_store(store: Optional[str] = None) -> Optional[Path]:
+    """Resolve a store to a local directory path.
+
+    When *store* is ``None`` (default), uses the official community repo
+    at ``github.com/nilayparikh/codefreedom-recipes``, cloned via GitPython.
+
+    Accepts:
+      - GitHub URL (e.g. ``https://github.com/owner/repo.git`` or
+        ``git@github.com:owner/repo.git``) — clones to
+        ``~/.codefreedom/stores/<owner>-<repo>/`` via GitPython sparse checkout.
+      - Local absolute path (e.g. ``/home/user/my-recipes``).
+
+    All sources use the same download mechanism (GitPython sparse checkout),
+    ensuring consistent behavior whether using the official repo or a custom
+    store.  Git metadata is removed after cloning — only the folder contents
+    remain.
+
+    Returns the ``Path`` to the store root, or ``None`` if resolution fails.
+    """
+    # ── Default: official community repo ────────────────────────────────
+    if store is None:
+        cf_dir = get_codefreedom_dir()
+        store_dir = cf_dir / "stores" / f"{RECIPE_OWNER}-{RECIPE_REPO}"
+        if _ensure_store(_OFFICIAL_REPO_URL, store_dir):
+            return store_dir
+        return None
+
+    store = store.strip()
+
+    # ── Local path ──────────────────────────────────────────────────────
+    expanded = os.path.expanduser(store)
+    if os.path.isabs(expanded) or store.startswith("."):
+        p = Path(expanded)
+        if p.is_dir():
+            return p.resolve()
+        eprint(f"  [WARN] Local store path does not exist or is not a directory: {p}")
+        return None
+
+    # ── GitHub URL ──────────────────────────────────────────────────────
+    repo_name = _parse_github_url(store)
+    if repo_name is None:
+        eprint(f"  [WARN] Could not parse GitHub URL: {store}")
+        return None
+
+    cf_dir = get_codefreedom_dir()
+    store_dir = cf_dir / "stores" / repo_name
+
+    if _ensure_store(store, store_dir):
+        return store_dir
+
+    eprint(f"  [WARN] Failed to clone/pull store from {store}")
+    return None
+
+
+def _ensure_store(url: str, dest: Path) -> bool:
+    """Clone (or update) a Git store and remove metadata.
+
+    Shared helper used by both the default official repo and custom
+    ``--store`` paths.  After a successful clone/update the ``.git/``
+    directory is removed so only recipe folder contents remain.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    if _clone_or_pull_store(url, dest):
+        _remove_git_metadata(dest)
+        return True
+    return False
+
+
+def _parse_github_url(url: str) -> Optional[str]:
+    """Parse a GitHub URL and return a sanitized directory name.
+
+    Handles formats:
+      - ``https://github.com/owner/repo.git``
+      - ``https://github.com/owner/repo``
+      - ``git@github.com:owner/repo.git``
+    """
+    import re
+
+    # HTTPS: https://github.com/owner/repo[.git]
+    m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", url)
+    if m:
+        return f"{m.group(1)}-{m.group(2).replace('.git', '')}"
+
+    # SSH: git@github.com:owner/repo[.git]
+    m = re.match(r"git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$", url)
+    if m:
+        return f"{m.group(1)}-{m.group(2).replace('.git', '')}"
+
+    return None
+
+
+def _clone_or_pull_store(url: str, dest: Path) -> bool:
+    """Clone or update a Git repository into *dest* using sparse checkout.
+
+    Uses GitPython with sparse checkout to fetch only the directory structure
+    and recipe manifests needed to list and resolve recipes.  The user's
+    stored GitHub credentials (git credential helper / SSH agent) are used
+    automatically.
+
+    Returns ``True`` on success.
+    """
+    from git import Repo, GitCommandError
+
+    try:
+        if dest.exists() and (dest / ".git").is_dir():
+            # Already cloned — update with fast-forward pull
+            print(f"  [STORE] Updating existing store at {dest}")
+            repo = Repo(dest)
+            origin = repo.remotes.origin
+            origin.pull(ff_only=True)
+            return True
+
+        # ── Fresh clone with sparse checkout ──────────────────────────────
+        print(f"  [STORE] Cloning {url} -> {dest}")
+        dest.mkdir(parents=True, exist_ok=True)
+        repo = Repo.init(dest)
+
+        with repo.config_writer() as config:
+            config.set_value("core", "sparseCheckout", "true")
+
+        # Sparse checkout pattern: fetch root files + all top-level dirs
+        # so we can list recipes and read recipe.yaml manifests.
+        sparse_path = Path(repo.git_dir) / "info" / "sparse-checkout"
+        sparse_path.parent.mkdir(parents=True, exist_ok=True)
+        sparse_path.write_text("/*\n*/\n", encoding="utf-8")
+
+        origin = repo.create_remote("origin", url)
+        origin.pull(repo.active_branch.name)
+        return True
+
+    except GitCommandError as e:
+        eprint(f"  [WARN] Git operation failed: {e}")
+        return False
+    except Exception as e:
+        eprint(f"  [WARN] Git operation failed: {e}")
+        return False
+
+
+def _remove_git_metadata(path: Path) -> None:
+    """Remove all Git metadata from a directory tree.
+
+    Deletes ``.git/``, ``.gitattributes``, ``.gitignore``, and
+    ``.gitmodules`` recursively so only the recipe folder contents
+    remain.
+    """
+    import shutil
+
+    git_dir = path / ".git"
+    if git_dir.is_dir():
+        shutil.rmtree(git_dir, ignore_errors=True)
+        print(f"  [STORE] Removed .git metadata from {path}")
+
+    for name in (".gitattributes", ".gitignore", ".gitmodules"):
+        f = path / name
+        if f.is_file():
+            f.unlink(missing_ok=True)
+
+
+def _list_recipes_from_store(store_path: Path) -> List[str]:
+    """List recipes available in a custom store directory.
+
+    Scans top-level subdirectories for ``recipe.yaml`` files.
+    Directories starting with ``_`` are excluded.
+    """
+    if not store_path.is_dir():
+        return []
+
+    recipes: List[str] = []
+    for child in sorted(store_path.iterdir()):
+        if not child.is_dir():
+            continue
+        if child.name.startswith("_"):
+            continue
+        if (child / "recipe.yaml").is_file():
+            recipes.append(child.name)
+    return recipes
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

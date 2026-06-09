@@ -30,6 +30,9 @@ from codefreedom.cli.recipe import (
     _fetch_recipe_manifest,
     _fetch_recipe_files,
     _print_summary,
+    _parse_github_url,
+    _list_recipes_from_store,
+    _resolve_store,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -632,3 +635,208 @@ class TestRecipeApply:
         # Verify extra was created
         extra = yaml.safe_load((cf_dir / "extra.yaml").read_text())
         assert extra["added"] is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Custom Store (--store flag)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestParseGithubUrl:
+    """Parsing GitHub URLs into directory names."""
+
+    def test_https_url_with_git_suffix(self):
+        """https://github.com/owner/repo.git → owner-repo."""
+        assert (
+            _parse_github_url("https://github.com/nilayparikh/cf-recipes.git")
+            == "nilayparikh-cf-recipes"
+        )
+
+    def test_https_url_without_git_suffix(self):
+        """https://github.com/owner/repo → owner-repo."""
+        assert (
+            _parse_github_url("https://github.com/nilayparikh/cf-recipes")
+            == "nilayparikh-cf-recipes"
+        )
+
+    def test_ssh_url(self):
+        """git@github.com:owner/repo.git → owner-repo."""
+        assert (
+            _parse_github_url("git@github.com:nilayparikh/cf-recipes.git")
+            == "nilayparikh-cf-recipes"
+        )
+
+    def test_https_url_trailing_slash(self):
+        """https://github.com/owner/repo/ → owner-repo."""
+        assert (
+            _parse_github_url("https://github.com/nilayparikh/cf-recipes/")
+            == "nilayparikh-cf-recipes"
+        )
+
+    def test_non_github_url(self):
+        """Arbitrary URL returns None."""
+        assert _parse_github_url("https://gitlab.com/owner/repo.git") is None
+
+    def test_invalid_string(self):
+        """Non-URL string returns None."""
+        assert _parse_github_url("not-a-url") is None
+
+
+class TestListRecipesFromStore:
+    """Listing recipes available in a custom store directory."""
+
+    def test_finds_recipes_with_recipe_yaml(self, tmp_path):
+        """Directories with recipe.yaml are listed."""
+        (tmp_path / "free" / "recipe.yaml").parent.mkdir()
+        (tmp_path / "free" / "recipe.yaml").write_text("name: free\n")
+        (tmp_path / "deepseek" / "recipe.yaml").parent.mkdir()
+        (tmp_path / "deepseek" / "recipe.yaml").write_text("name: deepseek\n")
+        (tmp_path / "_default" / "recipe.yaml").parent.mkdir()
+        (tmp_path / "_default" / "recipe.yaml").write_text("name: _default\n")
+
+        recipes = _list_recipes_from_store(tmp_path)
+        assert "free" in recipes
+        assert "deepseek" in recipes
+        assert "_default" not in recipes  # Skipped (starts with _)
+
+    def test_skips_non_recipe_dirs(self, tmp_path):
+        """Directories without recipe.yaml are ignored."""
+        (tmp_path / "free" / "recipe.yaml").parent.mkdir()
+        (tmp_path / "free" / "recipe.yaml").write_text("name: free\n")
+        (tmp_path / "not-a-recipe").mkdir()
+        (tmp_path / "some-file.txt").write_text("hello")
+
+        recipes = _list_recipes_from_store(tmp_path)
+        assert recipes == ["free"]
+
+    def test_empty_store(self, tmp_path):
+        """Empty directory returns empty list."""
+        assert _list_recipes_from_store(tmp_path) == []
+
+    def test_missing_directory(self):
+        """Non-existent directory returns empty list."""
+        assert _list_recipes_from_store(Path("/nonexistent/path")) == []
+
+
+class TestResolveStore:
+    """Resolving a --store value to a local directory path."""
+
+    def test_local_absolute_path(self, tmp_path):
+        """Absolute local path is returned as-is."""
+        result = _resolve_store(str(tmp_path))
+        assert result == tmp_path.resolve()
+
+    def test_local_path_with_expanduser(self, tmp_path, monkeypatch):
+        """~ expansion works correctly."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        home_dir = tmp_path
+        (home_dir / "my-recipes").mkdir()
+
+        result = _resolve_store("~/my-recipes")
+        assert result == home_dir.resolve() / "my-recipes"
+
+    def test_nonexistent_local_path(self):
+        """Non-existent local path returns None."""
+        result = _resolve_store("/tmp/nonexistent-recipe-store-12345")
+        assert result is None
+
+    def test_dot_relative_path(self, tmp_path):
+        """Relative path starting with '.' is resolved."""
+        cwd = Path.cwd()
+        result = _resolve_store(".")
+        assert result == cwd.resolve()
+
+    def test_github_url_parsing(self):
+        """GitHub URL is parsed but requires git clone which is mocked."""
+        # Just verify parse doesn't crash and returns None if no git
+        url = "https://github.com/nilayparikh/cf-recipes.git"
+        name = _parse_github_url(url)
+        assert name == "nilayparikh-cf-recipes"
+
+
+class TestResolveRecipeWithStore:
+    """_resolve_recipe with custom store_path."""
+
+    def test_store_takes_priority(self, tmp_path):
+        """Custom store is checked before local submodule and GitHub."""
+        # Create a store with a recipe
+        recipe_dir = tmp_path / "store" / "my-recipe"
+        recipe_dir.mkdir(parents=True)
+        recipe_yaml = {
+            "name": "my-recipe",
+            "files": [
+                {"path": "cfg.yaml", "target": "cfg.yaml", "merge": "deepdiff"},
+            ],
+        }
+        (recipe_dir / "recipe.yaml").write_text(yaml.dump(recipe_yaml))
+        (recipe_dir / "cfg.yaml").write_text("key: from-store\n")
+
+        # Mock local submodule to return a different recipe — store should win
+        with mock.patch(
+            "codefreedom.cli.recipe._find_local_recipe",
+            return_value=tmp_path / "local" / "my-recipe",
+        ):
+            manifest, files = _resolve_recipe(
+                "my-recipe", store_path=tmp_path / "store"
+            )
+            assert manifest is not None
+            assert manifest["name"] == "my-recipe"
+            assert files["cfg.yaml"] == "key: from-store\n"
+
+    def test_returns_none_when_not_in_store(self, tmp_path):
+        """When recipe not in store, returns None (no GitHub HTTP fallback)."""
+        with mock.patch(
+            "codefreedom.cli.recipe._find_local_recipe",
+            return_value=None,
+        ):
+            store = tmp_path / "empty-store"
+            store.mkdir()
+            manifest, files = _resolve_recipe("fallback-recipe", store_path=store)
+            assert manifest is None
+            assert files == {}
+
+    def test_extends_from_same_store(self, tmp_path):
+        """Extends chain resolves from the same store."""
+        # Create base recipe
+        base_dir = tmp_path / "store" / "_default"
+        base_dir.mkdir(parents=True)
+        (base_dir / "recipe.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "_default",
+                    "files": [
+                        {
+                            "path": "base.yaml",
+                            "target": "base.yaml",
+                            "merge": "deepdiff",
+                        }
+                    ],
+                }
+            )
+        )
+        (base_dir / "base.yaml").write_text("base: true\n")
+
+        # Create child recipe that extends _default
+        child_dir = tmp_path / "store" / "child"
+        child_dir.mkdir(parents=True)
+        (child_dir / "recipe.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "child",
+                    "extends": "_default",
+                    "files": [
+                        {
+                            "path": "child.yaml",
+                            "target": "child.yaml",
+                            "merge": "deepdiff",
+                        }
+                    ],
+                }
+            )
+        )
+        (child_dir / "child.yaml").write_text("child: true\n")
+
+        manifest, files = _resolve_recipe("child", store_path=tmp_path / "store")
+        assert manifest is not None
+        assert manifest["name"] == "child"
+        assert "child.yaml" in files

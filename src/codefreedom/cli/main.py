@@ -36,8 +36,9 @@ def main() -> None:
         help="Manage configuration recipes",
         description=(
             "Plan, apply, or list configuration recipes from"
-            " github.com/nilayparikh/codefreedom-recipes."
+            " github.com/nilayparikh/codefreedom-recipes or a custom store."
             " Without flags, installs the _default base recipe."
+            " Use --store to specify a GitHub URL or local folder."
         ),
     )
     recipe_group = recipe_parser.add_mutually_exclusive_group()
@@ -57,6 +58,13 @@ def main() -> None:
         "--list",
         action="store_true",
         help="List all available recipes from the repository",
+    )
+    recipe_parser.add_argument(
+        "--store",
+        type=str,
+        metavar="URL_OR_PATH",
+        default=None,
+        help="Custom recipe store: GitHub URL (e.g. https://github.com/owner/repo.git) or local folder path",
     )
 
     # ── claude subcommand ──────────────────────────────────────────────────
@@ -342,25 +350,27 @@ def main() -> None:
         init_action = getattr(args, "init_action", None)
 
         if init_action == "recipe":
+            store = getattr(args, "store", None)
+
             if args.list:
                 from codefreedom.cli.recipe import list_recipes
 
-                sys.exit(list_recipes())
+                sys.exit(list_recipes(store=store))
 
             if args.apply:
                 from codefreedom.cli.recipe import apply_plan
 
-                sys.exit(apply_plan(args.apply))
+                sys.exit(apply_plan(args.apply, store=store))
 
             if args.plan:
                 from codefreedom.cli.recipe import plan_recipe
 
-                sys.exit(plan_recipe(args.plan))
+                sys.exit(plan_recipe(args.plan, store=store))
 
             # No flags → install _default base recipe
             from codefreedom.cli.recipe import init_recipe
 
-            sys.exit(init_recipe("_default"))
+            sys.exit(init_recipe("_default", store=store))
 
         # Plain `cf init` — redirect to recipe system
         from codefreedom.cli.tool_init_utils import print_help_section
@@ -368,10 +378,11 @@ def main() -> None:
         print_help_section(
             "init",
             [
-                "Use:  cf init recipe              # install _default base recipe",
-                "      cf init recipe --list        # list available recipes",
-                "      cf init recipe --plan <name> # preview a recipe without applying",
-                "      cf init recipe <name>        # install a specific recipe",
+                "Use:  cf init recipe                    # install _default base recipe",
+                "      cf init recipe --list              # list available recipes",
+                "      cf init recipe --plan <name>       # preview a recipe without applying",
+                "      cf init recipe --store <path|url>  # use a custom recipe store",
+                "      cf init recipe <name>              # install a specific recipe",
             ],
             docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
             include_disclaimer=False,

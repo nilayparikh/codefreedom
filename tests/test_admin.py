@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import datetime
+import io
 import json
+from typing import Any
 import tarfile
 from pathlib import Path
 
@@ -38,8 +40,8 @@ from codefreedom.cli.admin import _parse_duration
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
-@pytest.fixture
-def cf_home(monkeypatch, tmp_path: Path) -> Path:
+@pytest.fixture(name="cf_home_dir")
+def _cf_home_fixture(monkeypatch, tmp_path: Path) -> Path:
     """Create a temporary CodeFreedom home with realistic config files."""
     home = tmp_path / "codefreedom-home"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(home))
@@ -188,8 +190,9 @@ class TestManifestSerialization:
 # ── Backup ────────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.usefixtures("cf_home_dir")
 class TestBackup:
-    def test_basic_backup(self, cf_home: Path):
+    def test_basic_backup(self):
         out_path, manifest = engine_backup(profile="test")
         assert out_path.exists()
         assert out_path.suffixes == [".tar", ".gz"]
@@ -198,7 +201,7 @@ class TestBackup:
         assert manifest.schema_version == CURRENT_SCHEMA_VERSION
         assert manifest.hostname
 
-    def test_all_categories(self, cf_home: Path):
+    def test_all_categories(self):
         _out_path, manifest = engine_backup()
         assert "profiles" in manifest.categories
         assert "proxy" in manifest.categories
@@ -207,7 +210,7 @@ class TestBackup:
         assert "sandbox" not in manifest.categories
         assert "proc" not in manifest.categories
 
-    def test_secrets_redacted(self, cf_home: Path):
+    def test_secrets_redacted(self):
         """Secrets files ARE backed up but with redacted values."""
         _out_path, manifest = engine_backup()
         all_paths = set()
@@ -221,34 +224,34 @@ class TestBackup:
         assert ".env.claude" in all_paths
         assert ".env.proxy" in all_paths
 
-    def test_correct_file_count(self, cf_home: Path):
+    def test_correct_file_count(self):
         """10 managed files should be backed up (8 regular + 2 redacted secrets)."""
         _out_path, manifest = engine_backup()
         total = sum(len(e) for e in manifest.contents.values())
         assert total == 10
 
-    def test_archive_is_valid_tar_gz(self, cf_home: Path):
+    def test_archive_is_valid_tar_gz(self):
         out_path, _manifest = engine_backup()
         # Verify it's a valid gzip + tar archive with manifest.json
         with tarfile.open(str(out_path), "r:gz") as tar:
             names = tar.getnames()
             assert "manifest.json" in names
 
-    def test_manifest_is_first_entry(self, cf_home: Path):
+    def test_manifest_is_first_entry(self):
         """manifest.json should be the first entry for fast extraction."""
         out_path, _manifest = engine_backup()
         with tarfile.open(str(out_path), "r:gz") as tar:
             names = tar.getnames()
             assert names[0] == "manifest.json"
 
-    def test_manifest_content(self, cf_home: Path):
+    def test_manifest_content(self):
         out_path, manifest = engine_backup()
         read_manifest = _read_manifest_from_archive(out_path)
         assert read_manifest.profile == manifest.profile
         assert read_manifest.created_at == manifest.created_at
         assert read_manifest.schema_version == CURRENT_SCHEMA_VERSION
 
-    def test_custom_output_path(self, cf_home: Path, tmp_path: Path):
+    def test_custom_output_path(self, tmp_path: Path):
         custom_path = tmp_path / "my-backup.tar.gz"
         out_path, manifest = engine_backup(output_path=custom_path, profile="custom")
         assert out_path == custom_path
@@ -264,12 +267,13 @@ class TestBackup:
 # ── List backups ──────────────────────────────────────────────────────────────
 
 
+@pytest.mark.usefixtures("cf_home_dir")
 class TestListBackups:
     def test_empty_dir(self, tmp_path: Path):
         summaries = list_backups(backup_dir=tmp_path / "nonexistent")
         assert summaries == []
 
-    def test_lists_backups(self, cf_home: Path):
+    def test_lists_backups(self):
         engine_backup(profile="p1")
         engine_backup(profile="p2")
         summaries = list_backups()
@@ -277,7 +281,7 @@ class TestListBackups:
         # Newest first
         assert summaries[0].created_at >= summaries[1].created_at
 
-    def test_summary_fields(self, cf_home: Path):
+    def test_summary_fields(self):
         engine_backup(profile="test-profile")
         s = list_backups()[0]
         assert s.filename.startswith("codefreedom-backup-test-profile-")
@@ -290,8 +294,9 @@ class TestListBackups:
 # ── Inspect ───────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.usefixtures("cf_home_dir")
 class TestInspect:
-    def test_inspect_valid(self, cf_home: Path):
+    def test_inspect_valid(self):
         out_path, _manifest = engine_backup()
         m = inspect_backup(out_path)
         assert m.schema_version == CURRENT_SCHEMA_VERSION
@@ -306,20 +311,20 @@ class TestInspect:
 
 
 class TestRestore:
-    def test_dry_run(self, cf_home: Path):
+    def test_dry_run(self, cf_home_dir: Path):
         out_path, _manifest = engine_backup()
-        target = cf_home.parent / "restore-target"
+        target = cf_home_dir.parent / "restore-target"
         target.mkdir()
-        diffs, manifest = engine_restore(out_path, target_dir=target, dry_run=True)
+        diffs, _ = engine_restore(out_path, target_dir=target, dry_run=True)
         assert len(diffs) > 0
         # Nothing should be written
         assert not (target / ".env.claude").exists()
 
-    def test_actual_restore(self, cf_home: Path):
+    def test_actual_restore(self, cf_home_dir: Path):
         out_path, _manifest = engine_backup()
-        target = cf_home.parent / "restore-target"
+        target = cf_home_dir.parent / "restore-target"
         target.mkdir()
-        diffs, _ = engine_restore(out_path, target_dir=target, dry_run=False)
+        engine_restore(out_path, target_dir=target, dry_run=False)
         assert (target / ".env.claude").exists()
         assert (target / "profiles/claude-code.yaml").exists()
         # Secrets ARE restored (with redacted values)
@@ -328,9 +333,9 @@ class TestRestore:
         secrets_content = (target / ".env.claude.secrets").read_text()
         assert "sk***c" in secrets_content
 
-    def test_diff_statuses(self, cf_home: Path):
+    def test_diff_statuses(self, cf_home_dir: Path):
         out_path, _manifest = engine_backup()
-        target = cf_home.parent / "restore-target"
+        target = cf_home_dir.parent / "restore-target"
         target.mkdir()
 
         # All ADD
@@ -346,22 +351,23 @@ class TestRestore:
         assert "MOD" in statuses
         assert "OK" in statuses
 
-    def test_invalid_schema_version(self, cf_home: Path, tmp_path: Path):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_invalid_schema_version(self, tmp_path: Path):
         """Create a backup with a future schema version and verify it's rejected."""
         out_path, _manifest = engine_backup()
         # Corrupt the manifest
         with tarfile.open(str(out_path), "r:gz") as tar:
-            data = json.loads(tar.extractfile("manifest.json").read())
+            entry = tar.extractfile("manifest.json")
+            assert entry is not None, "manifest.json not found in archive"
+            data = json.loads(entry.read())
         data["schema_version"] = 999
         # Rewrite
-        from io import BytesIO
-
-        buf = BytesIO()
+        buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w:gz") as tar:
             info = tarfile.TarInfo(name="manifest.json")
             payload = json.dumps(data).encode()
             info.size = len(payload)
-            tar.addfile(info, BytesIO(payload))
+            tar.addfile(info, io.BytesIO(payload))
 
         corrupted = tmp_path / "bad-backup.tar.gz"
         corrupted.write_bytes(buf.getvalue())
@@ -374,13 +380,15 @@ class TestRestore:
 
 
 class TestPrune:
-    def test_prune_nothing(self, cf_home: Path):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_prune_nothing(self):
         """Prune with no backups is a no-op."""
         result = prune_backups(keep=5)
         assert result.deleted == []
         assert result.kept == []
 
-    def test_prune_keep_2(self, cf_home: Path):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_prune_keep_2(self):
         for i in range(5):
             engine_backup(profile=f"test-{i}")
         result = prune_backups(keep=2)
@@ -388,24 +396,23 @@ class TestPrune:
         assert len(result.kept) == 2
         assert result.space_reclaimed > 0
 
-    def test_prune_keep_all(self, cf_home: Path):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_prune_keep_all(self):
         for i in range(3):
             engine_backup(profile=f"test-{i}")
         result = prune_backups(keep=10)
         assert len(result.deleted) == 0
         assert len(result.kept) == 3
 
-    def test_prune_older_than(self, cf_home: Path, tmp_path: Path):
+    def test_prune_older_than(self, cf_home_dir: Path):
         """Create a backup with an old timestamp and a recent one."""
         # Create a backup with old date by writing the archive directly
         old_backup = (
-            cf_home / "backup" / "codefreedom-backup-old-20250101-000000-oldhost.tar.gz"
+            cf_home_dir
+            / "backup"
+            / "codefreedom-backup-old-20250101-000000-oldhost.tar.gz"
         )
         old_backup.parent.mkdir(parents=True, exist_ok=True)
-        import json
-        import io
-        import tarfile
-
         data = json.dumps(
             {
                 "schema_version": 1,
@@ -495,7 +502,8 @@ class TestEncryption:
         with pytest.raises(ValueError, match="CodeFreedom"):
             _decrypt_data(b"garbage data", "pass")
 
-    def test_encrypted_backup_has_full_secrets(self, cf_home: Path):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_encrypted_backup_has_full_secrets(self):
         """With passphrase, secrets are not redacted."""
         out_path, manifest = engine_backup(passphrase="test-pass")
         assert manifest.secrets_redacted is False
@@ -503,36 +511,38 @@ class TestEncryption:
         # Archive should have encryption magic header
         assert _is_encrypted_file(out_path)
 
-    def test_encrypted_backup_needs_passphrase(self, cf_home: Path):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_encrypted_backup_needs_passphrase(self):
         out_path, _manifest = engine_backup(passphrase="test-pass")
         # Without passphrase, should error
         with pytest.raises(ValueError, match="passphrase"):
             _read_manifest_from_archive(out_path)
 
-    def test_encrypted_restore(self, cf_home: Path):
+    def test_encrypted_restore(self, cf_home_dir: Path):
         out_path, _manifest = engine_backup(passphrase="secret-123")
-        target = cf_home.parent / "enc-restore-target"
+        target = cf_home_dir.parent / "enc-restore-target"
         target.mkdir()
-        diffs, manifest = engine_restore(
-            out_path, target_dir=target, passphrase="secret-123"
-        )
+        engine_restore(out_path, target_dir=target, passphrase="secret-123")
         assert (target / ".env.claude").exists()
         assert (target / ".env.claude.secrets").exists()
         # Full secret values should be present
         secrets_content = (target / ".env.claude.secrets").read_text()
         assert "sk-secret-abc" in secrets_content  # full value, not redacted
 
-    def test_encrypted_without_passphrase_fails(self, cf_home: Path):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_encrypted_without_passphrase_fails(self):
         out_path, _manifest = engine_backup(passphrase="test-pass")
         with pytest.raises(ValueError, match="passphrase"):
             engine_restore(out_path, dry_run=True)
 
-    def test_inspect_encrypted(self, cf_home: Path):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_inspect_encrypted(self):
         out_path, _manifest = engine_backup(passphrase="inspect-pass")
         manifest = inspect_backup(out_path, passphrase="inspect-pass")
         assert manifest.schema_version == CURRENT_SCHEMA_VERSION
 
-    def test_inspect_encrypted_without_passphrase(self, cf_home: Path):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_inspect_encrypted_without_passphrase(self):
         out_path, _manifest = engine_backup(passphrase="inspect-pass")
         with pytest.raises(ValueError, match="passphrase"):
             inspect_backup(out_path)
@@ -557,10 +567,10 @@ class TestPostgresDump:
         """PG data directory is also categorized as 'database'."""
         assert _categorize("pg/data/somefile") == "database"
 
-    def test_managed_paths_includes_pg(self, cf_home: Path):
+    def test_managed_paths_includes_pg(self, cf_home_dir: Path):
         """PG backup dir within managed scope should be collected."""
         # Create a test pg dump file
-        pg_backup = cf_home / "pg" / "backup"
+        pg_backup = cf_home_dir / "pg" / "backup"
         pg_backup.mkdir(parents=True, exist_ok=True)
         (pg_backup / "codefreedom-pgdump-20260609-120000.dump").write_text(
             "PG_DUMP_CONTENT"
@@ -575,38 +585,14 @@ class TestPostgresDump:
         assert "pg/backup/codefreedom-pgdump-20260609-120000.dump" in all_paths
         assert "database" in manifest.categories
 
-    def test_backup_with_pg_dump_success(self, cf_home: Path, monkeypatch):
+    def test_backup_with_pg_dump_success(self, cf_home_dir: Path, monkeypatch):
         """Simulate a successful pg_dump and verify the dump is included."""
-        pg_backup = cf_home / "pg" / "backup"
+        pg_backup = cf_home_dir / "pg" / "backup"
         pg_backup.mkdir(parents=True, exist_ok=True)
 
-        # Mock docker ps to return a fake container
-        def mock_run_find(*args, **kwargs):
-            import subprocess
-
-            if args and args[0] and "docker" in str(args[0]) and "ps" in str(args[0]):
-                result = subprocess.CompletedProcess(
-                    args, returncode=0, stdout="litellm-codefreedom-0000\n", stderr=""
-                )
-                return result
-            return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
-
-        def mock_run_dump(*args, **kwargs):
-            import subprocess
-
-            if "pg_dump" in str(args):
-                # Simulate pg_dump by writing a file to the backup dir
-                dump_path = pg_backup / "codefreedom-pgdump-20260609-120000.dump"
-                dump_path.write_text("SIMULATED_PG_DUMP")
-                return subprocess.CompletedProcess(
-                    args, returncode=0, stdout="", stderr=""
-                )
-            return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
-
-        # First call finds the container, second call runs pg_dump
         call_count = [0]
 
-        def mock_subprocess_run(*args, **kwargs):
+        def mock_subprocess_run(*args: Any, **_kwargs: Any) -> Any:
             import subprocess
 
             nonlocal call_count
@@ -643,16 +629,13 @@ class TestPostgresDump:
         assert len(pg_dump_files) == 1, f"Expected 1 pg dump file, got {pg_dump_files}"
         assert "database" in manifest.categories
 
-    def test_backup_with_skip_pg_dump(self, cf_home: Path, monkeypatch):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_backup_with_skip_pg_dump(self, monkeypatch):
         """skip_pg_dump=True should skip the pg_dump call entirely."""
-        pg_backup = cf_home / "pg" / "backup"
-        pg_backup.mkdir(parents=True, exist_ok=True)
-
         called = [False]
 
-        def mock_run(*args, **kwargs):
+        def mock_run(*_: Any, **__: Any) -> None:
             called[0] = True
-            return None  # Would be subprocess.CompletedProcess but we just check call
 
         monkeypatch.setattr("codefreedom.admin._dump_postgresql", mock_run)
 
@@ -661,13 +644,13 @@ class TestPostgresDump:
         # _dump_postgresql should NOT have been called
         assert called[0] is False
 
-    def test_backup_without_skip_pg_dump_calls_dump(self, cf_home: Path, monkeypatch):
+    @pytest.mark.usefixtures("cf_home_dir")
+    def test_backup_without_skip_pg_dump_calls_dump(self, monkeypatch):
         """skip_pg_dump=False (default) should call _dump_postgresql."""
         called = [False]
 
-        def mock_dump(*args, **kwargs):
+        def mock_dump(*_: Any, **__: Any) -> None:
             called[0] = True
-            return None
 
         monkeypatch.setattr("codefreedom.admin._dump_postgresql", mock_dump)
 
@@ -678,25 +661,8 @@ class TestPostgresDump:
     def test_find_litellm_container_no_docker(self, monkeypatch):
         """_find_litellm_container returns None when docker is not available."""
 
-        def mock_run(*args, **kwargs):
+        def mock_run(*args: Any, **_kwargs: Any) -> Any:
             raise FileNotFoundError("docker not found")
-
-        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
-        result = _find_litellm_container()
-        assert result is None
-
-    def test_find_litellm_container_not_running(self, monkeypatch):
-        """_find_litellm_container returns None when no container is running."""
-
-        def mock_run(*args, **kwargs):
-            import subprocess
-
-            return subprocess.CompletedProcess(
-                args[0] if args else [],
-                returncode=0,
-                stdout="",
-                stderr="",
-            )
 
         monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
         result = _find_litellm_container()
@@ -705,7 +671,7 @@ class TestPostgresDump:
     def test_find_litellm_container_running(self, monkeypatch):
         """_find_litellm_container returns container name when running."""
 
-        def mock_run(*args, **kwargs):
+        def mock_run(*args: Any, **_kwargs: Any) -> Any:
             import subprocess
 
             return subprocess.CompletedProcess(
@@ -719,18 +685,33 @@ class TestPostgresDump:
         result = _find_litellm_container()
         assert result == "litellm-codefreedom-0000"
 
-    def test_dump_postgresql_no_container(self, cf_home: Path, monkeypatch):
+    def test_find_litellm_container_not_running(self, monkeypatch):
+        """_find_litellm_container returns None when no container is running."""
+
+        def mock_run(*args: Any, **_kwargs: Any) -> Any:
+            import subprocess
+
+            return subprocess.CompletedProcess(
+                args[0] if args else [],
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        result = _find_litellm_container()
+        assert result is None
+
+    def test_dump_postgresql_no_container(self, cf_home_dir: Path, monkeypatch):
         """_dump_postgresql returns None when no container is running."""
         monkeypatch.setattr("codefreedom.admin._find_litellm_container", lambda: None)
-        pg_backup = cf_home / "pg" / "backup"
+        pg_backup = cf_home_dir / "pg" / "backup"
         result = _dump_postgresql(pg_backup)
         assert result is None
 
-    def test_dump_postgresql_success(self, cf_home: Path, monkeypatch):
+    def test_dump_postgresql_success(self, cf_home_dir: Path, monkeypatch):
         """_dump_postgresql returns the dump path on success."""
-        import datetime
-
-        pg_backup = cf_home / "pg" / "backup"
+        pg_backup = cf_home_dir / "pg" / "backup"
         pg_backup.mkdir(parents=True, exist_ok=True)
 
         frozen_now = datetime.datetime(
@@ -754,7 +735,7 @@ class TestPostgresDump:
             ),
         )
 
-        def mock_run(*args, **kwargs):
+        def mock_run(*args: Any, **_kwargs: Any) -> Any:
             import subprocess
 
             if args and "pg_dump" in str(args):
@@ -781,9 +762,9 @@ class TestPostgresDump:
         assert result.exists()
         assert _PG_DUMP_PREFIX in result.name
 
-    def test_dump_postgresql_failure(self, cf_home: Path, monkeypatch):
+    def test_dump_postgresql_failure(self, cf_home_dir: Path, monkeypatch):
         """_dump_postgresql returns None when pg_dump fails."""
-        pg_backup = cf_home / "pg" / "backup"
+        pg_backup = cf_home_dir / "pg" / "backup"
         pg_backup.mkdir(parents=True, exist_ok=True)
 
         monkeypatch.setattr(
@@ -791,7 +772,7 @@ class TestPostgresDump:
             lambda: "litellm-codefreedom-0000",
         )
 
-        def mock_run(*args, **kwargs):
+        def mock_run(*args: Any, **_kwargs: Any) -> Any:
             import subprocess
 
             return subprocess.CompletedProcess(

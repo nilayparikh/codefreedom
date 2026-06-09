@@ -216,7 +216,7 @@ class FileDiff:
 _MANAGED_PATHS: List[str] = [
     "profiles",
     "proxy",
-    "pg",
+    "pg/backup",
     ".env.claude",
     ".env.claude.secrets",
     ".env.proxy",
@@ -228,6 +228,22 @@ def _is_managed(rel_path: str) -> bool:
     """Return True if *rel_path* is within the managed backup scope."""
     for prefix in _MANAGED_PATHS:
         if rel_path == prefix or rel_path.startswith(prefix + "/"):
+            return True
+    return False
+
+
+def _could_contain_managed(rel_path: str) -> bool:
+    """Return True if *rel_path* could be a parent directory of a managed path.
+
+    This is used during directory traversal to decide whether to descend
+    into a directory. A directory ``pg`` could contain the managed child
+    ``pg/backup``, so we need to enter it even though ``pg`` itself is not
+    a managed path.
+    """
+    if _is_managed(rel_path):
+        return True
+    for prefix in _MANAGED_PATHS:
+        if prefix.startswith(rel_path + "/"):
             return True
     return False
 
@@ -301,7 +317,7 @@ def _collect_files(
         root_rel = Path(root).relative_to(source_dir)
 
         # Prune: only descend into directories that could contain managed files
-        dirs[:] = [d for d in dirs if _is_managed(str(root_rel / d)) or _is_managed(d)]
+        dirs[:] = [d for d in dirs if _could_contain_managed(str(root_rel / d))]
 
         for filename in sorted(files):
             full_path = Path(root) / filename
