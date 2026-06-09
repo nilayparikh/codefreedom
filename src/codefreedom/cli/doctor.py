@@ -30,10 +30,12 @@ import sys
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from codefreedom.cli.docker_utils import is_port_available
+from codefreedom.cli.docker_utils import (
+    get_codefreedom_container_ports,
+    is_port_available,
+)
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint as _eprint, load_dotenv
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Check result types
@@ -706,17 +708,23 @@ def _check_web_bridge_running() -> CheckResult:
 
 @_section("Port Availability")
 def _check_chrome_cdp_port() -> CheckResult:
-    return _check_port(9222, "Chrome CDP", "~/.codefreedom/profiles/chrome.yaml (chrome.port)")
+    return _check_port(
+        9222, "Chrome CDP", "~/.codefreedom/profiles/chrome.yaml (chrome.port)"
+    )
 
 
 @_section("Port Availability")
 def _check_chrome_mcp_port() -> CheckResult:
-    return _check_port(9223, "Chrome MCP", "~/.codefreedom/profiles/chrome.yaml (chrome.mcp_port)")
+    return _check_port(
+        9223, "Chrome MCP", "~/.codefreedom/profiles/chrome.yaml (chrome.mcp_port)"
+    )
 
 
 @_section("Port Availability")
 def _check_web_port() -> CheckResult:
-    return _check_port(8420, "Web search (Camoufox)", "~/.codefreedom/profiles/web.yaml (web.port)")
+    return _check_port(
+        8420, "Web search (Camoufox)", "~/.codefreedom/profiles/web.yaml (web.port)"
+    )
 
 
 @_section("Port Availability")
@@ -730,23 +738,47 @@ def _check_proxy_port() -> CheckResult:
         port = int(port_str)
     except (ValueError, TypeError):
         port = 4000
-    return _check_port(port, "LiteLLM proxy", "~/.codefreedom/.env.proxy (LITELLM_PORT)")
+    return _check_port(
+        port, "LiteLLM proxy", "~/.codefreedom/.env.proxy (LITELLM_PORT)"
+    )
 
 
 def _check_port(port: int, label: str, config_hint: str) -> CheckResult:
     """Check if a TCP port is available for binding.
 
-    Docker is the single source of truth — if the container is running,
-    its port is expected to be in use.  All container names are
-    deterministic from config (no /proc tracking).
+    If the port is in use but belongs to a known CodeFreedom container
+    (e.g. Chrome, Web, proxy), it is reported as OK rather than a
+    warning — our own tools are expected to listen on those ports.
     """
-    available = is_port_available(port)
-    if available:
+    if is_port_available(port):
         return _ok(f"Port {port} ({label}) is available")
+
+    cf_ports = get_codefreedom_container_ports()
+    if port in cf_ports:
+        tool_label = _cf_tool_label_for_port(port)
+        if tool_label:
+            return _ok(
+                f"Port {port} ({label}) — in use by {tool_label} (CodeFreedom container)"
+            )
+        return _ok(f"Port {port} ({label}) — in use by a CodeFreedom container")
+
     return _warn(
         f"Port {port} ({label}) is already in use",
         f"Change the port in: {config_hint}",
     )
+
+
+# Map of well-known tool ports to friendly labels for doctor output.
+_CF_TOOL_PORT_LABELS: dict[int, str] = {
+    9222: "Chrome browser",
+    9223: "Chrome MCP",
+    8420: "Web search (Camoufox)",
+}
+
+
+def _cf_tool_label_for_port(port: int) -> str | None:
+    """Return a friendly label for a well-known CodeFreedom tool port."""
+    return _CF_TOOL_PORT_LABELS.get(port)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
