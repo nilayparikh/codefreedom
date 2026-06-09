@@ -1379,6 +1379,18 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
         print("    1. Start the proxy:  cf proxy start")
         print("    2. Launch the agent: cf cc")
     print("    4. Customize:         cf proxy start --port 4000")
+
+    # ── Sandbox permissions ────────────────────────────────────────────
+    cf_dir_str = str(cf_dir)
+    print()
+    print("  PERMISSIONS — Docker sandbox:")
+    print("    Sandbox containers run with minimal permissions (no root).")
+    print("    Grant ownership of the CodeFreedom data directory so the")
+    print("    container can read and write config:")
+    print()
+    print(f"      sudo chown -R $(id -u):$(id -g) {cf_dir_str}")
+    print()
+    print("    5. Run the command above if you plan to use --sandbox mode")
     print("  " + "─" * 55)
     print()
 

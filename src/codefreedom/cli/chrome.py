@@ -80,6 +80,7 @@ def _load_profile() -> dict:
         "port": _DEFAULT_PORT,
         "mcp_port": 9223,
         "mcp_path": "/mcp",
+        "cdp_proxy_port": 9220,
         "data_dir": _default_data_dir(),
         "env": {},
     }
@@ -130,6 +131,11 @@ def _load_profile() -> dict:
             pass
     if isinstance(chrome_cfg.get("mcp_port"), int) and chrome_cfg["mcp_port"] > 0:
         settings["mcp_port"] = chrome_cfg["mcp_port"]
+    if (
+        isinstance(chrome_cfg.get("cdp_proxy_port"), int)
+        and chrome_cfg["cdp_proxy_port"] > 0
+    ):
+        settings["cdp_proxy_port"] = chrome_cfg["cdp_proxy_port"]
     if isinstance(chrome_cfg.get("mcp_path"), str) and chrome_cfg["mcp_path"]:
         settings["mcp_path"] = chrome_cfg["mcp_path"]
     if isinstance(chrome_cfg.get("data_dir"), str) and chrome_cfg["data_dir"]:
@@ -238,8 +244,23 @@ def start(settings: dict) -> int:
     if "MCP_PORT" not in env_vars:
         env_flags.extend(["-e", f"MCP_PORT={mcp_port}"])
 
+    # Set CDP_PROXY_PORT for the socat forwarder.  socat listens on
+    # this port (0.0.0.0) inside the container and forwards to Chrome's
+    # 127.0.0.1:CHROME_DEBUG_PORT.  Using a distinct port avoids
+    # conflict with Chrome's own bind to CHROME_DEBUG_PORT.
+    cdp_proxy_port = settings.get("cdp_proxy_port", 9220)
+    if "CDP_PROXY_PORT" not in env_vars:
+        env_flags.extend(["-e", f"CDP_PROXY_PORT={cdp_proxy_port}"])
+
     # Start container — headless Chrome + MCP proxy.
-    # --network host avoids NAT issues with CDP on arm64 Chromium builds.
+    # Uses explicit port mapping (not --network host) so the ports are
+    # visible in `docker inspect` / `docker ps` and the container is
+    # reachable from other Docker containers (e.g. sandboxes) via the
+    # Docker bridge network.
+    # CDP is exposed via a socat forwarder inside the container
+    # (0.0.0.0:CDP_PROXY_PORT -> 127.0.0.1:CHROME_DEBUG_PORT) because
+    # Chrome 149+ ignores --remote-debugging-address=0.0.0.0 and only
+    # binds to localhost.
     # --shm-size=512m prevents Chrome from crashing on /dev/shm in containers.
     eprint(f"[CHROME] Starting container '{container_name}'...")
     eprint(f"[CHROME]   CDP port: {port}  MCP port: {mcp_port}")
@@ -250,11 +271,13 @@ def start(settings: dict) -> int:
             "-d",
             "--name",
             container_name,
-            "--network",
-            "host",
             "--shm-size=512m",
             "--restart",
             "unless-stopped",
+            "-p",
+            f"127.0.0.1:{port}:{cdp_proxy_port}",
+            "-p",
+            f"127.0.0.1:{mcp_port}:{mcp_port}",
             "-v",
             f"{resolved_data}:/data/chrome",
             *env_flags,
