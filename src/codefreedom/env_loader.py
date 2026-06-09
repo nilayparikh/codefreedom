@@ -1,46 +1,69 @@
-"""Environment variable loading with .env and .env.secrets support.
+"""Environment variable loading with .env, .env.secrets, and .env.user support.
 
-Three tiers of env files, loaded in precedence order, then system env on top:
+Five tiers of env files, loaded in precedence order, then system env on top.
+Within the loading order, ALL config files (.env.*) are loaded first, then ALL
+secrets files (.env.*.secrets), then the user override file (.env.user),
+then system env. This ensures secrets always override config, and user
+overrides always win short of the host OS environment.
 
   Tier 1: Component-specific (loaded only for the matching subcommand)
-    ~/.codefreedom/.env.claude / .env.claude.secrets   — codefreedom claude
-    ~/.codefreedom/.env.proxy  / .env.proxy.secrets    — codefreedom proxy
+    ~/.codefreedom/.env.claude              — codefreedom claude
+    ~/.codefreedom/.env.proxy               — codefreedom proxy
 
   Tier 2: Shared config (loaded for ALL components — claude, proxy, tools)
-    ~/.codefreedom/.env / .env.secrets
+    ~/.codefreedom/.env
 
-  Tier 3: Workspace overrides (loaded for ALL components)
-    {workspace_dir}/.env / .env.secrets
+  Tier 3: Workspace config (loaded for ALL components)
+    {workspace_dir}/.env
 
-  Tier 4: System environment (highest precedence, always wins)
+  Tier 4: Component-specific secrets
+    ~/.codefreedom/.env.claude.secrets      — codefreedom claude
+    ~/.codefreedom/.env.proxy.secrets       — codefreedom proxy
+
+  Tier 5: Shared secrets
+    ~/.codefreedom/.env.secrets
+
+  Tier 6: Workspace secrets
+    {workspace_dir}/.env.secrets
+
+  Tier 7: User overrides (highest config-file priority)
+    {codefreedom_dir}/.env.user             — created once by recipe, never
+                                               touched by recipes again.
+                                               Manually edited by the user to
+                                               override any parameter.
+
+  Tier 8: System environment (always wins)
     os.environ
 
 Full resolution order (later sources override earlier):
 
   codefreedom claude:
-    1. ~/.codefreedom/.env.claude           (skip if missing)
-    2. ~/.codefreedom/.env.claude.secrets   (skip if missing)
-    3. ~/.codefreedom/.env                  (shared — skip if missing)
-    4. ~/.codefreedom/.env.secrets          (shared — skip if missing)
-    5. {workspace_dir}/.env                 (skip if missing)
-    6. {workspace_dir}/.env.secrets         (skip if missing)
-    7. os.environ / exported vars           (always wins)
+    1. ~/.codefreedom/.env.claude           (component config, skip if missing)
+    2. ~/.codefreedom/.env                  (shared config, skip if missing)
+    3. {workspace_dir}/.env                 (workspace config, skip if missing)
+    4. ~/.codefreedom/.env.claude.secrets   (component secrets, skip if missing)
+    5. ~/.codefreedom/.env.secrets          (shared secrets, skip if missing)
+    6. {workspace_dir}/.env.secrets         (workspace secrets, skip if missing)
+    7. {codefreedom_dir}/.env.user          (user overrides, skip if missing)
+    8. os.environ / exported vars           (always wins)
 
   codefreedom proxy:
-    1. ~/.codefreedom/.env.proxy            (skip if missing)
-    2. ~/.codefreedom/.env.proxy.secrets    (skip if missing)
-    3. ~/.codefreedom/.env                  (shared — skip if missing)
-    4. ~/.codefreedom/.env.secrets          (shared — skip if missing)
-    5. {workspace_dir}/.env                 (skip if missing)
-    6. {workspace_dir}/.env.secrets         (skip if missing)
-    7. os.environ / exported vars           (always wins)
+    1. ~/.codefreedom/.env.proxy            (component config, skip if missing)
+    2. ~/.codefreedom/.env                  (shared config, skip if missing)
+    3. {workspace_dir}/.env                 (workspace config, skip if missing)
+    4. ~/.codefreedom/.env.proxy.secrets    (component secrets, skip if missing)
+    5. ~/.codefreedom/.env.secrets          (shared secrets, skip if missing)
+    6. {workspace_dir}/.env.secrets         (workspace secrets, skip if missing)
+    7. {codefreedom_dir}/.env.user          (user overrides, skip if missing)
+    8. os.environ / exported vars           (always wins)
 
   codefreedom tools (chrome, web, etc.):
-    1. ~/.codefreedom/.env                  (shared — skip if missing)
-    2. ~/.codefreedom/.env.secrets          (shared — skip if missing)
-    3. {workspace_dir}/.env                 (skip if missing)
-    4. {workspace_dir}/.env.secrets         (skip if missing)
-    5. os.environ / exported vars           (always wins)
+    1. ~/.codefreedom/.env                  (shared config, skip if missing)
+    2. {workspace_dir}/.env                 (workspace config, skip if missing)
+    3. ~/.codefreedom/.env.secrets          (shared secrets, skip if missing)
+    4. {workspace_dir}/.env.secrets         (workspace secrets, skip if missing)
+    5. {codefreedom_dir}/.env.user          (user overrides, skip if missing)
+    6. os.environ / exported vars           (always wins)
 """
 
 from __future__ import annotations
@@ -130,17 +153,18 @@ def load_env_chain(
                    and workspace envs are loaded (used by tools).
 
     Resolution order (later sources override earlier):
-      Component-specific (if component is set):
-        1. ~/.codefreedom/.env.<component>           (skip if missing)
-        2. ~/.codefreedom/.env.<component>.secrets   (skip if missing)
-      Shared (always loaded):
-        3. ~/.codefreedom/.env                        (skip if missing)
-        4. ~/.codefreedom/.env.secrets                (skip if missing)
-      Workspace (always loaded):
-        5. workspace_dir/.env                         (skip if missing)
-        6. workspace_dir/.env.secrets                 (skip if missing)
+      Config files (lowest priority):
+        1. ~/.codefreedom/.env.<component>           (component config, skip if missing)
+        2. ~/.codefreedom/.env                        (shared config, skip if missing)
+        3. workspace_dir/.env                         (workspace config, skip if missing)
+      Secrets files (override configs):
+        4. ~/.codefreedom/.env.<component>.secrets    (component secrets, skip if missing)
+        5. ~/.codefreedom/.env.secrets                (shared secrets, skip if missing)
+        6. workspace_dir/.env.secrets                 (workspace secrets, skip if missing)
+      User overrides (override everything except system env):
+        7. {codefreedom_dir}/.env.user                (user overrides, skip if missing)
       System (always wins):
-        7. process environment                        (highest precedence)
+        8. process environment                        (highest precedence)
 
     Returns a merged dict. Later sources override earlier ones.
     """
@@ -151,33 +175,41 @@ def load_env_chain(
 
     env_sources: list[tuple[Path, str, bool]] = []
 
-    # Tier 1: Component-specific (only for the matching subcommand)
+    # ── Tier 1: ALL config files first (lowest priority) ───────────────────
+
+    # Component-specific config
     if component:
-        env_sources.extend(
-            [
-                (codefreedom_dir / f".env.{component}", f"{component} config", True),
-                (
-                    codefreedom_dir / f".env.{component}.secrets",
-                    f"{component} secrets",
-                    True,
-                ),
-            ]
+        env_sources.append(
+            (codefreedom_dir / f".env.{component}", f"{component} config", True),
         )
 
-    # Tier 2: Shared config (loaded for ALL components)
-    env_sources.extend(
-        [
-            (codefreedom_dir / ".env", "shared config", True),
-            (codefreedom_dir / ".env.secrets", "shared secrets", True),
-        ]
-    )
+    # Shared config
+    env_sources.append((codefreedom_dir / ".env", "shared config", True))
 
-    # Tier 3: Workspace overrides
-    env_sources.extend(
-        [
-            (workspace_dir / ".env", "workspace config", True),
-            (workspace_dir / ".env.secrets", "workspace secrets", True),
-        ]
+    # Workspace config
+    env_sources.append((workspace_dir / ".env", "workspace config", True))
+
+    # ── Tier 2: ALL secrets files (override configs) ───────────────────────
+
+    # Component-specific secrets
+    if component:
+        env_sources.append(
+            (
+                codefreedom_dir / f".env.{component}.secrets",
+                f"{component} secrets",
+                True,
+            ),
+        )
+
+    # Shared secrets
+    env_sources.append((codefreedom_dir / ".env.secrets", "shared secrets", True))
+
+    # Workspace secrets
+    env_sources.append((workspace_dir / ".env.secrets", "workspace secrets", True))
+
+    # ── Tier 3: User overrides (just below system env — highest config priority)
+    env_sources.append(
+        (codefreedom_dir / ".env.user", "user overrides", True),
     )
 
     for path, label, _optional in env_sources:

@@ -229,10 +229,11 @@ RUN python patch_retry_after_type.py
 # /app/litellm-config/plugins/reasoning-efforts/reasoning_efforts_mapping.py
 # (the path relative to config.yaml's directory).  The compose file
 # bind-mounts the host config directory over /app/litellm-config at
-# runtime which shadows any baked files, so the entrypoint copies this
-# module into place on every container start.  The YAML config table
-# lives on the host (user-editable); the .py code is immutable (baked
-# into the image).
+# runtime which shadows any baked files, so the entrypoint creates a
+# symlink from the mounted dir to this baked location on every container
+# start (instead of copying, which would write the .py onto the host).
+# The YAML config table lives on the host (user-editable); the .py code
+# is immutable (baked into the image).
 COPY plugins/reasoning_efforts_mapping.py /app/litellm-plugins/reasoning_efforts_mapping.py
 
 # Install Node.js + npm so we can run the Prisma CLI natively.  The
@@ -328,8 +329,8 @@ COPY --from=pg-builder      /usr/local/pgsql /usr/local/pgsql
 COPY --from=litellm-builder /install         /usr/local
 
 # Pull in the baked reasoning-efforts mapping plugin.  The entrypoint
-# copies this into the host-mounted config directory at container start
-# so LiteLLM's callback loader can find it.
+# symlinks this into the host-mounted config directory at container
+# start so LiteLLM's callback loader can find it (no cp to host).
 COPY --from=litellm-builder --chown=1000:1000 \
     /app/litellm-plugins/ /app/litellm-plugins/
 

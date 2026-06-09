@@ -1,11 +1,11 @@
-"""Pydantic model for github.json — GitHub MCP Server tool profile."""
+"""Pydantic model for github.yaml — GitHub MCP Server tool profile."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import yaml
 from pydantic import BaseModel, Field
 
 
@@ -20,15 +20,17 @@ class GithubSettings(BaseModel, extra="forbid"):
 
 
 class GithubConfig(BaseModel, extra="forbid"):
-    """Schema for github.json — configures the GitHub MCP Server container."""
+    """Schema for github.yaml — configures the GitHub MCP Server container."""
 
     description: Optional[str] = None
     notes: Optional[List[str]] = None
     github: GithubSettings
 
     @classmethod
-    def from_json(cls, path: Path) -> "GithubConfig":
-        """Read a JSON file and validate against the model."""
+    def from_yaml(cls, path: Path) -> "GithubConfig":
+        """Read a YAML file and validate against the model."""
         with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            raise ValueError(f"Expected a mapping in {path}, got {type(data).__name__}")
         return cls.model_validate(data)

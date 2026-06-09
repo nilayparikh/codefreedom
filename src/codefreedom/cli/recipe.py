@@ -24,8 +24,8 @@ containing a ``recipe.yaml`` manifest:
       - path: .env.claude.example
         target: .env.claude
         merge: env
-      - path: profiles/claude-code.json
-        target: profiles/claude-code.json
+      - path: profiles/claude-code.yaml
+        target: profiles/claude-code.yaml
         merge: deepdiff
       - path: proxy/config/config.yaml
         target: proxy/config/config.yaml
@@ -60,6 +60,7 @@ Orphan detection:
 
 from __future__ import annotations
 
+import datetime
 import json
 import secrets
 import urllib.error
@@ -72,6 +73,7 @@ import yaml
 from codefreedom.admin import backup as cf_backup
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint
+from codefreedom.interpolate import interpolate_all_strings
 from pydantic import ValidationError
 
 from codefreedom.schemas.recipe import RecipeConfig
@@ -140,7 +142,8 @@ def init_recipe(name: str) -> int:
            key-by-key (.env), preserving existing values.
       4. Detect and delete orphaned files (files from a previous recipe
          that aren't in the new recipe's file list).
-      5. Print a "What's Next" summary with required secrets and next steps.
+      5. Ensure ``.env.user`` exists (created once, never touched again).
+      6. Print a "What's Next" summary with required secrets and next steps.
     """
     cf_dir = get_codefreedom_dir()
 
@@ -180,6 +183,9 @@ def init_recipe(name: str) -> int:
 
     # ── 2b. Orphan detection — delete files from previous recipe(s) ────
     _remove_orphans(all_managed, cf_dir)
+
+    # ── 2c. Ensure .env.user exists (user-managed overrides file) ──────
+    _ensure_user_env(cf_dir)
 
     # ── 3. What's Next summary ──────────────────────────────────────────
     _print_summary(manifest, cf_dir)
@@ -240,6 +246,7 @@ def plan_recipe(name: str) -> int:
 
     # ── 3. Compute what would happen to each file ──────────────────────
     plan_id = _generate_plan_id()
+    tool_home = Path.home() / ".codefreedom"
     plans_dir = cf_dir / "plans" / plan_id
     plans_dir.mkdir(parents=True, exist_ok=True)
 
@@ -247,7 +254,11 @@ def plan_recipe(name: str) -> int:
     patch_files: list[dict] = []
 
     for entry in plan_entries:
-        dst = cf_dir / entry["target"]
+        # Tool profiles live in ~/.codefreedom/, everything else respects CODEFREEDOM_HOME.
+        if entry["target"] in _TOOL_PROFILE_PATHS:
+            dst = tool_home / entry["target"]
+        else:
+            dst = cf_dir / entry["target"]
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         if not dst.exists():
@@ -308,8 +319,12 @@ def plan_recipe(name: str) -> int:
     managed_targets = {e["target"] for e in plan_entries}
     orphan_dirs: set[Path] = set()
     for e in plan_entries:
-        parent = (cf_dir / e["target"]).parent
-        if parent != cf_dir:  # Skip root cf_dir to avoid false positives
+        if e["target"] in _TOOL_PROFILE_PATHS:
+            parent = tool_home / e["target"]
+        else:
+            parent = cf_dir / e["target"]
+        parent = parent.parent
+        if parent != cf_dir and parent != tool_home:  # Skip root dirs
             orphan_dirs.add(parent)
 
     for parent_dir in sorted(orphan_dirs):
@@ -318,7 +333,13 @@ def plan_recipe(name: str) -> int:
         for child in sorted(parent_dir.iterdir()):
             if not child.is_file():
                 continue
-            rel = child.relative_to(cf_dir).as_posix()
+            try:
+                rel = child.relative_to(cf_dir).as_posix()
+            except ValueError:
+                try:
+                    rel = child.relative_to(tool_home).as_posix()
+                except ValueError:
+                    continue
             if rel not in managed_targets:
                 patch_files.append(
                     {
@@ -356,11 +377,17 @@ def plan_recipe(name: str) -> int:
     if delete_count:
         print(f"[plan]   {delete_count} files to delete")
     print("[plan]")
-    print("[plan] Files:")
+    print(f"[plan]   {'':>8} {'SOURCE':12} DESTINATION")
+    print(f"[plan]   {'-'*8} {'-'*12} {'-'*75}")
     for pf in patch_files:
         action = pf["action"].upper().ljust(8)
         src_label = pf["source"][:12].ljust(12)
-        print(f"[plan]   {action} {src_label} {pf['target']}")
+        target = pf["target"]
+        if target in _TOOL_PROFILE_PATHS:
+            dest = tool_home / target
+        else:
+            dest = cf_dir / target
+        print(f"[plan]   {action} {src_label} {dest}")
     print("[plan]")
     print(f"[plan] To apply:  cf init recipe --apply {plan_id}")
     print(f"[plan] To review: cat {plans_dir}/<patch-file>.diff")
@@ -403,6 +430,7 @@ def apply_plan(plan_id: str) -> int:
         print(f"[apply] [WARN] Backup failed: {e}")
         print("[apply] Continuing without backup...")
 
+    tool_home = Path.home() / ".codefreedom"
     print(f"[apply] Applying plan {plan_id}...")
     count = 0
 
@@ -411,7 +439,12 @@ def apply_plan(plan_id: str) -> int:
         action = pf.get("action", "")
         content_name = pf.get("content_file")
 
-        dst = cf_dir / target
+        # Tool profiles always land in ~/.codefreedom/, everything else
+        # respects CODEFREEDOM_HOME.
+        if target in _TOOL_PROFILE_PATHS:
+            dst = tool_home / target
+        else:
+            dst = cf_dir / target
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         if action == "same":
@@ -712,6 +745,15 @@ def _parse_yaml_file(path: Path) -> Dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+# Tool profile files always go to ~/.codefreedom/ (shared across projects).
+_TOOL_PROFILE_PATHS = {
+    "profiles/chrome.yaml",
+    "profiles/web.yaml",
+    "profiles/github.yaml",
+    "profiles/web-bridge.yaml",
+}
+
+
 def _install_recipe_files(
     manifest: Dict[str, Any],
     files: Dict[str, str],
@@ -724,14 +766,19 @@ def _install_recipe_files(
       - Target **does** exist → merge (DeepDiff for YAML/JSON,
         key-merge for .env, overwrite for everything else).
 
-    Returns count of files installed / modified.
+    Tool profiles (chrome.yaml, web.yaml, github.yaml) are always
+    written to ``~/.codefreedom/`` regardless of ``CODEFREEDOM_HOME``.
     """
+    # Interpolate ${VAR} references in manifest before validation
+    interpolate_all_strings(manifest)
+
     # Validate manifest with Pydantic (non-fatal — warn on failure)
     try:
         RecipeConfig.model_validate(manifest, strict=False)
     except ValidationError as exc:
         eprint(f"  [WARN] Recipe validation issue: {exc}")
 
+    tool_home = Path.home() / ".codefreedom"
     file_entries = manifest.get("files", [])
     count = 0
 
@@ -744,7 +791,13 @@ def _install_recipe_files(
         if content is None:
             continue
 
-        dst = cf_dir / target_path
+        # Tool profiles always land in ~/.codefreedom/, everything else
+        # respects CODEFREEDOM_HOME.
+        if target_path in _TOOL_PROFILE_PATHS:
+            dst = tool_home / target_path
+        else:
+            dst = cf_dir / target_path
+
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         if dst.exists():
@@ -1007,6 +1060,41 @@ def _merge_env(existing: str, incoming: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _ensure_user_env(cf_dir: Path) -> None:
+    """Create ``.env.user`` if it doesn't exist.
+
+    ``.env.user`` is a user-managed override file with the highest config
+    priority — it is created once by the init flow and never touched by
+    recipes again. Users put their personal overrides here (e.g. port
+    changes, custom URLs). It is intentionally excluded from recipe
+    file lists so recipes never create, merge, or update it.
+    """
+    user_env = cf_dir / ".env.user"
+    if user_env.exists():
+        return
+
+    header = (
+        "# ═══════════════════════════════════════════════════════════════════════════════\n"
+        "# .env.user — User overrides (highest config priority)\n"
+        "# ═══════════════════════════════════════════════════════════════════════════════\n"
+        "#\n"
+        "# This file is created once by `cf init recipe` and is NEVER touched by\n"
+        "# recipes again. It has the highest precedence of any config file — values\n"
+        "# here override .env.proxy, .env.claude, .env, .env.secrets, and all recipe\n"
+        "# defaults. Only the host OS environment (exported vars) can override it.\n"
+        "#\n"
+        "# Use this file for your personal overrides, such as:\n"
+        "#   LITELLM_PORT=4001\n"
+        "#   LITELLM_MODEL_ALIAS_ULTRA=my-custom-model\n"
+        "#\n"
+        "# Syntax: standard KEY=value (no quotes needed, no spaces around =)\n"
+        "# Supports ${VAR} and ${VAR:-default} interpolation.\n"
+        "# ═══════════════════════════════════════════════════════════════════════════════\n"
+    )
+    user_env.write_text(header, encoding="utf-8")
+    print(f"  [CREATE] .env.user (user-managed overrides)")
+
+
 def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     """Print a post-install summary telling the user what to do next."""
     name = manifest.get("name", "unknown")
@@ -1020,6 +1108,9 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     if description:
         print(f"  {description}")
     print("  " + "─" * 55)
+
+    # ── Generate a persistent RECIPE.md instruction file ────────────────
+    _generate_recipe_instruction(manifest, cf_dir)
 
     if required:
         print("  REQUIRED — set these before starting:")
@@ -1069,6 +1160,94 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     print("    4. Customize:         cf proxy start --port 4000")
     print("  " + "─" * 55)
     print()
+
+
+def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None:
+    """Generate a persistent ``~/.codefreedom/RECIPE.md`` instruction file.
+
+    This file records what recipe was installed, what files were created,
+    what secrets are required, and what tools are available.  The doctor
+    command (``cf doctor``) uses it as a reference for validation.
+    """
+    name = manifest.get("name", "unknown")
+    description = manifest.get("description", "")
+    required = manifest.get("required_secrets", [])
+    optional = manifest.get("optional_config", [])
+    tools = manifest.get("tools_optional", [])
+    files = manifest.get("files", [])
+
+    lines: list[str] = []
+    lines.append(f"# CodeFreedom Recipe: {name}")
+    lines.append("")
+    if description:
+        lines.append(f"> {description}")
+        lines.append("")
+    lines.append(f"Installed: {datetime.datetime.now().isoformat(timespec='seconds')}")
+    lines.append("")
+
+    if files:
+        lines.append("## Files Installed")
+        lines.append("")
+        for entry in files:
+            target = entry.get("target", entry.get("path", ""))
+            lines.append(f"- `{target}`")
+        lines.append("")
+
+    if required:
+        lines.append("## Required Secrets")
+        lines.append("")
+        for secret in required:
+            var = secret.get("var", "?")
+            prompt = secret.get("prompt", "")
+            hint = secret.get("hint", "")
+            default = secret.get("default", "")
+            line = f"- `{var}`"
+            if prompt:
+                line += f" — {prompt}"
+            if default:
+                line += f" (default: {default})"
+            lines.append(line)
+            if hint:
+                lines.append(f"  - {hint}")
+        lines.append("")
+
+    if optional:
+        lines.append("## Optional Configuration")
+        lines.append("")
+        for cfg in optional:
+            var = cfg.get("var", "?")
+            default = cfg.get("default", "")
+            line = f"- `{var}`"
+            if default:
+                line += f" (default: {default})"
+            lines.append(line)
+        lines.append("")
+
+    if tools:
+        lines.append("## Available Tools")
+        lines.append("")
+        for t in tools:
+            lines.append(f"- `{t}` — start with: `cf tools {t} start`")
+        lines.append("")
+
+    lines.append("## Quick Start")
+    lines.append("")
+    env_secrets = _find_env_secrets_targets(manifest, cf_dir)
+    if env_secrets:
+        lines.append("1. Edit the `.secrets` files and add your API keys")
+    lines.append("1. Start the proxy: `cf proxy start`")
+    lines.append("2. Launch the agent: `cf cc`")
+    lines.append("3. Run diagnostics: `cf doctor`")
+    lines.append("")
+
+    content = "\n".join(lines)
+    instruction_path = cf_dir / "RECIPE.md"
+
+    try:
+        instruction_path.write_text(content, encoding="utf-8")
+        print(f"  [INFO]  Instructions written to {instruction_path.name}")
+    except OSError as e:
+        print(f"  [WARN]  Could not write instructions: {e}")
 
 
 def _find_env_secrets_targets(

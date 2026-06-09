@@ -87,10 +87,12 @@ disable = [
     "C0103",                                  # invalid-name — too strict for project naming conventions
     "C0301",                                  # allow long lines for better readability in some cases
     "C0302",                                  # allow long lines in docstrings
+    "C3001",                                  # unnecessary-lambda — lambda is clearer than passing function ref
     "missing-function-docstring",             # tests don't need per-method docstrings
     "missing-class-docstring",                # test classes are self-documenting
     "unused-import",                          # pytest fixture imports look unused
     "use-implicit-booleaness-not-comparison", # assert == {} is clearer in tests
+    "W0718",                                  # broad-exception-caught — catching Exception is intentional in diagnostics
     "protected-access",                       # tests intentionally call underscore-prefixed helpers
 ]
 

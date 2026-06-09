@@ -173,8 +173,8 @@ class TestDeepDiffMerge:
         assert parsed["b"] == 3
         assert parsed["c"] == 4
 
-    def test_profile_json_merge(self):
-        """Simulates merging a new model into profiles/claude-code.json."""
+    def test_profile_yaml_merge(self):
+        """Simulates merging a new model into profiles/claude-code.yaml."""
         existing = {
             "profiles": {
                 "default": {

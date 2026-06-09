@@ -1,11 +1,11 @@
-"""Pydantic model for web.json — Web search tool profile."""
+"""Pydantic model for web.yaml — Web search tool profile."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import yaml
 from pydantic import BaseModel, Field
 
 
@@ -39,15 +39,17 @@ class WebSettings(BaseModel, extra="forbid"):
 
 
 class WebConfig(BaseModel, extra="forbid"):
-    """Schema for web.json — configures the web browser container."""
+    """Schema for web.yaml — configures the web browser container."""
 
     description: Optional[str] = None
     notes: Optional[List[str]] = None
     web: WebSettings
 
     @classmethod
-    def from_json(cls, path: Path) -> "WebConfig":
-        """Read a JSON file and validate against the model."""
+    def from_yaml(cls, path: Path) -> "WebConfig":
+        """Read a YAML file and validate against the model."""
         with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            raise ValueError(f"Expected a mapping in {path}, got {type(data).__name__}")
         return cls.model_validate(data)

@@ -34,7 +34,6 @@ from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint, load_dotenv, load_env_chain
 from codefreedom.profiles import ProfileError, load_profile_env, load_profiles
 
-
 # ╔═══════════════════════════════════════════════════════════════════════════╗
 # ║ Arg parser                                                               ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
@@ -42,9 +41,7 @@ from codefreedom.profiles import ProfileError, load_profile_env, load_profiles
 
 def build_parser(parser: argparse.ArgumentParser) -> None:
     """Add VS Code sub-subcommands (``claude config``, ``proxy config``) to *parser*."""
-    sub = parser.add_subparsers(
-        dest="vscode_action", title="actions", required=True
-    )
+    sub = parser.add_subparsers(dest="vscode_action", title="actions", required=True)
 
     # ── claude config ───────────────────────────────────────────────────
     claude_cfg = sub.add_parser(
@@ -108,7 +105,9 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
             " that points VS Code at the LiteLLM proxy."
         ),
     )
-    proxy_sub_actions = proxy_cfg.add_subparsers(dest="proxy_config_action", required=True)
+    proxy_sub_actions = proxy_cfg.add_subparsers(
+        dest="proxy_config_action", required=True
+    )
     proxy_config = proxy_sub_actions.add_parser(
         "config",
         help="Probe the proxy and emit a chatLanguageModels.json entry",
@@ -315,7 +314,7 @@ def _resolve_profiles_path() -> Path:
     override = os.environ.get("CODEFREEDOM_PROFILES_FILE")
     if override:
         return Path(override)
-    return _get_cf_dir() / "profiles" / "claude-code.json"
+    return _get_cf_dir() / "profiles" / "claude-code.yaml"
 
 
 def cmd_vscode_claude_config(args: argparse.Namespace) -> int:

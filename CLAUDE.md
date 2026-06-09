@@ -173,38 +173,73 @@ Tools refuse to start without a valid profile.
 
 Chrome runs headless. For stealth / anti-bot browsing, use the `web` tool (Camoufox) instead.
 
+### Tools are Shared, Persistent Infrastructure
+
+Tools (chrome, web/camoufox, github) are **shared** — once started they keep
+running until explicitly stopped (`cf tools <name> stop`). Container names
+are **static** (from the profile, e.g. `codefreedom-chrome`). All sessions
+and profiles share the same tool container:
+
+1. First `cf cc` or `cf tools <name> start` creates the container.
+2. Subsequent invocations detect it's already running and are no-ops.
+3. `cf tools <name> stop` is the only way to stop it.
+4. No random suffixes, no auto-cleanup, no per-session isolation.
+
+Ports are configured in the tool profile and can be overridden via documented
+environment variables (checked at profile load time):
+
+| Tool   | Env var                   | Default    |
+| ------ | ------------------------- | ---------- |
+| Chrome | `CODEFREEDOM_CHROME_PORT` | `9222`     |
+| Web    | `CODEFREEDOM_WEB_PORT`    | `8420`     |
+| GitHub | `CODEFREEDOM_GITHUB_PORT` | `0` (auto) |
+
+The proxy (`litellm` + `web-bridge`) is **separate** — it gets unique
+container names + project name per instance via `generate_container_name()`
+because the proxy config (port, providers) varies by instance.
+
 ### Environment Variable Chain
 
 Component-specific env files are loaded only for the matching subcommand. Shared
 and workspace env files are loaded for all components.
 
-**codefreedom claude** (7 layers, lowest to highest):
+**Priority groups** (all configs before secrets, user overrides before machine env):
 
-1. `~/.codefreedom/.env.claude` — Claude Code config (skips if missing)
-2. `~/.codefreedom/.env.claude.secrets` — Claude Code secrets (skips if missing)
-3. `~/.codefreedom/.env` — shared config (skips if missing)
-4. `~/.codefreedom/.env.secrets` — shared secrets (skips if missing)
-5. `{workspace}/.env` — workspace overrides (skips if missing)
+- Config files (lowest priority): `.env.claude` / `.env.proxy` → `.env` → `{workspace}/.env`
+- Secrets files: `.env.claude.secrets` / `.env.proxy.secrets` → `.env.secrets` → `{workspace}/.env.secrets`
+- User overrides: `.env.user` (highest config priority, never touched by recipes)
+- Machine env (highest priority): `os.environ`
+
+**codefreedom claude** (8 layers, lowest to highest):
+
+1. `{codefreedom_dir}/.env.claude` — Claude Code config (skips if missing)
+2. `{codefreedom_dir}/.env` — shared config (skips if missing)
+3. `{workspace}/.env` — workspace config (skips if missing)
+4. `{codefreedom_dir}/.env.claude.secrets` — Claude Code secrets (skips if missing)
+5. `{codefreedom_dir}/.env.secrets` — shared secrets (skips if missing)
 6. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
-7. `os.environ` — system env (always wins)
+7. `{codefreedom_dir}/.env.user` — user overrides (skips if missing)
+8. `os.environ` — system env (always wins)
 
-**codefreedom proxy** (7 layers):
+**codefreedom proxy** (8 layers):
 
-1. `~/.codefreedom/.env.proxy` — proxy config (skips if missing)
-2. `~/.codefreedom/.env.proxy.secrets` — proxy secrets (skips if missing)
-3. `~/.codefreedom/.env` — shared config (skips if missing)
-4. `~/.codefreedom/.env.secrets` — shared secrets (skips if missing)
-5. `{workspace}/.env` — workspace overrides (skips if missing)
+1. `{codefreedom_dir}/.env.proxy` — proxy config (skips if missing)
+2. `{codefreedom_dir}/.env` — shared config (skips if missing)
+3. `{workspace}/.env` — workspace config (skips if missing)
+4. `{codefreedom_dir}/.env.proxy.secrets` — proxy secrets (skips if missing)
+5. `{codefreedom_dir}/.env.secrets` — shared secrets (skips if missing)
 6. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
-7. `os.environ` — system env (always wins)
+7. `{codefreedom_dir}/.env.user` — user overrides (skips if missing)
+8. `os.environ` — system env (always wins)
 
-**codefreedom tools** (chrome, web, etc.) — 5 layers:
+**codefreedom tools** (chrome, web, etc.) — 6 layers:
 
-1. `~/.codefreedom/.env` — shared config (skips if missing)
-2. `~/.codefreedom/.env.secrets` — shared secrets (skips if missing)
-3. `{workspace}/.env` — workspace overrides (skips if missing)
+1. `{codefreedom_dir}/.env` — shared config (skips if missing)
+2. `{workspace}/.env` — workspace config (skips if missing)
+3. `{codefreedom_dir}/.env.secrets` — shared secrets (skips if missing)
 4. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
-5. `os.environ` — system env (always wins)
+5. `{codefreedom_dir}/.env.user` — user overrides (skips if missing)
+6. `os.environ` — system env (always wins)
 
 All layers support `${VAR}` and `${VAR:-default}` interpolation. **Empty-string env vars are valid overrides** (`export FOO=""` does NOT fall through to defaults).
 
@@ -249,7 +284,7 @@ the provider's native output type.
 
 - The plugin runs on `async_pre_request_hook` (Anthropic `/v1/messages`) and `async_log_pre_api_call` (OpenAI `/v1/chat/completions`).
 - Rules are resolved from `model_info.codefreedom.plugins.reasoning-efforts` (inline) or the YAML config (named). Fallback is `auto` — pure field rename based on provider detection.
-- The `.py` module is baked into the LiteLLM image at `/app/litellm-plugins/`. The entrypoint copies it into the host-mounted config directory at container start.
+- The `.py` module is baked into the LiteLLM image at `/app/litellm-plugins/`. The entrypoint symlinks it into the host-mounted config directory at container start (avoids writing the .py onto the host filesystem).
 - The YAML config lives on the host (user-editable). Cached by mtime — edits take effect on the next request without a proxy restart.
 - Wired in `config.yaml` via `callbacks: ["plugins.reasoning-efforts.reasoning_efforts_mapping.instance"]` — the lowercase `instance` is a module-level singleton (not the class) to match LiteLLM's callback dispatch.
 - The `proxy init` flow copies the YAML config alongside the rest of the proxy config.

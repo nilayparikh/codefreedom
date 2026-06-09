@@ -1,21 +1,22 @@
 """Profile management for model selection and routing across code agents.
 
-Profiles are defined in claude-code-profiles.json. Each profile sets
+Profiles are defined in claude-code-profiles.yaml. Each profile sets
 environment variables that control model selection, API endpoint, and auth.
 All profiles live in ~/.codefreedom/profiles/.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+import yaml
 from pydantic import ValidationError
 
+from codefreedom.interpolate import interpolate_all_strings
 from codefreedom.schemas.profiles import ClaudeCodeProfiles
 
 # Pre-compiled regex — mirrors env_loader._VAR_REF_RE
@@ -32,17 +33,26 @@ def eprint(*args: Any, **kwargs: Any) -> None:
 
 
 def load_profiles(profiles_path: Path) -> Dict[str, Any]:
-    """Load and validate the profiles JSON file."""
+    """Load and validate the profiles YAML file."""
     if not profiles_path.exists():
         eprint(f"[ERROR] Profiles file not found: {profiles_path}")
         raise ProfileError(f"Profiles file not found: {profiles_path}")
 
     try:
         with open(profiles_path, encoding="utf-8") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        eprint(f"[ERROR] Invalid JSON in {profiles_path}: {e}")
-        raise ProfileError(f"Invalid JSON in {profiles_path}: {e}") from e
+            data = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        eprint(f"[ERROR] Invalid YAML in {profiles_path}: {e}")
+        raise ProfileError(f"Invalid YAML in {profiles_path}: {e}") from e
+
+    if not isinstance(data, dict):
+        eprint(
+            f"[ERROR] Expected a mapping in {profiles_path}, got {type(data).__name__}"
+        )
+        raise ProfileError(f"Expected a mapping in {profiles_path}")
+
+    # Interpolate ${VAR} references before validation
+    interpolate_all_strings(data)
 
     # Validate with Pydantic (non-fatal — warn on failure, allow extra fields)
     try:

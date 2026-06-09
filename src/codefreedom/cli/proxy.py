@@ -11,8 +11,9 @@ Usage:
 The proxy is always run via `docker compose` against
 `~/.codefreedom/proxy/docker-compose.yaml`. The LiteLLM process runs inside
 the `codefreedom:litellm-latest` image (see docker/litellm/Dockerfile.LiteLLM)
-which bakes in the WebSearch count display patch. The web-bridge sidecar is
-started as a sibling service in the same compose stack.
+which bakes in the WebSearch count display patch.  The web-bridge is now a
+standalone tool (``cf tools web-bridge``) — start it separately before the
+proxy if you need WebSearch support.
 
 VS Code integration: see `codefreedom vscode proxy config`.
 """
@@ -81,14 +82,15 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _load_proxy_env_files() -> Dict[str, str]:
-    """Load proxy-specific env files: .env.proxy and .env.proxy.secrets.
+    """Load proxy env files: .env.proxy → .env.proxy.secrets → .env.user.
 
-    Returns a merged dict (secrets override config).
+    Returns a merged dict where later files override earlier ones.
     """
     merged: Dict[str, str] = {}
     for env_path in [
         _get_cf_dir() / ".env.proxy",
         _get_cf_dir() / ".env.proxy.secrets",
+        _get_cf_dir() / ".env.user",
     ]:
         if env_path.exists():
             merged.update(load_dotenv(env_path))
@@ -104,6 +106,12 @@ def _build_proxy_env() -> Dict[str, str]:
     Proxy env files override system env so the proxy process sees
     configured values even when system env has empty-string vars
     (e.g. MICROSOFT_FOUNDRY_API_BASE="" in shell).
+
+    Resolution order (later wins):
+      1. os.environ (base)
+      2. .env.proxy (config, skip if missing)
+      3. .env.proxy.secrets (secrets, skip if missing)
+      4. .env.user (user overrides — highest priority, skip if missing)
 
     Also injects ``POSTGRES_HOST_DATA_DIR`` and
     ``POSTGRES_HOST_BACKUP_DIR`` from ``CODEFREEDOM_HOME`` so the
@@ -236,13 +244,16 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         eprint("   Run: codefreedom proxy init")
         return 1
 
-    # Auto-build the web-bridge image if it isn't present locally. The image
-    # is referenced (not built) by docker-compose.yaml because a relative
-    # build context would not survive the example → ~/.codefreedom copy step.
-    if _ensure_web_bridge_image() != 0:
-        return 1
-
     eprint(f"[proxy] Starting LiteLLM via Docker Compose ({compose_file})...")
+
+    # Ensure tools are running (needed for WebSearch, browser automation, etc.)
+    # Non-fatal — proxy starts regardless.
+    try:
+        from codefreedom.cli.tools import ensure_tools
+
+        ensure_tools()
+    except Exception as exc:
+        eprint(f"[proxy] Warning: could not verify tools: {exc}")
 
     # Build merged environment: proxy files override system env, then CLI
     # flags override everything for this run only.
@@ -252,6 +263,14 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
             merged_env["LITELLM_PORT"] = str(args.port)
         if getattr(args, "host", None):
             merged_env["LITELLM_BIND_HOST"] = args.host
+
+    # Use SUFFIX_ID from .env.proxy to create deterministic container/project
+    # names.  Docker becomes the single source of truth — no /proc needed.
+    suffix = merged_env.get("SUFFIX_ID", "0000")
+    litellm_base = merged_env.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
+    litellm_name = f"{litellm_base}-{suffix}"
+    merged_env["LITELLM_CONTAINER_NAME"] = litellm_name
+    merged_env["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
 
     result = subprocess.run(
         [
@@ -271,7 +290,10 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     )
     if result.returncode == 0:
         port = merged_env.get("LITELLM_PORT", "4000")
-        eprint(f"[proxy] [OK] Proxy started at http://localhost:{port}")
+        eprint(
+            f"[proxy] [OK] Proxy started at http://localhost:{port}"
+            f" ({litellm_name})"
+        )
     else:
         eprint("[proxy] [FAIL] Failed to start. Check docker logs.")
     return result.returncode
@@ -332,7 +354,10 @@ def _restart() -> int:
         check=False,
     )
     if result.returncode == 0:
-        eprint("[proxy] [OK] Proxy restarted at http://localhost:4000")
+        # Read port from env (resolved at build time, not /proc)
+        merged_env = _build_proxy_env()
+        port = merged_env.get("LITELLM_PORT", "4000")
+        eprint(f"[proxy] [OK] Proxy restarted at http://localhost:{port}")
     else:
         eprint("[proxy] [FAIL] Failed to restart. Check docker logs.")
     return result.returncode

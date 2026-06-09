@@ -171,73 +171,19 @@ def main() -> None:
     # ── tools subcommand ──────────────────────────────────────────────────
     tools_parser = subparsers.add_parser(
         "tools",
-        help="Manage auxiliary tools (chrome browser, web search, etc.)",
-        description="Manage auxiliary tools used by coding agents (headless Chrome browser, web search, etc.).",
-    )
-    tools_subparsers = tools_parser.add_subparsers(dest="tool", title="tools")
-
-    # ── chrome tool ─────────────────────────────────────────────────────
-    chrome_parser = tools_subparsers.add_parser(
-        "chrome",
-        help="Headless Chrome browser for automation (CDP at port 9222)",
-        description="Start/stop/manage a headless Chrome browser container for browser automation. Coding agents connect via Chrome DevTools Protocol (CDP) at port 9222.",
-    )
-    chrome_parser.add_argument(
-        "action",
-        nargs="?",
-        default="status",
-        choices=["start", "stop", "restart", "status", "url"],
-        help="Action to perform (default: status). 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
-    )
-    chrome_parser.add_argument(
-        "--port",
-        type=int,
-        default=9222,
-        help="CDP debug port (default: 9222)",
-    )
-
-    # ── web tool ────────────────────────────────────────────────────────
-    web_parser = tools_subparsers.add_parser(
-        "web",
-        help="Web search and scraping tool (MCP)",
-        description="Start/stop/manage a web search container. The container runs an MCP server on port 8420 with web_search and web_fetch tools.",
-    )
-    web_parser.add_argument(
-        "action",
-        nargs="?",
-        default="status",
-        choices=["start", "stop", "restart", "status"],
-        help="Action to perform (default: status). 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
-    )
-    web_parser.add_argument(
-        "--port",
-        type=int,
-        default=8420,
-        help="MCP server port (default: 8420)",
-    )
-
-    # ── github tool ──────────────────────────────────────────────────────
-    github_parser = tools_subparsers.add_parser(
-        "github",
-        help="GitHub MCP Server (ghcr.io/github/github-mcp-server)",
+        help="Manage all auxiliary tools (start/stop/restart/status)",
         description=(
-            "Start/stop/manage a GitHub MCP Server container. "
-            "Provides GitHub API tools (issues, PRs, repos, etc.) via MCP. "
-            "Requires GITHUB_PERSONAL_ACCESS_TOKEN in the profile."
+            "Manage all auxiliary tools (Chrome, web search, GitHub MCP, web bridge). "
+            "All tools are managed as a group — use 'start', 'stop', 'restart', or 'status'. "
+            "Tools are auto-started by 'cf px start' and 'cf cc' when needed."
         ),
     )
-    github_parser.add_argument(
+    tools_parser.add_argument(
         "action",
         nargs="?",
         default="status",
         choices=["start", "stop", "restart", "status"],
-        help="Action to perform (default: status). 'restart' uses `docker restart` (preserves container state, does not pull a new image).",
-    )
-    github_parser.add_argument(
-        "--port",
-        type=int,
-        default=0,
-        help="HTTP MCP server port (0 = auto-pick random free port)",
+        help="Action to perform on all tools (default: status). 'restart' uses `docker restart`.",
     )
 
     # ── proxy subcommand ───────────────────────────────────────────────────
@@ -272,14 +218,14 @@ def main() -> None:
     start_parser.add_argument(
         "--port",
         type=int,
-        default=4000,
-        help="Port to publish on the host (sets LITELLM_PORT for this run only; default: 4000)",
+        default=None,
+        help="Port to publish on the host (sets LITELLM_PORT for this run only; default: from .env.proxy or 4000)",
     )
     start_parser.add_argument(
         "--host",
         type=str,
-        default="0.0.0.0",
-        help="Host bind address (sets LITELLM_BIND_HOST for this run only; default: 0.0.0.0)",
+        default=None,
+        help="Host bind address (sets LITELLM_BIND_HOST for this run only; default: from .env.proxy or 0.0.0.0)",
     )
 
     # stop
@@ -327,6 +273,25 @@ def main() -> None:
     from codefreedom.cli.vscode import build_parser as build_vscode_parser
 
     build_vscode_parser(vscode_parser)
+
+    # ── doctor subcommand ────────────────────────────────────────────────────
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        aliases=["doc", "dr"],
+        help="Validate the full CodeFreedom environment",
+        description=(
+            "Run comprehensive diagnostics on your CodeFreedom setup."
+            " Checks config files, Docker availability, PostgreSQL data"
+            " directory permissions, Docker images, profiles, env vars,"
+            " and proxy status. Detects issues like PostgreSQL initdb"
+            " permission errors before they happen."
+        ),
+    )
+    doctor_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed information for all checks (not just failures)",
+    )
 
     # -- update subcommand -----------------------------------------------------------
     update_parser = subparsers.add_parser(
@@ -380,14 +345,19 @@ def main() -> None:
             sys.exit(init_recipe("_default"))
 
         # Plain `cf init` — redirect to recipe system
-        print("[init] Use `cf init recipe` to initialize CodeFreedom configuration.")
-        print()
-        print("  cf init recipe              # install _default base recipe")
-        print("  cf init recipe --list        # list available recipes")
-        print("  cf init recipe --plan <name> # preview a recipe without applying")
-        print("  cf init recipe <name>        # install a specific recipe")
-        print()
-        print("  Docs: https://nilayparikh.github.io/codefreedom/recipes/")
+        from codefreedom.cli.tool_init_utils import print_help_section
+
+        print_help_section(
+            "init",
+            [
+                "Use:  cf init recipe              # install _default base recipe",
+                "      cf init recipe --list        # list available recipes",
+                "      cf init recipe --plan <name> # preview a recipe without applying",
+                "      cf init recipe <name>        # install a specific recipe",
+            ],
+            docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
+            include_disclaimer=False,
+        )
         sys.exit(0)
 
     if args.command in ("claude", "cc"):
@@ -440,34 +410,12 @@ def main() -> None:
 
         sys.exit(admin_run(args))
     elif args.command == "tools":
-        if args.tool == "chrome":
-            if unknown:
-                eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-                sys.exit(2)
-            from codefreedom.cli.chrome import run as chrome_run
+        if unknown:
+            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            sys.exit(2)
+        from codefreedom.cli.tools import run as tools_run
 
-            sys.exit(chrome_run(args))
-        elif args.tool == "web":
-            if unknown:
-                eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-                sys.exit(2)
-            from codefreedom.cli.web import run as web_run
-
-            sys.exit(web_run(args))
-        elif args.tool == "github":
-            if unknown:
-                eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-                sys.exit(2)
-            from codefreedom.cli.github import run as github_run
-
-            sys.exit(github_run(args))
-        elif args.tool is None:
-            tools_parser.print_help()
-            sys.exit(0)
-        else:
-            eprint(f"[ERROR] Unknown tool: {args.tool}")
-            eprint("   Available tools: chrome, web, github")
-            sys.exit(1)
+        sys.exit(tools_run(args))
     elif args.command in ("vscode", "vsc"):
         if unknown:
             eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
@@ -501,6 +449,13 @@ def main() -> None:
         from codefreedom.cli.update import run as update_run
 
         sys.exit(update_run(args))
+    elif args.command in ("doctor", "doc", "dr"):
+        if unknown:
+            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            sys.exit(2)
+        from codefreedom.cli.doctor import run as doctor_run
+
+        sys.exit(doctor_run(verbose=args.verbose))
     else:
         parser.print_help()
         sys.exit(0)

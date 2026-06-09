@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from codefreedom.cli.vscode import (
     _VSCODE_PREFERRED_LOCATION,
@@ -384,31 +385,30 @@ def _args(
 
 class TestVscodeSettingsGenerate:
     def test_happy_path_default_profile(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.json"
+        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
         profiles_file.parent.mkdir(parents=True)
-        profiles_file.write_text(
-            json.dumps(
-                {
-                    "profiles": {
-                        "default": {
-                            "description": "test default",
+        _write_yaml(
+            profiles_file,
+            {
+                "profiles": {
+                    "default": {
+                        "description": "test default",
+                        "env": {
+                            "ANTHROPIC_BASE_URL": "http://localhost:4000",
+                            "ANTHROPIC_AUTH_TOKEN": "sk-test",
+                            "CLAUDE_MODEL": "CodeFreedom/Flash",
+                            "ANTHROPIC_DEFAULT_OPUS_MODEL": "CodeFreedom/Ultra",
+                            "ANTHROPIC_DEFAULT_SONNET_MODEL": "CodeFreedom/Pro",
+                            "ANTHROPIC_DEFAULT_HAIKU_MODEL": "CodeFreedom/Flash",
+                        },
+                        "sandbox": {
                             "env": {
-                                "ANTHROPIC_BASE_URL": "http://localhost:4000",
-                                "ANTHROPIC_AUTH_TOKEN": "sk-test",
-                                "CLAUDE_MODEL": "CodeFreedom/Flash",
-                                "ANTHROPIC_DEFAULT_OPUS_MODEL": "CodeFreedom/Ultra",
-                                "ANTHROPIC_DEFAULT_SONNET_MODEL": "CodeFreedom/Pro",
-                                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "CodeFreedom/Flash",
-                            },
-                            "sandbox": {
-                                "env": {
-                                    "IS_SANDBOX": "1",
-                                }
-                            },
-                        }
+                                "IS_SANDBOX": "1",
+                            }
+                        },
                     }
                 }
-            )
+            },
         )
 
         monkeypatch.setattr(
@@ -464,23 +464,22 @@ class TestVscodeSettingsGenerate:
         assert env_names == sorted(env_names)
 
     def test_custom_profile(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.json"
+        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
         profiles_file.parent.mkdir(parents=True)
-        profiles_file.write_text(
-            json.dumps(
-                {
-                    "profiles": {
-                        "default": {
-                            "description": "default",
-                            "env": {"ANTHROPIC_BASE_URL": "http://localhost:4000"},
-                        },
-                        "ultra": {
-                            "description": "ultra",
-                            "env": {"CLAUDE_MODEL": "CodeFreedom/Ultra"},
-                        },
-                    }
+        _write_yaml(
+            profiles_file,
+            {
+                "profiles": {
+                    "default": {
+                        "description": "default",
+                        "env": {"ANTHROPIC_BASE_URL": "http://localhost:4000"},
+                    },
+                    "ultra": {
+                        "description": "ultra",
+                        "env": {"CLAUDE_MODEL": "CodeFreedom/Ultra"},
+                    },
                 }
-            )
+            },
         )
 
         monkeypatch.setattr(
@@ -503,19 +502,18 @@ class TestVscodeSettingsGenerate:
         assert payload["claudeCode.selectedModel"] == "CodeFreedom/Ultra"
 
     def test_host_port_override(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.json"
+        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
         profiles_file.parent.mkdir(parents=True)
-        profiles_file.write_text(
-            json.dumps(
-                {
-                    "profiles": {
-                        "default": {
-                            "description": "default",
-                            "env": {"ANTHROPIC_BASE_URL": "http://localhost:4000"},
-                        }
+        _write_yaml(
+            profiles_file,
+            {
+                "profiles": {
+                    "default": {
+                        "description": "default",
+                        "env": {"ANTHROPIC_BASE_URL": "http://localhost:4000"},
                     }
                 }
-            )
+            },
         )
 
         monkeypatch.setattr(
@@ -539,19 +537,18 @@ class TestVscodeSettingsGenerate:
         assert base_url_entry["value"] == "http://proxy.lan:5000"
 
     def test_writes_to_out_file(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.json"
+        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
         profiles_file.parent.mkdir(parents=True)
-        profiles_file.write_text(
-            json.dumps(
-                {
-                    "profiles": {
-                        "default": {
-                            "description": "default",
-                            "env": {"ANTHROPIC_BASE_URL": "http://localhost:4000"},
-                        }
+        _write_yaml(
+            profiles_file,
+            {
+                "profiles": {
+                    "default": {
+                        "description": "default",
+                        "env": {"ANTHROPIC_BASE_URL": "http://localhost:4000"},
                     }
                 }
-            )
+            },
         )
 
         monkeypatch.setattr(
@@ -593,19 +590,18 @@ class TestVscodeSettingsGenerate:
         assert "codefreedom claude init" in captured.err
 
     def test_profile_error_returns_1(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.json"
+        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
         profiles_file.parent.mkdir(parents=True)
-        profiles_file.write_text(
-            json.dumps(
-                {
-                    "profiles": {
-                        "default": {
-                            "description": "default",
-                            "env": {},
-                        }
+        _write_yaml(
+            profiles_file,
+            {
+                "profiles": {
+                    "default": {
+                        "description": "default",
+                        "env": {},
                     }
                 }
-            )
+            },
         )
 
         monkeypatch.setattr(
@@ -631,19 +627,18 @@ class TestVscodeSettingsGenerate:
     def test_no_claude_model_omits_selected_model(
         self, monkeypatch, tmp_path: Path, capsys
     ):
-        profiles_file = tmp_path / "profiles" / "claude-code.json"
+        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
         profiles_file.parent.mkdir(parents=True)
-        profiles_file.write_text(
-            json.dumps(
-                {
-                    "profiles": {
-                        "default": {
-                            "description": "default",
-                            "env": {"ANTHROPIC_BASE_URL": "http://localhost:4000"},
-                        }
+        _write_yaml(
+            profiles_file,
+            {
+                "profiles": {
+                    "default": {
+                        "description": "default",
+                        "env": {"ANTHROPIC_BASE_URL": "http://localhost:4000"},
                     }
                 }
-            )
+            },
         )
 
         monkeypatch.setattr(
@@ -675,7 +670,7 @@ class TestDispatchPath:
         from codefreedom.cli.vscode import _resolve_profiles_path
 
         path = _resolve_profiles_path()
-        assert path == tmp_path / "profiles" / "claude-code.json"
+        assert path == tmp_path / "profiles" / "claude-code.yaml"
 
     def test_resolve_profiles_path_env_override(self, monkeypatch, tmp_path: Path):
         custom = tmp_path / "custom-profiles.json"
@@ -766,3 +761,12 @@ class TestSubprocessDispatch:
         result = self._run("claude", "vscode")
         assert result.returncode != 0
         assert "invalid choice" in result.stderr
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+
+def _write_yaml(path: Path, data: dict) -> None:
+    """Write a Python dict as YAML to *path*."""
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)

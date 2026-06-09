@@ -29,6 +29,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import yaml
+
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint
 
@@ -57,13 +59,13 @@ _SERVICE_DESCRIPTIONS: dict[str, str] = {
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _read_json(path: Path) -> dict[str, Any] | None:
-    """Read a JSON file safely. Returns None on any error."""
+def _read_yaml(path: Path) -> dict[str, Any] | None:
+    """Read a YAML file safely. Returns None on any error."""
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError):
         return None
 
 
@@ -98,7 +100,7 @@ def _normalize_ref(image: str) -> str:
     just ``nilayparikh/codefreedom:name``.
     """
     if image.startswith("docker.io/"):
-        return image[len("docker.io/"):]
+        return image[len("docker.io/") :]
     return image
 
 
@@ -112,9 +114,12 @@ def _local_images() -> list[str]:
         return []
     result = subprocess.run(
         [
-            "docker", "images",
-            "--filter", f"reference={IMAGE_NAMESPACE}/{IMAGE_REPO}*",
-            "--format", "{{.Repository}}:{{.Tag}}",
+            "docker",
+            "images",
+            "--filter",
+            f"reference={IMAGE_NAMESPACE}/{IMAGE_REPO}*",
+            "--format",
+            "{{.Repository}}:{{.Tag}}",
         ],
         capture_output=True,
         text=True,
@@ -320,30 +325,38 @@ def discover_images() -> list[dict[str, str]]:
         if norm not in profile_images:
             profile_images[norm] = (img, source, service)
 
-    # 1. claude-code.json profiles
-    data = _read_json(cf_dir / "profiles" / "claude-code.json")
+    # 1. claude-code.yaml profiles
+    data = _read_yaml(cf_dir / "profiles" / "claude-code.yaml")
     if data:
         for pname, pdef in data.get("profiles", {}).items():
             for stype, img in pdef.get("sandbox_images", {}).items():
                 if isinstance(img, str):
-                    _add_profile(img, f"claude-code.json ({pname})", f"sandbox ({stype})")
+                    _add_profile(
+                        img, f"claude-code.yaml ({pname})", f"sandbox ({stype})"
+                    )
 
-    # 2. chrome.json profile
-    chrome_data = _read_json(cf_dir / "profiles" / "chrome.json")
+    # 2. chrome.yaml profile
+    chrome_data = _read_yaml(cf_dir / "profiles" / "chrome.yaml")
     if chrome_data:
-        _add_profile(chrome_data.get("chrome", {}).get("image", ""), "profiles/chrome.json", "chrome")
+        _add_profile(
+            chrome_data.get("chrome", {}).get("image", ""),
+            "profiles/chrome.yaml",
+            "chrome",
+        )
 
-    # 3. web.json profile
-    web_data = _read_json(cf_dir / "profiles" / "web.json")
+    # 3. web.yaml profile
+    web_data = _read_yaml(cf_dir / "profiles" / "web.yaml")
     if web_data:
-        _add_profile(web_data.get("web", {}).get("image", ""), "profiles/web.json", "web")
+        _add_profile(
+            web_data.get("web", {}).get("image", ""), "profiles/web.yaml", "web"
+        )
 
-    # 4. github.json profile
-    github_data = _read_json(cf_dir / "profiles" / "github.json")
+    # 4. github.yaml profile
+    github_data = _read_yaml(cf_dir / "profiles" / "github.yaml")
     if github_data:
         _add_profile(
             github_data.get("github", {}).get("image", ""),
-            "profiles/github.json",
+            "profiles/github.yaml",
             "github",
         )
 
@@ -373,7 +386,7 @@ def discover_images() -> list[dict[str, str]]:
                     current_service = svc_match.group(1)
                     continue
             if indent == 4 and current_service and stripped.startswith("image:"):
-                img_raw = stripped[len("image:"):].strip()
+                img_raw = stripped[len("image:") :].strip()
                 img = _parse_compose_image(img_raw)
                 if img:
                     _add_profile(img, "proxy/docker-compose.yaml", current_service)
@@ -579,10 +592,14 @@ def _display_results(
             print()
         elif pypi_result["status"] == "new":
             print(f" [upd]  codefreedom {pypi_result['local_version']}")
-            print(f"        {pypi_result['message']}  ({pypi_result['remote_version']} available)")
+            print(
+                f"        {pypi_result['message']}  ({pypi_result['remote_version']} available)"
+            )
             print()
         else:
-            print(f"  [??]  codefreedom {pypi_result['local_version']} ({pypi_result['message']})")
+            print(
+                f"  [??]  codefreedom {pypi_result['local_version']} ({pypi_result['message']})"
+            )
             print()
 
     # ── Summary ─────────────────────────────────────────────────────────
@@ -595,7 +612,9 @@ def _display_results(
         if counts.get("ok", 0):
             parts.append(f"{counts['ok']} up to date")
         if counts.get("new", 0):
-            parts.append(f"{counts['new']} update{'s' if counts['new'] != 1 else ''} available")
+            parts.append(
+                f"{counts['new']} update{'s' if counts['new'] != 1 else ''} available"
+            )
         if counts.get("pinned", 0):
             parts.append(f"{counts['pinned']} pinned")
         if counts.get("bare", 0):
@@ -691,6 +710,7 @@ def run(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     import argparse
+
     p = argparse.ArgumentParser(description="Check CodeFreedom for updates")
     p.add_argument("services", nargs="*", help="Services to check")
     run(p.parse_args())

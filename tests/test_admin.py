@@ -47,9 +47,9 @@ def cf_home(monkeypatch, tmp_path: Path) -> Path:
 def _populate_cf_home(home: Path) -> None:
     """Populate *home* with a standard set of test config files."""
     files = {
-        "profiles/claude-code.json": '{"model": "claude-sonnet-4"}',
-        "profiles/chrome.json": '{"port": 9222, "headless": true}',
-        "profiles/web.json": '{"port": 8420}',
+        "profiles/claude-code.yaml": "model: claude-sonnet-4\n",
+        "profiles/chrome.yaml": "port: 9222\nheadless: true\n",
+        "profiles/web.yaml": "port: 8420\n",
         "proxy/config/config.yaml": "general:\n  debug: false\n",
         "proxy/config/providers/deepseek.yaml": "model: deepseek-chat",
         "proxy/docker-compose.yaml": "version: '3'\nservices:\n  litellm:\n",
@@ -58,7 +58,7 @@ def _populate_cf_home(home: Path) -> None:
         ".env.proxy": "LITELLM_MASTER_KEY=sk-test-key",
         ".env.proxy.secrets": "LITELLM_DB_PASSWORD=supersecret",
         "proc/sessions/active.json": '{"session_id": "abc123"}',
-        "proc/tools/chrome.json": '{"status": "running"}',
+        "proc/tools/chrome.yaml": "status: running\n",
         "sandbox/default/.claude/settings.json": '{"theme": "dark"}',
         "sandbox/tools/chrome/data.txt": "browser cache data",
     }
@@ -80,7 +80,7 @@ class TestIsSecretsFile:
 
     def test_non_secrets(self):
         assert not _is_secrets_file(".env.claude")
-        assert not _is_secrets_file("profiles/claude-code.json")
+        assert not _is_secrets_file("profiles/claude-code.yaml")
         assert not _is_secrets_file("proxy/config/config.yaml")
         assert not _is_secrets_file("some/other/file.txt")
 
@@ -90,7 +90,7 @@ class TestIsSecretsFile:
 
 class TestCategorize:
     def test_profiles(self):
-        assert _categorize("profiles/claude-code.json") == "profiles"
+        assert _categorize("profiles/claude-code.yaml") == "profiles"
 
     def test_proxy(self):
         assert _categorize("proxy/config/config.yaml") == "proxy"
@@ -318,7 +318,7 @@ class TestRestore:
         target.mkdir()
         diffs, _ = engine_restore(out_path, target_dir=target, dry_run=False)
         assert (target / ".env.claude").exists()
-        assert (target / "profiles/claude-code.json").exists()
+        assert (target / "profiles/claude-code.yaml").exists()
         # Secrets ARE restored (with redacted values)
         assert (target / ".env.claude.secrets").exists()
         # Verify redacted content

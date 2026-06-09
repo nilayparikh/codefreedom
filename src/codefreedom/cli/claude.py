@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from codefreedom.cli.tool_init_utils import _print_non_disclaimer
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint, load_env_chain
 from codefreedom.launcher import run_docker, run_local
@@ -26,7 +25,7 @@ from codefreedom.profiles import (
 )
 from codefreedom.tool_registry import acquire_tools, generate_session_id, release_tools
 
-# Default location for profiles — ~/.codefreedom/profiles/claude-code.json
+# Default location for profiles — ~/.codefreedom/profiles/claude-code.yaml
 # Can be overridden with CODEFREEDOM_PROFILES_FILE env var
 import os
 
@@ -42,16 +41,19 @@ def init_claude() -> int:
     Bundled examples have been replaced by the recipe system.
     Use ``cf init recipe`` or ``cf init recipe --plan <name>`` instead.
     """
-    print("[claude init] Bundled examples have been replaced by recipes.")
-    print()
-    print("  Use:  cf init recipe              # install _default base recipe")
-    print("        cf init recipe --list        # list available recipes")
-    print("        cf init recipe --plan <name> # preview a recipe without applying")
-    print("        cf init recipe <name>        # install a specific recipe")
-    print()
-    print("  Docs: https://nilayparikh.github.io/codefreedom/recipes/")
-    print()
-    _print_non_disclaimer()
+    from codefreedom.cli.tool_init_utils import print_help_section
+
+    print_help_section(
+        "claude init",
+        [
+            "Use:  cf init recipe              # install _default base recipe",
+            "      cf init recipe --list        # list available recipes",
+            "      cf init recipe --plan <name> # preview a recipe without applying",
+            "      cf init recipe <name>        # install a specific recipe",
+        ],
+        docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
+        include_disclaimer=True,
+    )
     return 0
 
 
@@ -268,14 +270,16 @@ def run(args: argparse.Namespace) -> int:
     dangerously_skip = getattr(args, "dangerously_skip_permissions", False)
     run_as_me = getattr(args, "run_as_me", False)
 
-    # ── Tool lifecycle (acquire before, release after) ───────────────────
+    # ── Tools: ensure profile-declared tools are running ─────────────────
+    # Tools are shared and persistent.  Start them if not already running.
+    # They stay running until explicitly stopped via `cf tools stop`.
     session_id = generate_session_id(mode)
     acquired_tools: list[str] = []
     if tools:
         eprint(f"[TOOLS] Profile '{profile_name}' declares tools: {', '.join(tools)}")
         acquired_tools = acquire_tools(session_id, tools, profile_name)
         if acquired_tools:
-            eprint(f"[TOOLS] Acquired: {', '.join(acquired_tools)}")
+            eprint(f"[TOOLS] Running: {', '.join(acquired_tools)}")
 
     try:
         if args.sandbox:
@@ -296,14 +300,14 @@ def run(args: argparse.Namespace) -> int:
                 eprint("[WARN] --run-as-me is only valid with --sandbox; ignoring.")
             return run_local(profile_env, args.claude_args, dangerously_skip)
     finally:
+        # release_tools is a no-op — tools persist until `cf tools stop`
         if acquired_tools:
-            eprint(f"[TOOLS] Releasing: {', '.join(acquired_tools)}")
             release_tools(session_id, acquired_tools)
 
 
 def _resolve_profiles_path() -> Path:
-    """Return the profiles path (~/.codefreedom/profiles/claude-code.json)."""
+    """Return the profiles path (~/.codefreedom/profiles/claude-code.yaml)."""
     override = os.environ.get("CODEFREEDOM_PROFILES_FILE")
     if override:
         return Path(override)
-    return _get_cf_dir() / "profiles" / "claude-code.json"
+    return _get_cf_dir() / "profiles" / "claude-code.yaml"

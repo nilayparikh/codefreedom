@@ -1,10 +1,10 @@
 """Tests for profiles — loading, inheritance, ${VAR} resolution."""
 
-import json
 import os
 from pathlib import Path
 
 import pytest
+import yaml
 
 from codefreedom.profiles import (
     ProfileError,
@@ -17,7 +17,7 @@ from codefreedom.profiles import (
 class TestLoadProfiles:
     """Unit tests for load_profiles."""
 
-    def test_loads_valid_json(self, tmp_path):
+    def test_loads_valid_yaml(self, tmp_path):
         path = _write_profiles(
             tmp_path, {"profiles": {"test": {"description": "test"}}}
         )
@@ -26,11 +26,11 @@ class TestLoadProfiles:
 
     def test_missing_file(self, tmp_path):
         with pytest.raises(ProfileError):
-            load_profiles(tmp_path / "nonexistent.json")
+            load_profiles(tmp_path / "nonexistent.yaml")
 
-    def test_invalid_json(self, tmp_path):
-        path = tmp_path / "bad.json"
-        path.write_text("not json")
+    def test_invalid_yaml(self, tmp_path):
+        path = tmp_path / "bad.yaml"
+        path.write_text(": not: valid: yaml")
         with pytest.raises(ProfileError):
             load_profiles(path)
 
@@ -116,6 +116,7 @@ class TestLoadProfileEnv:
 
 
 def _write_profiles(tmp_path: Path, data: dict) -> Path:
-    path = tmp_path / "profiles.json"
-    path.write_text(json.dumps(data))
+    path = tmp_path / "profiles.yaml"
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     return path
