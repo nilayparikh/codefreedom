@@ -1527,13 +1527,12 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
     """Generate a persistent ``~/.codefreedom/RECIPE.md`` instruction file.
 
     This file records what recipe was installed, what files were created,
-    what secrets are required, and what tools are available.  The doctor
-    command (``cf doctor``) uses it as a reference for validation.
+    and what tools are available. The doctor command (``cf doctor``) uses
+    it as a reference for validation. Secret-related information is shown
+    only on stdout — never written to disk.
     """
     name = manifest.get("name", "unknown")
     description = manifest.get("description", "")
-    required = manifest.get("required_secrets", [])
-    optional = manifest.get("optional_config", [])
     tools = manifest.get("tools_optional", [])
     files = manifest.get("files", [])
 
@@ -1554,24 +1553,6 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
             lines.append(f"- `{target}`")
         lines.append("")
 
-    if required:
-        lines.append("## Required Secrets")
-        lines.append("")
-        lines.append("Set these environment variables before starting:")
-        lines.append("")
-        for secret in required:
-            var = secret.get("var", "?")
-            lines.append(f"- `{var}`")
-        lines.append("")
-
-    if optional:
-        lines.append("## Optional Configuration")
-        lines.append("")
-        for cfg in optional:
-            var = cfg.get("var", "?")
-            lines.append(f"- `{var}`")
-        lines.append("")
-
     if tools:
         lines.append("## Available Tools")
         lines.append("")
@@ -1581,9 +1562,7 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
 
     lines.append("## Quick Start")
     lines.append("")
-    env_secrets = _find_env_secrets_targets(manifest, cf_dir)
-    if env_secrets:
-        lines.append("1. Edit the `.secrets` files and add your API keys")
+    lines.append("1. Edit the `.secrets` files and add your API keys")
     lines.append("1. Start the proxy: `cf proxy start`")
     lines.append("2. Launch the agent: `cf cc`")
     lines.append("3. Run diagnostics: `cf doctor`")
