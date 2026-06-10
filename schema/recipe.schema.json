@@ -240,6 +240,6 @@
   ],
   "title": "RecipeConfig",
   "type": "object",
-  "$id": "https://raw.githubusercontent.com/nilayparikh/codefreedom/main/schema/recipe.schema.json",
+  "$id": "https://raw.githubusercontent.com/nilayparikh/codefreedom/recipe-branch/schema/recipe.schema.json",
   "$schema": "https://json-schema.org/draft-07/schema#"
 }
