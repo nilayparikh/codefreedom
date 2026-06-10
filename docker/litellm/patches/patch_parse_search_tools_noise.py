@@ -23,26 +23,25 @@ calls only fire on the first invocation.
 
 Run from Dockerfile.LiteLLM as a build step.  Idempotent.
 """
+
 from __future__ import annotations
 import os, sys
 
 HEADING_OLD = (
-    '        print(  # noqa\n'
+    "        print(  # noqa\n"
     '            "\\033[32mLiteLLM: Proxy initialized with Search Tools:\\033[0m"\n'
-    '        )  # noqa\n'
+    "        )  # noqa\n"
 )
 
 HEADING_NEW = (
     '        if not getattr(self, "_search_tools_printed", False):\n'
-    '            self._search_tools_printed = True\n'
-    '            print(  # noqa\n'
+    "            self._search_tools_printed = True\n"
+    "            print(  # noqa\n"
     '                "\\033[32mLiteLLM: Proxy initialized with Search Tools:\\033[0m"\n'
-    '            )  # noqa\n'
+    "            )  # noqa\n"
 )
 
-TOOLNAME_OLD = (
-    '            print(f"\\033[32m    {search_tool_name} ({search_provider})\\033[0m")  # noqa\n'
-)
+TOOLNAME_OLD = '            print(f"\\033[32m    {search_tool_name} ({search_provider})\\033[0m")  # noqa\n'
 
 TOOLNAME_NEW = (
     '            if not getattr(self, "_search_tools_printed", False):\n'
@@ -53,7 +52,10 @@ TOOLNAME_NEW = (
 def patch_proxy_server(path=None):
     if path is None:
         import litellm
-        path = os.path.join(os.path.dirname(litellm.__file__), "proxy", "proxy_server.py")
+
+        path = os.path.join(
+            os.path.dirname(litellm.__file__), "proxy", "proxy_server.py"
+        )
 
     if not os.path.isfile(path):
         print(f"[patch] ERROR: not found at {path}")
@@ -80,6 +82,7 @@ def patch_proxy_server(path=None):
         f.write(content)
 
     import py_compile
+
     try:
         py_compile.compile(path, doraise=True)
     except py_compile.PyCompileError as e:

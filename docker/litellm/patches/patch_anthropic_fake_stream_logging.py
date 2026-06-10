@@ -62,9 +62,7 @@ def patch_logging() -> bool:
     import litellm
 
     pkg_dir = os.path.dirname(litellm.__file__)
-    logging_path = os.path.join(
-        pkg_dir, "litellm_core_utils", "litellm_logging.py"
-    )
+    logging_path = os.path.join(pkg_dir, "litellm_core_utils", "litellm_logging.py")
 
     if not os.path.isfile(logging_path):
         print(f"[patch] ERROR: litellm_logging.py not found at {logging_path}")
@@ -93,7 +91,9 @@ def patch_logging() -> bool:
 
     # Verify.
     if "FakeAnthropicMessagesStreamIterator" in content:
-        print("[patch] Successfully patched _handle_anthropic_messages_response_logging.")
+        print(
+            "[patch] Successfully patched _handle_anthropic_messages_response_logging."
+        )
         return True
 
     print("[patch] ERROR: verification failed after write.")
