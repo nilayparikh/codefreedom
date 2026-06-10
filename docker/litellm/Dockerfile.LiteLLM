@@ -243,6 +243,15 @@ RUN python patch_anthropic_fake_stream_logging.py
 COPY patches/patch_parse_search_tools_noise.py .
 RUN python patch_parse_search_tools_noise.py
 
+# Disable Responses API auto-routing for Azure models.  LiteLLM 1.87.x
+# auto-routes GPT-5.x chat completions through the Azure Responses API
+# when reasoning_effort + tools or reasoning_summary are present.  Azure
+# Foundry (services.ai.azure.com) does not reliably serve the Responses
+# API yet, so this removes "azure" from the provider condition.
+# (see patch_responses_azure.py)
+COPY patches/patch_responses_azure.py .
+RUN python patch_responses_azure.py
+
 # ── Bake the reasoning-efforts mapping plugin into the image ───────────────
 # The .py module must be findable by LiteLLM's callback loader at
 # /app/litellm-config/plugins/reasoning-efforts/reasoning_efforts_mapping.py
