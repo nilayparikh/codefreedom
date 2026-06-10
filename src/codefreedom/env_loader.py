@@ -221,4 +221,28 @@ def load_env_chain(
     for key, val in os.environ.items():
         merged[key] = val
 
+    # CF_CLI_* overrides from machine env — highest priority of all.
+    # Users can export CF_CLI_LITELLM_MASTER_KEY=sk-... in their shell
+    # to force-set configuration values without touching .env files.
+    merged = apply_cf_cli_overrides(merged)
+
     return merged
+
+
+def apply_cf_cli_overrides(env: Dict[str, str]) -> Dict[str, str]:
+    """Apply ``CF_CLI_*`` machine env vars as final overrides.
+
+    Any environment variable starting with ``CF_CLI_`` is stripped of its
+    prefix and written into *env*, overriding any existing value.  This
+    gives users a guaranteed way to control CodeFreedom configuration
+    from their shell or dotfiles without editing ``.env`` files.
+
+    Example:
+        ``export CF_CLI_LITELLM_MASTER_KEY=sk-xxx``
+        → sets ``env["LITELLM_MASTER_KEY"] = "sk-xxx"``
+    """
+    for key, val in os.environ.items():
+        if key.startswith("CF_CLI_"):
+            real_key = key[len("CF_CLI_") :]
+            env[real_key] = val
+    return env

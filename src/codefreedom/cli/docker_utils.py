@@ -16,6 +16,8 @@ from typing import Any
 
 import yaml
 
+from pydantic import BaseModel
+
 from codefreedom.env_loader import eprint
 from codefreedom.interpolate import interpolate_all_strings
 
@@ -414,7 +416,7 @@ def load_tool_profile(
     tool_key: str,
     defaults: dict[str, Any],
     profile_filename: str,
-    schema_class: type | None = None,
+    schema_class: type[BaseModel] | None = None,
     env_port_var: str | None = None,
     extra_keys: list[str] | None = None,
     label: str | None = None,
@@ -631,7 +633,7 @@ def start_tool_docker_guard(label: str) -> bool:
     """
     if check_docker_available():
         return True
-    eprint("[ERROR] Docker not found. Install Docker and try again.")
+    eprint(f"[{label}] Docker not found. Install Docker and try again.")
     return False
 
 

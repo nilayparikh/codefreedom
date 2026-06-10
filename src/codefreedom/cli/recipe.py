@@ -533,7 +533,6 @@ def _make_diff(
     style for new files.
     """
     import difflib
-    import datetime
 
     existing_lines = existing.splitlines(keepends=True)
     incoming_lines = incoming.splitlines(keepends=True)

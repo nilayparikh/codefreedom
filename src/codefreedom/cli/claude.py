@@ -294,5 +294,3 @@ def run(args: argparse.Namespace) -> int:
         # release_tools is a no-op — tools persist until `cf tools stop`
         if acquired_tools:
             release_tools(session_id, acquired_tools)
-
-

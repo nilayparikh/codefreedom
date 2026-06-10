@@ -106,3 +106,27 @@ To reduce noise:
 ```bash
 export LITELLM_LOG_LEVEL=WARNING
 ```
+
+## Environment Variable Priority
+
+The proxy resolves configuration from multiple sources. Later sources override earlier ones:
+
+| Priority    | Source                              | Example                                   |
+| ----------- | ----------------------------------- | ----------------------------------------- |
+| 1 (lowest)  | `~/.codefreedom/.env.proxy`         | Component config                          |
+| 2           | `~/.codefreedom/.env`               | Shared config                             |
+| 3           | `{workspace}/.env`                  | Workspace config                          |
+| 4           | `~/.codefreedom/.env.proxy.secrets` | Component secrets                         |
+| 5           | `~/.codefreedom/.env.secrets`       | Shared secrets                            |
+| 6           | `{workspace}/.env.secrets`          | Workspace secrets                         |
+| 7           | `~/.codefreedom/.env.user`          | User overrides (never touched by recipes) |
+| 8           | Machine environment (`os.environ`)  | Exported shell vars                       |
+| 9 (highest) | `CF_CLI_*` overrides                | `export CF_CLI_LITELLM_MASTER_KEY=sk-...` |
+
+**`CF_CLI_*` overrides** let you force-set any configuration value from your shell without editing `.env` files. The prefix is stripped and the value is applied as the final override:
+
+```bash
+# In ~/.bashrc — always wins, no matter what .env files say
+export CF_CLI_LITELLM_MASTER_KEY=sk-d3k5Zz9gWx...
+export CF_CLI_DEEPSEEK_API_KEY=sk-...
+```

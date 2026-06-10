@@ -24,13 +24,13 @@ Profiles control which AI model you use. Think of them as presets.
 
 ### Built-in Profiles
 
-| Profile | Model | When to Use |
-|---------|-------|-------------|
-| `default` | `${MODEL_NAME}` | Everyday work |
-| `bare` | _(none)_ | Minimal setup, no model aliases |
-| `ultra` | `${MODEL_NAME_ULTRA}` | Architecture, complex reasoning |
-| `pro` | `${MODEL_NAME_PRO}` | Balanced — implementation work |
-| `air` | `${MODEL_NAME_AIR}` | Quick tasks, fast responses |
+| Profile   | Model                 | When to Use                     |
+| --------- | --------------------- | ------------------------------- |
+| `default` | `${MODEL_NAME}`       | Everyday work                   |
+| `bare`    | _(none)_              | Minimal setup, no model aliases |
+| `ultra`   | `${MODEL_NAME_ULTRA}` | Architecture, complex reasoning |
+| `pro`     | `${MODEL_NAME_PRO}`   | Balanced — implementation work  |
+| `air`     | `${MODEL_NAME_AIR}`   | Quick tasks, fast responses     |
 
 ### Use a Profile
 
@@ -62,6 +62,30 @@ Then use it:
 codefreedom claude --profile my-work
 ```
 
+## Environment Variable Priority
+
+Claude Code configuration is resolved from multiple sources. Later sources override earlier ones:
+
+| Priority    | Source                               | Example                                     |
+| ----------- | ------------------------------------ | ------------------------------------------- |
+| 1 (lowest)  | `~/.codefreedom/.env.claude`         | Component config                            |
+| 2           | `~/.codefreedom/.env`                | Shared config                               |
+| 3           | `{workspace}/.env`                   | Workspace config                            |
+| 4           | `~/.codefreedom/.env.claude.secrets` | Component secrets                           |
+| 5           | `~/.codefreedom/.env.secrets`        | Shared secrets                              |
+| 6           | `{workspace}/.env.secrets`           | Workspace secrets                           |
+| 7           | `~/.codefreedom/.env.user`           | User overrides (never touched by recipes)   |
+| 8           | Machine environment (`os.environ`)   | Exported shell vars                         |
+| 9 (highest) | `CF_CLI_*` overrides                 | `export CF_CLI_ANTHROPIC_AUTH_TOKEN=sk-...` |
+
+**`CF_CLI_*` overrides** let you force-set any value from your shell without editing `.env` files. The prefix is stripped and the value is applied as the final override — above files, above `os.environ`, above everything:
+
+```bash
+# In ~/.bashrc — always wins
+export CF_CLI_LITELLM_MASTER_KEY=sk-d3k5Zz9gWx...
+export CF_CLI_ANTHROPIC_AUTH_TOKEN=sk-...
+```
+
 **Inheritance:** Custom profiles automatically inherit from `default`. You only set what differs.
 
 ## Sandbox Mode
@@ -77,11 +101,11 @@ codefreedom claude --sandbox --run-as-me   # Run as your user
 
 ### Sandbox Images
 
-| Image | Use Case | Tag |
-|-------|----------|-----|
-| Ubuntu | CPU-only, general purpose | `latest` |
-| CUDA | NVIDIA GPU (AI workloads) | `cuda-latest` |
-| ROCm | AMD GPU (AI workloads) | `rocm-latest` |
+| Image  | Use Case                  | Tag           |
+| ------ | ------------------------- | ------------- |
+| Ubuntu | CPU-only, general purpose | `latest`      |
+| CUDA   | NVIDIA GPU (AI workloads) | `cuda-latest` |
+| ROCm   | AMD GPU (AI workloads)    | `rocm-latest` |
 
 All images include Claude Code, Node.js, Python, Git, and essential dev tools.
 
@@ -94,11 +118,11 @@ All images include Claude Code, Node.js, Python, Git, and essential dev tools.
 
 ### GPU Requirements
 
-| Image | Requirement |
-|-------|-------------|
-| CUDA | NVIDIA GPU + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) |
-| ROCm | AMD GPU + ROCm support |
-| Ubuntu | No GPU needed |
+| Image  | Requirement                                                                                                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| CUDA   | NVIDIA GPU + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) |
+| ROCm   | AMD GPU + ROCm support                                                                                                               |
+| Ubuntu | No GPU needed                                                                                                                        |
 
 No GPU? Use Ubuntu:
 
@@ -118,12 +142,12 @@ codefreedom claude --native-models  # Local, bypass proxy (use Anthropic directl
 
 ### Local vs Sandbox
 
-| Aspect | Sandbox | Local |
-|--------|---------|-------|
-| Isolation | Full container | Host environment |
-| GPU | Automatic (`--gpus all`) | Manual setup |
-| State | Per-profile, isolated | Shared `~/.claude` |
-| Cleanup | Auto on exit | N/A |
+| Aspect    | Sandbox                  | Local              |
+| --------- | ------------------------ | ------------------ |
+| Isolation | Full container           | Host environment   |
+| GPU       | Automatic (`--gpus all`) | Manual setup       |
+| State     | Per-profile, isolated    | Shared `~/.claude` |
+| Cleanup   | Auto on exit             | N/A                |
 
 ## Bypass the Proxy
 

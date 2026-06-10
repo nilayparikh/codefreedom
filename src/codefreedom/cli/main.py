@@ -447,7 +447,7 @@ def main() -> None:
             "proxy": cmd_vscode_proxy_config,
         }
         action = getattr(args, "vscode_action", None)
-        handler = action_map.get(action)
+        handler = action_map.get(action) if isinstance(action, str) else None
         if handler is None:
             vscode_parser.print_help()
             sys.exit(1)
@@ -469,7 +469,7 @@ def main() -> None:
         "up": ("codefreedom.cli.update", "run"),
         "deinit": ("codefreedom.cli.deinit", "run"),
     }
-    dispatch = _SIMPLE_DISPATCH.get(args.command)
+    dispatch = _SIMPLE_DISPATCH.get(args.command) if isinstance(args.command, str) else None
     if dispatch is not None:
         _dispatch(dispatch[0], dispatch[1], args)
 

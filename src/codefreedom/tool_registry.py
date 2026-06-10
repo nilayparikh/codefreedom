@@ -102,7 +102,6 @@ def acquire_tools(_session_id: str, tools: list[str], _profile: str) -> list[str
 
 def release_tools(_session_id: str, _tools: list[str]) -> None:
     """Release tools — no-op.  Tools persist until explicitly stopped."""
-    pass
 
 
 # ── MCP endpoint resolution ───────────────────────────────────────────────────

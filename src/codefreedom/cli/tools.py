@@ -13,6 +13,7 @@ Profiles are loaded from ~/.codefreedom/profiles/.
 from __future__ import annotations
 
 import argparse
+from typing import Callable
 
 from codefreedom.env_loader import eprint
 from codefreedom.cli.docker_utils import container_is_running
@@ -37,7 +38,7 @@ from codefreedom.cli.web_bridge import (
     stop as web_bridge_stop,
 )
 
-_TOOLS: list[tuple[str, str, callable, callable, callable]] = [
+_TOOLS: list[tuple[str, str, Callable, Callable, Callable]] = [
     ("chrome", "Chrome browser", chrome_load_profile, chrome_start, chrome_stop),
     ("web", "Web search", web_load_profile, web_start, web_stop),
     ("github", "GitHub MCP", github_load_profile, github_start, github_stop),
@@ -45,9 +46,9 @@ _TOOLS: list[tuple[str, str, callable, callable, callable]] = [
 ]
 
 
-def _load_all_settings() -> list[tuple[str, str, dict, callable, callable]]:
+def _load_all_settings() -> list[tuple[str, str, dict, Callable, Callable]]:
     """Load settings for all tools. Returns (name, label, settings, start_fn, stop_fn) tuples."""
-    results: list[tuple[str, str, dict, callable, callable]] = []
+    results: list[tuple[str, str, dict, Callable, Callable]] = []
     for name, label, load_fn, start_fn, stop_fn in _TOOLS:
         try:
             settings = load_fn()
@@ -61,7 +62,7 @@ def _for_each_tool(action: str) -> int:
     """Run an action across all tools. Returns exit code (0 if all ok)."""
     failures = 0
     verb = action.capitalize().rstrip("e") + "ing"
-    for name, label, settings, start_fn, stop_fn in _load_all_settings():
+    for _name, label, settings, start_fn, stop_fn in _load_all_settings():
         eprint(f"[tools] {verb} {label}...")
         if action == "start":
             rc = start_fn(settings)

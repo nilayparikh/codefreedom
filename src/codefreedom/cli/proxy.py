@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from codefreedom.config import get_codefreedom_dir
-from codefreedom.env_loader import eprint, load_dotenv
+from codefreedom.env_loader import apply_cf_cli_overrides, eprint, load_dotenv
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 
@@ -79,6 +79,10 @@ def run(args: argparse.Namespace) -> int:
 def _load_proxy_env_files() -> Dict[str, str]:
     """Load proxy env files: .env.proxy → .env.proxy.secrets → .env.user.
 
+    ``CF_CLI_*`` overrides from the machine environment are applied
+    separately by ``_build_proxy_env`` as the final, highest-priority
+    step.
+
     Returns a merged dict where later files override earlier ones.
     """
     merged: Dict[str, str] = {}
@@ -106,7 +110,9 @@ def _build_proxy_env() -> Dict[str, str]:
       1. os.environ (base)
       2. .env.proxy (config, skip if missing)
       3. .env.proxy.secrets (secrets, skip if missing)
-      4. .env.user (user overrides — highest priority, skip if missing)
+      4. .env.user (user overrides, skip if missing)
+      5. ``CF_CLI_*`` overrides (absolute highest — stripped of prefix,
+         e.g. ``CF_CLI_LITELLM_MASTER_KEY`` → ``LITELLM_MASTER_KEY``)
 
     Also injects ``POSTGRES_HOST_DATA_DIR`` and
     ``POSTGRES_HOST_BACKUP_DIR`` from ``CODEFREEDOM_HOME`` so the
@@ -120,6 +126,11 @@ def _build_proxy_env() -> Dict[str, str]:
     cf_dir = get_codefreedom_dir()
     merged.setdefault("POSTGRES_HOST_DATA_DIR", str(cf_dir / "pg" / "data"))
     merged.setdefault("POSTGRES_HOST_BACKUP_DIR", str(cf_dir / "pg" / "backup"))
+
+    # CF_CLI_* overrides from machine env — highest priority of all.
+    # Export CF_CLI_LITELLM_MASTER_KEY=sk-... in your shell to override
+    # without touching .env files.
+    merged = apply_cf_cli_overrides(merged)
 
     return merged
 
@@ -251,6 +262,7 @@ def _ensure_codefreedom_network() -> None:
     create = subprocess.run(
         ["docker", "network", "create", "codefreedom"],
         capture_output=True,
+        text=True,
         timeout=15,
         check=False,
     )
@@ -280,7 +292,8 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         eprint(f"[proxy] Warning: could not verify tools: {exc}")
 
     # Build merged environment: proxy files override system env, then CLI
-    # flags override everything for this run only.
+    # flags override everything for this run only, then CF_CLI_* overrides
+    # from machine env win everything.
     merged_env = _build_proxy_env()
     if args is not None:
         if getattr(args, "port", None):

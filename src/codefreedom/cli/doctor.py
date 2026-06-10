@@ -27,7 +27,7 @@ import shutil
 import stat
 import subprocess
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from codefreedom.cli.docker_utils import (
     get_codefreedom_container_ports,
@@ -564,6 +564,43 @@ def _check_tool_profile(name: str, label: str) -> CheckResult:
 # ── Section: Env Vars (Proxy) ──────────────────────────────────────────────
 
 
+def _resolve_env_var_value(
+    name: str,
+    env_files: Optional[List[Path]] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Resolve an env var value across all sources.
+
+    Checks (in priority order):
+    1. ``CF_CLI_<NAME>`` in ``os.environ`` (highest priority machine override)
+    2. ``NAME`` directly in ``os.environ``
+    3. ``NAME=`` in the provided *env_files*
+
+    Returns ``(value, source_description)`` or ``(None, None)`` if not found
+    in any source.
+    """
+    # 1. CF_CLI_* override (highest priority — beats everything)
+    cf_cli_name = f"CF_CLI_{name}"
+    if cf_cli_name in os.environ and os.environ[cf_cli_name]:
+        return os.environ[cf_cli_name], f"CF_CLI_{cf_cli_name} (machine env override)"
+
+    # 2. Direct env var
+    if name in os.environ and os.environ[name]:
+        return os.environ[name], f"{name} (machine env)"
+
+    # 3. Env files
+    if env_files:
+        for env_file in env_files:
+            if env_file.exists():
+                content = env_file.read_text(encoding="utf-8")
+                for line in content.splitlines():
+                    if line.strip().startswith(f"{name}="):
+                        val = line.split("=", 1)[1].strip()
+                        if val and val != "CHANGE_ME":
+                            return val, f"{name} (in {env_file.name})"
+
+    return None, None
+
+
 @_section("Environment Variables (Proxy)")
 def _check_litellm_master_key() -> CheckResult:
     return _check_env_var(
@@ -572,36 +609,33 @@ def _check_litellm_master_key() -> CheckResult:
 
 
 def _check_env_var(name: str, label: str, source_hint: str) -> CheckResult:
-    """Check that an env var is set (in os.environ or in the proxy env files)."""
-    if name in os.environ and os.environ[name]:
-        return _ok(f"{name} is set ({label})")
-    # Also check the .env.proxy.secrets file
+    """Check that an env var is set across all sources (env, CF_CLI_*, files).
+
+    Uses :func:`_resolve_env_var_value` for a single code path that considers
+    ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
+    """
     cf_dir = get_codefreedom_dir()
-    for env_file in [cf_dir / ".env.proxy", cf_dir / ".env.proxy.secrets"]:
-        if env_file.exists():
-            content = env_file.read_text(encoding="utf-8")
-            for line in content.splitlines():
-                if line.strip().startswith(f"{name}="):
-                    val = line.split("=", 1)[1].strip()
-                    if val and val != "CHANGE_ME":
-                        return _ok(f"{name} is set in {env_file.name}")
+    env_files = [cf_dir / ".env.proxy", cf_dir / ".env.proxy.secrets"]
+    value, source = _resolve_env_var_value(name, env_files=env_files)
+    if value is not None:
+        return _ok(f"{name} is set ({label})")
     return _fail(
         f"{name} is not set ({label})",
-        f"Set it in {source_hint}",
+        f"Set it in {source_hint} or export CF_CLI_{name}=... in your shell",
     )
 
 
 def _check_env_var_optional(name: str, label: str, _source_hint: str) -> CheckResult:
-    """Check an optional env var."""
-    if name in os.environ and os.environ[name]:
-        return _ok(f"{name} is set ({label})")
+    """Check an optional env var across all sources (env, CF_CLI_*, files).
+
+    Uses :func:`_resolve_env_var_value` for a single code path that considers
+    ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
+    """
     cf_dir = get_codefreedom_dir()
-    for env_file in [cf_dir / ".env.proxy", cf_dir / ".env.proxy.secrets"]:
-        if env_file.exists():
-            content = env_file.read_text(encoding="utf-8")
-            for line in content.splitlines():
-                if line.strip().startswith(f"{name}="):
-                    return _ok(f"{name} is set in {env_file.name}")
+    env_files = [cf_dir / ".env.proxy", cf_dir / ".env.proxy.secrets"]
+    value, source = _resolve_env_var_value(name, env_files=env_files)
+    if value is not None:
+        return _ok(f"{name} is set ({label})")
     return _skip(f"{name} is not set (optional — {label})")
 
 

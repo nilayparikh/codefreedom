@@ -234,8 +234,12 @@ and workspace env files are loaded for all components.
 - Secrets files: `.env.claude.secrets` / `.env.proxy.secrets` → `.env.secrets` → `{workspace}/.env.secrets`
 - User overrides: `.env.user` (highest config priority, never touched by recipes)
 - Machine env (highest priority): `os.environ`
+- `CF_CLI_*` overrides (absolute highest): any env var prefixed `CF_CLI_`
+  (e.g. `CF_CLI_LITELLM_MASTER_KEY`) is stripped of its prefix and applied
+  as a final override, beating everything. Use this for shell-level overrides
+  that must always win regardless of `.env` file contents.
 
-**codefreedom claude** (8 layers, lowest to highest):
+**codefreedom claude** (8 layers + CF_CLI, lowest to highest):
 
 1. `{codefreedom_dir}/.env.claude` — Claude Code config (skips if missing)
 2. `{codefreedom_dir}/.env` — shared config (skips if missing)
@@ -245,8 +249,10 @@ and workspace env files are loaded for all components.
 6. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
 7. `{codefreedom_dir}/.env.user` — user overrides (skips if missing)
 8. `os.environ` — system env (always wins)
+9. `CF_CLI_*` — machine env vars prefixed with `CF_CLI_` are stripped
+   of the prefix and applied as final overrides (always wins everything)
 
-**codefreedom proxy** (8 layers):
+**codefreedom proxy** (8 layers + CF_CLI):
 
 1. `{codefreedom_dir}/.env.proxy` — proxy config (skips if missing)
 2. `{codefreedom_dir}/.env` — shared config (skips if missing)
@@ -256,8 +262,10 @@ and workspace env files are loaded for all components.
 6. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
 7. `{codefreedom_dir}/.env.user` — user overrides (skips if missing)
 8. `os.environ` — system env (always wins)
+9. `CF_CLI_*` — machine env vars prefixed with `CF_CLI_` are stripped
+   of the prefix and applied as final overrides (always wins everything)
 
-**codefreedom tools** (chrome, web, etc.) — 6 layers:
+**codefreedom tools** (chrome, web, etc.) — 6 layers + CF_CLI:
 
 1. `{codefreedom_dir}/.env` — shared config (skips if missing)
 2. `{workspace}/.env` — workspace config (skips if missing)
@@ -265,6 +273,8 @@ and workspace env files are loaded for all components.
 4. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
 5. `{codefreedom_dir}/.env.user` — user overrides (skips if missing)
 6. `os.environ` — system env (always wins)
+7. `CF_CLI_*` — machine env vars prefixed with `CF_CLI_` are stripped
+   of the prefix and applied as final overrides (always wins everything)
 
 All layers support `${VAR}` and `${VAR:-default}` interpolation. **Empty-string env vars are valid overrides** (`export FOO=""` does NOT fall through to defaults).
 
