@@ -286,13 +286,17 @@ RUN case "${TARGETARCH}" in \
     && echo "[prisma] TARGETARCH=${TARGETARCH} → PRISMA_CLI_BINARY_TARGETS=${PRISMA_CLI_BINARY_TARGETS}" \
     && cd /install/lib/python3.13/site-packages/litellm/proxy \
     && npx prisma@5.17.0 generate \
-    && HASH=$(find /root/.cache/prisma -maxdepth 4 -name query-engine -type f -path '*-openssl-3*' | head -1 | grep -oP '[0-9a-f]{40}') \
-    && SRC=$(find /root/.cache/prisma -maxdepth 4 -name query-engine -type f -path '*-openssl-3*' | head -1) \
+    && if [ "$PT" != "native" ]; then \
+         SRC=$(find "/root/.cache/prisma" -maxdepth 5 -path "*/${PT}/query-engine" -type f | head -1); \
+       else \
+         SRC=$(find /root/.cache/prisma -maxdepth 4 -name query-engine -type f -path '*-openssl-3*' | head -1); \
+       fi \
+    && HASH=$(echo "$SRC" | grep -oP '[0-9a-f]{40}') \
     && DST="/root/.cache/prisma-python/binaries/5.17.0/$HASH" \
     && mkdir -p "$DST" \
     && ENGINE_NAME=$(python3 -c "from prisma.engine.utils import query_engine_name; print(query_engine_name())") \
     && cp "$SRC" "$DST/$ENGINE_NAME" \
-    && echo "Engines: prisma $(basename "$SRC") → prisma-python $HASH"
+    && echo "Engines: prisma ${SRC} → prisma-python ${ENGINE_NAME}"
 
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║ Stage 3 — runtime: combine PG + LiteLLM + tini + entrypoint        ║
