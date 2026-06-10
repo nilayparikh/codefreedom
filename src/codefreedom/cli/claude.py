@@ -10,12 +10,9 @@ VS Code integration: see `codefreedom vscode claude config`.
 from __future__ import annotations
 
 import argparse
-import shutil
 from pathlib import Path
 
-from codefreedom.cli.init_utils import find_bundled_examples
-from codefreedom.cli.tool_init_utils import _print_non_disclaimer
-from codefreedom.config import get_codefreedom_dir
+from codefreedom.config import resolve_profiles_path
 from codefreedom.env_loader import eprint, load_env_chain
 from codefreedom.launcher import run_docker, run_local
 from codefreedom.profiles import (
@@ -28,85 +25,26 @@ from codefreedom.profiles import (
 )
 from codefreedom.tool_registry import acquire_tools, generate_session_id, release_tools
 
-# Default location for profiles — ~/.codefreedom/profiles/claude-code.json
-# Can be overridden with CODEFREEDOM_PROFILES_FILE env var
-import os
-
-
-def _get_cf_dir() -> Path:
-    """Lazy accessor for the CodeFreedom config directory (test-patchable)."""
-    return get_codefreedom_dir()
-
 
 def init_claude() -> int:
-    """Initialize Claude Code profiles and .env.claude from bundled examples.
+    """Initialize Claude Code configuration via recipes.
 
-    Only copies files into an empty target — if any config already exists,
-    directs user to docs and example configs for manual merging.
+    Bundled examples have been replaced by the recipe system.
+    Use ``cf init recipe`` or ``cf init recipe --plan <name>`` instead.
     """
-    bundled = find_bundled_examples(__file__)
-    claude_src = bundled / "claude"
-    profiles_src = claude_src / "profiles"
+    from codefreedom.cli.tool_init_utils import print_help_section
 
-    cf_dir = _get_cf_dir()
-    profiles_dst_dir = cf_dir / "profiles"
-
-    # Collect all source→destination pairs
-    pairs: list[tuple[Path, Path]] = [
-        (profiles_src / "claude-code.json", profiles_dst_dir / "claude-code.json"),
-        (
-            profiles_src / "claude-code.schema.json",
-            profiles_dst_dir / "claude-code.schema.json",
-        ),
-        (claude_src / ".env.claude.example", cf_dir / ".env.claude"),
-        (claude_src / ".env.claude.secrets.example", cf_dir / ".env.claude.secrets"),
-    ]
-
-    # All-or-nothing check: if any destination file exists, skip everything
-    existing = [dst for _, dst in pairs if dst.exists()]
-    if existing:
-        print(
-            "[claude init] Config already exists — init only bootstraps clean directories."
-        )
-        print(
-            "              Docs:    https://nilayparikh.github.io/codefreedom/claude-code/local/"
-        )
-        print(
-            "              Example: https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/claude/"
-        )
-        print("              Please merge changes manually.")
-        print()
-        _print_non_disclaimer()
-        return 0
-
-    # Nothing exists -- copy all, with rollback on failure
-    created: list[Path] = []
-    try:
-        for src, dst in pairs:
-            if src.exists():
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-                created.append(dst)
-                print(f"[claude init] [CREATE] {dst}")
-            else:
-                print(f"[claude init] [MISSING] Source not found: {src}")
-    except OSError as exc:
-        eprint(f"[claude init] [ERROR] Copy failed: {exc}. Rolling back.")
-        for path in created:
-            try:
-                path.unlink()
-            except OSError:
-                pass
-        return 1
-
-    # ── Summary ─────────────────────────────────────────────────────────
-    print()
-    if created:
-        print(f"[claude init] Done -- {len(created)} created.")
-    print(
-        "              Configure: https://nilayparikh.github.io/codefreedom/claude-code/local/"
+    print_help_section(
+        "claude init",
+        [
+            "Use:  cf init recipe              # install _default base recipe",
+            "      cf init recipe --list        # list available recipes",
+            "      cf init recipe --plan <name> # preview a recipe without applying",
+            "      cf init recipe <name>        # install a specific recipe",
+        ],
+        docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
+        include_disclaimer=True,
     )
-    _print_non_disclaimer()
     return 0
 
 
@@ -131,7 +69,7 @@ def cmd_config(args: argparse.Namespace) -> int:
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = getattr(args, "profile", None) or "default"
-    profiles_path = _resolve_profiles_path()
+    profiles_path = resolve_profiles_path()
 
     profile_env: dict[str, str] = {}
     if profiles_path.exists():
@@ -153,10 +91,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         )
         return 1
     else:
-        eprint(
-            "[ERROR] No profiles file found. "
-            "Run `codefreedom claude init` first."
-        )
+        eprint("[ERROR] No profiles file found. Run `codefreedom claude init` first.")
         return 1
 
     if not profile_env:
@@ -173,7 +108,9 @@ def cmd_config(args: argparse.Namespace) -> int:
         lines.append("<#")
         lines.append("  Claude Code environment variables -- generated by codefreedom")
         lines.append(f"  Profile: {profile_name}")
-        lines.append("  WARNING: This file may contain sensitive values (API keys, tokens).")
+        lines.append(
+            "  WARNING: This file may contain sensitive values (API keys, tokens)."
+        )
         lines.append("#>")
         lines.append("")
         for key in sorted(profile_env):
@@ -184,7 +121,9 @@ def cmd_config(args: argparse.Namespace) -> int:
         lines.append("#!/usr/bin/env bash")
         lines.append("# Claude Code environment variables -- generated by codefreedom")
         lines.append(f"# Profile: {profile_name}")
-        lines.append("# WARNING: This file may contain sensitive values (API keys, tokens).")
+        lines.append(
+            "# WARNING: This file may contain sensitive values (API keys, tokens)."
+        )
         lines.append("")
         for key in sorted(profile_env):
             val = profile_env[key]
@@ -204,7 +143,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         eprint(warning)
         out_file = Path(out_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
-        out_file.write_text(output)
+        out_file.write_text(output, encoding="utf-8")
         out_file.chmod(0o600)
         eprint(f"[CONFIG] Written to {out_file.resolve()}")
         return 0
@@ -231,7 +170,7 @@ def run(args: argparse.Namespace) -> int:
 
     # Fast-path flags (no env loading needed)
     if args.list_profiles:
-        profiles_path = _resolve_profiles_path()
+        profiles_path = resolve_profiles_path()
         profiles = list_profiles(profiles_path)
         if not profiles:
             eprint("[PROFILES] No profiles found.")
@@ -275,7 +214,7 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
-    profiles_path = _resolve_profiles_path()
+    profiles_path = resolve_profiles_path()
 
     profile_env: dict = {}
     sandbox_images: dict[str, str] = {}
@@ -322,14 +261,16 @@ def run(args: argparse.Namespace) -> int:
     dangerously_skip = getattr(args, "dangerously_skip_permissions", False)
     run_as_me = getattr(args, "run_as_me", False)
 
-    # ── Tool lifecycle (acquire before, release after) ───────────────────
+    # ── Tools: ensure profile-declared tools are running ─────────────────
+    # Tools are shared and persistent.  Start them if not already running.
+    # They stay running until explicitly stopped via `cf tools stop`.
     session_id = generate_session_id(mode)
     acquired_tools: list[str] = []
     if tools:
         eprint(f"[TOOLS] Profile '{profile_name}' declares tools: {', '.join(tools)}")
         acquired_tools = acquire_tools(session_id, tools, profile_name)
         if acquired_tools:
-            eprint(f"[TOOLS] Acquired: {', '.join(acquired_tools)}")
+            eprint(f"[TOOLS] Running: {', '.join(acquired_tools)}")
 
     try:
         if args.sandbox:
@@ -350,14 +291,6 @@ def run(args: argparse.Namespace) -> int:
                 eprint("[WARN] --run-as-me is only valid with --sandbox; ignoring.")
             return run_local(profile_env, args.claude_args, dangerously_skip)
     finally:
+        # release_tools is a no-op — tools persist until `cf tools stop`
         if acquired_tools:
-            eprint(f"[TOOLS] Releasing: {', '.join(acquired_tools)}")
             release_tools(session_id, acquired_tools)
-
-
-def _resolve_profiles_path() -> Path:
-    """Return the profiles path (~/.codefreedom/profiles/claude-code.json)."""
-    override = os.environ.get("CODEFREEDOM_PROFILES_FILE")
-    if override:
-        return Path(override)
-    return _get_cf_dir() / "profiles" / "claude-code.json"

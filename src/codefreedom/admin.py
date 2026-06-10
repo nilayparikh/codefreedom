@@ -37,6 +37,7 @@ import platform
 import re
 import secrets as secrets_module
 import stat
+import subprocess
 import sys
 import tarfile
 import time
@@ -215,6 +216,7 @@ class FileDiff:
 _MANAGED_PATHS: List[str] = [
     "profiles",
     "proxy",
+    "pg/backup",
     ".env.claude",
     ".env.claude.secrets",
     ".env.proxy",
@@ -226,6 +228,22 @@ def _is_managed(rel_path: str) -> bool:
     """Return True if *rel_path* is within the managed backup scope."""
     for prefix in _MANAGED_PATHS:
         if rel_path == prefix or rel_path.startswith(prefix + "/"):
+            return True
+    return False
+
+
+def _could_contain_managed(rel_path: str) -> bool:
+    """Return True if *rel_path* could be a parent directory of a managed path.
+
+    This is used during directory traversal to decide whether to descend
+    into a directory. A directory ``pg`` could contain the managed child
+    ``pg/backup``, so we need to enter it even though ``pg`` itself is not
+    a managed path.
+    """
+    if _is_managed(rel_path):
+        return True
+    for prefix in _MANAGED_PATHS:
+        if prefix.startswith(rel_path + "/"):
             return True
     return False
 
@@ -299,7 +317,7 @@ def _collect_files(
         root_rel = Path(root).relative_to(source_dir)
 
         # Prune: only descend into directories that could contain managed files
-        dirs[:] = [d for d in dirs if _is_managed(str(root_rel / d)) or _is_managed(d)]
+        dirs[:] = [d for d in dirs if _could_contain_managed(str(root_rel / d))]
 
         for filename in sorted(files):
             full_path = Path(root) / filename
@@ -374,6 +392,8 @@ def _categorize(rel_path: str) -> str:
         return "sandbox"
     if rel_path.startswith("proc/"):
         return "proc"
+    if rel_path.startswith("pg/"):
+        return "database"
     if rel_path.startswith(".env"):
         return "env"
     return "other"
@@ -386,6 +406,136 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+# ── PostgreSQL dump ───────────────────────────────────────────────────────────
+
+
+_PG_DUMP_PREFIX = "codefreedom-pgdump"
+
+
+def _find_litellm_container() -> Optional[str]:
+    """Find the running LiteLLM proxy container name.
+
+    Uses ``docker ps`` filtered by the ``codefreedom.component=litellm-proxy``
+    label set in docker-compose.yaml. Returns ``None`` if no container is
+    running (non-fatal — the backup continues without a PG dump).
+
+    Returns:
+        The container name string, or None.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "--filter",
+                "label=codefreedom.component=litellm-proxy",
+                "--format",
+                "{{.Names}}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        # Take the first running container
+        return result.stdout.strip().splitlines()[0]
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
+    """Dump the embedded PostgreSQL database from the running LiteLLM container.
+
+    Runs ``pg_dump`` (custom format, compressed) inside the container and
+    writes the dump to the bind-mounted backup directory (``pg/backup/``).
+    The dump is named ``codefreedom-pgdump-<timestamp>.dump``.
+
+    This is a best-effort operation — if the container isn't running or
+    ``pg_dump`` fails, a warning is printed and the backup continues.
+
+    Args:
+        pg_backup_dir: The host directory where PG dumps are written
+            (``~/.codefreedom/pg/backup/``, bind-mounted into the container).
+
+    Returns:
+        The path to the created dump file, or None on failure.
+    """
+    container = _find_litellm_container()
+    if container is None:
+        eprint("[backup] No running LiteLLM container found — skipping PostgreSQL dump")
+        return None
+
+    pg_backup_dir.mkdir(parents=True, exist_ok=True)
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    timestamp = now.strftime("%Y%m%d-%H%M%S")
+    dump_filename = f"{_PG_DUMP_PREFIX}-{timestamp}.dump"
+    container_dump_path = f"/var/lib/postgresql/backup/{dump_filename}"
+
+    eprint(f"[backup] Dumping PostgreSQL database from container '{container}'...")
+
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                container,
+                "pg_dump",
+                "-U",
+                "litellm",
+                "-d",
+                "litellm",
+                "-Fc",  # custom format (compressed, parallel-restore capable)
+                "-f",
+                container_dump_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            if stderr:
+                eprint(f"[backup] [WARN] pg_dump failed: {stderr}")
+            else:
+                eprint(
+                    f"[backup] [WARN] pg_dump failed (exit code {result.returncode})"
+                )
+            return None
+
+        dump_path = pg_backup_dir / dump_filename
+        if dump_path.exists():
+            size = dump_path.stat().st_size
+            eprint(
+                f"[backup] [OK] PostgreSQL dump created: {dump_filename}"
+                f" ({_fmt_size_pg(size)})"
+            )
+            return dump_path
+
+        eprint(
+            f"[backup] [WARN] pg_dump completed but dump file not found at {dump_path}"
+        )
+        return None
+
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        eprint(f"[backup] [WARN] Could not dump PostgreSQL: {exc}")
+        return None
+
+
+def _fmt_size_pg(size: int) -> str:
+    """Format a byte count as a human-readable string (local helper)."""
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    elif size < 1024 * 1024 * 1024:
+        return f"{size / (1024 * 1024):.1f} MB"
+    return f"{size / (1024 * 1024 * 1024):.1f} GB"
 
 
 # ── Naming ────────────────────────────────────────────────────────────────────
@@ -525,19 +675,31 @@ def backup(
     output_path: Optional[Path] = None,
     profile: str = "default",
     passphrase: Optional[str] = None,
+    redact_secrets: Optional[bool] = None,
+    skip_pg_dump: bool = False,
 ) -> Tuple[Path, BackupManifest]:
     """Backup the CodeFreedom home directory to a ``.tar.gz`` archive.
 
-    Only backs up managed files (``profiles/``, ``proxy/``, ``.env.*``).
+    Only backs up managed files (``profiles/``, ``proxy/``, ``pg/``, ``.env.*``).
+    If the LiteLLM proxy is running, the embedded PostgreSQL database is
+    automatically dumped (``pg_dump -Fc``) into ``pg/backup/`` before the
+    archive is created. Use ``skip_pg_dump=True`` to disable this.
 
     When *passphrase* is provided, secrets are stored with full values
     and the archive is encrypted with AES-256-GCM. Without a passphrase,
     secrets are redacted and the archive is unencrypted.
 
+    To create an unencrypted backup with full secret values (e.g. for
+    pre-apply rollback snapshots), set ``redact_secrets=False``.
+
     Args:
         output_path: Target file path.
         profile: Profile label stored in manifest and filename.
         passphrase: If set, encrypt the archive and skip secret redaction.
+        redact_secrets: Explicit override.  Defaults to ``True`` when
+            *passphrase* is unset, ``False`` when set.
+        skip_pg_dump: If True, skip the PostgreSQL dump even if the
+            LiteLLM container is running.
 
     Returns:
         Tuple of (output_path, manifest).
@@ -557,12 +719,20 @@ def backup(
     if not source_dir.exists():
         raise FileNotFoundError(f"CodeFreedom home directory not found: {source_dir}")
 
-    # Collect files (no redaction when encrypting)
-    contents, categories = _collect_files(source_dir, redact_secrets=not encrypting)
+    # Determine redaction: explicit override wins, else default
+    should_redact = redact_secrets if redact_secrets is not None else not encrypting
 
-    # Build manifest (secrets are not redacted when encrypting)
+    # Dump PostgreSQL before collecting files (best-effort, non-fatal)
+    if not skip_pg_dump:
+        pg_backup_dir = get_codefreedom_dir() / "pg" / "backup"
+        _dump_postgresql(pg_backup_dir)
+
+    # Collect files
+    contents, categories = _collect_files(source_dir, redact_secrets=should_redact)
+
+    # Build manifest
     manifest = _build_manifest(
-        contents, categories, profile, secrets_redacted=not encrypting
+        contents, categories, profile, secrets_redacted=should_redact
     )
 
     # Resolve output path
@@ -597,7 +767,7 @@ def _write_archive(
         tar.addfile(info, io.BytesIO(manifest_bytes))
 
         # Write all collected files
-        for cat, entries in manifest.contents.items():
+        for _cat, entries in manifest.contents.items():
             for entry in entries:
                 # Redacted files: write the in-memory redacted content
                 if entry.redacted and entry.redacted_content is not None:
@@ -785,7 +955,7 @@ def prune_backups(
                     to_delete.add(p)
             except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
                 # Can't parse? skip from older_than deletion
-                if isinstance(exc, ValueError) and 'passphrase' in str(exc).lower():
+                if isinstance(exc, ValueError) and "passphrase" in str(exc).lower():
                     eprint(f"[WARN] Cannot evaluate encrypted backup: {p.name}")
                 continue
 
@@ -833,7 +1003,7 @@ def _compute_diff(manifest: BackupManifest, target_dir: Path) -> List[FileDiff]:
     """
     diffs: List[FileDiff] = []
 
-    for cat, entries in manifest.contents.items():
+    for _cat, entries in manifest.contents.items():
         for entry in entries:
             current_path = target_dir / entry.path
             if not current_path.exists():

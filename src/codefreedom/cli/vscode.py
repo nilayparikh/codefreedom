@@ -34,7 +34,6 @@ from codefreedom.config import get_codefreedom_dir
 from codefreedom.env_loader import eprint, load_dotenv, load_env_chain
 from codefreedom.profiles import ProfileError, load_profile_env, load_profiles
 
-
 # ╔═══════════════════════════════════════════════════════════════════════════╗
 # ║ Arg parser                                                               ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
@@ -42,9 +41,7 @@ from codefreedom.profiles import ProfileError, load_profile_env, load_profiles
 
 def build_parser(parser: argparse.ArgumentParser) -> None:
     """Add VS Code sub-subcommands (``claude config``, ``proxy config``) to *parser*."""
-    sub = parser.add_subparsers(
-        dest="vscode_action", title="actions", required=True
-    )
+    sub = parser.add_subparsers(dest="vscode_action", title="actions", required=True)
 
     # ── claude config ───────────────────────────────────────────────────
     claude_cfg = sub.add_parser(
@@ -108,7 +105,9 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
             " that points VS Code at the LiteLLM proxy."
         ),
     )
-    proxy_sub_actions = proxy_cfg.add_subparsers(dest="proxy_config_action", required=True)
+    proxy_sub_actions = proxy_cfg.add_subparsers(
+        dest="proxy_config_action", required=True
+    )
     proxy_config = proxy_sub_actions.add_parser(
         "config",
         help="Probe the proxy and emit a chatLanguageModels.json entry",
@@ -310,12 +309,9 @@ def _build_vscode_settings(
 
 def _resolve_profiles_path() -> Path:
     """Return the resolved Claude Code profiles path (test-patchable)."""
-    from codefreedom.cli.claude import _get_cf_dir  # local import: avoid cycle
+    from codefreedom.config import resolve_profiles_path as _resolve
 
-    override = os.environ.get("CODEFREEDOM_PROFILES_FILE")
-    if override:
-        return Path(override)
-    return _get_cf_dir() / "profiles" / "claude-code.json"
+    return _resolve()
 
 
 def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
@@ -420,81 +416,101 @@ _VSCODE_APIKEY_PLACEHOLDER = "${input:codefreedom.litellm.master_key}"
 _DEFAULT_MAX_INPUT_TOKENS = 128000
 _DEFAULT_MAX_OUTPUT_TOKENS = 16000
 
-# Hardcoded `supportsReasoningEffort` lookup for specific model families.
+# Standard reasoning effort levels advertised to VS Code.
+#
+# The VS Code config always advertises the full standard set for any model
+# that supports reasoning.  The proxy's reasoning-efforts mapping plugin
+# translates these standard values to model-native values at runtime
+# (see ``plugins/reasoning-efforts/reasoning-efforts-mapping.yaml``).
+_STANDARD_REASONING_EFFORT_LEVELS: Tuple[str, ...] = (
+    "none",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+)
+
+# Hardcoded model-family lookup used to decide WHICH models get the
+# ``supportsReasoningEffort`` field.
 #
 # The proxy's /v1/model/info does not surface a per-model list of supported
 # `reasoning_effort` levels, and LiteLLM has no consistent capability
 # database for them.  Rather than leave every model with `[]` (which hides
-# the effort control in VS Code's model picker), we hardcode the documented
-# effort levels for the families we know about and return `[]` for the
-# rest.  The user can edit the generated JSON to override any value.
+# the effort control in VS Code's model picker), we hardcode the model
+# families we know about and return `[]` for the rest.
 #
-# Each rule is a (substring, levels) tuple.  Matching is case-insensitive
-# substring on the full model id (e.g. "Azure/GPT-5.4-Mini").  Order
-# matters -- more specific patterns MUST come first so they win over
-# less-specific ones (e.g. "gpt-5.4-nano" before "gpt-5.4").
+# Each rule is a (substring, supports_reasoning) tuple.  Matching is
+# case-insensitive substring on the full model id.
 #
-# A rule value of `None` means "the model only supports `none` (i.e. has
-# no real reasoning capability)".  In that case the caller OMITS the
-# `supportsReasoningEffort` field from the entry entirely -- advertising
-# `["none"]` is a no-op and just adds noise to the generated JSON.
-_REASONING_EFFORT_RULES: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...] = (
+# A value of ``True`` means the model supports reasoning -- the generated
+# entry will advertise the full standard set (``_STANDARD_REASONING_EFFORT_LEVELS``).
+# A value of ``False`` means the model only supports ``"none"`` (no real
+# reasoning capability).  In that case the caller OMITS the field entirely,
+# since advertising ``["none"]`` is a no-op and just adds noise.
+_REASONING_EFFORT_RULES: Tuple[Tuple[str, bool], ...] = (
     # ── Native OpenAI Tier (Azure) ────────────────────────────────────────────
     # Nano is text-only reasoning; passing extended effort would crash.
-    ("gpt-5.4-nano", None),
-    ("gpt-5.4-mini", ("none", "low", "medium")),
-    ("gpt-5.4", ("none", "low", "medium", "high", "xhigh")),
-    # ── DeepSeek V4 (Pro has xhigh, Flash is capped at high) ─────────────────
-    # Matches all three providers (DeepSeek, NVIDIA, OpenCodeZen-FREE).
-    ("deepseek-v4-pro", ("none", "low", "medium", "high", "xhigh")),
-    ("deepseek-v4-flash", ("none", "low", "medium", "high")),
+    ("gpt-5.4-nano", False),
+    ("gpt-5.4-mini", True),
+    ("gpt-5.4", True),
+    # ── DeepSeek V4 (all variants support reasoning) ─────────────────────────
+    ("deepseek-v4-pro", True),
+    ("deepseek-v4-flash", True),
     # ── Zhipu AI GLM (safe default is none) ──────────────────────────────────
-    ("glm-5.1", None),
+    ("glm-5.1", False),
     # ── NVIDIA & Moonshot backends ────────────────────────────────────────────
     # Kimi-K2.6: text-optimized, no gradient.
-    ("kimi-k2.6", None),
+    ("kimi-k2.6", False),
     # Nemotron-3-Ultra: full gradient; matches both OpenRouter and
     # OpenCodeZen FREE variants.  The Super variant is text-optimized
     # (only `none`) and must come after Ultra so it doesn't get
     # shadowed.
-    ("nemotron-3-ultra", ("none", "low", "medium", "high")),
-    ("nemotron-3-super", None),
+    ("nemotron-3-ultra", True),
+    ("nemotron-3-super", False),
     # ── OpenCodeZen & Aggregator custom models ───────────────────────────────
-    ("mimo-v2.5-free", ("none", "low", "medium", "high")),
-    ("minimax-m3-free", ("none", "low", "medium", "high")),
-    ("big-pickle", None),
-    ("freerouter", None),
+    ("mimo-v2.5-free", True),
+    ("minimax-m3-free", True),
+    ("big-pickle", False),
+    ("freerouter", False),
     # ── Alibaba Qwen 3.6 MoE ──────────────────────────────────────────────────
-    ("qwen3.6-35b-a3b", ("none", "low", "medium", "high")),
-    ("qwen3.6-27b", None),
+    ("qwen3.6-35b-a3b", True),
+    ("qwen3.6-27b", False),
     # ── CodeFreedom internal fallbacks ───────────────────────────────────────
     # Ultra and Flash sit on heavy logic backends with full gradient.
     # Pro and Air are optimised for speed; only `none` is safe.
-    ("codefreedom/ultra", ("none", "low", "medium", "high")),
-    ("codefreedom/flash", ("none", "low", "medium", "high")),
-    ("codefreedom/pro", None),
-    ("codefreedom/air", None),
+    ("codefreedom/ultra", True),
+    ("codefreedom/flash", True),
+    ("codefreedom/pro", False),
+    ("codefreedom/air", False),
 )
 
 
 def _resolve_reasoning_effort(model_name: str) -> Optional[List[str]]:
     """Return the supported `reasoning_effort` levels for *model_name*.
 
+    The VS Code config always advertises the *standard* set of effort levels
+    (``_STANDARD_REASONING_EFFORT_LEVELS``) for any model that supports
+    reasoning.  The proxy's reasoning-efforts mapping plugin handles
+    translation to model-native values at runtime.
+
     Returns:
-      * A list of supported levels (e.g. ``["none", "low", "medium"]``)
-        when the model exposes a real gradient.
-      * ``None`` when the model only supports ``"none"`` (i.e. has no
-        real reasoning capability).  The caller should OMIT the
-        ``supportsReasoningEffort`` field in that case.
-      * An empty list when the model is unknown -- VS Code treats this as
-        "no reasoning effort support advertised" the same as omitting
-        the field.
+      * The standard effort list (``["none", "low", "medium", "high",
+        "xhigh", "max"]``) when the model supports reasoning.
+      * ``None`` when the model has no real reasoning capability.
+        The caller should OMIT the ``supportsReasoningEffort`` field.
+      * The standard effort list for unknown models -- being permissive
+        is better than hiding the effort control in VS Code's model
+        picker.  The user can always prune the generated JSON.
     """
     name_lower = (model_name or "").lower()
-    for pattern, levels in _REASONING_EFFORT_RULES:
+    for pattern, supports_reasoning in _REASONING_EFFORT_RULES:
         if pattern in name_lower:
-            return list(levels) if levels is not None else None
-    return []
+            if supports_reasoning:
+                return list(_STANDARD_REASONING_EFFORT_LEVELS)
+            return None
+    # Unknown model -- be permissive
+    return list(_STANDARD_REASONING_EFFORT_LEVELS)
 
 
 def _resolve_master_key() -> Optional[str]:
@@ -584,9 +600,12 @@ def _model_to_vscode_entry(model: Dict[str, Any], base_url: str) -> Dict[str, An
 
     `supportsReasoningEffort` is resolved by case-insensitive substring
     match against a hardcoded table of known model families (see
-    `_REASONING_EFFORT_RULES`).  Unknown models emit `[]` and models
-    that only support `"none"` (no real gradient) are OMITTED entirely --
-    see `_resolve_reasoning_effort` for the three-way return contract.
+    `_REASONING_EFFORT_RULES`).  Models known to support reasoning get
+    the full standard set (``["none", "low", "medium", "high", "xhigh",
+    "max"]``).  Models with no real reasoning capability OMIT the field
+    entirely.  Unknown models are treated permissively (same full set).  The
+    proxy's reasoning-efforts mapping plugin translates standard values to
+    model-native values at runtime.
     """
     model_info = model.get("model_info") or {}
     if not isinstance(model_info, dict):
@@ -628,11 +647,10 @@ def _model_to_vscode_entry(model: Dict[str, Any], base_url: str) -> Dict[str, An
         "maxInputTokens": max_input_int,
         "maxOutputTokens": max_output_int,
     }
-    # Hardcoded reasoning-effort lookup; see `_resolve_reasoning_effort`.
-    # `None` means the model only supports `"none"` (no real gradient) --
-    # OMIT the field entirely in that case rather than emit a no-op
-    # `["none"]`.  `[]` (empty list) means unknown -- still emit the
-    # field so VS Code knows we considered it.
+    # Reasoning-effort lookup; see `_resolve_reasoning_effort`.
+    # `None` means no real reasoning capability -- OMIT the field entirely.
+    # Otherwise, the full standard set is advertised; the proxy's plugin
+    # maps standard levels to model-native values at runtime.
     effort = _resolve_reasoning_effort(str(model_name))
     if effort is not None:
         entry["supportsReasoningEffort"] = effort

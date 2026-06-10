@@ -18,7 +18,9 @@ A headless Google Chrome container for browser automation. Code agents connect v
 ## Usage
 
 ```bash
-codefreedom tools chrome init     # One-time setup (type "I understand")
+# Install the _default recipe to create the chrome profile
+cf init recipe
+
 codefreedom tools chrome start    # Start container
 codefreedom tools chrome url      # Get CDP debug URL
 codefreedom tools chrome status   # Check status
@@ -45,12 +47,12 @@ Or point Playwright/Puppeteer to `ws://127.0.0.1:9222`.
 
 Settings live in `~/.codefreedom/profiles/chrome.json`:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `image` | `codefreedom:chrome` | Docker image |
-| `container_name` | `codefreedom-chrome` | Container name |
-| `port` | `9222` | CDP debug port |
-| `data_dir` | `~/.codefreedom/sandbox/tools/chrome` | Persistent data |
+| Setting          | Default                               | Description     |
+| ---------------- | ------------------------------------- | --------------- |
+| `image`          | `codefreedom:chrome`                  | Docker image    |
+| `container_name` | `codefreedom-chrome`                  | Container name  |
+| `port`           | `9222`                                | CDP debug port  |
+| `data_dir`       | `~/.codefreedom/sandbox/tools/chrome` | Persistent data |
 
 ## Data Persistence
 

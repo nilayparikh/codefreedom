@@ -72,7 +72,7 @@ model_list:
         - response_format
 ```
 
-See the [source YAML](https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/proxy/config/providers/opencode-zen.yaml) for all model entries. Free-tier models use the `-free` suffix in the upstream model path.
+See the [recipe YAML](https://github.com/nilayparikh/codefreedom-recipes/tree/main/opencode-free/proxy/config/providers/opencode-zen.yaml) for all model entries. Free-tier models use the `-free` suffix in the upstream model path.
 
 ## Enabling
 

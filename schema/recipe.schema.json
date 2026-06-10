@@ -1,90 +1,245 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/nilayparikh/codefreedom-recipes/main/recipe.schema.json",
-  "title": "CodeFreedom Recipe",
-  "description": "Schema for recipe.yaml — defines a CodeFreedom configuration recipe.",
-  "type": "object",
-  "properties": {
-    "name": {
-      "type": "string",
-      "description": "Recipe name (must match the folder name)",
-      "pattern": "^[a-zA-Z0-9_-]+$"
-    },
-    "description": {
-      "type": "string",
-      "description": "Human-readable description of what this recipe sets up"
-    },
-    "version": {
-      "type": "integer",
-      "description": "Recipe schema version",
-      "minimum": 1
-    },
-    "extends": {
-      "type": "string",
-      "description": "Base recipe to extend. Files from the base recipe are installed first, then this recipe's files are merged on top.",
-      "pattern": "^[a-zA-Z0-9_-]+$"
-    },
-    "files": {
-      "type": "array",
-      "description": "List of files to copy from this recipe into ~/.codefreedom/",
-      "items": {
-        "type": "object",
-        "properties": {
-          "path": {
-            "type": "string",
-            "description": "Source path within the recipe folder"
-          },
-          "target": {
-            "type": "string",
-            "description": "Target path under ~/.codefreedom/ (defaults to path if omitted)"
-          },
-          "merge": {
-            "type": "string",
-            "enum": ["deepdiff", "env", "auto", "overwrite"],
-            "description": "Merge strategy when target already exists"
-          }
+  "$defs": {
+    "ConfigEntry": {
+      "additionalProperties": false,
+      "description": "An optional config environment variable with a sensible default.",
+      "properties": {
+        "var": {
+          "title": "Var",
+          "type": "string"
         },
-        "required": ["path"],
-        "additionalProperties": false
-      }
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "var"
+      ],
+      "title": "ConfigEntry",
+      "type": "object"
     },
-    "required_secrets": {
-      "type": "array",
-      "description": "Environment variables the user MUST set before using this recipe",
-      "items": {
-        "type": "object",
-        "properties": {
-          "var": { "type": "string" },
-          "prompt": { "type": "string" },
-          "hint": { "type": "string" },
-          "default": { "type": "string" }
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "A file to copy from the recipe into ~/.codefreedom/.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
         },
-        "required": ["var"],
-        "additionalProperties": false
-      }
-    },
-    "optional_config": {
-      "type": "array",
-      "description": "Environment variables with sensible defaults the user MAY override",
-      "items": {
-        "type": "object",
-        "properties": {
-          "var": { "type": "string" },
-          "default": { "type": "string" }
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
         },
-        "required": ["var"],
-        "additionalProperties": false
-      }
+        "merge": {
+          "anyOf": [
+            {
+              "pattern": "^(deepdiff|env|auto|overwrite)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Merge"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "FileEntry",
+      "type": "object"
     },
-    "tools_optional": {
-      "type": "array",
-      "description": "Auxiliary tools (chrome, web, github) that enhance this recipe",
-      "items": {
-        "type": "string",
-        "enum": ["chrome", "web", "github"]
-      }
+    "SecretEntry": {
+      "additionalProperties": false,
+      "description": "A required secret environment variable.",
+      "properties": {
+        "var": {
+          "title": "Var",
+          "type": "string"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hint"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "var"
+      ],
+      "title": "SecretEntry",
+      "type": "object"
     }
   },
-  "required": ["name", "files"],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "description": "Schema for recipe.yaml \u2014 defines a CodeFreedom configuration recipe.",
+  "properties": {
+    "name": {
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Version"
+    },
+    "extends": {
+      "anyOf": [
+        {
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extends"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "dirs": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Directories to create under CODEFREEDOM_HOME (e.g. mountable volume host paths like pg/data, pg/backup)",
+      "title": "Dirs"
+    },
+    "required_secrets": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/SecretEntry"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Required Secrets"
+    },
+    "optional_config": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ConfigEntry"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Optional Config"
+    },
+    "tools_optional": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tools Optional"
+    }
+  },
+  "required": [
+    "name",
+    "files"
+  ],
+  "title": "RecipeConfig",
+  "type": "object",
+  "$id": "https://raw.githubusercontent.com/nilayparikh/codefreedom/recipe-branch/schema/recipe.schema.json",
+  "$schema": "https://json-schema.org/draft-07/schema#"
 }

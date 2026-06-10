@@ -11,7 +11,7 @@ cli/          -- command dispatch, user-facing logic
   |
 core/         -- env, profiles, launcher, config
   |
-infra/        -- Docker images, proxy config, bundled examples
+infra/        -- Docker images, proxy config, recipes
 ```
 
 Three layers. Each layer calls only the layer below it. No cross-layer or sideways calls.
@@ -39,23 +39,23 @@ Details on env chain layers and profile inheritance: see `CLAUDE.md` > Key Patte
 | `chrome`          | `src/codefreedom/cli/chrome.py`          | `codefreedom tools chrome` — browser container lifecycle                        |
 | `web`             | `src/codefreedom/cli/web.py`             | `codefreedom tools web` — Camoufox MCP container lifecycle                      |
 | `docker_utils`    | `src/codefreedom/cli/docker_utils.py`    | Shared Docker helpers — container exists/running, ensure image, ephemeral names |
-| `init_utils`      | `src/codefreedom/cli/init_utils.py`      | Shared init — find bundled examples, delta-aware copy                           |
+| `recipe`          | `src/codefreedom/cli/recipe.py`          | Recipe system — fetch, plan, and apply configuration recipes                    |
 | `tool_init_utils` | `src/codefreedom/cli/tool_init_utils.py` | Tool acceptance gates, notices, tool metadata                                   |
 | `admin`           | `src/codefreedom/cli/admin.py`           | `codefreedom admin` — backup/restore/prune                                      |
 | `vscode`          | `src/codefreedom/cli/vscode.py`          | `codefreedom vscode` — VS Code config generation (claude, proxy)                |
 
 ### Infrastructure (runtime assets)
 
-| Block           | Location                    | Responsibility                                                                  |
-| --------------- | --------------------------- | ------------------------------------------------------------------------------- |
-| `docker_images` | `docker/`                   | CUDA, ROCm, Ubuntu, Chrome, Camoufox, LiteLLM image families                    |
-| `web-bridge`    | `docker/web-bridge/`        | FastAPI sidecar — SearXNG → Camoufox MCP translation for WebSearch interception |
-| `litellm`       | `docker/litellm/`           | Self-hosted LiteLLM proxy image with embedded PostgreSQL 18.4                    |
-| `litellm_patches` | `docker/litellm/patches/` | Build-time patches applied into the LiteLLM image                                |
-| `litellm_plugins` | `docker/litellm/plugins/` | LiteLLM callbacks baked into the image (reasoning-efforts mapping)               |
-| `proxy_config`  | `~/.codefreedom/proxy/`     | LiteLLM routing, provider YAML, model aliases, plugin configs                   |
-| `examples`      | `src/codefreedom/examples/` | Bundled configs copied by init commands                                         |
-| `tool_profiles` | `~/.codefreedom/profiles/`  | Per-tool JSON settings (chrome, web)                                            |
+| Block             | Location                   | Responsibility                                                                  |
+| ----------------- | -------------------------- | ------------------------------------------------------------------------------- |
+| `docker_images`   | `docker/`                  | CUDA, ROCm, Ubuntu, Chrome, Camoufox, LiteLLM image families                    |
+| `web-bridge`      | `docker/web-bridge/`       | FastAPI sidecar — SearXNG → Camoufox MCP translation for WebSearch interception |
+| `litellm`         | `docker/litellm/`          | Self-hosted LiteLLM proxy image with embedded PostgreSQL 18.4                   |
+| `litellm_patches` | `docker/litellm/patches/`  | Build-time patches applied into the LiteLLM image                               |
+| `litellm_plugins` | `docker/litellm/plugins/`  | LiteLLM callbacks baked into the image (reasoning-efforts mapping)              |
+| `proxy_config`    | `~/.codefreedom/proxy/`    | LiteLLM routing, provider YAML, model aliases, plugin configs                   |
+| `recipes`         | `recipes/`                 | Configuration recipes from github.com/nilayparikh/codefreedom-recipes           |
+| `tool_profiles`   | `~/.codefreedom/profiles/` | Per-tool JSON settings (chrome, web)                                            |
 
 **litellm component.** The `docker/litellm/` directory contains a multi-stage Dockerfile (`Dockerfile.LiteLLM`) that builds a self-contained LiteLLM proxy image with embedded PostgreSQL 18.4 (built from source), Prisma schema management, and the WebSearch count display patch. The image installs LiteLLM from a git fork at a pinned tag (default `nilayparikh/litellm.git` at `v1.87.1`) with `--no-deps`, then layers a curated minimal dependency set. Patches in `docker/litellm/patches/` are applied at build time:
 

@@ -133,8 +133,9 @@ trap cleanup EXIT TERM INT
 # The reasoning-efforts mapping plugin .py is baked into the image at
 # /app/litellm-plugins/.  LiteLLM's callback loader resolves paths
 # relative to the config file's directory, which is bind-mounted from
-# the host at /app/litellm-config/.  Copy the baked .py into the
-# mounted directory at container start so LiteLLM can find it.
+# the host at /app/litellm-config/.  Create a symlink from the mounted
+# directory to the baked location so LiteLLM can find it without
+# copying the .py source onto the host filesystem.
 #
 # The plugin's YAML config lives on the host (user-editable); the .py
 # code is immutable (baked into the image).  Failures here are non-fatal
@@ -143,10 +144,12 @@ PLUGIN_SRC="/app/litellm-plugins/reasoning_efforts_mapping.py"
 PLUGIN_DST="/app/litellm-config/plugins/reasoning-efforts/reasoning_efforts_mapping.py"
 if [ -f "$PLUGIN_SRC" ]; then
     mkdir -p "$(dirname "$PLUGIN_DST")" 2>/dev/null || true
-    if cp "$PLUGIN_SRC" "$PLUGIN_DST" 2>/dev/null; then
-        echo "[entrypoint] Plugin .py deployed to $PLUGIN_DST"
+    # Remove stale regular file from pre-symlink entrypoint versions
+    [ -f "$PLUGIN_DST" ] && [ ! -L "$PLUGIN_DST" ] && rm -f "$PLUGIN_DST"
+    if ln -sf "$PLUGIN_SRC" "$PLUGIN_DST" 2>/dev/null; then
+        echo "[entrypoint] Plugin .py symlinked: $PLUGIN_DST -> $PLUGIN_SRC"
     else
-        echo "[entrypoint] WARNING: Could not deploy plugin .py (read-only mount?)."
+        echo "[entrypoint] WARNING: Could not symlink plugin .py (read-only mount?)."
         echo "              The reasoning-efforts mapper will be unavailable."
     fi
 fi

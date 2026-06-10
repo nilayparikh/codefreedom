@@ -69,7 +69,7 @@ model_list:
         - reasoning_effort
 ```
 
-See the [source YAML](https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/proxy/config/providers/azure-foundry.yaml) for all model entries (Mini and Nano have smaller context windows and different pricing).
+See the [recipe YAML](https://github.com/nilayparikh/codefreedom-recipes/tree/main/azure-openai/proxy/config/providers/azure-foundry.yaml) for all model entries (Mini and Nano have smaller context windows and different pricing).
 
 ## Enabling
 

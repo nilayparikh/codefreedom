@@ -57,7 +57,7 @@ model_list:
         - reasoning_effort
 ```
 
-Append `:free` for free-tier routing. The `openrouter/openrouter/free` endpoint picks the best available model at request time. See the [source YAML](https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/proxy/config/providers/openrouter.yaml) for the full file.
+Append `:free` for free-tier routing. The `openrouter/openrouter/free` endpoint picks the best available model at request time. See the [recipe YAML](https://github.com/nilayparikh/codefreedom-recipes/tree/main/openrouter-free/proxy/config/providers/openrouter.yaml) for the full file.
 
 ## Enabling
 

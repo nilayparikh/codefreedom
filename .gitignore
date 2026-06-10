@@ -34,3 +34,5 @@ site/
 .venv-mkdocs/
 # .mcp.json
 .mcp*.json
+
+.bak/

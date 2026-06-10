@@ -1,23 +1,32 @@
 """Tests for load_tool_mcp_endpoints in tool_registry.py."""
 
-import json
+import os
+from pathlib import Path
+
+import yaml
 
 from codefreedom.config import get_codefreedom_dir
 from codefreedom.tool_registry import load_tool_mcp_endpoints
 
 
-def _write_tool_profile(tool, data):
-    """Write a tool profile JSON to the active codefreedom test dir.
+def _tool_home() -> Path:
+    """Return the tool home directory (set by conftest.py or default)."""
+    override = os.environ.get("CODEFREEDOM_TOOL_HOME")
+    if override:
+        return Path(override)
+    return get_codefreedom_dir()
 
-    Uses ``get_codefreedom_dir()`` which returns the session-scoped
-    temp directory set by ``conftest.py``.  Never monkeypatch
-    ``CODEFREEDOM_HOME`` — the module-level ``_CODEFREEDOM_DIR`` in
-    chrome.py / web.py is evaluated at import time.
+
+def _write_tool_profile(tool, data):
+    """Write a tool profile YAML to the tool home test dir.
+
+    Tool profiles live under ``CODEFREEDOM_TOOL_HOME`` (set by
+    conftest.py to the same session-scoped temp directory).
     """
-    cf_dir = get_codefreedom_dir()
-    profiles = cf_dir / "profiles"
+    profiles = _tool_home() / "profiles"
     profiles.mkdir(parents=True, exist_ok=True)
-    (profiles / f"{tool}.json").write_text(json.dumps(data))
+    with open(profiles / f"{tool}.yaml", "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
 
 class TestLoadToolMcpEndpoints:
@@ -162,9 +171,7 @@ class TestLoadToolMcpEndpoints:
         )
 
         endpoints = load_tool_mcp_endpoints(["github"])
-        assert endpoints["mcpServers"]["github"]["url"] == (
-            "http://127.0.0.1:9090/mcp"
-        )
+        assert endpoints["mcpServers"]["github"]["url"] == ("http://127.0.0.1:9090/mcp")
 
     def test_all_tools_merged(self, monkeypatch):
         """Chrome, Web, and GitHub MCP all produce distinct entries."""

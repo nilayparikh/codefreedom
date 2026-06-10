@@ -68,7 +68,7 @@ model_list:
         - reasoning_effort
 ```
 
-See the [source YAML](https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/proxy/config/providers/nvidia.yaml) for all model entries including model-specific `extra_body` overrides (GLM-5.1 uses `temperature`/`top_p`/`top_k`; Kimi-K2.6 uses `chat_template_kwargs.thinking: true`).
+See the [recipe YAML](https://github.com/nilayparikh/codefreedom-recipes/tree/main/nvidia/proxy/config/providers/nvidia.yaml) for all model entries including model-specific `extra_body` overrides (GLM-5.1 uses `temperature`/`top_p`/`top_k`; Kimi-K2.6 uses `chat_template_kwargs.thinking: true`).
 
 ## Enabling
 

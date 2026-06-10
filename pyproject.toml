@@ -27,7 +27,13 @@ keywords = [
 #   PyYAML         — YAML parsing (litellm config validation)
 #   types-PyYAML   — type stubs needed by litellm's config parser at runtime
 #   deepdiff       — structural YAML/JSON diff for recipe merging
-dependencies = ["PyYAML>=6.0", "types-PyYAML", "deepdiff>=7.0"]
+dependencies = [
+    "PyYAML>=6.0",
+    "types-PyYAML",
+    "deepdiff>=7.0",
+    "pydantic>=2.0",
+    "GitPython>=3.1.43",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -77,49 +83,22 @@ Documentation = "https://nilayparikh.github.io/codefreedom/"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# All files copied by the init subcommands (claude, proxy, chrome, web).
-# Keep this in sync with src/codefreedom/cli/{claude,proxy,chrome,web}.py
-# and src/codefreedom/cli/init_utils.py — every file referenced there
-# must be listed here so it's included in the wheel/sdist and available
-# for first-time `codefreedom ... init` runs.
-codefreedom = [
-    # Claude code agent — copied by `codefreedom claude init`
-    "examples/claude/.env.claude.example",
-    "examples/claude/.env.claude.secrets.example",
-    "examples/claude/profiles/claude-code.json",
-    "examples/claude/profiles/claude-code.schema.json",
-    # LiteLLM proxy — copied by `codefreedom proxy init`
-    "examples/proxy/.env.proxy.example",
-    "examples/proxy/.env.proxy.secrets.example",
-    "examples/proxy/config/config.yaml",
-    "examples/proxy/docker-compose.yaml",
-    "examples/proxy/config/providers/anthropic-compatible.yaml",
-    "examples/proxy/config/providers/azure-foundry.yaml",
-    "examples/proxy/config/providers/deepseek.yaml",
-    "examples/proxy/config/providers/local.yaml",
-    "examples/proxy/config/providers/nvidia.yaml",
-    "examples/proxy/config/providers/openai-compatible.yaml",
-    "examples/proxy/config/providers/opencode-zen.yaml",
-    "examples/proxy/config/providers/openrouter.yaml",
-    # WebSearch count display patch is baked into the litellm image
-    # (see docker/litellm/Dockerfile.LiteLLM and docs/proxy/websearch-interception.md)
-    # — no host-side copy needed.
-    # Browser tools — copied by `codefreedom tools <tool> init`
-    "examples/tools/chrome/chrome.json",
-    "examples/tools/chrome/chrome.schema.json",
-    "examples/tools/web/web.json",
-    "examples/tools/web/web.schema.json",
-]
+# Bundled examples removed — configuration is handled by the recipe system.
+# See `cf init recipe` and github.com/nilayparikh/codefreedom-recipes.
+codefreedom = []
 
 # ── Pylint ───────────────────────────────────────────────────────────────────
 [tool.pylint.messages_control]
 disable = [
     "C0103",                                  # invalid-name — too strict for project naming conventions
     "C0301",                                  # allow long lines for better readability in some cases
+    "C0302",                                  # allow long lines in docstrings
+    "C3001",                                  # unnecessary-lambda — lambda is clearer than passing function ref
     "missing-function-docstring",             # tests don't need per-method docstrings
     "missing-class-docstring",                # test classes are self-documenting
     "unused-import",                          # pytest fixture imports look unused
     "use-implicit-booleaness-not-comparison", # assert == {} is clearer in tests
+    "W0718",                                  # broad-exception-caught — catching Exception is intentional in diagnostics
     "protected-access",                       # tests intentionally call underscore-prefixed helpers
 ]
 

@@ -11,8 +11,9 @@ Usage:
 The proxy is always run via `docker compose` against
 `~/.codefreedom/proxy/docker-compose.yaml`. The LiteLLM process runs inside
 the `codefreedom:litellm-latest` image (see docker/litellm/Dockerfile.LiteLLM)
-which bakes in the WebSearch count display patch. The web-bridge sidecar is
-started as a sibling service in the same compose stack.
+which bakes in the WebSearch count display patch.  The web-bridge is now a
+standalone tool (``cf tools web-bridge``) — start it separately before the
+proxy if you need WebSearch support.
 
 VS Code integration: see `codefreedom vscode proxy config`.
 """
@@ -21,111 +22,19 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from codefreedom.cli.init_utils import find_bundled_examples
-from codefreedom.cli.tool_init_utils import _print_non_disclaimer
 from codefreedom.config import get_codefreedom_dir
-from codefreedom.env_loader import eprint, load_dotenv
+from codefreedom.env_loader import apply_cf_cli_overrides, eprint, load_dotenv
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 
 
-def _get_cf_dir() -> Path:
-    """Lazy accessor for the CodeFreedom config directory (test-patchable)."""
-    return get_codefreedom_dir()
-
-
-def init_proxy() -> int:
-    """Initialize proxy configs and .env.proxy from bundled examples.
-
-    Only copies files into an empty target — if any config already exists,
-    directs user to docs and example configs for manual merging.
-    """
-    bundled = find_bundled_examples(__file__)
-    proxy_src = bundled / "proxy"
-
-    cf_dir = _get_cf_dir()
-    proxy_dst = cf_dir / "proxy"
-
-    # Collect all source→destination pairs
-    pairs: list[tuple[Path, Path]] = [
-        (proxy_src / "config" / "config.yaml", proxy_dst / "config" / "config.yaml"),
-        (proxy_src / "docker-compose.yaml", proxy_dst / "docker-compose.yaml"),
-        (proxy_src / ".env.proxy.example", cf_dir / ".env.proxy"),
-        (proxy_src / ".env.proxy.secrets.example", cf_dir / ".env.proxy.secrets"),
-    ]
-
-    providers_src = proxy_src / "config" / "providers"
-    providers_dst = proxy_dst / "config" / "providers"
-    if providers_src.exists():
-        for provider_file in sorted(providers_src.glob("*.yaml")):
-            pairs.append((provider_file, providers_dst / provider_file.name))
-
-    # Bundled LiteLLM plugins live under config/plugins/ alongside
-    # config.yaml.  Each plugin has its own subfolder (e.g.
-    # plugins/reasoning-efforts/) containing a .yaml config table.
-    # The .py module is baked into the Docker image (see
-    # docker/litellm/Dockerfile.LiteLLM and entrypoint.sh) -- we
-    # only copy the user-editable YAML to the host config directory.
-    plugins_src = proxy_src / "config" / "plugins"
-    plugins_dst = proxy_dst / "config" / "plugins"
-    if plugins_src.exists():
-        for plugin_file in sorted(plugins_src.rglob("*")):
-            if plugin_file.is_file() and plugin_file.suffix == ".yaml":
-                rel = plugin_file.relative_to(plugins_src)
-                pairs.append((plugin_file, plugins_dst / rel))
-
-    # All-or-nothing check: if any destination file exists, skip everything
-    existing = [dst for _, dst in pairs if dst.exists()]
-    if existing:
-        print(
-            "[proxy init] Config already exists — init only bootstraps clean directories."
-        )
-        print("             Docs:    https://nilayparikh.github.io/codefreedom/proxy/")
-        print(
-            "             Example: https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/proxy/"
-        )
-        print("             Please merge changes manually.")
-        print()
-        _print_non_disclaimer()
-        return 0
-
-    # Nothing exists -- copy all, with rollback on failure
-    created: list[Path] = []
-    try:
-        for src, dst in pairs:
-            if src.exists():
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-                created.append(dst)
-                print(f"[proxy init] [CREATE] {dst}")
-            else:
-                print(f"[proxy init] [MISSING] Source not found: {src}")
-    except OSError as exc:
-        eprint(f"[proxy init] [ERROR] Copy failed: {exc}. Rolling back.")
-        for path in created:
-            try:
-                path.unlink()
-            except OSError:
-                pass
-        return 1
-
-    # ── Summary ────────────────────────────────────────────────────────
-    print()
-    if created:
-        print(f"[proxy init] Done -- {len(created)} created.")
-    print("             Configure: https://nilayparikh.github.io/codefreedom/proxy/")
-    _print_non_disclaimer()
-    return 0
-
-
 def _find_compose_file() -> Optional[Path]:
     """Find the LiteLLM docker-compose file in ~/.codefreedom/proxy/."""
-    candidate = _get_cf_dir() / "proxy" / "docker-compose.yaml"
+    candidate = get_codefreedom_dir() / "proxy" / "docker-compose.yaml"
     if candidate.exists():
         return candidate
     return None
@@ -133,7 +42,7 @@ def _find_compose_file() -> Optional[Path]:
 
 def _find_config_file() -> Optional[Path]:
     """Find the LiteLLM config.yaml in ~/.codefreedom/proxy/config/."""
-    candidate = _get_cf_dir() / "proxy" / "config" / "config.yaml"
+    candidate = get_codefreedom_dir() / "proxy" / "config" / "config.yaml"
     if candidate.exists():
         return candidate
     return None
@@ -157,27 +66,30 @@ def run(args: argparse.Namespace) -> int:
         return _status()
     elif action == "validate":
         return _validate()
-    elif action == "init":
-        return init_proxy()
     # `vscode` moved to the top-level `codefreedom vscode proxy config`
     # subcommand -- see codefreedom.cli.vscode.
     else:
         eprint(
             "[proxy] No action specified."
-            " Use start, stop, restart, status, validate, or init."
+            " Use start, stop, restart, status, or validate."
         )
         return 1
 
 
 def _load_proxy_env_files() -> Dict[str, str]:
-    """Load proxy-specific env files: .env.proxy and .env.proxy.secrets.
+    """Load proxy env files: .env.proxy → .env.proxy.secrets → .env.user.
 
-    Returns a merged dict (secrets override config).
+    ``CF_CLI_*`` overrides from the machine environment are applied
+    separately by ``_build_proxy_env`` as the final, highest-priority
+    step.
+
+    Returns a merged dict where later files override earlier ones.
     """
     merged: Dict[str, str] = {}
     for env_path in [
-        _get_cf_dir() / ".env.proxy",
-        _get_cf_dir() / ".env.proxy.secrets",
+        get_codefreedom_dir() / ".env.proxy",
+        get_codefreedom_dir() / ".env.proxy.secrets",
+        get_codefreedom_dir() / ".env.user",
     ]:
         if env_path.exists():
             merged.update(load_dotenv(env_path))
@@ -194,6 +106,14 @@ def _build_proxy_env() -> Dict[str, str]:
     configured values even when system env has empty-string vars
     (e.g. MICROSOFT_FOUNDRY_API_BASE="" in shell).
 
+    Resolution order (later wins):
+      1. os.environ (base)
+      2. .env.proxy (config, skip if missing)
+      3. .env.proxy.secrets (secrets, skip if missing)
+      4. .env.user (user overrides, skip if missing)
+      5. ``CF_CLI_*`` overrides (absolute highest — stripped of prefix,
+         e.g. ``CF_CLI_LITELLM_MASTER_KEY`` → ``LITELLM_MASTER_KEY``)
+
     Also injects ``POSTGRES_HOST_DATA_DIR`` and
     ``POSTGRES_HOST_BACKUP_DIR`` from ``CODEFREEDOM_HOME`` so the
     embedded PostgreSQL always lands inside the correct CodeFreedom
@@ -206,6 +126,11 @@ def _build_proxy_env() -> Dict[str, str]:
     cf_dir = get_codefreedom_dir()
     merged.setdefault("POSTGRES_HOST_DATA_DIR", str(cf_dir / "pg" / "data"))
     merged.setdefault("POSTGRES_HOST_BACKUP_DIR", str(cf_dir / "pg" / "backup"))
+
+    # CF_CLI_* overrides from machine env — highest priority of all.
+    # Export CF_CLI_LITELLM_MASTER_KEY=sk-... in your shell to override
+    # without touching .env files.
+    merged = apply_cf_cli_overrides(merged)
 
     return merged
 
@@ -317,6 +242,36 @@ def _ensure_web_bridge_image() -> int:
     return 0
 
 
+def _ensure_codefreedom_network() -> None:
+    """Create the shared ``codefreedom`` bridge network if it doesn't exist.
+
+    All proxy instances (regardless of ``SUFFIX_ID``) attach to this
+    common network so they can communicate with each other and with
+    tools running on the host.
+    """
+    inspect = subprocess.run(
+        ["docker", "network", "inspect", "codefreedom"],
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if inspect.returncode == 0:
+        return  # network already exists
+
+    eprint("[proxy] Creating shared 'codefreedom' Docker network...")
+    create = subprocess.run(
+        ["docker", "network", "create", "codefreedom"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    if create.returncode == 0:
+        eprint("   [OK] Network 'codefreedom' created.")
+    else:
+        eprint(f"   [WARN] Could not create network: {create.stderr.strip()}")
+
+
 def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     """Start LiteLLM via docker compose."""
     compose_file = _find_compose_file()
@@ -325,22 +280,39 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         eprint("   Run: codefreedom proxy init")
         return 1
 
-    # Auto-build the web-bridge image if it isn't present locally. The image
-    # is referenced (not built) by docker-compose.yaml because a relative
-    # build context would not survive the example → ~/.codefreedom copy step.
-    if _ensure_web_bridge_image() != 0:
-        return 1
-
     eprint(f"[proxy] Starting LiteLLM via Docker Compose ({compose_file})...")
 
+    # Ensure tools are running (needed for WebSearch, browser automation, etc.)
+    # Non-fatal — proxy starts regardless.
+    try:
+        from codefreedom.cli.tools import ensure_tools
+
+        ensure_tools()
+    except Exception as exc:
+        eprint(f"[proxy] Warning: could not verify tools: {exc}")
+
     # Build merged environment: proxy files override system env, then CLI
-    # flags override everything for this run only.
+    # flags override everything for this run only, then CF_CLI_* overrides
+    # from machine env win everything.
     merged_env = _build_proxy_env()
     if args is not None:
         if getattr(args, "port", None):
             merged_env["LITELLM_PORT"] = str(args.port)
         if getattr(args, "host", None):
             merged_env["LITELLM_BIND_HOST"] = args.host
+
+    # Use SUFFIX_ID from .env.proxy to create deterministic container/project
+    # names.  Docker becomes the single source of truth — no /proc needed.
+    suffix = merged_env.get("SUFFIX_ID", "0000")
+    litellm_base = merged_env.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
+    litellm_name = f"{litellm_base}-{suffix}"
+    merged_env["LITELLM_CONTAINER_NAME"] = litellm_name
+    merged_env["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
+
+    # Ensure the shared `codefreedom` bridge network exists (external network
+    # referenced by docker-compose.yaml).  All proxy instances share this
+    # network regardless of SUFFIX_ID.
+    _ensure_codefreedom_network()
 
     result = subprocess.run(
         [
@@ -360,10 +332,29 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     )
     if result.returncode == 0:
         port = merged_env.get("LITELLM_PORT", "4000")
-        eprint(f"[proxy] [OK] Proxy started at http://localhost:{port}")
+        eprint(
+            f"[proxy] [OK] Proxy started at http://localhost:{port}"
+            f" ({litellm_name})"
+        )
     else:
         eprint("[proxy] [FAIL] Failed to start. Check docker logs.")
     return result.returncode
+
+
+# ── Compose env helper ────────────────────────────────────────────────────────
+
+
+def _build_compose_env() -> dict[str, str]:
+    """Build the environment dict for docker compose subprocess calls.
+
+    Loads proxy env files (same as ``_build_proxy_env``) and extracts
+    ``COMPOSE_PROJECT_NAME`` from ``SUFFIX_ID`` so that ``stop``, ``restart``,
+    and other compose commands target the same project that ``start`` created.
+    """
+    merged = _build_proxy_env()
+    suffix = merged.get("SUFFIX_ID", "0000")
+    merged["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
+    return merged
 
 
 # ── Stop ─────────────────────────────────────────────────────────────────────
@@ -378,8 +369,10 @@ def _stop() -> int:
         return 1
 
     eprint("[proxy] Stopping LiteLLM proxy...")
+    compose_env = _build_compose_env()
     result = subprocess.run(
         ["docker", "compose", "-f", str(compose_file), "--profile", "litellm", "down"],
+        env=compose_env,
         capture_output=False,
         timeout=60,
         check=False,
@@ -406,6 +399,7 @@ def _restart() -> int:
         return 1
 
     eprint(f"[proxy] Restarting LiteLLM via Docker Compose ({compose_file})...")
+    compose_env = _build_compose_env()
     result = subprocess.run(
         [
             "docker",
@@ -416,12 +410,16 @@ def _restart() -> int:
             "litellm",
             "restart",
         ],
+        env=compose_env,
         capture_output=False,
         timeout=60,
         check=False,
     )
     if result.returncode == 0:
-        eprint("[proxy] [OK] Proxy restarted at http://localhost:4000")
+        # Read port from env (resolved at build time, not /proc)
+        merged_env = _build_proxy_env()
+        port = merged_env.get("LITELLM_PORT", "4000")
+        eprint(f"[proxy] [OK] Proxy restarted at http://localhost:{port}")
     else:
         eprint("[proxy] [FAIL] Failed to restart. Check docker logs.")
     return result.returncode
@@ -438,13 +436,71 @@ def _status() -> int:
         eprint("   Run: codefreedom proxy init")
         return 1
 
+    compose_env = _build_compose_env()
     result = subprocess.run(
         ["docker", "compose", "-f", str(compose_file), "--profile", "litellm", "ps"],
+        env=compose_env,
         capture_output=False,
         timeout=15,
         check=False,
     )
     return result.returncode
+
+
+# ── Database URL check ───────────────────────────────────────────────────────
+
+_DEFAULT_LITELLM_IMAGE = "docker.io/nilayparikh/codefreedom:litellm-latest"
+_GHCR_LITELLM_IMAGE = "ghcr.io/nilayparikh/codefreedom:litellm-latest"
+
+
+def _warn_database_url(
+    in_config: bool,
+    in_env: bool,
+    proxy_env: Dict[str, str],
+) -> None:
+    """Check database_url and warn if it looks like the DB won't be available.
+
+    The codefreedom litellm image ships an embedded PostgreSQL whose entrypoint
+    auto-sets ``DATABASE_URL`` before launching LiteLLM.  Users of the default
+    image get database features without setting anything on the host.
+
+    Only warn when:
+    - ``database_url`` is missing from both config.yaml *and* the host env,
+      AND
+    - ``LITELLM_IMAGE`` is overridden to a *non*-codefreedom image (meaning
+      the embedded PG is not present).
+    """
+    if in_config or in_env:
+        return  # database_url is explicitly configured — all good
+
+    # Check which litellm image is in use
+    litellm_image = proxy_env.get("LITELLM_IMAGE")
+    if not litellm_image:
+        litellm_image = os.environ.get("LITELLM_IMAGE")
+
+    using_codefreedom_image = (
+        litellm_image is None
+        or _DEFAULT_LITELLM_IMAGE in litellm_image
+        or _GHCR_LITELLM_IMAGE in litellm_image
+        or "nilayparikh/codefreedom:litellm" in litellm_image
+    )
+
+    if using_codefreedom_image:
+        eprint(
+            "  [OK]  database_url not required — embedded PG in"
+            " nilayparikh/codefreedom:litellm image auto-sets it"
+        )
+    else:
+        eprint("  [WARN]  database_url not set (stateless mode)")
+        eprint(
+            "         LiteLLM runs without Prisma persistence unless"
+            " DATABASE_URL is set."
+        )
+        eprint(
+            "         The codefreedom litellm image (default) ships"
+            " embedded PG that auto-sets it."
+        )
+        eprint(f"         You are using: {litellm_image}")
 
 
 # ── Validate ─────────────────────────────────────────────────────────────────
@@ -527,8 +583,9 @@ def _validate() -> int:
                 errors.append(f"Missing provider file: {inc}")
 
     general = config.get("general_settings", {})
-    if not general.get("database_url"):
-        eprint("  [WARN]  database_url not set (stateless mode)")
+    database_url_in_config = general.get("database_url")
+    database_url_in_env = _env_is_set("DATABASE_URL", proxy_env)
+    _warn_database_url(database_url_in_config, database_url_in_env, proxy_env)
 
     router = config.get("router_settings", {})
     aliases = router.get("model_group_alias", {})

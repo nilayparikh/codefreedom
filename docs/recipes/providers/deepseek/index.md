@@ -63,7 +63,7 @@ model_list:
         - response_format
 ```
 
-See the [source YAML](https://github.com/nilayparikh/codefreedom/tree/main/src/codefreedom/examples/proxy/config/providers/deepseek.yaml) for the full file with both models.
+See the [recipe YAML](https://github.com/nilayparikh/codefreedom-recipes/tree/main/deepseek/proxy/config/providers/deepseek.yaml) for the full file with both models.
 
 ## Enabling
 

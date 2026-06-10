@@ -24,16 +24,22 @@ def _codefreedom_test_home() -> str:  # type: ignore[misc]
     tests complete.
     """
     saved = os.environ.get("CODEFREEDOM_HOME")
+    saved_tool = os.environ.get("CODEFREEDOM_TOOL_HOME")
     tmp = tempfile.mkdtemp(prefix="codefreedom-test-")
     os.environ["CODEFREEDOM_HOME"] = tmp
+    os.environ["CODEFREEDOM_TOOL_HOME"] = tmp
 
     yield tmp
 
-    # Restore (or clear) the env var
+    # Restore (or clear) the env vars
     if saved is not None:
         os.environ["CODEFREEDOM_HOME"] = saved
     else:
         os.environ.pop("CODEFREEDOM_HOME", None)
+    if saved_tool is not None:
+        os.environ["CODEFREEDOM_TOOL_HOME"] = saved_tool
+    else:
+        os.environ.pop("CODEFREEDOM_TOOL_HOME", None)
 
     # Remove the temp directory tree
     shutil.rmtree(tmp, ignore_errors=True)

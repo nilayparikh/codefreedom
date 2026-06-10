@@ -23,7 +23,7 @@ TOOL_INFO: Dict[str, dict] = {
             ("dumb-init (PID 1 supervisor)", "Yelp, Inc."),
         ],
         "docs_url": "https://nilayparikh.github.io/codefreedom/tools/chrome/",
-        "profile_name": "chrome.json",
+        "profile_name": "chrome.yaml",
     },
     "web": {
         "name": "Web Search (MCP)",
@@ -42,7 +42,7 @@ TOOL_INFO: Dict[str, dict] = {
             "DO NOT USE or REPURPOSE the tool beyond permissible use cases."
         ),
         "docs_url": "https://nilayparikh.github.io/codefreedom/tools/web/",
-        "profile_name": "web.json",
+        "profile_name": "web.yaml",
     },
     "github": {
         "name": "GitHub MCP Server",
@@ -59,7 +59,7 @@ TOOL_INFO: Dict[str, dict] = {
             "repository permissions. Store the token securely in the profile's env section."
         ),
         "docs_url": "https://nilayparikh.github.io/codefreedom/tools/github/",
-        "profile_name": "github.json",
+        "profile_name": "github.yaml",
     },
 }
 
@@ -148,3 +148,37 @@ def prompt_acceptance(tool_name: str) -> bool:
 
     eprint("[init] Init aborted.")
     return False
+
+
+# ── Help/usage formatting ────────────────────────────────────────────────────
+
+
+def print_help_section(
+    title: str,
+    usage_lines: list[str],
+    docs_url: str = "",
+    include_disclaimer: bool = True,
+) -> None:
+    """Print a standardized help section (ASCII only, no Unicode).
+
+    Parameters
+    ----------
+    title:
+        Tag printed in brackets, e.g. ``"claude init"``.
+    usage_lines:
+        Lines of usage info. Each is prefixed with two spaces.
+    docs_url:
+        Optional documentation URL printed after usage lines.
+    include_disclaimer:
+        Whether to append the standard non-warranty disclaimer.
+    """
+    print(f"[{title}]")
+    print()
+    for line in usage_lines:
+        print(f"  {line}")
+    print()
+    if docs_url:
+        print(f"  Docs: {docs_url}")
+        print()
+    if include_disclaimer:
+        _print_non_disclaimer()

@@ -98,6 +98,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
     libasound2t64 \
     python3 \
+    socat \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 

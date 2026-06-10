@@ -40,10 +40,10 @@ jobs:
           - "3.11"
           - "3.12"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -79,10 +79,10 @@ jobs:
         python-version:
           - "3.12"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -107,33 +107,50 @@ jobs:
           codefreedom proxy --help
           cf px --help
 
-          # Init
-          codefreedom --init
-          test -f ~/.codefreedom/profiles/claude-code.json || { echo "MISSING: profiles"; exit 1; }
+          # Init (install _default base recipe)
+          codefreedom init recipe
+
+          # Verify core structure was created
+          test -f ~/.codefreedom/.env.user || { echo "MISSING: .env.user"; exit 1; }
           test -f ~/.codefreedom/proxy/config/config.yaml || { echo "MISSING: proxy config"; exit 1; }
           test -f ~/.codefreedom/proxy/docker-compose.yaml || { echo "MISSING: compose"; exit 1; }
-          test -d ~/.codefreedom/proxy/config/providers || { echo "MISSING: providers"; exit 1; }
-          test -f ~/.codefreedom/.env || { echo "MISSING: .env"; exit 1; }
+          test -f ~/.codefreedom/profiles/chrome.yaml || { echo "MISSING: chrome profile"; exit 1; }
+          test -f ~/.codefreedom/profiles/web.yaml || { echo "MISSING: web profile"; exit 1; }
+          test -f ~/.codefreedom/profiles/github.yaml || { echo "MISSING: github profile"; exit 1; }
+          test -f ~/.codefreedom/profiles/web-bridge.yaml || { echo "MISSING: web-bridge profile"; exit 1; }
+          test -f ~/.codefreedom/.env.claude || { echo "MISSING: .env.claude"; exit 1; }
+          test -f ~/.codefreedom/.env.proxy || { echo "MISSING: .env.proxy"; exit 1; }
+
+          # Validate proxy config YAML
+          python -c "
+          import yaml
+          from pathlib import Path
+          p = Path.home() / '.codefreedom' / 'proxy' / 'config' / 'config.yaml'
+          d = yaml.safe_load(p.read_text(encoding='utf-8'))
+          assert 'general_settings' in d, 'config.yaml should contain general_settings'
+          assert 'router_settings' in d, 'config.yaml should contain router_settings'
+          assert 'litellm_settings' in d, 'config.yaml should contain litellm_settings'
+          assert 'search_tools' in d, 'config.yaml should contain search_tools'
+          print('[CONFIG OK]')
+          "
+
+          # Validate tool profile YAMLs
+          python -c "
+          import yaml
+          from pathlib import Path
+          for name in ['chrome', 'web', 'github', 'web-bridge']:
+              p = Path.home() / '.codefreedom' / 'profiles' / f'{name}.yaml'
+              d = yaml.safe_load(p.read_text(encoding='utf-8'))
+              assert isinstance(d, dict), f'{name}.yaml should be valid YAML'
+          print('[PROFILES OK]')
+          "
 
           # Profile listing
           codefreedom claude --list-profiles
 
-          # Validate schema and profile JSON
-          python -c "
-          import json
-          from pathlib import Path
-          p = Path.home() / '.codefreedom' / 'profiles' / 'claude-code.json'
-          d = json.loads(p.read_text())
-          assert 'default' in d['profiles']
-          e = d['profiles']['default']['env']
-          assert 'CLAUDE_MODEL' in e
-          assert 'ANTHROPIC_BASE_URL' in e
-          assert 'ANTHROPIC_AUTH_TOKEN' in e
-          print('[OK]')
-          "
           # Proxy validate
-          codefreedom proxy --validate 2>&1 || true
+          codefreedom proxy validate 2>&1 || true
 
-          # Bare profile dry-run
+          # CLI dry-run
           export LITELLM_MASTER_KEY="sk-test-dummy-key-for-ci"
-          codefreedom claude --profile bare --help 2>&1 || true
+          codefreedom claude --help 2>&1 || true

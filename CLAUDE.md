@@ -53,25 +53,25 @@ src/codefreedom/
 ├── cli/
 │   ├── main.py            # Top-level parser, dispatches to subcommands
 │   ├── admin.py           # 'codefreedom admin' — backup, restore, list, inspect, prune
-│   ├── claude.py          # 'codefreedom claude' — init, profile loading, run dispatch
-│   ├── proxy.py           # 'codefreedom proxy' — init, lifecycle (start/stop/status)
-│   ├── chrome.py          # 'codefreedom tools chrome' — init, start/stop/status/url
-│   ├── web.py             # 'codefreedom tools web' — init, start/stop/status (Camoufox)
+│   ├── claude.py          # 'codefreedom claude' — profile loading, run dispatch
+│   ├── proxy.py           # 'codefreedom proxy' — lifecycle (start/stop/status)
+│   ├── chrome.py          # 'codefreedom tools chrome' — start/stop/status/url
+│   ├── web.py             # 'codefreedom tools web' — start/stop/status (Camoufox)
+│   ├── github.py          # 'codefreedom tools github' — GitHub MCP server lifecycle
+│   ├── web_bridge.py      # 'codefreedom tools web-bridge' — SearXNG→Camoufox bridge
+│   ├── tools.py           # Unified tool management (start/stop/restart/status all)
 │   ├── docker_utils.py    # Shared Docker helpers (start/stop/status/ephemeral names)
-│   ├── init_utils.py      # Shared init bootstrap (bundled examples, all-or-nothing copy)
+│   ├── recipe.py          # Recipe system — fetch, plan, apply config recipes
 │   ├── update.py          # 'codefreedom update' — Docker image + PyPI version checks
 │   ├── vscode.py          # 'codefreedom vscode' — VS Code config fragment generation
+│   ├── doctor.py          # 'codefreedom doctor' — environment diagnostic checks
+│   ├── deinit.py          # 'codefreedom deinit' — full teardown (containers + config)
 │   └── tool_init_utils.py # Shared acceptance prompt, notices, tool metadata
 ├── profiles.py      # Profile JSON loading, ${VAR} resolution, inheritance
 ├── tool_registry.py # Reference-counted tool lifecycle via ~/.codefreedom/proc/
 ├── launcher.py      # Docker sandbox and native local execution
 ├── env_loader.py    # .env chain: component-specific → legacy → workspace → system
-└── examples/        # Bundled into package, copied by init commands
-    ├── claude/      # profiles + .env.claude.example, .env.claude.secrets.example
-    ├── proxy/       # config.yaml, docker-compose.yaml, providers/, env files
-    │   └── config/
-    │       └── plugins/  # reasoning-efforts mapping YAML config (plugin .py baked in image)
-    └── tools/       # chrome/ and web/ profile + schema files
+└── recipes/         # Configuration recipes from github.com/nilayparikh/codefreedom-recipes
 ```
 
 Entry points: `codefreedom` / `cf` → `src/codefreedom/cli/main.py:main`
@@ -88,7 +88,11 @@ Use the `arch-docs` skill to keep this current when code changes.
 
 | Command                                                    | Description                                                                |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `codefreedom claude init`                                  | Initialize Claude Code profiles + .env.claude                              |
+| `codefreedom init recipe`                                  | Install default base recipe from codefreedom-recipes                       |
+| `codefreedom init recipe --list`                           | List available recipes                                                     |
+| `codefreedom init recipe --plan NAME`                      | Preview a recipe without applying                                          |
+| `codefreedom init recipe --apply PLAN_ID`                  | Apply a previously generated plan                                          |
+| `codefreedom init recipe --store URL_OR_PATH`              | Use a custom recipe store (GitHub URL or local folder)                     |
 | `codefreedom claude`                                       | Launch Claude Code (alias: `cf cc`)                                        |
 | `codefreedom claude --sandbox`                             | Launch in Docker container with GPU                                        |
 | `codefreedom claude --cuda`                                | Use CUDA GPU image (with --sandbox)                                        |
@@ -137,16 +141,30 @@ Use the `arch-docs` skill to keep this current when code changes.
 | `codefreedom tools web stop`                               | Stop Camoufox container                                                    |
 | `codefreedom tools web restart`                            | Restart Camoufox container (preserves state, no image pull)                |
 | `codefreedom tools web status`                             | Show Camoufox container status                                             |
+| `codefreedom tools start`                                  | Start all tools (chrome, web, github, web-bridge)                          |
+| `codefreedom tools stop`                                   | Stop all tools                                                             |
+| `codefreedom tools restart`                                | Restart all tools                                                          |
+| `codefreedom tools status`                                 | Show status of all tools                                                   |
 | `codefreedom tools github init`                            | Initialize GitHub MCP tool profile (requires acceptance)                   |
-| `codefreedom tools github start`                           | Pull image + validate token (ephemeral stdio, no long-running container)   |
-| `codefreedom tools github stop`                            | No-op (container is per-session ephemeral)                                 |
-| `codefreedom tools github restart`                         | No-op (ephemeral)                                                          |
-| `codefreedom tools github status`                          | Show image availability + token status                                     |
+| `codefreedom tools github start`                           | Start GitHub MCP container (stdio-to-HTTP bridge on port 8082)             |
+| `codefreedom tools github stop`                            | Stop GitHub MCP container                                                  |
+| `codefreedom tools github restart`                         | Restart GitHub MCP container (preserves state, no image pull)              |
+| `codefreedom tools github status`                          | Show GitHub MCP container status                                           |
+| `codefreedom tools web-bridge init`                        | Initialize web-bridge tool profile (requires acceptance)                   |
+| `codefreedom tools web-bridge start`                       | Start web-bridge container (SearXNG endpoint on port 8500)                 |
+| `codefreedom tools web-bridge stop`                        | Stop web-bridge container                                                  |
+| `codefreedom tools web-bridge restart`                     | Restart web-bridge container (preserves state, no image pull)              |
+| `codefreedom tools web-bridge status`                      | Show web-bridge container status                                           |
+| `codefreedom doctor`                                       | Run full environment diagnostic (alias: `cf doc`, `cf dr`)                 |
+| `codefreedom doctor --verbose`                             | Show detail messages for all checks                                        |
+| `codefreedom deinit`                                       | Full teardown: stop containers, remove ~/.codefreedom (interactive)        |
+| `codefreedom deinit --force`                               | Full teardown without confirmation prompt                                  |
 | `cf cc`                                                    | Alias for `codefreedom claude`                                             |
 | `cf px`                                                    | Alias for `codefreedom proxy`                                              |
 | `cf adm`                                                   | Alias for `codefreedom admin`                                              |
 | `cf upd` / `cf up`                                         | Alias for `codefreedom update`                                             |
 | `cf vsc`                                                   | Alias for `codefreedom vscode`                                             |
+| `cf doc` / `cf dr`                                         | Alias for `codefreedom doctor`                                             |
 
 ## Key Patterns
 
@@ -162,11 +180,12 @@ Use the `arch-docs` skill to keep this current when code changes.
   tools (deduplicated). Set `"tools": []` to opt out. Tracked via `~/.codefreedom/proc/`.
   Works in both sandbox and local modes.
 
-### Tool Profiles (`~/.codefreedom/profiles/<tool>.json`)
+### Tool Profiles (`~/.codefreedom/profiles/<tool>.yaml`)
 
-Tools (chrome browser, web/camoufox) load settings from `~/.codefreedom/profiles/<tool>.json`.
-Generated by `codefreedom tools <tool> init` from bundled `src/codefreedom/examples/tools/<tool>/`.
-Tool init requires user acceptance (typing "I understand"). Tools refuse to start without successful init.
+Tools (chrome, web, github, web-bridge) load settings from
+`~/.codefreedom/profiles/<tool>.yaml`. Created by `cf init recipe`.
+Tools refuse to start without a valid profile. Legacy `.json` profiles
+for chrome/web are still supported for backward compatibility.
 
 | Setting          | Default                                           | Profile override                                                                            |
 | ---------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -178,38 +197,84 @@ Tool init requires user acceptance (typing "I understand"). Tools refuse to star
 
 Chrome runs headless. For stealth / anti-bot browsing, use the `web` tool (Camoufox) instead.
 
+### Tools are Shared, Persistent Infrastructure
+
+Tools (chrome, web/camoufox, github, web-bridge) are **shared** — once started
+they keep running until explicitly stopped (`cf tools <name> stop`). Container
+names are **static** (from the profile, e.g. `codefreedom-tools-chrome`). All
+sessions and profiles share the same tool container:
+
+1. First `cf cc` or `cf tools <name> start` creates the container.
+2. Subsequent invocations detect it's already running and are no-ops.
+3. `cf tools <name> stop` is the only way to stop it.
+4. No random suffixes, no auto-cleanup, no per-session isolation.
+
+Ports are configured in the tool profile and can be overridden via documented
+environment variables (checked at profile load time):
+
+| Tool       | Env var                       | Default    |
+| ---------- | ----------------------------- | ---------- |
+| Chrome     | `CODEFREEDOM_CHROME_PORT`     | `9222`     |
+| Web        | `CODEFREEDOM_WEB_PORT`        | `8420`     |
+| GitHub     | `CODEFREEDOM_GITHUB_PORT`     | `0` (auto) |
+| Web-bridge | `CODEFREEDOM_WEB_BRIDGE_PORT` | `8500`     |
+
+The proxy (`litellm` + `web-bridge`) is **separate** — it gets unique
+container names + project name per instance via `generate_container_name()`
+because the proxy config (port, providers) varies by instance.
+
 ### Environment Variable Chain
 
 Component-specific env files are loaded only for the matching subcommand. Shared
 and workspace env files are loaded for all components.
 
-**codefreedom claude** (7 layers, lowest to highest):
+**Priority groups** (all configs before secrets, user overrides before machine env):
 
-1. `~/.codefreedom/.env.claude` — Claude Code config (skips if missing)
-2. `~/.codefreedom/.env.claude.secrets` — Claude Code secrets (skips if missing)
-3. `~/.codefreedom/.env` — shared config (skips if missing)
-4. `~/.codefreedom/.env.secrets` — shared secrets (skips if missing)
-5. `{workspace}/.env` — workspace overrides (skips if missing)
+- Config files (lowest priority): `.env.claude` / `.env.proxy` → `.env` → `{workspace}/.env`
+- Secrets files: `.env.claude.secrets` / `.env.proxy.secrets` → `.env.secrets` → `{workspace}/.env.secrets`
+- User overrides: `.env.user` (highest config priority, never touched by recipes)
+- Machine env (highest priority): `os.environ`
+- `CF_CLI_*` overrides (absolute highest): any env var prefixed `CF_CLI_`
+  (e.g. `CF_CLI_LITELLM_MASTER_KEY`) is stripped of its prefix and applied
+  as a final override, beating everything. Use this for shell-level overrides
+  that must always win regardless of `.env` file contents.
+
+**codefreedom claude** (8 layers + CF_CLI, lowest to highest):
+
+1. `{codefreedom_dir}/.env.claude` — Claude Code config (skips if missing)
+2. `{codefreedom_dir}/.env` — shared config (skips if missing)
+3. `{workspace}/.env` — workspace config (skips if missing)
+4. `{codefreedom_dir}/.env.claude.secrets` — Claude Code secrets (skips if missing)
+5. `{codefreedom_dir}/.env.secrets` — shared secrets (skips if missing)
 6. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
-7. `os.environ` — system env (always wins)
+7. `{codefreedom_dir}/.env.user` — user overrides (skips if missing)
+8. `os.environ` — system env (always wins)
+9. `CF_CLI_*` — machine env vars prefixed with `CF_CLI_` are stripped
+   of the prefix and applied as final overrides (always wins everything)
 
-**codefreedom proxy** (7 layers):
+**codefreedom proxy** (8 layers + CF_CLI):
 
-1. `~/.codefreedom/.env.proxy` — proxy config (skips if missing)
-2. `~/.codefreedom/.env.proxy.secrets` — proxy secrets (skips if missing)
-3. `~/.codefreedom/.env` — shared config (skips if missing)
-4. `~/.codefreedom/.env.secrets` — shared secrets (skips if missing)
-5. `{workspace}/.env` — workspace overrides (skips if missing)
+1. `{codefreedom_dir}/.env.proxy` — proxy config (skips if missing)
+2. `{codefreedom_dir}/.env` — shared config (skips if missing)
+3. `{workspace}/.env` — workspace config (skips if missing)
+4. `{codefreedom_dir}/.env.proxy.secrets` — proxy secrets (skips if missing)
+5. `{codefreedom_dir}/.env.secrets` — shared secrets (skips if missing)
 6. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
-7. `os.environ` — system env (always wins)
+7. `{codefreedom_dir}/.env.user` — user overrides (skips if missing)
+8. `os.environ` — system env (always wins)
+9. `CF_CLI_*` — machine env vars prefixed with `CF_CLI_` are stripped
+   of the prefix and applied as final overrides (always wins everything)
 
-**codefreedom tools** (chrome, web, etc.) — 5 layers:
+**codefreedom tools** (chrome, web, etc.) — 6 layers + CF_CLI:
 
-1. `~/.codefreedom/.env` — shared config (skips if missing)
-2. `~/.codefreedom/.env.secrets` — shared secrets (skips if missing)
-3. `{workspace}/.env` — workspace overrides (skips if missing)
+1. `{codefreedom_dir}/.env` — shared config (skips if missing)
+2. `{workspace}/.env` — workspace config (skips if missing)
+3. `{codefreedom_dir}/.env.secrets` — shared secrets (skips if missing)
 4. `{workspace}/.env.secrets` — workspace secrets (skips if missing)
-5. `os.environ` — system env (always wins)
+5. `{codefreedom_dir}/.env.user` — user overrides (skips if missing)
+6. `os.environ` — system env (always wins)
+7. `CF_CLI_*` — machine env vars prefixed with `CF_CLI_` are stripped
+   of the prefix and applied as final overrides (always wins everything)
 
 All layers support `${VAR}` and `${VAR:-default}` interpolation. **Empty-string env vars are valid overrides** (`export FOO=""` does NOT fall through to defaults).
 
@@ -222,7 +287,7 @@ Only `pyproject.toml` holds the version. `__init__.py` derives `__version__` fro
 - LiteLLM instance routing model requests to providers (DeepSeek, Azure Foundry, NVIDIA, local).
 - Default: **stateless** (no database). Optional PostgreSQL unlocks Admin UI, spend tracking.
 - Provider config: `~/.codefreedom/proxy/config/providers/*.yaml` — opt-in via API key env vars.
-- Model aliases controlled by env vars: `LITELLM_MODEL_ALIAS_ULTRA`, `LITELLM_MODEL_ALIAS_PRO`, `LITELLM_MODEL_ALIAS_FLASH`, `LITELLM_MODEL_ALIAS_AIR`.
+- Model aliases controlled by env vars: `LITELLM_MODEL_ALIAS_BEST`, `LITELLM_MODEL_ALIAS_FABLE`, `LITELLM_MODEL_ALIAS_SONNET`, `LITELLM_MODEL_ALIAS_OPUS`, `LITELLM_MODEL_ALIAS_HAIKU`, `LITELLM_MODEL_ALIAS_SONNET_1M`, `LITELLM_MODEL_ALIAS_OPUS_1M`, `LITELLM_MODEL_ALIAS_OPUSPLAN`.
 
 #### Reasoning-efforts mapping plugin (v2)
 
@@ -247,15 +312,14 @@ the provider's native output type.
 | File | Purpose |
 |------|---------|
 | `docker/litellm/plugins/reasoning_efforts_mapping.py` | Plugin module — baked into Docker image |
-| `src/codefreedom/examples/proxy/config/plugins/reasoning-efforts/reasoning-efforts-mapping.yaml` | YAML config table — copied to host on `proxy init` |
-| `~/.codefreedom/proxy/config/plugins/reasoning-efforts/reasoning-efforts-mapping.yaml` | User-editable override |
+| `~/.codefreedom/proxy/config/plugins/reasoning-efforts/reasoning-efforts-mapping.yaml` | User-editable override (created by `cf init recipe`) |
 | `tests/test_reasoning_efforts_mapping.py` | Unit tests |
 
 **Key facts:**
 
 - The plugin runs on `async_pre_request_hook` (Anthropic `/v1/messages`) and `async_log_pre_api_call` (OpenAI `/v1/chat/completions`).
 - Rules are resolved from `model_info.codefreedom.plugins.reasoning-efforts` (inline) or the YAML config (named). Fallback is `auto` — pure field rename based on provider detection.
-- The `.py` module is baked into the LiteLLM image at `/app/litellm-plugins/`. The entrypoint copies it into the host-mounted config directory at container start.
+- The `.py` module is baked into the LiteLLM image at `/app/litellm-plugins/`. The entrypoint symlinks it into the host-mounted config directory at container start (avoids writing the .py onto the host filesystem).
 - The YAML config lives on the host (user-editable). Cached by mtime — edits take effect on the next request without a proxy restart.
 - Wired in `config.yaml` via `callbacks: ["plugins.reasoning-efforts.reasoning_efforts_mapping.instance"]` — the lowercase `instance` is a module-level singleton (not the class) to match LiteLLM's callback dispatch.
 - The `proxy init` flow copies the YAML config alongside the rest of the proxy config.
@@ -293,7 +357,7 @@ Seven image families in `docker/` published to `docker.io/nilayparikh/codefreedo
 | **Ubuntu**     | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only / general-purpose                                                                                                                                |
 | **Chrome**     | `docker/chrome/Dockerfile.Chrome`      | Headless Chromium for browser automation via CDP port 9222                                                                                                |
 | **Web**        | `docker/web/Dockerfile.Web`            | Camoufox MCP server for stealth / anti-bot web search and scraping                                                                                        |
-| **GitHub MCP** | `docker/github/Dockerfile.Github`      | stdio-to-HTTP bridge over `ghcr.io/github/github-mcp-server`, exposes GitHub API tools via HTTP MCP on port 8082                                           |
+| **GitHub MCP** | `docker/github/Dockerfile.Github`      | stdio-to-HTTP bridge over `ghcr.io/github/github-mcp-server`, exposes GitHub API tools via HTTP MCP on port 8082                                          |
 | **LiteLLM**    | `docker/litellm/Dockerfile.LiteLLM`    | Self-hosted LiteLLM proxy image. Replaces `ghcr.io/berriai/litellm` in the proxy compose stack. Bakes in the WebSearch count display patch at build time. |
 | **Web Bridge** | `docker/web-bridge/Dockerfile.Bridge`  | FastAPI SearXNG-shaped sidecar → Camoufox MCP for transparent WebSearch interception                                                                      |
 
@@ -301,21 +365,21 @@ Images are built, cosign-signed, and published by per-family GitHub Actions work
 
 ## CI/CD
 
-| Workflow                | Trigger                                        | Purpose                                                                        |
-| ----------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------ |
-| `integration-test.yml`  | push/PR                                        | Tests on Python 3.10/11/12 across Ubuntu, Windows, macOS                       |
-| `docker-cuda.yml`       | `docker/claude-code/Dockerfile.CUDA` changes   | Build, cosign-sign, and publish CUDA image to `docker.io` + `ghcr.io`          |
-| `docker-rocm.yml`       | `docker/claude-code/Dockerfile.ROCm` changes   | Build, cosign-sign, and publish ROCm image to `docker.io` + `ghcr.io`          |
-| `docker-ubuntu.yml`     | `docker/claude-code/Dockerfile.Ubuntu` changes | Build, cosign-sign, and publish Ubuntu image to `docker.io` + `ghcr.io`        |
-| `docker-chrome.yml`     | `docker/chrome/Dockerfile.Chrome` changes      | Build, cosign-sign, and publish Chrome image to `docker.io` + `ghcr.io`        |
-| `docker-web.yml`        | `docker/web/Dockerfile.Web` changes            | Build, cosign-sign, and publish Camoufox web image to `docker.io` + `ghcr.io`  |
-| `docker-github.yml`     | `docker/github/Dockerfile.Github` changes     | Build, cosign-sign, and publish GitHub MCP bridge image to `docker.io` + `ghcr.io`  |
-| `docker-litellm.yml`    | `docker/litellm/Dockerfile.LiteLLM` changes    | Build, cosign-sign, and publish LiteLLM proxy image to `docker.io` + `ghcr.io` |
-| `docker-web-bridge.yml` | `docker/web-bridge/Dockerfile.Bridge` changes  | Build, cosign-sign, and publish web-bridge image to `docker.io` + `ghcr.io`    |
-| `gated-checkin.yml`     | push/PR                                        | Release-gate checks on tagged commits                                          |
-| `pipy.yaml`             | `v*` tags                                      | Publish to PyPI                                                                |
-| `publish-docs.yml`      | push to `main`                                 | Build MkDocs site, deploy to GitHub Pages                                      |
-| `trivy.yml`             | push/PR                                        | Security scanning with Trivy                                                   |
+| Workflow                | Trigger                                        | Purpose                                                                            |
+| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `integration-test.yml`  | push/PR                                        | Tests on Python 3.10/11/12 across Ubuntu, Windows, macOS                           |
+| `docker-cuda.yml`       | `docker/claude-code/Dockerfile.CUDA` changes   | Build, cosign-sign, and publish CUDA image to `docker.io` + `ghcr.io`              |
+| `docker-rocm.yml`       | `docker/claude-code/Dockerfile.ROCm` changes   | Build, cosign-sign, and publish ROCm image to `docker.io` + `ghcr.io`              |
+| `docker-ubuntu.yml`     | `docker/claude-code/Dockerfile.Ubuntu` changes | Build, cosign-sign, and publish Ubuntu image to `docker.io` + `ghcr.io`            |
+| `docker-chrome.yml`     | `docker/chrome/Dockerfile.Chrome` changes      | Build, cosign-sign, and publish Chrome image to `docker.io` + `ghcr.io`            |
+| `docker-web.yml`        | `docker/web/Dockerfile.Web` changes            | Build, cosign-sign, and publish Camoufox web image to `docker.io` + `ghcr.io`      |
+| `docker-github.yml`     | `docker/github/Dockerfile.Github` changes      | Build, cosign-sign, and publish GitHub MCP bridge image to `docker.io` + `ghcr.io` |
+| `docker-litellm.yml`    | `docker/litellm/Dockerfile.LiteLLM` changes    | Build, cosign-sign, and publish LiteLLM proxy image to `docker.io` + `ghcr.io`     |
+| `docker-web-bridge.yml` | `docker/web-bridge/Dockerfile.Bridge` changes  | Build, cosign-sign, and publish web-bridge image to `docker.io` + `ghcr.io`        |
+| `gated-checkin.yml`     | push/PR                                        | Release-gate checks on tagged commits                                              |
+| `pipy.yaml`             | `v*` tags                                      | Publish to PyPI                                                                    |
+| `publish-docs.yml`      | push to `main`                                 | Build MkDocs site, deploy to GitHub Pages                                          |
+| `trivy.yml`             | push/PR                                        | Security scanning with Trivy                                                       |
 
 ### Image Supply Chain (Cosign)
 
@@ -344,17 +408,18 @@ cosign verify \
 
 ## Tests
 
-Fifteen test modules in `tests/`, all using `pytest` with `tmp_path` fixtures and `monkeypatch` for path isolation — never touching real `~/.codefreedom/` during tests.
+Nineteen test modules in `tests/`, all using `pytest` with `tmp_path` fixtures and `monkeypatch` for path isolation — never touching real `~/.codefreedom/` during tests.
 
 | File                                | Coverage                                                              |
 | ----------------------------------- | --------------------------------------------------------------------- |
 | `test_admin.py`                     | Backup, restore, list, inspect, prune, sha256, categorization         |
 | `test_chrome.py`                    | Chrome tool container lifecycle (start/stop/status/url)               |
+| `test_deinit.py`                    | Full teardown: stop containers, remove config, preserve .env.user     |
+| `test_doctor.py`                    | Environment diagnostics: config, Docker, ports, permissions           |
 | `test_docker_utils.py`              | Docker container lifecycle helpers (start/stop/status)                |
 | `test_env_loader.py`                | `.env` parsing, component-aware chain precedence, `${VAR}` resolution |
-| `test_init_claude.py`               | Claude `--init` bootstrap, file creation, skip/force logic            |
-| `test_init_proxy.py`                | Proxy `--init` bootstrap, file creation, skip/force logic             |
-| `test_init_utils.py`                | Bundled examples resolution, all-or-nothing file copy                 |
+| `test_github.py`                    | GitHub MCP tool container lifecycle (start/stop/status/restart)       |
+| `test_recipe.py`                    | Recipe system — fetch, plan, apply, merge                             |
 | `test_mcp_endpoints.py`             | MCP endpoint configuration and validation                             |
 | `test_profiles.py`                  | Profile loading, inheritance, env resolution                          |
 | `test_proxy.py`                     | Path resolution, config validation, Docker Compose discovery          |
@@ -387,9 +452,11 @@ Windows terminal defaults to cp1252 encoding, which cannot encode Unicode box-dr
 **Always use plain ASCII in user-facing strings** — replace `───` with `---`, `◆` with `*`, etc.
 Affected files: `src/codefreedom/cli/claude.py`, `proxy.py`, `tool_init_utils.py` (the `_NOTICE`/`_NON_DISCLAIMER` variables).
 
-### Top-level `--init` must stay in sync with CI
+### Tool profiles use YAML — not JSON
 
-The integration test (`.github/workflows/integration-test.yml`) runs `codefreedom --init` to bootstrap all config files. The handler lives in `src/codefreedom/cli/main.py` before subcommand dispatch. Init is all-or-nothing: if any target file already exists, it skips and directs the user to docs/examples for manual merging.
+Tool profiles (`chrome`, `web`, `github`, `web-bridge`) use `.yaml` files at
+`~/.codefreedom/profiles/<tool>.yaml`. Legacy `.json` profiles for chrome/web
+are still supported. The `github` and `web-bridge` tools are YAML-only.
 
 ### Proxy is Docker-only — no native mode
 

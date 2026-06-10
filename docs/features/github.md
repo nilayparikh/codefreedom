@@ -17,13 +17,16 @@ Exposes GitHub's API as MCP tools. Your code agent can manage repos, issues, pul
 ## Requirements
 
 A **GitHub Personal Access Token (PAT)** with appropriate scopes:
+
 - Classic tokens: `repo` and `read:org`
 - Fine-grained tokens: permissions matching your target repos
 
 ## Usage
 
 ```bash
-codefreedom tools github init     # One-time setup
+# Install the _default recipe to create the github profile
+cf init recipe
+
 codefreedom tools github start    # Validate token, pull image
 codefreedom tools github status   # Check status
 codefreedom tools github stop     # No-op (ephemeral)
@@ -57,11 +60,11 @@ Or reference a system env var:
 
 ## Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `image` | `docker.io/nilayparikh/codefreedom:github-latest` | Docker image |
-| `container_name` | `codefreedom-tools-github` | Container name |
-| `port` | `8082` | HTTP MCP port |
+| Setting          | Default                                           | Description    |
+| ---------------- | ------------------------------------------------- | -------------- |
+| `image`          | `docker.io/nilayparikh/codefreedom:github-latest` | Docker image   |
+| `container_name` | `codefreedom-tools-github`                        | Container name |
+| `port`           | `8082`                                            | HTTP MCP port  |
 
 ## Ephemeral Design
 

@@ -15,7 +15,7 @@ Core Python package for [CodeFreedom](../../README.md) — a unified CLI wrapper
 | `tool_registry.py` | Reference-counted tool lifecycle via `~/.codefreedom/proc/` (first session starts, last stops).      |
 | `admin.py`         | Backup/restore engine — archives config with secret redaction and optional AES-256 encryption.       |
 | `cli/`             | CLI subcommands (`claude`, `proxy`, `tools`, `admin`, `vscode`). See `CLAUDE.md` for full reference. |
-| `examples/`        | Bundled example files copied by `init` commands (profiles, `.env` templates, Docker configs).        |
+| `recipes/`         | Configuration recipes from github.com/nilayparikh/codefreedom-recipes.                               |
 
 ## Key Patterns
 
