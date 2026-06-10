@@ -1180,10 +1180,10 @@ def _print_ownership_advice() -> None:
 
     if system == "Linux":
         print(f"""
-  ───────────────────────────────────────────────────────────────
+  -------------------------------------------------------------
   Linux/WSL permission tip
-  ───────────────────────────────────────────────────────────────
-  Docker on Linux shares the host kernel directly — file ownership
+  -------------------------------------------------------------
+  Docker on Linux shares the host kernel directly -- file ownership
   uses numeric UIDs/GIDs.  If the container's internal user has a
   different UID (e.g. 1001) than your host user (e.g. 1000), files
   created by the container will be owned by UID 1001, and you'll
@@ -1200,8 +1200,8 @@ def _print_ownership_advice() -> None:
   macOS / Windows (Docker Desktop):
   Docker Desktop runs containers inside a lightweight VM with a
   virtualised filesystem layer, so file ownership is mapped
-  transparently — no chown needed.
-  ───────────────────────────────────────────────────────────────""")
+  transparently -- no chown needed.
+  -------------------------------------------------------------""")
     else:
         print("  (Ownership mapping is handled automatically on this platform.)")
 
@@ -1456,7 +1456,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     print(f"  Recipe: {name}")
     if description:
         print(f"  {description}")
-    print("  " + "─" * 55)
+    print("  " + "-" * 55)
 
     # ── Generate a persistent RECIPE.md instruction file ────────────────
     _generate_recipe_instruction(manifest, cf_dir)
@@ -1519,7 +1519,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     print(f"      sudo chown -R $(id -u):$(id -g) {cf_dir_str}")
     print()
     print("    5. Run the command above if you plan to use --sandbox mode")
-    print("  " + "─" * 55)
+    print("  " + "-" * 55)
     print()
 
 
