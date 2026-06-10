@@ -224,6 +224,25 @@ RUN python patch_websearch_count.py
 COPY patches/patch_retry_after_type.py .
 RUN python patch_retry_after_type.py
 
+# Patch _handle_anthropic_messages_response_logging to guard against
+# FakeAnthropicMessagesStreamIterator.  When use_chat_completions_url_for_
+# anthropic_messages is True and streaming is used, the experimental pass-
+# through handler returns a FakeAnthropicMessagesStreamIterator that is
+# not a ModelResponse, so the success handler falls through to
+# AnthropicResponse.model_validate() which crashes with a pydantic error.
+# This adds an early-return guard for that type.
+# (see patch_anthropic_fake_stream_logging.py)
+COPY patches/patch_anthropic_fake_stream_logging.py .
+RUN python patch_anthropic_fake_stream_logging.py
+
+# Suppress the "Proxy initialized with Search Tools" print that fires on
+# every 30-second background DB poll (add_deployment → _update_llm_router
+# → parse_search_tools).  Adds a _search_tools_printed sentinel so the
+# print only fires on the first call.
+# (see patch_parse_search_tools_noise.py)
+COPY patches/patch_parse_search_tools_noise.py .
+RUN python patch_parse_search_tools_noise.py
+
 # ── Bake the reasoning-efforts mapping plugin into the image ───────────────
 # The .py module must be findable by LiteLLM's callback loader at
 # /app/litellm-config/plugins/reasoning-efforts/reasoning_efforts_mapping.py
