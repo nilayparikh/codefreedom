@@ -201,7 +201,7 @@ class TestFetchModelInfo:
         ctx.__enter__.return_value.read.return_value = b'{"data": []}'
         captured: list = []
 
-        def fake(req, timeout):
+        def fake(req, **__kwargs):
             captured.append(req)
             return ctx
 

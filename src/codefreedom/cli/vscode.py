@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -442,7 +441,7 @@ _STANDARD_REASONING_EFFORT_LEVELS: Tuple[str, ...] = (
 # proxy's plugin-based mapping.  The plugin IS the single source of truth.
 
 
-def _resolve_reasoning_effort(model_name: str) -> List[str]:
+def _resolve_reasoning_effort(_model_name: str) -> List[str]:
     """Return the supported `reasoning_effort` levels for *model_name*.
 
     Always returns the full standard set (``["none", "low", "medium",
@@ -454,6 +453,8 @@ def _resolve_reasoning_effort(model_name: str) -> List[str]:
     rule simply maps all levels to ``"none"``, and VS Code's UI still
     shows the control but the effect is a no-op.
 
+    The ``_model_name`` parameter is accepted for backward compatibility
+    with callers that already pass it, but is no longer consulted.
     Previously this function used a hardcoded rule table
     (``_REASONING_EFFORT_RULES``) to decide per-model, but that was fragile
     and required updates whenever a new model family was added.  Since the
