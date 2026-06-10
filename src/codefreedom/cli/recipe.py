@@ -696,7 +696,11 @@ def _read_local_files(
     recipe_dir: Path,
     manifest: Dict[str, Any],
 ) -> Dict[str, str]:
-    """Read all recipe files from the local filesystem."""
+    """Read all recipe files from the local filesystem.
+
+    Missing files are silently skipped — they may be provided by an
+    extending base recipe, or simply not exist yet.
+    """
     files: Dict[str, str] = {}
     for entry in manifest.get("files", []):
         src_path = entry.get("path", "")
@@ -704,8 +708,6 @@ def _read_local_files(
         file_path = recipe_dir / src_path
         if file_path.exists():
             files[target] = file_path.read_text(encoding="utf-8")
-        else:
-            eprint(f"  [WARN] Local file not found: {file_path}")
     return files
 
 
@@ -777,12 +779,16 @@ def _resolve_store(
 
 
 def _ensure_store(url: str, dest: Path, branch: str = "main") -> bool:
-    """Clone (or update) a Git store and remove metadata.
+    """Clone a Git store fresh and remove metadata.
 
-    Shared helper used by both the default official repo and custom
-    ``--store`` paths.  After a successful clone/update the ``.git/``
-    directory is removed so only recipe folder contents remain.
+    Always re-clones to guarantee latest content — there is no local
+    cache beyond the current invocation.  After a successful clone the
+    ``.git/`` directory is removed so only recipe folder contents remain.
     """
+    import shutil
+
+    if dest.exists():
+        shutil.rmtree(dest)
     dest.mkdir(parents=True, exist_ok=True)
     if _clone_or_pull_store(url, dest, branch=branch):
         _remove_git_metadata(dest)
@@ -878,7 +884,6 @@ def _remove_git_metadata(path: Path) -> None:
     git_dir = path / ".git"
     if git_dir.is_dir():
         shutil.rmtree(git_dir, ignore_errors=True)
-        print(f"  [STORE] Removed .git metadata from {path}")
 
     for name in (".gitattributes", ".gitignore", ".gitmodules"):
         f = path / name
