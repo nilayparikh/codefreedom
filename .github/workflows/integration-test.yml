@@ -126,7 +126,7 @@ jobs:
           import yaml
           from pathlib import Path
           p = Path.home() / '.codefreedom' / 'proxy' / 'config' / 'config.yaml'
-          d = yaml.safe_load(p.read_text())
+          d = yaml.safe_load(p.read_text(encoding='utf-8'))
           assert 'general_settings' in d, 'config.yaml should contain general_settings'
           assert 'router_settings' in d, 'config.yaml should contain router_settings'
           assert 'litellm_settings' in d, 'config.yaml should contain litellm_settings'
@@ -140,7 +140,7 @@ jobs:
           from pathlib import Path
           for name in ['chrome', 'web', 'github', 'web-bridge']:
               p = Path.home() / '.codefreedom' / 'profiles' / f'{name}.yaml'
-              d = yaml.safe_load(p.read_text())
+              d = yaml.safe_load(p.read_text(encoding='utf-8'))
               assert isinstance(d, dict), f'{name}.yaml should be valid YAML'
           print('[PROFILES OK]')
           "
