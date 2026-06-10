@@ -1557,19 +1557,11 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
     if required:
         lines.append("## Required Secrets")
         lines.append("")
+        lines.append("Set these environment variables before starting:")
+        lines.append("")
         for secret in required:
             var = secret.get("var", "?")
-            prompt = secret.get("prompt", "")
-            hint = secret.get("hint", "")
-            default = secret.get("default", "")
-            line = f"- `{var}`"
-            if prompt:
-                line += f" — {prompt}"
-            if default:
-                line += f" (default: {default})"
-            lines.append(line)
-            if hint:
-                lines.append(f"  - {hint}")
+            lines.append(f"- `{var}`")
         lines.append("")
 
     if optional:
@@ -1577,11 +1569,7 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
         lines.append("")
         for cfg in optional:
             var = cfg.get("var", "?")
-            default = cfg.get("default", "")
-            line = f"- `{var}`"
-            if default:
-                line += f" (default: {default})"
-            lines.append(line)
+            lines.append(f"- `{var}`")
         lines.append("")
 
     if tools:

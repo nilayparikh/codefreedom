@@ -117,8 +117,10 @@ jobs:
           from pathlib import Path
           p = Path.home() / '.codefreedom' / 'proxy' / 'config' / 'config.yaml'
           d = yaml.safe_load(p.read_text())
-          assert 'model_list' in d, 'config.yaml should contain model_list'
           assert 'general_settings' in d, 'config.yaml should contain general_settings'
+          assert 'router_settings' in d, 'config.yaml should contain router_settings'
+          assert 'litellm_settings' in d, 'config.yaml should contain litellm_settings'
+          assert 'search_tools' in d, 'config.yaml should contain search_tools'
           print('[CONFIG OK]')
           "
 
