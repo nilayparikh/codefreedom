@@ -476,7 +476,9 @@ def main() -> None:
         "up": ("codefreedom.cli.update", "run"),
         "deinit": ("codefreedom.cli.deinit", "run"),
     }
-    dispatch = _SIMPLE_DISPATCH.get(args.command) if isinstance(args.command, str) else None
+    dispatch = (
+        _SIMPLE_DISPATCH.get(args.command) if isinstance(args.command, str) else None
+    )
     if dispatch is not None:
         _dispatch(dispatch[0], dispatch[1], args)
 
