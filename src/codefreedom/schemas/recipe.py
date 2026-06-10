@@ -35,6 +35,13 @@ class ConfigEntry(BaseModel, extra="forbid"):
     default: Optional[str] = None
 
 
+class DirEntry(BaseModel, extra="forbid"):
+    """A directory to create in ~/.codefreedom/ (mountable volume host path)."""
+
+    path: str
+    _target: Optional[str] = None  # resolved at runtime
+
+
 class RecipeConfig(BaseModel, extra="forbid"):
     """Schema for recipe.yaml — defines a CodeFreedom configuration recipe."""
 
@@ -43,6 +50,7 @@ class RecipeConfig(BaseModel, extra="forbid"):
     version: Optional[int] = Field(default=None, ge=1)
     extends: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]+$")
     files: List[FileEntry]
+    dirs: Optional[List[str]] = None
     required_secrets: Optional[List[SecretEntry]] = None
     optional_config: Optional[List[ConfigEntry]] = None
     tools_optional: Optional[List[str]] = None
@@ -51,7 +59,7 @@ class RecipeConfig(BaseModel, extra="forbid"):
     @classmethod
     def _validate_tools(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         if v is not None:
-            allowed = {"chrome", "web", "github"}
+            allowed = {"chrome", "web", "github", "web-bridge"}
             for t in v:
                 if t not in allowed:
                     raise ValueError(

@@ -66,6 +66,11 @@ def main() -> None:
         default=None,
         help="Custom recipe store: GitHub URL (e.g. https://github.com/owner/repo.git) or local folder path",
     )
+    recipe_parser.add_argument(
+        "--staging",
+        action="store_true",
+        help="Use recipes from the 'staging' branch instead of 'main'",
+    )
 
     # ── claude subcommand ──────────────────────────────────────────────────
     claude_parser = subparsers.add_parser(
@@ -361,24 +366,25 @@ def main() -> None:
 
         if init_action == "recipe":
             store = getattr(args, "store", None)
+            staging = getattr(args, "staging", False)
 
             if args.list:
                 from codefreedom.cli.recipe import list_recipes
 
-                sys.exit(list_recipes(store=store))
+                sys.exit(list_recipes(store=store, staging=staging))
             if args.apply:
                 from codefreedom.cli.recipe import apply_plan
 
-                sys.exit(apply_plan(args.apply, store=store))
+                sys.exit(apply_plan(args.apply, store=store, staging=staging))
             if args.plan:
                 from codefreedom.cli.recipe import plan_recipe
 
-                sys.exit(plan_recipe(args.plan, store=store))
+                sys.exit(plan_recipe(args.plan, store=store, staging=staging))
 
             # No flags → install _default base recipe
             from codefreedom.cli.recipe import init_recipe
 
-            sys.exit(init_recipe("_default", store=store))
+            sys.exit(init_recipe("_default", store=store, staging=staging))
 
         # Plain `cf init` — redirect to recipe system
         from codefreedom.cli.tool_init_utils import print_help_section
@@ -390,6 +396,7 @@ def main() -> None:
                 "      cf init recipe --list              # list available recipes",
                 "      cf init recipe --plan <name>       # preview a recipe without applying",
                 "      cf init recipe --store <path|url>  # use a custom recipe store",
+                "      cf init recipe --staging <name>    # use recipes from the staging branch",
                 "      cf init recipe <name>              # install a specific recipe",
             ],
             docs_url="https://nilayparikh.github.io/codefreedom/recipes/",

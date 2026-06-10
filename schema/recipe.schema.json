@@ -172,6 +172,22 @@
       "title": "Files",
       "type": "array"
     },
+    "dirs": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Directories to create under CODEFREEDOM_HOME (e.g. mountable volume host paths like pg/data, pg/backup)",
+      "title": "Dirs"
+    },
     "required_secrets": {
       "anyOf": [
         {

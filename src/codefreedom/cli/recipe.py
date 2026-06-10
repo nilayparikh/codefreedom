@@ -115,12 +115,13 @@ class RecipeError(Exception):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def list_recipes(store: Optional[str] = None) -> int:
+def list_recipes(store: Optional[str] = None, staging: bool = False) -> int:
     """List all available recipes from the recipe store.
 
     Returns exit code 0 on success, 1 on failure.
     """
-    store_path = _resolve_store(store)
+    branch = "staging" if staging else "main"
+    store_path = _resolve_store(store, branch=branch)
 
     if store_path:
         recipes = _list_recipes_from_store(store_path)
@@ -143,7 +144,7 @@ def list_recipes(store: Optional[str] = None) -> int:
     return 0
 
 
-def init_recipe(name: str, store: Optional[str] = None) -> int:
+def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -> int:
     """Fetch and apply a recipe to ``~/.codefreedom/``.
 
     This is the main entry point for ``cf init --recipe <name>``.
@@ -164,7 +165,8 @@ def init_recipe(name: str, store: Optional[str] = None) -> int:
     cf_dir = get_codefreedom_dir()
 
     # ── 1. Recipe source ────────────────────────────────────────────────
-    store_path = _resolve_store(store)
+    branch = "staging" if staging else "main"
+    store_path = _resolve_store(store, branch=branch)
     manifest, files = _resolve_recipe(name, store_path=store_path)
     if manifest is None:
         # Silently skip _default when not found in the store
@@ -216,7 +218,7 @@ def init_recipe(name: str, store: Optional[str] = None) -> int:
     return 0
 
 
-def plan_recipe(name: str, store: Optional[str] = None) -> int:
+def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -> int:
     """Preview recipe changes without applying them.
 
     Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
@@ -228,7 +230,8 @@ def plan_recipe(name: str, store: Optional[str] = None) -> int:
     cf_dir = get_codefreedom_dir()
 
     # ── 1. Resolve recipe ──────────────────────────────────────────────
-    store_path = _resolve_store(store)
+    branch = "staging" if staging else "main"
+    store_path = _resolve_store(store, branch=branch)
     manifest, files = _resolve_recipe(name, store_path=store_path)
     if manifest is None:
         print(f"[plan] Recipe '{name}' not found.")
@@ -255,6 +258,7 @@ def plan_recipe(name: str, store: Optional[str] = None) -> int:
             )
 
     extends = manifest.get("extends")
+    base_man: dict[str, Any] | None = None
     if extends:
         base_man, base_files = _resolve_recipe(extends, store_path=store_path)
         if base_man is not None:
@@ -377,12 +381,25 @@ def plan_recipe(name: str, store: Optional[str] = None) -> int:
                 )
                 summary["delete"] = summary.get("delete", 0) + 1
 
+    # ── 3c. Collect dirs from base + extending manifests ──────────────
+    plan_dirs: list[str] = []
+
+    def _collect_dirs(man: dict) -> None:
+        for d in man.get("dirs") or []:
+            if d not in plan_dirs:
+                plan_dirs.append(d)
+
+    if extends and base_man is not None:
+        _collect_dirs(base_man)
+    _collect_dirs(manifest)
+
     # ── 4. Write plan.yaml ─────────────────────────────────────────────
     plan_meta = {
         "plan_id": plan_id,
         "recipe": name,
         "extends": extends,
         "summary": summary,
+        "dirs": plan_dirs,
         "files": patch_files,
     }
     (plans_dir / "plan.yaml").write_text(
@@ -401,6 +418,9 @@ def plan_recipe(name: str, store: Optional[str] = None) -> int:
     print(f"[plan]   {summary['same']} unchanged (skipped)")
     if delete_count:
         print(f"[plan]   {delete_count} files to delete")
+    dir_count = len(plan_dirs)
+    if dir_count:
+        print(f"[plan]   {dir_count} directories to create")
     print("[plan]")
     print(f"[plan]   {'':>8} {'SOURCE':12} DESTINATION")
     print(f"[plan]   {'-'*8} {'-'*12} {'-'*75}")
@@ -413,13 +433,16 @@ def plan_recipe(name: str, store: Optional[str] = None) -> int:
         else:
             dest = cf_dir / target
         print(f"[plan]   {action} {src_label} {dest}")
+    for d in plan_dirs:
+        dest = cf_dir / d
+        print(f"[plan]   {'MKDIR'.ljust(8)} {'recipe'.ljust(12)} {dest}/")
     print("[plan]")
     print(f"[plan] To apply:  cf init recipe --apply {plan_id}")
     print(f"[plan] To review: cat {plans_dir}/<patch-file>.diff")
     return 0
 
 
-def apply_plan(plan_id: str, store: Optional[str] = None) -> int:
+def apply_plan(plan_id: str, store: Optional[str] = None, staging: bool = False) -> int:
     """Apply a previously generated plan by ID.
 
     Reads ``~/.codefreedom/plans/<plan_id>/plan.yaml`` and applies
@@ -507,6 +530,21 @@ def apply_plan(plan_id: str, store: Optional[str] = None) -> int:
         label = "CREATE" if action == "create" else "REPLACE"
         print(f"  [{label}] {target}")
         count += 1
+
+    # ── Create mountable directories ────────────────────────────────────
+    dir_count = 0
+    for rel_path in plan.get("dirs") or []:
+        target = cf_dir / rel_path
+        if target.is_dir():
+            print(f"  [SAME]  {rel_path}/ (already exists)")
+            continue
+        target.mkdir(parents=True, exist_ok=True)
+        print(f"  [MKDIR] {rel_path}/")
+        dir_count += 1
+
+    if dir_count:
+        print(f"\n  Created {dir_count} mountable director(ies).")
+        _print_ownership_advice()
 
     if count:
         print(f"\n[apply] Plan applied — {count} file(s) updated.")
@@ -676,7 +714,10 @@ def _read_local_files(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _resolve_store(store: Optional[str] = None) -> Optional[Path]:
+def _resolve_store(
+    store: Optional[str] = None,
+    branch: str = "main",
+) -> Optional[Path]:
     """Resolve a store to a local directory path.
 
     When *store* is ``None`` (default), uses the official community repo
@@ -685,8 +726,12 @@ def _resolve_store(store: Optional[str] = None) -> Optional[Path]:
     Accepts:
       - GitHub URL (e.g. ``https://github.com/owner/repo.git`` or
         ``git@github.com:owner/repo.git``) — clones to
-        ``~/.codefreedom/stores/<owner>-<repo>/`` via GitPython sparse checkout.
+        ``~/.codefreedom/stores/<owner>-<repo>-<branch>/`` via GitPython
+        sparse checkout.
       - Local absolute path (e.g. ``/home/user/my-recipes``).
+
+    The *branch* parameter controls which git branch is checked out when
+    cloning the official store (ignored for local paths and custom URLs).
 
     All sources use the same download mechanism (GitPython sparse checkout),
     ensuring consistent behavior whether using the official repo or a custom
@@ -698,8 +743,9 @@ def _resolve_store(store: Optional[str] = None) -> Optional[Path]:
     # ── Default: official community repo ────────────────────────────────
     if store is None:
         cf_dir = get_codefreedom_dir()
-        store_dir = cf_dir / "stores" / f"{RECIPE_OWNER}-{RECIPE_REPO}"
-        if _ensure_store(_OFFICIAL_REPO_URL, store_dir):
+        store_name = f"{RECIPE_OWNER}-{RECIPE_REPO}-{branch}"
+        store_dir = cf_dir / "stores" / store_name
+        if _ensure_store(_OFFICIAL_REPO_URL, store_dir, branch=branch):
             return store_dir
         return None
 
@@ -730,7 +776,7 @@ def _resolve_store(store: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def _ensure_store(url: str, dest: Path) -> bool:
+def _ensure_store(url: str, dest: Path, branch: str = "main") -> bool:
     """Clone (or update) a Git store and remove metadata.
 
     Shared helper used by both the default official repo and custom
@@ -738,7 +784,7 @@ def _ensure_store(url: str, dest: Path) -> bool:
     directory is removed so only recipe folder contents remain.
     """
     dest.mkdir(parents=True, exist_ok=True)
-    if _clone_or_pull_store(url, dest):
+    if _clone_or_pull_store(url, dest, branch=branch):
         _remove_git_metadata(dest)
         return True
     return False
@@ -767,7 +813,7 @@ def _parse_github_url(url: str) -> Optional[str]:
     return None
 
 
-def _clone_or_pull_store(url: str, dest: Path) -> bool:
+def _clone_or_pull_store(url: str, dest: Path, branch: str = "main") -> bool:
     """Clone or update a Git repository into *dest* using sparse checkout.
 
     Uses GitPython with sparse checkout to fetch only the directory structure
@@ -775,21 +821,25 @@ def _clone_or_pull_store(url: str, dest: Path) -> bool:
     stored GitHub credentials (git credential helper / SSH agent) are used
     automatically.
 
+    The *branch* parameter controls which remote branch is fetched.  After
+    cloning from a branch-specific store (e.g. ``staging``) the ``.git/``
+    metadata is removed, so subsequent calls always do a fresh clone.
+
     Returns ``True`` on success.
     """
     from git import Repo, GitCommandError
 
     try:
         if dest.exists() and (dest / ".git").is_dir():
-            # Already cloned — update with fast-forward pull
-            print(f"  [STORE] Updating existing store at {dest}")
+            # Already cloned — update with fast-forward pull on the branch
+            print(f"  [STORE] Updating existing store at {dest} ({branch})")
             repo = Repo(dest)
             origin = repo.remotes.origin
-            origin.pull(ff_only=True)
+            origin.pull(branch, ff_only=True)
             return True
 
         # ── Fresh clone with sparse checkout ──────────────────────────────
-        print(f"  [STORE] Cloning {url} -> {dest}")
+        print(f"  [STORE] Cloning {url} -> {dest} (branch: {branch})")
         dest.mkdir(parents=True, exist_ok=True)
         repo = Repo.init(dest)
 
@@ -803,7 +853,9 @@ def _clone_or_pull_store(url: str, dest: Path) -> bool:
         sparse_path.write_text("/*\n*/\n", encoding="utf-8")
 
         origin = repo.create_remote("origin", url)
-        origin.pull(repo.active_branch.name)
+        # Fetch the specific branch and check it out
+        origin.fetch(branch)
+        repo.git.checkout(branch)
         return True
 
     except GitCommandError as e:
@@ -1025,6 +1077,9 @@ def _install_recipe_files(
 
         count += new_count
 
+    # ── Create mountable directories ────────────────────────────────────
+    _create_recipe_dirs(manifest, cf_dir)
+
     if count:
         print(f"\n  Recipe applied — {count} file(s) created/updated.")
     else:
@@ -1071,6 +1126,79 @@ def _remove_orphans(
         print(f"\n  Removed {deleted} orphaned file(s) from previous recipe.")
     else:
         print("\n  No orphaned files to clean up.")
+
+
+def _create_recipe_dirs(
+    manifest: Dict[str, Any],
+    cf_dir: Path,
+) -> None:
+    """Create mountable directories declared in the recipe's ``dirs`` list.
+
+    Directories are created under ``CODEFREEDOM_HOME`` (e.g.
+    ``<cf_dir>/pg/data``, ``<cf_dir>/pg/backup``). These are typically
+    host paths referenced by Docker volume mounts in compose files that
+    need to exist before ``docker compose up`` runs so that a subsequent
+    permission-fix command (e.g. ``chown 1000:1000``) can set the correct
+    ownership before the container starts.
+    """
+    dirs = manifest.get("dirs")
+    if not dirs:
+        return
+
+    created = 0
+    for rel_path in dirs:
+        target = cf_dir / rel_path
+        if target.is_dir():
+            print(f"  [SAME]  {rel_path}/ (already exists)")
+            continue
+        target.mkdir(parents=True, exist_ok=True)
+        print(f"  [MKDIR] {rel_path}/")
+        created += 1
+
+    if created:
+        print(f"\n  Created {created} mountable director(ies).")
+        _print_ownership_advice()
+
+
+def _print_ownership_advice() -> None:
+    """Print cross-platform advice about Docker volume ownership.
+
+    Linux and WSL share the host kernel, so files written by a container
+    user with a different UID become owned by that numeric UID on the
+    host.  macOS and native Windows (Docker Desktop) virtualise the
+    filesystem layer and map ownership automatically.
+    """
+    import platform
+
+    system = platform.system()
+    cf_dir = get_codefreedom_dir()
+
+    if system == "Linux":
+        print(f"""
+  ───────────────────────────────────────────────────────────────
+  Linux/WSL permission tip
+  ───────────────────────────────────────────────────────────────
+  Docker on Linux shares the host kernel directly — file ownership
+  uses numeric UIDs/GIDs.  If the container's internal user has a
+  different UID (e.g. 1001) than your host user (e.g. 1000), files
+  created by the container will be owned by UID 1001, and you'll
+  get "Permission denied" when accessing them on the host.
+
+  To fix, run:
+
+      sudo chown -R $(id -u):$(id -g) {cf_dir}
+
+  This re-assigns ownership of all CodeFreedom files to your
+  current host user.  You only need to run it once (or after
+  running Docker commands that create new files as root).
+
+  macOS / Windows (Docker Desktop):
+  Docker Desktop runs containers inside a lightweight VM with a
+  virtualised filesystem layer, so file ownership is mapped
+  transparently — no chown needed.
+  ───────────────────────────────────────────────────────────────""")
+    else:
+        print("  (Ownership mapping is handled automatically on this platform.)")
 
 
 def _merge_file(
