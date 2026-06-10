@@ -29,7 +29,14 @@ from codefreedom.cli.vscode import (
 
 
 class TestResolveMasterKey:
+    # Helper: clean up CF_CLI_ prefix from the real env so it doesn't bleed
+    # into tests that aren't explicitly testing the CF_CLI_ prefix.
+    @staticmethod
+    def _clean_cf_cli(monkeypatch):
+        monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
+
     def test_from_os_environ_wins(self, monkeypatch, tmp_path: Path):
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
         # Even if the file has a different key, env wins.
@@ -39,6 +46,7 @@ class TestResolveMasterKey:
         assert _resolve_master_key() == "sk-from-env"
 
     def test_from_secrets_file_when_env_missing(self, monkeypatch, tmp_path: Path):
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         (tmp_path / ".env.proxy.secrets").write_text(
@@ -47,25 +55,56 @@ class TestResolveMasterKey:
         assert _resolve_master_key() == "sk-from-file"
 
     def test_missing_in_both(self, monkeypatch, tmp_path: Path):
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         # No secrets file
         assert _resolve_master_key() is None
 
-    def test_empty_string_in_env_treated_as_missing(self, monkeypatch, tmp_path: Path):
+    def test_empty_string_in_env_treated_as_set(self, monkeypatch, tmp_path: Path):
+        """Empty-string env var is a valid override (env wins over files).
+
+        Per CLAUDE.md: "Empty-string env vars are valid overrides
+        (export FOO="" does NOT fall through to defaults)."
+        """
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
-        monkeypatch.setenv("LITELLM_MASTER_KEY", "   ")
+        monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "")
         (tmp_path / ".env.proxy.secrets").write_text(
             "LITELLM_MASTER_KEY=sk-from-file\n"
         )
-        # Whitespace-only env falls through to the file.
-        assert _resolve_master_key() == "sk-from-file"
+        # Env (empty string) beats file — returns None since empty is falsy.
+        assert _resolve_master_key() is None
 
     def test_secrets_file_missing_key(self, monkeypatch, tmp_path: Path):
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         (tmp_path / ".env.proxy.secrets").write_text("OTHER_KEY=foo\n")
         assert _resolve_master_key() is None
+
+    def test_cf_cli_prefix_wins_over_env(self, monkeypatch, tmp_path: Path):
+        """CF_CLI_LITELLM_MASTER_KEY beats direct LITELLM_MASTER_KEY."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
+        monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-from-cf-cli")
+        assert _resolve_master_key() == "sk-from-cf-cli"
+
+    def test_cf_cli_prefix_falls_through_to_env(self, monkeypatch, tmp_path: Path):
+        """When CF_CLI_ is absent, direct env var is used."""
+        self._clean_cf_cli(monkeypatch)
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
+        monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
+        assert _resolve_master_key() == "sk-from-env"
+
+    def test_cf_cli_prefix_alone(self, monkeypatch, tmp_path: Path):
+        """Only CF_CLI_LITELLM_MASTER_KEY is set (no LITELLM_MASTER_KEY)."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+        monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-from-cf-cli-only")
+        assert _resolve_master_key() == "sk-from-cf-cli-only"
 
 
 # ── URL helpers ──────────────────────────────────────────────────────────────
@@ -282,20 +321,14 @@ class TestModelToVscodeEntry:
         out = _model_to_vscode_entry({"model_name": "Azure/GPT-5.4"}, self.BASE_URL)
         assert out["supportsReasoningEffort"] == self.STD
 
-    def test_known_model_only_none_omits_field(self):
-        # A model that matches a rule with `None` (only supports "none")
-        # gets the field OMITTED entirely — not `["none"]`, not `None`.
-        out = _model_to_vscode_entry(
-            {"model_name": "Azure/GPT-5.4-Nano"}, self.BASE_URL
-        )
-        assert "supportsReasoningEffort" not in out
-        # The rest of the entry is still intact.
-        assert out["id"] == "Azure/GPT-5.4-Nano"
-        assert out["toolCalling"] is True
-
-    def test_only_none_for_all_only_none_families(self):
-        # Spot-check several "only none" families from the research.
+    def test_model_with_any_name_emits_list(self):
+        # Every model now unconditionally gets the full standard set,
+        # because the proxy's reasoning-efforts mapping plugin handles
+        # translation to model-native values (including mapping all
+        # levels to "none" for models that don't actually reason).
         for name in (
+            "Azure/GPT-5.4",
+            "Azure/GPT-5.4-Nano",
             "NVIDIA/GLM-5.1",
             "NVIDIA/Kimi-K2.6",
             "DGX/Qwen3.6-27B",
@@ -305,27 +338,17 @@ class TestModelToVscodeEntry:
             "OpenRouter/FreeRouter",
         ):
             out = _model_to_vscode_entry({"model_name": name}, self.BASE_URL)
-            assert (
-                "supportsReasoningEffort" not in out
-            ), f"{name} should omit supportsReasoningEffort but got {out.get('supportsReasoningEffort')!r}"
+            assert out["supportsReasoningEffort"] == self.STD
 
 
 # ── _resolve_reasoning_effort ────────────────────────────────────────────────
 
 
 class TestResolveReasoningEffort:
-    """Reasoning-effort lookup — always returns the standard set for any
-    model that supports reasoning.
-
-    The helper has a two-way return contract:
-      * ``list[str]`` — model supports reasoning; always the full standard
-        set (``["none", "low", "medium", "high", "xhigh", "max"]``).
-      * ``None`` — model has no real reasoning capability; the caller
-        should OMIT the field.
-
-    Models not in the hardcoded table are treated permissively (full standard
-    set).  Order matters: more specific patterns must come first so they win
-    over less-specific ones (e.g. ``gpt-5.4-nano`` before ``gpt-5.4``).
+    """Reasoning-effort lookup now unconditionally returns the full
+    standard set for every model.  The proxy's reasoning-efforts mapping
+    plugin handles translation to model-native values at runtime; there
+    is no longer a per-model rule table in this code.
     """
 
     STD = list(_STANDARD_REASONING_EFFORT_LEVELS)
@@ -333,88 +356,50 @@ class TestResolveReasoningEffort:
     @pytest.mark.parametrize(
         "model_name",
         [
-            # ── Native OpenAI Tier (Azure) ──────────────────────────────
             "Azure/GPT-5.4",
             "openai/gpt-5.4",
             "Azure/GPT-5.4-Mini",
             "openai/gpt-5.4-mini",
-            # ── DeepSeek V4 ─────────────────────────────────────────────
+            "Azure/GPT-5.4-Nano",
+            "openai/gpt-5.4-nano",
             "DeepSeek/DeepSeek-V4-Pro",
             "NVIDIA/DeepSeek-V4-Pro",
             "DeepSeek/DeepSeek-V4-Flash",
             "NVIDIA/DeepSeek-V4-Flash",
             "OpenCodeZen/DeepSeek-V4-Flash-FREE",
-            # ── NVIDIA & Moonshot backends ───────────────────────────────
             "OpenRouter/Nemotron-3-Ultra-550B-A55B",
             "OpenCodeZen/Nemotron-3-Ultra-FREE",
-            # ── OpenCodeZen custom models ────────────────────────────────
+            "OpenCodeZen/Nemotron-3-Super-FREE",
             "OpenCodeZen/MiMo-V2.5-FREE",
             "OpenCodeZen/Minimax-M3-FREE",
-            # ── Alibaba Qwen 3.6 MoE ─────────────────────────────────────
             "DGX/Qwen3.6-35B-A3B",
-            # ── CodeFreedom internal fallbacks ───────────────────────────
-            "CodeFreedom/Ultra",
-            "CodeFreedom/Flash",
-        ],
-    )
-    def test_known_models_with_gradient(self, model_name):
-        assert _resolve_reasoning_effort(model_name) == self.STD
-
-    @pytest.mark.parametrize(
-        "model_name",
-        [
-            # ── Native OpenAI Tier ─────────────────────────────────────────
-            "Azure/GPT-5.4-Nano",
-            "openai/gpt-5.4-nano",
-            # ── Zhipu AI GLM ───────────────────────────────────────────────
-            "Azure/GLM-5.1",
+            "DGX/Qwen3.6-27B",
             "NVIDIA/GLM-5.1",
-            # ── NVIDIA & Moonshot backends ─────────────────────────────────
             "NVIDIA/Kimi-K2.6",
-            "OpenCodeZen/Nemotron-3-Super-FREE",
-            # ── OpenCodeZen custom models ──────────────────────────────────
             "OpenCodeZen/Big-Pickle",
             "OpenRouter/FreeRouter",
-            # ── Alibaba Qwen 3.6 MoE ───────────────────────────────────────
-            "DGX/Qwen3.6-27B",
-            # ── CodeFreedom internal fallbacks ─────────────────────────────
+            "CodeFreedom/Ultra",
+            "CodeFreedom/Flash",
             "CodeFreedom/Pro",
             "CodeFreedom/Air",
-        ],
-    )
-    def test_known_models_only_none_returns_None(self, model_name):
-        # ``None`` tells the caller to OMIT the field — not the same as
-        # an empty list.  See the helper's docstring.
-        assert _resolve_reasoning_effort(model_name) is None
-
-    def test_unknown_models_return_standard_set(self):
-        # Unknown models are treated permissively — get the full standard set.
-        for model_name in [
+            "Azure/GLM-5.1",
             "some-org/Some-Random-Model",
             "totally/unknown",
             "foo",
-            "NVIDIA/Step-3.7-Flash",  # in nvidia.yaml but not in rules
             "",
             "unknown",
-        ]:
-            assert _resolve_reasoning_effort(model_name) == self.STD
+        ],
+    )
+    def test_every_model_gets_standard_set(self, model_name):
+        """Every model, regardless of name, gets the full standard set."""
+        assert _resolve_reasoning_effort(model_name) == self.STD
 
-    def test_case_insensitive_match(self):
-        # The lookup is case-insensitive on the substring pattern.
+    def test_case_insensitive(self):
         assert _resolve_reasoning_effort("azure/gpt-5.4") == self.STD
         assert _resolve_reasoning_effort("AZURE/GPT-5.4-MINI") == self.STD
-        # The "only none" branch is also case-insensitive.
-        assert _resolve_reasoning_effort("azure/gpt-5.4-nano") is None
-
-    def test_specific_pattern_wins_over_general(self):
-        # gpt-5.4-nano must NOT fall through to the general gpt-5.4 rule.
-        assert _resolve_reasoning_effort("Azure/GPT-5.4-Nano") is None
-        # gpt-5.4-mini must NOT fall through to the general gpt-5.4 rule.
+        assert _resolve_reasoning_effort("azure/gpt-5.4-nano") == self.STD
+        assert _resolve_reasoning_effort("Azure/GPT-5.4-Nano") == self.STD
         assert _resolve_reasoning_effort("Azure/GPT-5.4-Mini") == self.STD
-        # nemotron-3-super must NOT be shadowed by nemotron-3-ultra
-        # (different substrings — verify the order in the rules table).
-        assert _resolve_reasoning_effort("OpenCodeZen/Nemotron-3-Super-FREE") is None
-        assert _resolve_reasoning_effort("OpenCodeZen/Nemotron-3-Ultra-FREE") == self.STD
 
     def test_returned_list_is_fresh(self):
         # Calling twice returns a new list each time (not a shared mutable).
@@ -474,12 +459,13 @@ class TestCmdVscodeGenerate:
     def test_missing_master_key_returns_1(self, monkeypatch, tmp_path: Path, capsys):
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+        monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setattr(
             "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
         )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
-        # Error message names the env file.
+        # Error message mentions LITELLM_MASTER_KEY.
         captured = capsys.readouterr()
         assert "LITELLM_MASTER_KEY" in captured.err
 

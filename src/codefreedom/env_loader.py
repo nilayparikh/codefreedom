@@ -142,6 +142,7 @@ def load_env_chain(
     workspace_dir: Path,
     *,
     component: Optional[str] = None,
+    verbose: bool = True,
 ) -> Dict[str, str]:
     """Load env vars in precedence order: component → shared → workspace → system env.
 
@@ -151,6 +152,7 @@ def load_env_chain(
                    .env.claude/.env.claude.secrets, "proxy" loads
                    .env.proxy/.env.proxy.secrets.  If None, only shared
                    and workspace envs are loaded (used by tools).
+        verbose: Print ``[ENV]`` log lines for each loaded file.
 
     Resolution order (later sources override earlier):
       Config files (lowest priority):
@@ -167,6 +169,10 @@ def load_env_chain(
         8. process environment                        (highest precedence)
 
     Returns a merged dict. Later sources override earlier ones.
+
+    Note: Most call sites should use :func:`get_env` instead — it wraps this
+    function with support for extra injections (e.g. proxy POSTGRES_* paths)
+    and is the single canonical env-resolution entry point.
     """
     from codefreedom.config import get_codefreedom_dir
 
@@ -215,7 +221,8 @@ def load_env_chain(
     for path, label, _optional in env_sources:
         if path.exists():
             merged.update(load_dotenv(path))
-            eprint(f"  [ENV] Loaded {label} from {path}")
+            if verbose:
+                eprint(f"  [ENV] Loaded {label} from {path}")
 
     # Process environment (highest precedence — machine-level overrides)
     for key, val in os.environ.items():
@@ -225,6 +232,48 @@ def load_env_chain(
     # Users can export CF_CLI_LITELLM_MASTER_KEY=sk-... in their shell
     # to force-set configuration values without touching .env files.
     merged = apply_cf_cli_overrides(merged)
+
+    return merged
+
+
+def get_env(
+    workspace_dir: Path,
+    *,
+    component: Optional[str] = None,
+    verbose: bool = True,
+    extra_injections: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
+    """THE single canonical env resolver for all CodeFreedom components.
+
+    Loads the full env precedence chain via :func:`load_env_chain`, applies
+    ``CF_CLI_*`` overrides, and injects any *extra_injections* with
+    ``setdefault`` semantics (they won't override an existing value).
+
+    Every subcommand (claude, proxy, tools, vscode, doctor, deinit) should
+    use this function — and ONLY this function — to resolve environment
+    variables.  No more custom env loading in individual call sites.
+
+    Args:
+        workspace_dir: Path to the project workspace (for .env overrides).
+        component: Which subcommand is loading envs — ``"claude"`` loads
+                   ``.env.claude`` / ``.env.claude.secrets``, ``"proxy"``
+                   loads ``.env.proxy`` / ``.env.proxy.secrets``.  If
+                   ``None``, only shared and workspace envs are loaded
+                   (used by tools).
+        verbose: Print ``[ENV]`` log lines for each loaded file.
+        extra_injections: Additional vars to inject with ``setdefault``
+            (e.g. ``{"POSTGRES_HOST_DATA_DIR": "/path/to/pg/data"}``).
+            These won't override existing values from env files or
+            ``os.environ``.
+
+    Returns:
+        A merged ``Dict[str, str]`` with the full resolved environment.
+    """
+    merged = load_env_chain(workspace_dir, component=component, verbose=verbose)
+
+    if extra_injections:
+        for key, val in extra_injections.items():
+            merged.setdefault(key, val)
 
     return merged
 

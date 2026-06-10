@@ -30,8 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from codefreedom.config import get_codefreedom_dir
-from codefreedom.env_loader import eprint, load_dotenv, load_env_chain
+from codefreedom.env_loader import eprint, load_env_chain
 from codefreedom.profiles import ProfileError, load_profile_env, load_profiles
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -431,105 +430,54 @@ _STANDARD_REASONING_EFFORT_LEVELS: Tuple[str, ...] = (
     "max",
 )
 
-# Hardcoded model-family lookup used to decide WHICH models get the
-# ``supportsReasoningEffort`` field.
+# Note: ``supportsReasoningEffort`` is now unconditionally advertised for
+# ALL models.  The proxy's ``reasoning-efforts`` mapping plugin translates
+# standard effort levels to model-native values at runtime.  If a model has
+# no real reasoning capability, the plugin's rule maps everything to
+# ``"none"`` -- the VS Code UI still shows the control but it's effectively
+# a no-op.  No per-model rule table needed anymore.
 #
-# The proxy's /v1/model/info does not surface a per-model list of supported
-# `reasoning_effort` levels, and LiteLLM has no consistent capability
-# database for them.  Rather than leave every model with `[]` (which hides
-# the effort control in VS Code's model picker), we hardcode the model
-# families we know about and return `[]` for the rest.
-#
-# Each rule is a (substring, supports_reasoning) tuple.  Matching is
-# case-insensitive substring on the full model id.
-#
-# A value of ``True`` means the model supports reasoning -- the generated
-# entry will advertise the full standard set (``_STANDARD_REASONING_EFFORT_LEVELS``).
-# A value of ``False`` means the model only supports ``"none"`` (no real
-# reasoning capability).  In that case the caller OMITS the field entirely,
-# since advertising ``["none"]`` is a no-op and just adds noise.
-_REASONING_EFFORT_RULES: Tuple[Tuple[str, bool], ...] = (
-    # ── Native OpenAI Tier (Azure) ────────────────────────────────────────────
-    # Nano is text-only reasoning; passing extended effort would crash.
-    ("gpt-5.4-nano", False),
-    ("gpt-5.4-mini", True),
-    ("gpt-5.4", True),
-    # ── DeepSeek V4 (all variants support reasoning) ─────────────────────────
-    ("deepseek-v4-pro", True),
-    ("deepseek-v4-flash", True),
-    # ── Zhipu AI GLM (safe default is none) ──────────────────────────────────
-    ("glm-5.1", False),
-    # ── NVIDIA & Moonshot backends ────────────────────────────────────────────
-    # Kimi-K2.6: text-optimized, no gradient.
-    ("kimi-k2.6", False),
-    # Nemotron-3-Ultra: full gradient; matches both OpenRouter and
-    # OpenCodeZen FREE variants.  The Super variant is text-optimized
-    # (only `none`) and must come after Ultra so it doesn't get
-    # shadowed.
-    ("nemotron-3-ultra", True),
-    ("nemotron-3-super", False),
-    # ── OpenCodeZen & Aggregator custom models ───────────────────────────────
-    ("mimo-v2.5-free", True),
-    ("minimax-m3-free", True),
-    ("big-pickle", False),
-    ("freerouter", False),
-    # ── Alibaba Qwen 3.6 MoE ──────────────────────────────────────────────────
-    ("qwen3.6-35b-a3b", True),
-    ("qwen3.6-27b", False),
-    # ── CodeFreedom internal fallbacks ───────────────────────────────────────
-    # Ultra and Flash sit on heavy logic backends with full gradient.
-    # Pro and Air are optimised for speed; only `none` is safe.
-    ("codefreedom/ultra", True),
-    ("codefreedom/flash", True),
-    ("codefreedom/pro", False),
-    ("codefreedom/air", False),
-)
+# The old ``_REASONING_EFFORT_RULES`` tuple was removed because it required
+# manual updates for every new model family and could not keep up with the
+# proxy's plugin-based mapping.  The plugin IS the single source of truth.
 
 
-def _resolve_reasoning_effort(model_name: str) -> Optional[List[str]]:
+def _resolve_reasoning_effort(model_name: str) -> List[str]:
     """Return the supported `reasoning_effort` levels for *model_name*.
 
-    The VS Code config always advertises the *standard* set of effort levels
-    (``_STANDARD_REASONING_EFFORT_LEVELS``) for any model that supports
-    reasoning.  The proxy's reasoning-efforts mapping plugin handles
-    translation to model-native values at runtime.
+    Always returns the full standard set (``["none", "low", "medium",
+    "high", "xhigh", "max"]``) for every model.  The proxy's
+    reasoning-efforts mapping plugin handles translation to model-native
+    values (thinking budgets, native reasoning_effort, pass-through) at
+    runtime -- see ``plugins/reasoning-efforts/reasoning-efforts-mapping.yaml``.
+    If a model truly has no reasoning capability, the mapping plugin's
+    rule simply maps all levels to ``"none"``, and VS Code's UI still
+    shows the control but the effect is a no-op.
 
-    Returns:
-      * The standard effort list (``["none", "low", "medium", "high",
-        "xhigh", "max"]``) when the model supports reasoning.
-      * ``None`` when the model has no real reasoning capability.
-        The caller should OMIT the ``supportsReasoningEffort`` field.
-      * The standard effort list for unknown models -- being permissive
-        is better than hiding the effort control in VS Code's model
-        picker.  The user can always prune the generated JSON.
+    Previously this function used a hardcoded rule table
+    (``_REASONING_EFFORT_RULES``) to decide per-model, but that was fragile
+    and required updates whenever a new model family was added.  Since the
+    mapping plugin already covers all configured models, unconditionally
+    advertising the field is both simpler and more future-proof.
     """
-    name_lower = (model_name or "").lower()
-    for pattern, supports_reasoning in _REASONING_EFFORT_RULES:
-        if pattern in name_lower:
-            if supports_reasoning:
-                return list(_STANDARD_REASONING_EFFORT_LEVELS)
-            return None
-    # Unknown model -- be permissive
     return list(_STANDARD_REASONING_EFFORT_LEVELS)
 
 
 def _resolve_master_key() -> Optional[str]:
-    """Return LITELLM_MASTER_KEY from env or ~/.codefreedom/.env.proxy.secrets.
+    """Return LITELLM_MASTER_KEY from the canonical :func:`get_env` chain.
 
-    Precedence matches the rest of the CLI: os.environ wins, then the secrets
-    file.  Returns None if the key is unset or empty in both locations.
+    Delegates to :func:`get_env` (``component="proxy"``) so the same
+    precedence applies as everywhere else — env files, shared configs,
+    ``os.environ``, and ``CF_CLI_*`` overrides.
+
+    This is a convenience wrapper; ``cmd_vscode_proxy_config`` accesses
+    the key directly from ``get_env()``.
     """
-    env_key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
-    if env_key:
-        return env_key
+    from codefreedom.env_loader import get_env
 
-    secrets_path = get_codefreedom_dir() / ".env.proxy.secrets"
-    if secrets_path.exists():
-        secrets = load_dotenv(secrets_path)
-        file_key = secrets.get("LITELLM_MASTER_KEY", "").strip()
-        if file_key:
-            return file_key
-    return None
+    merged = get_env(Path.cwd(), component="proxy", verbose=False)
+    key = merged.get("LITELLM_MASTER_KEY", "").strip()
+    return key if key else None
 
 
 def _proxy_health_url(host: str, port: int) -> str:
@@ -598,14 +546,10 @@ def _model_to_vscode_entry(model: Dict[str, Any], base_url: str) -> Dict[str, An
     LiteLLM `model_info` payload (keys: `supports_vision`, `max_input_tokens`,
     `max_output_tokens`, with `max_tokens` as a shared fallback).
 
-    `supportsReasoningEffort` is resolved by case-insensitive substring
-    match against a hardcoded table of known model families (see
-    `_REASONING_EFFORT_RULES`).  Models known to support reasoning get
-    the full standard set (``["none", "low", "medium", "high", "xhigh",
-    "max"]``).  Models with no real reasoning capability OMIT the field
-    entirely.  Unknown models are treated permissively (same full set).  The
-    proxy's reasoning-efforts mapping plugin translates standard values to
-    model-native values at runtime.
+    `supportsReasoningEffort` is always advertised with the full standard
+    set (``["none", "low", "medium", "high", "xhigh", "max"]``) for
+    every model.  The proxy's reasoning-efforts mapping plugin translates
+    standard values to model-native values at runtime.
     """
     model_info = model.get("model_info") or {}
     if not isinstance(model_info, dict):
@@ -647,13 +591,10 @@ def _model_to_vscode_entry(model: Dict[str, Any], base_url: str) -> Dict[str, An
         "maxInputTokens": max_input_int,
         "maxOutputTokens": max_output_int,
     }
-    # Reasoning-effort lookup; see `_resolve_reasoning_effort`.
-    # `None` means no real reasoning capability -- OMIT the field entirely.
-    # Otherwise, the full standard set is advertised; the proxy's plugin
-    # maps standard levels to model-native values at runtime.
-    effort = _resolve_reasoning_effort(str(model_name))
-    if effort is not None:
-        entry["supportsReasoningEffort"] = effort
+    # Reasoning effort is always advertised.  The proxy's reasoning-efforts
+    # mapping plugin translates standard levels to model-native values at
+    # runtime (see ``plugins/reasoning-efforts/reasoning-efforts-mapping.yaml``).
+    entry["supportsReasoningEffort"] = _resolve_reasoning_effort(str(model_name))
     return entry
 
 
@@ -682,6 +623,13 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     port = args.port or 4000
     provider_name = args.name
     out_path = Path(args.out) if args.out else None
+    workspace_dir = Path.cwd()
+
+    # Load the full env chain so LITELLM_MASTER_KEY is resolved from ANY
+    # supported location: .env.proxy, .env.proxy.secrets, .env.secrets,
+    # .env.user, CF_CLI_LITELLM_MASTER_KEY, etc.
+    eprint(f"[vscode] Loading env chain (proxy component) from {workspace_dir}...")
+    base_env = load_env_chain(workspace_dir, component="proxy")
 
     eprint(f"[vscode] Probing proxy at {_proxy_health_url(host, port)} ...")
     if not _check_proxy_live(host, port):
@@ -691,11 +639,12 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
         )
         return 1
 
-    master_key = _resolve_master_key()
+    master_key = base_env.get("LITELLM_MASTER_KEY", "").strip()
     if not master_key:
         eprint(
             "[ERROR] LITELLM_MASTER_KEY is not set."
             " Export it in your shell, or add it to ~/.codefreedom/.env.proxy.secrets,"
+            " or set CF_CLI_LITELLM_MASTER_KEY in your shell,"
             " then re-run this command."
         )
         return 1

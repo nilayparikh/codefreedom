@@ -72,32 +72,26 @@ def _stop_proxy(cf_dir: Path) -> int:
         return 0
 
     eprint("[deinit] Stopping proxy...")
-    # Load proxy env files to get SUFFIX_ID for COMPOSE_PROJECT_NAME
-    # Start with os.environ so HOME and other system vars are available
-    # to Docker Compose, preventing "${HOME} not set" warnings in the
-    # compose file's Postgres volume fallback paths.
-    compose_env: dict[str, str] = {}
-    for env_path in [
-        cf_dir / ".env.proxy",
-        cf_dir / ".env.proxy.secrets",
-        cf_dir / ".env.user",
-    ]:
-        if env_path.exists():
-            try:
-                from codefreedom.env_loader import load_dotenv
+    # Use the canonical get_env() chain to resolve all proxy env vars
+    # (including SUFFIX_ID, POSTGRES_HOST_* paths, and os.environ).
+    try:
+        from codefreedom.env_loader import get_env
 
-                compose_env.update(load_dotenv(env_path))
-            except Exception:
-                pass
+        compose_env = get_env(
+            Path.cwd(),
+            component="proxy",
+            verbose=False,
+            extra_injections={
+                "POSTGRES_HOST_DATA_DIR": str(cf_dir / "pg" / "data"),
+                "POSTGRES_HOST_BACKUP_DIR": str(cf_dir / "pg" / "backup"),
+            },
+        )
+    except Exception:
+        # Fallback: minimal env for docker compose (shouldn't happen)
+        compose_env = dict(os.environ)
 
-    compose_env = {**os.environ, **compose_env}
     suffix = compose_env.get("SUFFIX_ID", "0000")
     compose_env["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
-
-    # Inject PostgreSQL dirs from CODEFREEDOM_HOME to avoid ${HOME}
-    # fallback in the docker-compose.yaml
-    compose_env.setdefault("POSTGRES_HOST_DATA_DIR", str(cf_dir / "pg" / "data"))
-    compose_env.setdefault("POSTGRES_HOST_BACKUP_DIR", str(cf_dir / "pg" / "backup"))
 
     try:
         result = subprocess.run(

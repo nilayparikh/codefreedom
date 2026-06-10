@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from codefreedom.config import get_codefreedom_dir
-from codefreedom.env_loader import apply_cf_cli_overrides, eprint, load_dotenv
+from codefreedom.env_loader import eprint, get_env, load_dotenv
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 
@@ -77,11 +77,11 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _load_proxy_env_files() -> Dict[str, str]:
-    """Load proxy env files: .env.proxy → .env.proxy.secrets → .env.user.
+    """Load proxy env files only (no os.environ, no CF_CLI_*).
 
-    ``CF_CLI_*`` overrides from the machine environment are applied
-    separately by ``_build_proxy_env`` as the final, highest-priority
-    step.
+    Used by ``_validate()`` which needs to inspect raw file contents.
+    All other callers should use :func:`_build_proxy_env` which goes
+    through the full :func:`get_env` chain.
 
     Returns a merged dict where later files override earlier ones.
     """
@@ -93,45 +93,37 @@ def _load_proxy_env_files() -> Dict[str, str]:
     ]:
         if env_path.exists():
             merged.update(load_dotenv(env_path))
-            eprint(f"[proxy] Loaded env from {env_path}")
-        else:
-            eprint(f"[proxy] Env file not found (skipping): {env_path}")
     return merged
 
 
 def _build_proxy_env() -> Dict[str, str]:
-    """Build merged environment: proxy env files override system env.
+    """Build merged proxy environment via the canonical :func:`get_env` chain.
 
-    Proxy env files override system env so the proxy process sees
-    configured values even when system env has empty-string vars
-    (e.g. MICROSOFT_FOUNDRY_API_BASE="" in shell).
+    Resolution order (standard — later wins):
+      1. .env.proxy (config, skip if missing)
+      2. .env (shared config, skip if missing)
+      3. workspace .env (skip if missing)
+      4. .env.proxy.secrets (secrets, skip if missing)
+      5. .env.secrets (shared secrets, skip if missing)
+      6. workspace .env.secrets (skip if missing)
+      7. .env.user (user overrides, skip if missing)
+      8. os.environ (machine env — always wins)
+      9. CF_CLI_* overrides (absolute highest)
 
-    Resolution order (later wins):
-      1. os.environ (base)
-      2. .env.proxy (config, skip if missing)
-      3. .env.proxy.secrets (secrets, skip if missing)
-      4. .env.user (user overrides, skip if missing)
-      5. ``CF_CLI_*`` overrides (absolute highest — stripped of prefix,
-         e.g. ``CF_CLI_LITELLM_MASTER_KEY`` → ``LITELLM_MASTER_KEY``)
-
-    Also injects ``POSTGRES_HOST_DATA_DIR`` and
-    ``POSTGRES_HOST_BACKUP_DIR`` from ``CODEFREEDOM_HOME`` so the
-    embedded PostgreSQL always lands inside the correct CodeFreedom
-    directory, even when ``CODEFREEDOM_HOME`` is customised.
+    Also injects ``POSTGRES_HOST_DATA_DIR`` and ``POSTGRES_HOST_BACKUP_DIR``
+    from ``CODEFREEDOM_HOME`` so the embedded PostgreSQL always lands inside
+    the correct CodeFreedom directory, even when customised.
     """
-    proxy_file_env = _load_proxy_env_files()
-    merged = {**os.environ, **proxy_file_env}
-
-    # Inject PostgreSQL data/backup dirs from CODEFREEDOM_HOME
     cf_dir = get_codefreedom_dir()
-    merged.setdefault("POSTGRES_HOST_DATA_DIR", str(cf_dir / "pg" / "data"))
-    merged.setdefault("POSTGRES_HOST_BACKUP_DIR", str(cf_dir / "pg" / "backup"))
-
-    # CF_CLI_* overrides from machine env — highest priority of all.
-    # Export CF_CLI_LITELLM_MASTER_KEY=sk-... in your shell to override
-    # without touching .env files.
-    merged = apply_cf_cli_overrides(merged)
-
+    merged = get_env(
+        Path.cwd(),
+        component="proxy",
+        verbose=False,
+        extra_injections={
+            "POSTGRES_HOST_DATA_DIR": str(cf_dir / "pg" / "data"),
+            "POSTGRES_HOST_BACKUP_DIR": str(cf_dir / "pg" / "backup"),
+        },
+    )
     return merged
 
 
