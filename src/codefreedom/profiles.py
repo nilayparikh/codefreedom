@@ -14,7 +14,7 @@ import yaml
 from pydantic import ValidationError
 
 from codefreedom.env_loader import eprint
-from codefreedom.interpolate import interpolate_all_strings, resolve_env_vars
+from codefreedom.interpolate import resolve_env_vars
 from codefreedom.schemas.profiles import ClaudeCodeProfiles
 
 
@@ -41,8 +41,12 @@ def load_profiles(profiles_path: Path) -> Dict[str, Any]:
         )
         raise ProfileError(f"Expected a mapping in {profiles_path}")
 
-    # Interpolate ${VAR} references before validation
-    interpolate_all_strings(data)
+    # NOTE: Do NOT interpolate ${VAR} references here.  load_profiles() runs
+    # BEFORE the env chain (load_env_chain) has resolved CF_CLI_* overrides,
+    # so variables like ${LITELLM_MASTER_KEY} would resolve to empty because
+    # only CF_CLI_LITELLM_MASTER_KEY is in os.environ.  Interpolation is
+    # handled downstream by load_profile_env's resolve_env() which receives
+    # the fully-resolved base_env context.
 
     # Validate with Pydantic (non-fatal — warn on failure, allow extra fields)
     try:

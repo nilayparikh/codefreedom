@@ -112,6 +112,12 @@ Use the `arch-docs` skill to keep this current when code changes.
 | `codefreedom claude --list-profiles`                       | List available profiles                                                    |
 | `codefreedom claude config`                                | Resolve profile env vars for standalone use                                |
 | `codefreedom claude --dangerously-skip-permissions`        | Skip permission prompts (local mode)                                       |
+| `codefreedom mimo`                                         | Launch MiMoCode with 0-click proxy auto-config (alias: `cf mc`)            |
+| `codefreedom mimo --sandbox`                               | Launch in Docker container                                                 |
+| `codefreedom mimo --run-as-me`                             | Run sandbox as host user (uid/gid match)                                   |
+| `codefreedom mimo --profile PROFILE`                       | Use a specific profile (default: "default")                                |
+| `codefreedom mimo --list-profiles`                         | List available profiles                                                    |
+| `codefreedom mimo config`                                  | Generate proxy-resolved `mimocode.json` for standalone use                 |
 | `codefreedom proxy init`                                   | Initialize proxy configs + .env.proxy                                      |
 | `codefreedom proxy start`                                  | Start the proxy (Docker Compose; only mode)                                |
 | `codefreedom proxy start --port PORT`                      | Override `LITELLM_PORT` for this run only (default: 4000)                  |
@@ -188,6 +194,24 @@ Use the `arch-docs` skill to keep this current when code changes.
   First session starts them, last session stops them. Child profiles merge with default's
   tools (deduplicated). Set `"tools": []` to opt out. Tracked via `~/.codefreedom/proc/`.
   Works in both sandbox and local modes.
+
+### MiMoCode Profiles (`~/.codefreedom/profiles/mimo-code.yaml`)
+
+Same structure as Claude Code profiles, using MiMoCode-specific environment variables.
+The `default` and `bare` profiles are standalone; all others inherit from `default`.
+
+| Profile   | Purpose                          | Key env vars                                      |
+| --------- | -------------------------------- | ------------------------------------------------- |
+| `default` | Base — 0-click proxy auto-config | `LITELLM_BASE_URL`, `MIMOCODE_DISABLE_AUTOUPDATE` |
+| `bare`    | Minimal standalone               | `MIMOCODE_MIMO_ONLY`                              |
+| `ultra`   | Maximum capability               | `MIMOCODE_EXPERIMENTAL=1`                         |
+| `pro`     | Production coding                | `MIMOCODE_PERMISSION=build`                       |
+| `flash`   | Speed-optimized                  | Disables heavy plugins                            |
+| `air`     | Minimal-resource                 | Disables background work                          |
+| `ui-ux`   | Frontend/design                  | `MIMOCODE_MAX_PROMPT_IMAGES=20`                   |
+
+The generated `mimocode.json` (auto-created from proxy model list) is injected via
+`MIMOCODE_CONFIG` env var — all proxy models are available as `codefreedom/<model-id>`.
 
 ### Tool Profiles (`~/.codefreedom/profiles/<tool>.yaml`)
 

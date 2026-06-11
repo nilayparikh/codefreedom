@@ -1,0 +1,127 @@
+# ── MiMoCode Docker Image — Ubuntu ────────────────────────────────────────────
+# Platform: All architectures — ARM64, AMD64, Intel
+# Lightweight sandbox base: MiMoCode + dev tools.
+#
+# @platform  Ubuntu
+# @version   v0.1.0
+# @arch      linux/arm64, linux/amd64
+#
+# Base: ubuntu:24.04 (multi-arch)
+#   • Minimal Ubuntu 24.04 + Node.js + MiMoCode (mimo) + dev tools
+#
+# Build:
+#   docker build --build-arg IMAGE_VERSION=0.1.0 \
+#     -t codefreedom:mimo-code-v0.1.0 \
+#     -f docker/mimo-code/Dockerfile.Ubuntu docker/mimo-code/
+# ────────────────────────────────────────────────────────────────────────────────
+
+ARG IMAGE_VERSION=0.1.0
+
+# 1. Ubuntu 24.04 (multi-arch: arm64 + amd64)
+FROM ubuntu:24.04
+
+ARG IMAGE_VERSION
+
+LABEL org.opencontainers.image.title="CodeFreedom - MiMoCode (Ubuntu)" \
+      org.opencontainers.image.description="MiMoCode dev container — Ubuntu base with mimocode binary and dev tools." \
+      org.opencontainers.image.version="v${IMAGE_VERSION}" \
+      org.opencontainers.image.vendor="nilayparikh" \
+      org.opencontainers.image.authors="Nilay Parikh" \
+      com.codefreedom.platform="Ubuntu" \
+      com.codefreedom.arch="linux/arm64,linux/amd64"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 2. System packages
+#
+# Vulnerability strategy: `apt-get upgrade -y` patches the base image's
+# security updates BEFORE we install any user packages, so installed
+# versions come from the patched pool. Use `dist-upgrade` (not `upgrade`)
+# to handle dependency changes introduced by security patches. The
+# `--no-install-recommends` keeps the image lean, which in turn keeps the
+# Trivy CVE list smaller.
+RUN apt-get update \
+    && apt-get -y dist-upgrade \
+    && apt-get install -y --no-install-recommends \
+        python3 \
+        curl \
+        git \
+        ca-certificates \
+        shellcheck \
+        fd-find \
+        tree \
+        ripgrep \
+        jq \
+        yq \
+        sd \
+        unzip \
+        bubblewrap \
+        socat \
+        openssh-client \
+        libgcc-s1 \
+        libstdc++6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s $(which fdfind) /usr/local/bin/fd
+
+# 3. Node.js LTS (v20) — required for npm install of @mimo-ai/cli shim
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. GitHub CLI
+RUN mkdir -p /usr/share/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5. MiMoCode (mimo) — install via npm and pre-download native binary
+#    @mimo-ai/cli is a lightweight node shim that downloads the real binary
+#    on first invocation. The shim caches the native binary at
+#    {shim_dir}/.mimocode/ (next to the shim script itself), making it
+#    user-agnostic. We invoke it here so the binary is pre-cached at
+#    build time — truly 0-click at runtime regardless of container user.
+RUN npm install -g @mimo-ai/cli \
+    && npm config set cache /tmp/.npm --global \
+    && npm cache clean --force \
+    && mimo --version 2>/dev/null || true \
+    && rm -rf /tmp/*
+
+# 6. Non-root user — codefreedom (uid 1000) owns /workspace inside the container.
+#    At runtime, the launcher may override this with --run-as-me to match the
+#    host user's uid/gid for seamless file permission compatibility.
+ARG USERNAME=codefreedom
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN set -eux; \
+    group_name="$(getent group "${USER_GID}" | cut -d: -f1 || true)"; \
+    if [ -z "${group_name}" ]; then \
+        group_name="${USERNAME}"; \
+        groupadd --gid "${USER_GID}" "${group_name}"; \
+    fi; \
+    useradd --non-unique --uid "${USER_UID}" --gid "${group_name}" -m -s /bin/bash "${USERNAME}"; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends sudo; \
+    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}"; \
+    chmod 0440 "/etc/sudoers.d/${USERNAME}"; \
+    mkdir -p /workspace; \
+    chown "${USER_UID}:${USER_GID}" /workspace; \
+    rm -rf /var/lib/apt/lists/*
+
+# 7. Environment
+ENV IS_SANDBOX="1" \
+    MIMOCODE_DISABLE_AUTOUPDATE="1" \
+    MIMOCODE_DISABLE_MODELS_FETCH="1" \
+    MIMOCODE_DISABLE_GIT="0" \
+    HOME="/home/${USERNAME}"
+
+WORKDIR /workspace
+
+# 8. Fix npm cache for any-user access — /tmp/.npm is world-writable so
+#     npx/npm work when the container runs with a different UID at runtime.
+RUN rm -rf /tmp/.npm && mkdir -p /tmp/.npm && chmod 1777 /tmp/.npm

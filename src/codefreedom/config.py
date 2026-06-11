@@ -41,3 +41,15 @@ def resolve_profiles_path() -> Path:
     if override:
         return Path(override)
     return get_codefreedom_dir() / "profiles" / "claude-code.yaml"
+
+
+def resolve_mimo_profiles_path() -> Path:
+    """Return the MiMoCode profiles path (test-patchable).
+
+    Checks ``MIMOCODE_PROFILES_FILE`` env var, falls back to
+    ``~/.codefreedom/profiles/mimo-code.yaml``.
+    """
+    override = os.environ.get("MIMOCODE_PROFILES_FILE")
+    if override:
+        return Path(override)
+    return get_codefreedom_dir() / "profiles" / "mimo-code.yaml"

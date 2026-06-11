@@ -38,7 +38,7 @@
 # @version   v0.1.0
 # ─────────────────────────────────────────────────────────────────────────────
 
-ARG IMAGE_VERSION=0.1.0
+ARG IMAGE_VERSION=0.2.0
 ARG LITELLM_FORK_URL=https://github.com/nilayparikh/litellm.git
 ARG LITELLM_TAG=v1.87.1
 ARG PG_VERSION=18.4
@@ -263,6 +263,7 @@ RUN python patch_responses_azure.py
 # The YAML config table lives on the host (user-editable); the .py code
 # is immutable (baked into the image).
 COPY plugins/reasoning_efforts_mapping.py /app/litellm-plugins/reasoning_efforts_mapping.py
+COPY plugins/system_message_merger.py /app/litellm-plugins/system_message_merger.py
 
 # Install Node.js + npm so we can run the Prisma CLI natively.  The
 # Python prisma CLI wrapper (from requirements.txt) creates only

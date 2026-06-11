@@ -154,6 +154,18 @@ if [ -f "$PLUGIN_SRC" ]; then
     fi
 fi
 
+PLUGIN2_SRC="/app/litellm-plugins/system_message_merger.py"
+PLUGIN2_DST="/app/litellm-config/plugins/system-message-merger/system_message_merger.py"
+if [ -f "$PLUGIN2_SRC" ]; then
+    mkdir -p "$(dirname "$PLUGIN2_DST")" 2>/dev/null || true
+    [ -f "$PLUGIN2_DST" ] && [ ! -L "$PLUGIN2_DST" ] && rm -f "$PLUGIN2_DST"
+    if ln -sf "$PLUGIN2_SRC" "$PLUGIN2_DST" 2>/dev/null; then
+        echo "[entrypoint] Plugin .py symlinked: $PLUGIN2_DST -> $PLUGIN2_SRC"
+    else
+        echo "[entrypoint] WARNING: Could not symlink system-message-merger plugin."
+    fi
+fi
+
 # ── Start LiteLLM ───────────────────────────────────────────────────────────
 echo "[entrypoint] Starting LiteLLM on $LITELLM_BIND_HOST:$LITELLM_PORT..."
 # --use_prisma_db_push: we already ran `prisma db push` above; tells LiteLLM

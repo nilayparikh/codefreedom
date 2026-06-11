@@ -170,6 +170,67 @@ def main() -> None:
         help="Output in PowerShell $env: format",
     )
 
+    # ── mimo subcommand ───────────────────────────────────────────────────
+    mimo_parser = subparsers.add_parser(
+        "mimo",
+        aliases=["mc"],
+        help="Launch MiMoCode with 0-click proxy auto-config",
+        description=(
+            "Run MiMoCode (mimo) natively (default) or in a sandboxed Docker container. "
+            "Auto-detects the CodeFreedom proxy, generates a complete mimocode.json "
+            "with all proxy models, and launches with zero configuration."
+        ),
+    )
+    mimo_parser.add_argument(
+        "--sandbox",
+        action="store_true",
+        help="Run inside a sandboxed Docker container (default: native)",
+    )
+    mimo_parser.add_argument(
+        "--run-as-me",
+        action="store_true",
+        help="Run sandbox container as host user (uid/gid match). Only valid with --sandbox.",
+    )
+    mimo_parser.add_argument(
+        "--profile",
+        type=str,
+        default="default",
+        metavar="NAME",
+        help="Load a named profile (default: 'default')",
+    )
+    mimo_parser.add_argument(
+        "--list-profiles",
+        action="store_true",
+        help="List available profiles and exit",
+    )
+
+    # ── mimo sub-actions ────────────────────────────────────────────────
+    mimo_subparsers = mimo_parser.add_subparsers(dest="mimo_action", title="actions")
+
+    mimo_config_parser = mimo_subparsers.add_parser(
+        "config",
+        help="Generate proxy-resolved mimocode.json for standalone MiMoCode use",
+        description=(
+            "Generate a complete mimocode.json config pointing at the running "
+            "CodeFreedom proxy. Fetches the live model list and outputs the config. "
+            "Use --out to write to a file."
+        ),
+    )
+    mimo_config_parser.add_argument(
+        "--profile",
+        type=str,
+        default="default",
+        metavar="NAME",
+        help="Profile to resolve (default: 'default')",
+    )
+    mimo_config_parser.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Write to FILE instead of stdout",
+    )
+
     # ── admin subcommand ───────────────────────────────────────────────────
     admin_parser = subparsers.add_parser(
         "admin",
@@ -438,6 +499,37 @@ def main() -> None:
         from codefreedom.cli.claude import run as claude_run
 
         sys.exit(claude_run(args))
+
+    # ── mimo subcommand ───────────────────────────────────────────────────
+    if args.command in ("mimo", "mc"):
+        _MIMO_BOOL_FLAGS = {
+            "--sandbox": "sandbox",
+            "--run-as-me": "run_as_me",
+            "--list-profiles": "list_profiles",
+        }
+        forwarded_mimo: list[str] = []
+        _mimo_unknown_iter = iter(unknown)
+        for arg in _mimo_unknown_iter:
+            if arg in _MIMO_BOOL_FLAGS:
+                setattr(args, _MIMO_BOOL_FLAGS[arg], True)
+            elif arg == "--profile":
+                try:
+                    args.profile = next(_mimo_unknown_iter)
+                except StopIteration:
+                    forwarded_mimo.append(arg)
+            else:
+                forwarded_mimo.append(arg)
+
+        mimo_action = getattr(args, "mimo_action", None)
+        if mimo_action == "config":
+            from codefreedom.cli.mimo import cmd_config
+
+            sys.exit(cmd_config(args))
+
+        args.mimo_args = forwarded_mimo
+        from codefreedom.cli.mimo import run as mimo_run
+
+        sys.exit(mimo_run(args))
 
     # ── vscode subcommand (two-level dispatch) ────────────────────────────
     if args.command in ("vscode", "vsc"):
