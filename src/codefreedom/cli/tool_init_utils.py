@@ -92,22 +92,22 @@ def _print_tool_notice(tool_name: str) -> None:
 
     tag = _TAG_MAP.get(tool_name, tool_name.upper())
     components = info["third_party"]
-    print()
-    print(f"[{tag}] --- Third-Party Notice ---")
-    print(f"[{tag}] This container includes third-party components:")
+    eprint()
+    eprint(f"[{tag}] --- Third-Party Notice ---")
+    eprint(f"[{tag}] This container includes third-party components:")
     for component, vendor in components:
-        print(f"[{tag}]   * {component} ({vendor})")
-    print(f"[{tag}]")
-    print(f"[{tag}] {_THIRD_PARTY_NOTICE}")
+        eprint(f"[{tag}]   * {component} ({vendor})")
+    eprint(f"[{tag}]")
+    eprint(f"[{tag}] {_THIRD_PARTY_NOTICE}")
     if "warning" in info:
-        print(f"[{tag}]")
-        print(f"[{tag}] WARNING: {info['warning']}")
-    print(f"[{tag}] ---")
+        eprint(f"[{tag}]")
+        eprint(f"[{tag}] WARNING: {info['warning']}")
+    eprint(f"[{tag}] ---")
 
 
 def _print_non_disclaimer() -> None:
     """Print the general non-disclaimer banner."""
-    print(_NON_DISCLAIMER)
+    eprint(_NON_DISCLAIMER)
 
 
 def prompt_acceptance(tool_name: str) -> bool:
@@ -120,33 +120,33 @@ def prompt_acceptance(tool_name: str) -> bool:
     """
     info = TOOL_INFO.get(tool_name)
     if not info:
-        eprint(f"[init] Unknown tool: {tool_name}")
+        eprint(f"[INIT] Unknown tool: {tool_name}.")
         return False
 
-    print()
-    print(f"--- {info['name']} " + "-" * 50)
-    print(info["description"])
-    print()
-    print("Third-party components:")
+    eprint()
+    eprint(f"--- {info['name']} " + "-" * 50)
+    eprint(info["description"])
+    eprint()
+    eprint("Third-party components:")
     for component, vendor in info["third_party"]:
-        print(f"  * {component} -- {vendor}")
-    print()
-    print("By continuing, you acknowledge that this tool uses")
-    print("third-party components. " + _THIRD_PARTY_NOTICE)
-    print()
-    print("Documentation: " + info["docs_url"])
-    print()
+        eprint(f"  * {component} -- {vendor}")
+    eprint()
+    eprint("By continuing, you acknowledge that this tool uses")
+    eprint("third-party components. " + _THIRD_PARTY_NOTICE)
+    eprint()
+    eprint("Documentation: " + info["docs_url"])
+    eprint()
     try:
         response = input("Continue? [y/N]: ").strip()
     except (EOFError, KeyboardInterrupt):
-        print()
-        eprint("[init] Init aborted.")
+        eprint()
+        eprint("[INIT] Init aborted.")
         return False
 
     if response.lower() == "y":
         return True
 
-    eprint("[init] Init aborted.")
+    eprint("[INIT] Init aborted.")
     return False
 
 
@@ -172,13 +172,13 @@ def print_help_section(
     include_disclaimer:
         Whether to append the standard non-warranty disclaimer.
     """
-    print(f"[{title}]")
-    print()
+    eprint(f"[{title}]")
+    eprint()
     for line in usage_lines:
-        print(f"  {line}")
-    print()
+        eprint(f"  {line}")
+    eprint()
     if docs_url:
-        print(f"  Docs: {docs_url}")
-        print()
+        eprint(f"  Docs: {docs_url}")
+        eprint()
     if include_disclaimer:
         _print_non_disclaimer()

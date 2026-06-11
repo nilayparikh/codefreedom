@@ -325,7 +325,7 @@ def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
     workspace_dir = Path.cwd()
     profile_name = args.profile or "default"
 
-    eprint(f"[vscode] Loading env chain (claude component) from {workspace_dir}...")
+    eprint(f"[VSCODE] Loading env chain (claude component) from {workspace_dir}...")
     base_env = load_env_chain(workspace_dir, component="claude")
 
     profiles_path = _resolve_profiles_path()

@@ -179,7 +179,7 @@ def start(settings: dict) -> int:
             eprint(f"   {create.stderr.strip()}")
         return 1
 
-    eprint("   [OK] Container started.")
+    eprint("[CHROME] Container started.")
     eprint(f"   CDP debug URL: http://127.0.0.1:{port}")
     eprint(
         f"   MCP endpoint:  http://127.0.0.1:{mcp_port}{settings.get('mcp_path', '/mcp')}"
@@ -222,7 +222,7 @@ def status(settings: dict) -> int:
         return 1
 
     eprint("[CHROME] No Chrome container found.")
-    eprint("   Use: cf tools start")
+    eprint("   Use: cf tools start.")
     return 0
 
 
@@ -237,7 +237,7 @@ def url(settings: dict) -> int:
 
     if not container_is_running(container_name):
         eprint("[CHROME] Chrome container is not running.")
-        eprint("   Use: cf tools start")
+        eprint("   Use: cf tools start.")
         return 1
 
     print(f"http://127.0.0.1:{port}")

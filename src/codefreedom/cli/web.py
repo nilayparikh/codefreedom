@@ -87,7 +87,12 @@ def _load_profile() -> dict:
         "web.yaml",
         schema_class=WebConfig,
         env_port_var="CODEFREEDOM_WEB_PORT",
-        extra_keys=["mcp_path", "search_engines", "parser_registry", "search_cooldown_seconds"],
+        extra_keys=[
+            "mcp_path",
+            "search_engines",
+            "parser_registry",
+            "search_cooldown_seconds",
+        ],
     )
 
 
@@ -202,7 +207,7 @@ def status(settings: dict) -> int:
     if container_is_running(container_name):
         eprint(f"[WEB] Container '{container_name}' is running.")
         eprint(f"[WEB] MCP endpoint: http://127.0.0.1:{port}/mcp")
-        eprint("[WEB] Tools: web_search, web_fetch")
+        eprint("[WEB] Tools: web_search, web_fetch.")
         return 0
 
     if container_exists(container_name):
@@ -210,7 +215,7 @@ def status(settings: dict) -> int:
         return 1
 
     eprint("[WEB] No web container found.")
-    eprint("   Use: cf tools start")
+    eprint("   Use: cf tools start.")
     return 1
 
 
@@ -233,5 +238,6 @@ def run(args: argparse.Namespace) -> int:
     elif args.action == "status":
         return status(settings)
     else:
-        eprint(f"[ERROR] Unknown action: {args.action}")
+        eprint(f"[ERROR] Unknown action: {args.action}.")
+        eprint("   Valid actions: start, stop, restart, status.")
         return 1

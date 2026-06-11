@@ -130,17 +130,17 @@ def list_recipes(store: Optional[str] = None, staging: bool = False) -> int:
 
     if not recipes:
         source = store_path or _GITHUB_API_BASE
-        print("[recipe] No recipes found.")
-        print(f"         {source}")
+        eprint("[RECIPE] No recipes found.")
+        eprint(f"   {source}")
         return 1
 
-    print(f"[recipe] Available recipes ({len(recipes)}):")
+    eprint(f"[RECIPE] Available recipes ({len(recipes)}):")
     for name in recipes:
-        print(f"           {name}")
-    print()
-    print("  Use:  cf init recipe --plan <name>")
+        eprint(f"   {name}")
+    eprint("")
+    eprint("   Use:  cf init recipe --plan <name>")
     source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
-    print(f"  Store: {source}")
+    eprint(f"   Store: {source}")
     return 0
 
 
@@ -172,13 +172,13 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         # Silently skip _default when not found in the store
         if name == "_default":
             source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
-            print("[recipe] No '_default' recipe in store — skipping.")
-            print(f"         Store: {source}")
+            eprint("[RECIPE] No '_default' recipe in store — skipping.")
+            eprint(f"   Store: {source}")
             return 0
-        print(f"[recipe] Recipe '{name}' not found.")
-        print("         Run 'cf init recipe --list' to see available recipes.")
+        eprint(f"[RECIPE] Recipe '{name}' not found.")
+        eprint("   Run 'cf init recipe --list' to see available recipes.")
         source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
-        print(f"         Store: {source}")
+        eprint(f"   Store: {source}")
         return 1
 
     # ── 1b. Collect all managed targets for orphan detection ────────────
@@ -193,11 +193,11 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     # ── 1c. If recipe extends a base, resolve and install it first ──────
     extends = manifest.get("extends")
     if extends:
-        print(f"  [EXTENDS] Installing base recipe '{extends}' first...")
+        eprint(f"[RECIPE] Installing base recipe '{extends}' first...")
         base_manifest, base_files = _resolve_recipe(extends, store_path=store_path)
         if base_manifest is None:
-            print(
-                f"  [WARN] Base recipe '{extends}' not found — continuing without it."
+            eprint(
+                f"[RECIPE] Warning: base recipe '{extends}' not found — continuing without it."
             )
         else:
             _collect_targets(base_manifest)
@@ -442,7 +442,7 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     return 0
 
 
-def apply_plan(plan_id: str, store: Optional[str] = None, staging: bool = False) -> int:
+def apply_plan(plan_id: str) -> int:
     """Apply a previously generated plan by ID.
 
     Reads ``~/.codefreedom/plans/<plan_id>/plan.yaml`` and applies
@@ -453,17 +453,17 @@ def apply_plan(plan_id: str, store: Optional[str] = None, staging: bool = False)
     plan_path = plans_dir / "plan.yaml"
 
     if not plan_path.exists():
-        print(f"[apply] Plan '{plan_id}' not found at {plans_dir}")
+        eprint(f"[RECIPE] Plan '{plan_id}' not found at {plans_dir}")
         return 1
 
     try:
         plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
-        print(f"[apply] Invalid plan.yaml: {e}")
+        eprint(f"[RECIPE] Invalid plan.yaml: {e}")
         return 1
 
     if not isinstance(plan, dict):
-        print("[apply] Invalid plan format")
+        print("[RECIPE] Invalid plan format")
         return 1
 
     # ── 0. Auto-backup before applying ──────────────────────────────────
@@ -473,13 +473,13 @@ def apply_plan(plan_id: str, store: Optional[str] = None, staging: bool = False)
             profile=f"pre-apply-{plan_id}",
             redact_secrets=False,
         )
-        print(f"[apply] Backup: {backup_path}")
+        eprint(f"[RECIPE] Backup: {backup_path}")
     except (FileNotFoundError, OSError, RuntimeError) as e:
-        print(f"[apply] [WARN] Backup failed: {e}")
-        print("[apply] Continuing without backup...")
+        eprint(f"[RECIPE] Warning: Backup failed: {e}")
+        print("[RECIPE] Continuing without backup...")
 
     tool_home = Path.home() / ".codefreedom"
-    print(f"[apply] Applying plan {plan_id}...")
+    eprint(f"[RECIPE] Applying plan {plan_id}...")
     count = 0
 
     for pf in plan.get("files", []):
@@ -547,9 +547,9 @@ def apply_plan(plan_id: str, store: Optional[str] = None, staging: bool = False)
         _print_ownership_advice()
 
     if count:
-        print(f"\n[apply] Plan applied — {count} file(s) updated.")
+        print(f"\n[RECIPE] Plan applied — {count} file(s) updated.")
     else:
-        print("\n[apply] No files were changed.")
+        print("\n[RECIPE] No files were changed.")
     return 0
 
 
@@ -651,7 +651,7 @@ def _resolve_recipe(
                 files = _read_local_files(recipe_dir, manifest)
                 return manifest, files
             except RecipeError as e:
-                eprint(f"  [WARN] Store recipe '{name}' has errors: {e}")
+                eprint(f"[RECIPE] Warning: Store recipe '{name}' has errors: {e}")
                 return None, {}
 
     # 1. Try local submodule (dev installs with git clone) as fallback
@@ -664,7 +664,7 @@ def _resolve_recipe(
                 files = _read_local_files(local_path, manifest)
                 return manifest, files
             except RecipeError as e:
-                eprint(f"  [WARN] Local recipe '{name}' has errors: {e}")
+                eprint(f"[RECIPE] Warning: Local recipe '{name}' has errors: {e}")
 
     return None, {}
 
@@ -759,13 +759,15 @@ def _resolve_store(
         p = Path(expanded)
         if p.is_dir():
             return p.resolve()
-        eprint(f"  [WARN] Local store path does not exist or is not a directory: {p}")
+        eprint(
+            f"[RECIPE] Warning: Local store path does not exist or is not a directory: {p}"
+        )
         return None
 
     # ── GitHub URL ──────────────────────────────────────────────────────
     repo_name = _parse_github_url(store)
     if repo_name is None:
-        eprint(f"  [WARN] Could not parse GitHub URL: {store}")
+        eprint(f"[RECIPE] Warning: Could not parse GitHub URL: {store}")
         return None
 
     cf_dir = get_codefreedom_dir()
@@ -774,7 +776,7 @@ def _resolve_store(
     if _ensure_store(store, store_dir):
         return store_dir
 
-    eprint(f"  [WARN] Failed to clone/pull store from {store}")
+    eprint(f"[RECIPE] Warning: Failed to clone/pull store from {store}")
     return None
 
 
@@ -865,10 +867,10 @@ def _clone_or_pull_store(url: str, dest: Path, branch: str = "main") -> bool:
         return True
 
     except GitCommandError as e:
-        eprint(f"  [WARN] Git operation failed: {e}")
+        eprint(f"[RECIPE] Warning: Git operation failed: {e}")
         return False
     except Exception as e:
-        eprint(f"  [WARN] Git operation failed: {e}")
+        eprint(f"[RECIPE] Warning: Git operation failed: {e}")
         return False
 
 
@@ -982,7 +984,7 @@ def _fetch_recipe_files(
             files[target] = content
             print(f"  [FETCH] {src_path}")
         except RecipeError as e:
-            eprint(f"  [WARN] Could not fetch {src_path}: {e}")
+            eprint(f"[RECIPE] Warning: Could not fetch {src_path}: {e}")
     return files
 
 
@@ -1005,7 +1007,7 @@ def _fetch_available_recipes() -> List[str]:
                     pass
         return sorted(candidates)
     except (RecipeError, json.JSONDecodeError) as e:
-        eprint(f"  [WARN] Could not list recipes: {e}")
+        eprint(f"[RECIPE] Warning: Could not list recipes: {e}")
         return []
 
 
@@ -1049,7 +1051,7 @@ def _install_recipe_files(
     try:
         RecipeConfig.model_validate(manifest, strict=False)
     except ValidationError as exc:
-        eprint(f"  [WARN] Recipe validation issue: {exc}")
+        eprint(f"[RECIPE] Warning: Recipe validation issue: {exc}")
 
     tool_home = Path.home() / ".codefreedom"
     file_entries = manifest.get("files", [])
@@ -1249,7 +1251,7 @@ def _merge_file(
 
     else:  # overwrite
         dst.write_text(incoming_content, encoding="utf-8")
-        print(f"  [UPDATE] {display_path}")
+        print(f"  [RECIPE] {display_path}")
         return 1
 
 
@@ -1292,7 +1294,7 @@ def _deepdiff_merge(
         from deepdiff import DeepDiff  # type: ignore
     except ImportError:
         eprint(
-            "  [WARN] deepdiff not installed — falling back to overwrite "
+            "[RECIPE] Warning: deepdiff not installed — falling back to overwrite "
             f"for {display_path}"
         )
         return incoming
@@ -1301,7 +1303,7 @@ def _deepdiff_merge(
         existing_obj = yaml.safe_load(existing)
         incoming_obj = yaml.safe_load(incoming)
     except yaml.YAMLError as e:
-        eprint(f"  [WARN] YAML parse error in {display_path}: {e}")
+        eprint(f"[RECIPE] Warning: YAML parse error in {display_path}: {e}")
         return incoming
 
     # Handle edge cases
@@ -1575,7 +1577,7 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
         instruction_path.write_text(content, encoding="utf-8")
         print(f"  [INFO]  Instructions written to {instruction_path.name}")
     except OSError as e:
-        print(f"  [WARN]  Could not write instructions: {e}")
+        eprint(f"[RECIPE] Warning: Could not write instructions: {e}")
 
 
 def _find_env_secrets_targets(

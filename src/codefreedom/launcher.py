@@ -157,7 +157,7 @@ def status() -> int:
             eprint(f"[STATUS] {len(containers)} codefreedom sandbox container(s):")
             for line in containers:
                 name, status_line, _created = line.split("\t", 2)
-                marker = "[RUNNING]" if "Up " in status_line else "[STOPPED]"
+                marker = "RUNNING" if "Up " in status_line else "STOPPED"
                 eprint(f"   {marker} {name}  ({status_line})")
             eprint("\n   Stop all:  docker stop <container-name>")
         else:
@@ -206,7 +206,7 @@ def stop() -> int:
             timeout=30,
             check=False,
         )
-        eprint("   [OK] All sandbox containers removed.")
+        eprint("[SANDBOX] All sandbox containers removed.")
         return 0
     except subprocess.TimeoutExpired:
         eprint("[ERROR] Docker command timed out.")
@@ -241,17 +241,17 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
     claude_dir = profile_dir / ".claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(claude_dir, 0o777)
-    eprint(f"[SANDBOX] Isolated .claude dir: {claude_dir}")
+    eprint(f"[SANDBOX] Isolated .claude dir: {claude_dir}.")
 
     # ── Fresh .claude.json (never copy from host) ──────────────────────
     sandbox_json = profile_dir / ".claude.json"
     if not sandbox_json.exists():
         sandbox_json.write_text("{}")
         os.chmod(sandbox_json, 0o666)
-        eprint(f"[SANDBOX] Created fresh .claude.json: {sandbox_json}")
+        eprint(f"[SANDBOX] Created fresh .claude.json: {sandbox_json}.")
     else:
         os.chmod(sandbox_json, 0o666)
-        eprint(f"[SANDBOX] Using existing .claude.json: {sandbox_json}")
+        eprint(f"[SANDBOX] Using existing .claude.json: {sandbox_json}.")
 
     # ── Shared tools cache (used by Chrome DevTools MCP, etc.) ─────
     tools_cache = CODEFREEDOM_DIR / "sandbox" / "tools" / ".cache"
@@ -297,7 +297,7 @@ def run_local(
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
-        eprint(f"[ERROR] Claude binary not found at {claude_bin}")
+        eprint(f"[ERROR] Claude binary not found at {claude_bin}.")
         return 1
     except KeyboardInterrupt:
         return 130
@@ -343,15 +343,15 @@ def run_docker(
             registry = REGISTRY
             name = IMAGE_NAME
             image = f"{registry}/{name}:{gpu_type}-latest"
-        eprint(f"[GPU] Selected '{gpu_type}' sandbox image: {image}")
+        eprint(f"[GPU] Selected '{gpu_type}' sandbox image: {image}.")
     else:
         image = sandbox_images.get("default") or TARGET_IMAGE
 
     if container_name is None:
         container_name = _generate_container_name()
 
-    eprint(f"[IMAGE] Using sandbox image: {image}")
-    eprint(f"[CONTAINER] Name: {container_name}")
+    eprint(f"[IMAGE] Using sandbox image: {image}.")
+    eprint(f"[CONTAINER] Name: {container_name}.")
 
     env_flags: List[str] = []
     for key in sorted(profile_env.keys()):
@@ -442,7 +442,7 @@ def run_docker(
                 eprint(f"   {pull.stderr.strip()}")
             return 1
     else:
-        eprint(f"[IMAGE] Using cached image '{image}'")
+        eprint(f"[IMAGE] Using cached image '{image}'.")
 
     # ── Ensure workspace .claude dir exists ───────────────────────────────
     (workspace_dir / ".claude").mkdir(parents=True, exist_ok=True)
@@ -464,7 +464,7 @@ def run_docker(
         if create.stderr:
             eprint(f"   {create.stderr.strip()}")
         return 1
-    eprint("   [OK] Container started.")
+    eprint("[SANDBOX] Container started.")
 
     # ── Exec claude into the container ────────────────────────────────────
     eprint("[EXEC] Attaching Claude Code session...")
@@ -503,6 +503,6 @@ def run_docker(
             timeout=5,
             check=False,
         )
-        eprint("   [OK] Container cleaned up.")
+        eprint("[SANDBOX] Container cleaned up.")
 
     return exit_code

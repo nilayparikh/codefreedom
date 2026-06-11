@@ -375,7 +375,7 @@ def main() -> None:
             if args.apply:
                 from codefreedom.cli.recipe import apply_plan
 
-                sys.exit(apply_plan(args.apply, store=store, staging=staging))
+                sys.exit(apply_plan(args.apply))
             if args.plan:
                 from codefreedom.cli.recipe import plan_recipe
 

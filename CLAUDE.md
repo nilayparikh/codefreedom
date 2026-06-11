@@ -25,6 +25,15 @@ It orchestrates code agents through their **publicly supported interfaces only**
 - **Surgical changes.** Touch only what's needed. Match existing style. Clean up only your own mess.
 - **Goal-driven.** Define verifiable success criteria. Loop until tests pass.
 
+## Internal Specs
+
+Internal standards live in `/specs/` (not published to GitHub Pages — that's `/docs/`).
+
+| Document              | Purpose                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `specs/cli-output.md` | CLI output conventions: prefixes, streams, punctuation, return codes               |
+| `specs/code-style.md` | Code style: module organization, shared utilities, tool patterns, type annotations |
+
 ## Commands
 
 ```bash
@@ -437,9 +446,11 @@ CI runs tests on Python 3.10/11/12 across Ubuntu, Windows, and macOS via `integr
 
 When an unknown flag appears **before** a known flag, `parse_known_args` puts ALL remaining args into the unknown list. The `_CLAUDE_BOOL_FLAGS` dict in `main.py` rescues CodeFreedom flags. **If you add a new boolean flag to the claude subcommand, add it to `_CLAUDE_BOOL_FLAGS` too.**
 
-### `eprint` duplication
+### `eprint` and `_VAR_REF_RE` — single source of truth
 
-`eprint` is intentionally duplicated in `env_loader.py` and `profiles.py` to avoid circular imports. Don't consolidate.
+`eprint()` is defined once in `env_loader.py` — all modules import from there. Do not duplicate it in other files. If a circular import would result, refactor the dependency instead.
+
+`_VAR_REF_RE` (the `${VAR}` / `${VAR:-default}` regex) is defined once in `interpolate.py` — all modules import from there. The shared `resolve_env_vars()` and `resolve_env_dict()` functions handle all interpolation. Do not inline regex substitution in other modules.
 
 ### `--dangerously-skip-permissions`
 

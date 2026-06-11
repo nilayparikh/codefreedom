@@ -205,7 +205,7 @@ def start(settings: dict) -> int:
             eprint(f"   {create.stderr.strip()}")
         return 1
 
-    eprint("   [OK] Container started.")
+    eprint("[GITHUB] Container started.")
     eprint(f"   MCP endpoint: http://127.0.0.1:{host_port}/mcp")
     return 0
 
@@ -232,7 +232,7 @@ def status(settings: dict) -> int:
         port = _get_mapped_port(container_name) or "?"
         eprint(f"[GITHUB] Container '{container_name}' is running.")
         eprint(f"[GITHUB] MCP endpoint: http://127.0.0.1:{port}/mcp")
-        eprint("[GITHUB] Tools: GitHub API operations (issues, PRs, repos, etc.)")
+        eprint("[GITHUB] Tools: GitHub API operations (issues, PRs, repos, etc.).")
         return 0
 
     if container_exists(container_name):
@@ -240,7 +240,7 @@ def status(settings: dict) -> int:
         return 1
 
     eprint("[GITHUB] No GitHub MCP container found.")
-    eprint("   Use: cf tools start")
+    eprint("   Use: cf tools start.")
     return 1
 
 
@@ -263,5 +263,6 @@ def run(args: argparse.Namespace) -> int:
     elif args.action == "status":
         return status(settings)
     else:
-        eprint(f"[ERROR] Unknown action: {args.action}")
+        eprint(f"[ERROR] Unknown action: {args.action}.")
+        eprint("   Valid actions: start, stop, restart, status.")
         return 1

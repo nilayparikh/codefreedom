@@ -124,10 +124,10 @@ def ensure_image(
         check=False,
     )
     if _inspect.returncode == 0:
-        print(f"[{label}] Using cached image '{image}'", flush=True)
+        eprint(f"[{label}] Using cached image '{image}'.")
         return True
 
-    print(f"[{label}] Image '{image}' not found locally, pulling...", flush=True)
+    eprint(f"[{label}] Image '{image}' not found locally, pulling...")
     pull = subprocess.run(
         ["docker", "pull", image],
         capture_output=True,
@@ -136,23 +136,18 @@ def ensure_image(
         check=False,
     )
     if pull.returncode == 0:
-        print("   [OK] Image pulled.", flush=True)
+        eprint(f"[{label}] Image pulled.")
         return True
 
-    import sys
-
-    print(f"[ERROR] Failed to pull image '{image}'.", file=sys.stderr)
+    eprint(f"[ERROR] Failed to pull image '{image}'.")
     if pull.stderr:
-        print(f"   {pull.stderr.strip()}", file=sys.stderr)
-    print("", file=sys.stderr)
-    print("  Tips:", file=sys.stderr)
+        eprint(f"   {pull.stderr.strip()}")
+    eprint("")
+    eprint("  Tips:")
     if build_tip:
-        print(f"    * Build locally:  {build_tip}", file=sys.stderr)
-    print(
-        f"    * Set 'image' in {profile_path} to your local tag",
-        file=sys.stderr,
-    )
-    print("    * Wait for CI to publish the image to ghcr.io", file=sys.stderr)
+        eprint(f"    * Build locally:  {build_tip}")
+    eprint(f"    * Set 'image' in {profile_path} to your local tag")
+    eprint("    * Wait for CI to publish the image to ghcr.io")
     return False
 
 
@@ -320,7 +315,9 @@ def get_codefreedom_container_ports() -> set[int]:
                 # Host-network container: ports are directly on host.
                 # Read exposed ports from Config.ExposedPorts.
                 try:
-                    exposed = _json.loads(exposed_ports_json) if exposed_ports_json else {}
+                    exposed = (
+                        _json.loads(exposed_ports_json) if exposed_ports_json else {}
+                    )
                 except _json.JSONDecodeError:
                     exposed = {}
                 for key in exposed:
@@ -389,10 +386,12 @@ def init_tool_redirect(tool_filename: str) -> int:
     profile_path = tool_home() / "profiles" / tool_filename
     if profile_path.exists():
         tool_label = tool_filename.replace(".yaml", "")
-        eprint(f"[{tool_label}] Profile already exists at ~/.codefreedom/profiles/{tool_filename}")
+        eprint(
+            f"[{tool_label}] Profile already exists at ~/.codefreedom/profiles/{tool_filename}."
+        )
         return 0
     eprint(
-        f"[{tool_filename.replace('.yaml', '')}] No profile found."
+        f"[{tool_label}] No profile found."
         " Run 'cf init recipe' to install the default recipe."
     )
     from codefreedom.cli.tool_init_utils import print_help_section
@@ -489,7 +488,7 @@ def load_tool_profile(
         defaults["env"] = cfg["env"]
 
     # Extra keys specific to the tool
-    for key in (extra_keys or []):
+    for key in extra_keys or []:
         val = cfg.get(key)
         if key == "port":
             continue  # handled above

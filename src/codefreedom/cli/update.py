@@ -220,9 +220,9 @@ def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
             if digest:
                 return digest.strip().removeprefix("sha256:")
     except HTTPError as exc:
-        eprint(f"[UPDATE] [WARN] Hub manifest check failed ({exc.code}): {url}")
+        eprint(f"[UPDATE] Warning: Hub manifest check failed ({exc.code}): {url}.")
     except URLError as exc:
-        eprint(f"[UPDATE] [WARN] Hub unreachable ({exc.reason}): {url}")
+        eprint(f"[UPDATE] Warning: Hub unreachable ({exc.reason}): {url}.")
     return None
 
 
@@ -235,7 +235,7 @@ def _get_docker_hub_token(namespace: str, repo: str) -> str | None:
             data = json.loads(resp.read())
             return data.get("token")
     except (URLError, HTTPError, json.JSONDecodeError) as exc:
-        eprint(f"[UPDATE] [WARN] Docker Hub auth failed: {exc}")
+        eprint(f"[UPDATE] Warning: Docker Hub auth failed: {exc}.")
     return None
 
 

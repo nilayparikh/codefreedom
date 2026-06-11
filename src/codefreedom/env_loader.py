@@ -69,19 +69,15 @@ Full resolution order (later sources override earlier):
 from __future__ import annotations
 
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-# Pre-compiled regex for ${VAR} and ${VAR:-default} patterns in .env files.
-# Uses greedy .* to correctly capture defaults containing '}' characters
-# (e.g., ${JSON:-{"key":"val"}}).
-_VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-(.*))?\}")
+from codefreedom.interpolate import resolve_env_vars
 
 
 def eprint(*args: Any, **kwargs: Any) -> None:
-    """Print to stderr."""
+    """Print to stderr. The canonical definition — all modules import from here."""
     print(*args, file=sys.stderr, **kwargs)
 
 
@@ -117,23 +113,7 @@ def load_dotenv(path: Path) -> Dict[str, str]:
                 raw_val = raw_val[1:-1]
 
             # Resolve ${VAR} references from current env + already-parsed vars
-            def _replace_var(m: re.Match) -> str:
-                varname = m.group(1)
-                default = m.group(2)
-                # Use `in` check rather than `or` — an empty-string env var
-                # (e.g., export FOO="") is a valid override and must not
-                # fall through to a lower-precedence value.
-                if varname in os.environ:
-                    resolved = os.environ[varname]
-                elif varname in env:
-                    resolved = env[varname]
-                else:
-                    resolved = None
-                if resolved is not None:
-                    return resolved
-                return default if default is not None else ""
-
-            raw_val = _VAR_REF_RE.sub(_replace_var, raw_val)
+            raw_val = resolve_env_vars(raw_val, {**os.environ, **env})
             env[key] = raw_val
     return env
 

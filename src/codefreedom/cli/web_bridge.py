@@ -185,7 +185,7 @@ def status(settings: dict) -> int:
         return 1
 
     eprint("[WEB-BRIDGE] No web-bridge container found.")
-    eprint("   Use: cf tools start")
+    eprint("   Use: cf tools start.")
     return 1
 
 
@@ -204,6 +204,7 @@ def run(args: argparse.Namespace) -> int:
     elif action == "status":
         return status(settings)
     else:
-        eprint(f"[ERROR] Unknown action: {action}")
-        eprint("   Valid actions: start, stop, restart, status")
+        eprint(f"[ERROR] Unknown action: {action}.")
+        eprint("   Valid actions: start, stop, restart, status.")
+        return 1
         return 1

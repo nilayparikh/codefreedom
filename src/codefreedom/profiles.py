@@ -7,29 +7,19 @@ All profiles live in ~/.codefreedom/profiles/.
 
 from __future__ import annotations
 
-import os
-import re
-import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
 from pydantic import ValidationError
 
-from codefreedom.interpolate import interpolate_all_strings
+from codefreedom.env_loader import eprint
+from codefreedom.interpolate import interpolate_all_strings, resolve_env_vars
 from codefreedom.schemas.profiles import ClaudeCodeProfiles
-
-# Pre-compiled regex — mirrors env_loader._VAR_REF_RE
-_VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-(.*))?\}")
 
 
 class ProfileError(Exception):
     """Raised when a profile cannot be loaded or is invalid."""
-
-
-def eprint(*args: Any, **kwargs: Any) -> None:
-    """Print to stderr."""
-    print(*args, file=sys.stderr, **kwargs)
 
 
 def load_profiles(profiles_path: Path) -> Dict[str, Any]:
@@ -70,28 +60,7 @@ def load_profiles(profiles_path: Path) -> Dict[str, Any]:
 
 def resolve_env(env_def: Dict[str, str], context: Dict[str, str]) -> Dict[str, str]:
     """Resolve ${VAR} references in env values using a context dict."""
-    result: Dict[str, str] = {}
-    for key, raw_val in env_def.items():
-
-        def _sub(m: re.Match) -> str:
-            varname = m.group(1)
-            default = m.group(2)
-            # Use `in` check — empty-string values are valid overrides
-            if varname in context:
-                resolved = context[varname]
-            elif varname in os.environ:
-                resolved = os.environ[varname]
-            else:
-                resolved = None
-            if resolved is not None:
-                return resolved
-            if default is not None:
-                return default
-            eprint(f"[WARN] env var ${{{varname}}} referenced but not set (empty)")
-            return ""
-
-        result[key] = _VAR_REF_RE.sub(_sub, raw_val)
-    return result
+    return {key: resolve_env_vars(val, context) for key, val in env_def.items()}
 
 
 def load_profile_env(

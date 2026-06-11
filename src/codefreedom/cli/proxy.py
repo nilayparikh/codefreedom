@@ -70,7 +70,7 @@ def run(args: argparse.Namespace) -> int:
     # subcommand -- see codefreedom.cli.vscode.
     else:
         eprint(
-            "[proxy] No action specified."
+            "[PROXY] No action specified."
             " Use start, stop, restart, status, or validate."
         )
         return 1
@@ -196,7 +196,7 @@ def _ensure_web_bridge_image() -> int:
     build_ctx = _web_bridge_build_context()
     if build_ctx is None:
         eprint(
-            f"[proxy] [WARN] '{image}' image is missing and the source tree"
+            f"[PROXY] Warning: '{image}' image is missing and the source tree"
             " (docker/web-bridge/) could not be located."
         )
         eprint(
@@ -209,7 +209,7 @@ def _ensure_web_bridge_image() -> int:
         return 0
 
     eprint(
-        f"[proxy] Web-bridge image '{image}' not found locally."
+        f"[PROXY] Web-bridge image '{image}' not found locally."
         " Building from source tree..."
     )
     eprint("   This is a one-time build (may take ~30 s).")
@@ -228,9 +228,9 @@ def _ensure_web_bridge_image() -> int:
         check=False,
     )
     if result.returncode != 0:
-        eprint(f"[proxy] [FAIL] Failed to build {image}. Check docker output above.")
+        eprint(f"[PROXY] Failed to build {image}. Check docker output above.")
         return 1
-    eprint(f"[proxy] [OK] Built {image}.")
+    eprint(f"[PROXY] Built {image}.")
     return 0
 
 
@@ -250,7 +250,7 @@ def _ensure_codefreedom_network() -> None:
     if inspect.returncode == 0:
         return  # network already exists
 
-    eprint("[proxy] Creating shared 'codefreedom' Docker network...")
+    eprint("[PROXY] Creating shared 'codefreedom' Docker network...")
     create = subprocess.run(
         ["docker", "network", "create", "codefreedom"],
         capture_output=True,
@@ -259,9 +259,9 @@ def _ensure_codefreedom_network() -> None:
         check=False,
     )
     if create.returncode == 0:
-        eprint("   [OK] Network 'codefreedom' created.")
+        eprint("[PROXY] Network 'codefreedom' created.")
     else:
-        eprint(f"   [WARN] Could not create network: {create.stderr.strip()}")
+        eprint(f"[PROXY] Warning: could not create network: {create.stderr.strip()}")
 
 
 def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
@@ -272,7 +272,7 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         eprint("   Run: codefreedom proxy init")
         return 1
 
-    eprint(f"[proxy] Starting LiteLLM via Docker Compose ({compose_file})...")
+    eprint(f"[PROXY] Starting LiteLLM via Docker Compose ({compose_file})...")
 
     # Ensure tools are running (needed for WebSearch, browser automation, etc.)
     # Non-fatal — proxy starts regardless.
@@ -281,7 +281,7 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
 
         ensure_tools()
     except Exception as exc:
-        eprint(f"[proxy] Warning: could not verify tools: {exc}")
+        eprint(f"[PROXY] Warning: could not verify tools: {exc}")
 
     # Build merged environment: proxy files override system env, then CLI
     # flags override everything for this run only, then CF_CLI_* overrides
@@ -324,12 +324,9 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     )
     if result.returncode == 0:
         port = merged_env.get("LITELLM_PORT", "4000")
-        eprint(
-            f"[proxy] [OK] Proxy started at http://localhost:{port}"
-            f" ({litellm_name})"
-        )
+        eprint(f"[PROXY] Proxy started at http://localhost:{port}" f" ({litellm_name})")
     else:
-        eprint("[proxy] [FAIL] Failed to start. Check docker logs.")
+        eprint("[PROXY] Failed to start. Check docker logs.")
     return result.returncode
 
 
@@ -360,7 +357,7 @@ def _stop() -> int:
         eprint("   Run: codefreedom proxy init")
         return 1
 
-    eprint("[proxy] Stopping LiteLLM proxy...")
+    eprint("[PROXY] Stopping LiteLLM proxy...")
     compose_env = _build_compose_env()
     result = subprocess.run(
         ["docker", "compose", "-f", str(compose_file), "--profile", "litellm", "down"],
@@ -370,7 +367,7 @@ def _stop() -> int:
         check=False,
     )
     if result.returncode == 0:
-        eprint("[proxy] [OK] Proxy stopped.")
+        eprint("[PROXY] Proxy stopped.")
     return result.returncode
 
 
@@ -390,7 +387,7 @@ def _restart() -> int:
         eprint("   Run: codefreedom proxy init")
         return 1
 
-    eprint(f"[proxy] Restarting LiteLLM via Docker Compose ({compose_file})...")
+    eprint(f"[PROXY] Restarting LiteLLM via Docker Compose ({compose_file})...")
     compose_env = _build_compose_env()
     result = subprocess.run(
         [
@@ -411,9 +408,9 @@ def _restart() -> int:
         # Read port from env (resolved at build time, not /proc)
         merged_env = _build_proxy_env()
         port = merged_env.get("LITELLM_PORT", "4000")
-        eprint(f"[proxy] [OK] Proxy restarted at http://localhost:{port}")
+        eprint(f"[PROXY] Proxy restarted at http://localhost:{port}")
     else:
-        eprint("[proxy] [FAIL] Failed to restart. Check docker logs.")
+        eprint("[PROXY] Failed to restart. Check docker logs.")
     return result.returncode
 
 
@@ -479,20 +476,17 @@ def _warn_database_url(
 
     if using_codefreedom_image:
         eprint(
-            "  [OK]  database_url not required — embedded PG in"
-            " nilayparikh/codefreedom:litellm image auto-sets it"
+            "[PROXY] database_url not required — embedded PG in"
+            " nilayparikh/codefreedom:litellm image auto-sets it."
         )
     else:
-        eprint("  [WARN]  database_url not set (stateless mode)")
+        eprint("[PROXY] Warning: database_url not set (stateless mode).")
+        eprint("   LiteLLM runs without Prisma persistence unless DATABASE_URL is set.")
         eprint(
-            "         LiteLLM runs without Prisma persistence unless"
-            " DATABASE_URL is set."
-        )
-        eprint(
-            "         The codefreedom litellm image (default) ships"
+            "   The codefreedom litellm image (default) ships"
             " embedded PG that auto-sets it."
         )
-        eprint(f"         You are using: {litellm_image}")
+        eprint(f"   You are using: {litellm_image}")
 
 
 # ── Validate ─────────────────────────────────────────────────────────────────
@@ -508,7 +502,7 @@ def _validate() -> int:
 
     errors: List[str] = []
 
-    eprint(f"[proxy] Validating {config_file}...")
+    eprint(f"[PROXY] Validating {config_file}...")
     eprint()
 
     # Load proxy env files so we can check api_key references against them

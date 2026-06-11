@@ -466,7 +466,7 @@ def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
     """
     container = _find_litellm_container()
     if container is None:
-        eprint("[backup] No running LiteLLM container found — skipping PostgreSQL dump")
+        eprint("[ADMIN] No running LiteLLM container found — skipping PostgreSQL dump.")
         return None
 
     pg_backup_dir.mkdir(parents=True, exist_ok=True)
@@ -476,7 +476,7 @@ def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
     dump_filename = f"{_PG_DUMP_PREFIX}-{timestamp}.dump"
     container_dump_path = f"/var/lib/postgresql/backup/{dump_filename}"
 
-    eprint(f"[backup] Dumping PostgreSQL database from container '{container}'...")
+    eprint(f"[ADMIN] Dumping PostgreSQL database from container '{container}'...")
 
     try:
         result = subprocess.run(
@@ -501,10 +501,10 @@ def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
         if result.returncode != 0:
             stderr = result.stderr.strip()
             if stderr:
-                eprint(f"[backup] [WARN] pg_dump failed: {stderr}")
+                eprint(f"[ADMIN] Warning: pg_dump failed: {stderr}")
             else:
                 eprint(
-                    f"[backup] [WARN] pg_dump failed (exit code {result.returncode})"
+                    f"[ADMIN] Warning: pg_dump failed (exit code {result.returncode})."
                 )
             return None
 
@@ -512,18 +512,18 @@ def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
         if dump_path.exists():
             size = dump_path.stat().st_size
             eprint(
-                f"[backup] [OK] PostgreSQL dump created: {dump_filename}"
-                f" ({_fmt_size_pg(size)})"
+                f"[ADMIN] PostgreSQL dump created: {dump_filename}"
+                f" ({_fmt_size_pg(size)})."
             )
             return dump_path
 
         eprint(
-            f"[backup] [WARN] pg_dump completed but dump file not found at {dump_path}"
+            f"[ADMIN] Warning: pg_dump completed but dump file not found at {dump_path}."
         )
         return None
 
     except (OSError, subprocess.TimeoutExpired) as exc:
-        eprint(f"[backup] [WARN] Could not dump PostgreSQL: {exc}")
+        eprint(f"[ADMIN] Warning: could not dump PostgreSQL: {exc}.")
         return None
 
 
@@ -956,7 +956,9 @@ def prune_backups(
             except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
                 # Can't parse? skip from older_than deletion
                 if isinstance(exc, ValueError) and "passphrase" in str(exc).lower():
-                    eprint(f"[WARN] Cannot evaluate encrypted backup: {p.name}")
+                    eprint(
+                        f"[ADMIN] Warning: cannot evaluate encrypted backup: {p.name}."
+                    )
                 continue
 
     # Apply --keep (after older_than, so --keep always wins)

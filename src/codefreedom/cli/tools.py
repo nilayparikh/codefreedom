@@ -42,7 +42,13 @@ _TOOLS: list[tuple[str, str, Callable, Callable, Callable]] = [
     ("chrome", "Chrome browser", chrome_load_profile, chrome_start, chrome_stop),
     ("web", "Web search", web_load_profile, web_start, web_stop),
     ("github", "GitHub MCP", github_load_profile, github_start, github_stop),
-    ("web-bridge", "Web bridge", web_bridge_load_profile, web_bridge_start, web_bridge_stop),
+    (
+        "web-bridge",
+        "Web bridge",
+        web_bridge_load_profile,
+        web_bridge_start,
+        web_bridge_stop,
+    ),
 ]
 
 
@@ -54,7 +60,7 @@ def _load_all_settings() -> list[tuple[str, str, dict, Callable, Callable]]:
             settings = load_fn()
             results.append((name, label, settings, start_fn, stop_fn))
         except Exception as exc:
-            eprint(f"[tools] Failed to load profile for '{label}': {exc}")
+            eprint(f"[TOOLS] Failed to load profile for '{label}': {exc}")
     return results
 
 
@@ -63,7 +69,7 @@ def _for_each_tool(action: str) -> int:
     failures = 0
     verb = action.capitalize().rstrip("e") + "ing"
     for _name, label, settings, start_fn, stop_fn in _load_all_settings():
-        eprint(f"[tools] {verb} {label}...")
+        eprint(f"[TOOLS] {verb} {label}...")
         if action == "start":
             rc = start_fn(settings)
         elif action == "stop":
@@ -74,12 +80,12 @@ def _for_each_tool(action: str) -> int:
         else:
             rc = 0
         if rc != 0:
-            eprint(f"[tools]   {label} FAILED")
+            eprint(f"[TOOLS] {label} failed.")
             failures += 1
     if failures:
-        eprint(f"[tools] {failures} tool(s) failed to {action}.")
+        eprint(f"[TOOLS] {failures} tool(s) failed to {action}.")
         return 1
-    eprint(f"[tools] All tools {action}ed.")
+    eprint(f"[TOOLS] All tools {action}ed.")
     return 0
 
 
@@ -105,14 +111,14 @@ def status_all() -> int:
         container_name = settings.get("container_name", f"codefreedom-{name}")
         if container_is_running(container_name):
             port = settings.get("port", "?")
-            eprint(f"[tools]   [{label:15}] RUNNING  ({container_name}, port {port})")
+            eprint(f"[TOOLS] {label:15} RUNNING  ({container_name}, port {port})")
         else:
             all_running = False
-            eprint(f"[tools]   [{label:15}] STOPPED  ({container_name})")
+            eprint(f"[TOOLS] {label:15} STOPPED  ({container_name})")
     if all_running:
-        eprint("[tools] All tools are running.")
+        eprint("[TOOLS] All tools are running.")
         return 0
-    eprint("[tools] Some tools are not running. Use 'cf tools start'.")
+    eprint("[TOOLS] Some tools are not running. Use 'cf tools start'.")
     return 1
 
 
@@ -122,9 +128,9 @@ def ensure_tools() -> int:
     for name, label, settings, start_fn, _stop_fn in _load_all_settings():
         container_name = settings.get("container_name", f"codefreedom-{name}")
         if not container_is_running(container_name):
-            eprint(f"[tools] Auto-starting {label} ({container_name})...")
+            eprint(f"[TOOLS] Auto-starting {label} ({container_name})...")
             if start_fn(settings) != 0:
-                eprint(f"[tools]   {label} FAILED — continuing.")
+                eprint(f"[TOOLS] {label} failed — continuing.")
                 failures += 1
     if failures:
         return 1

@@ -71,7 +71,7 @@ def _stop_proxy(cf_dir: Path) -> int:
     if not compose_file.exists():
         return 0
 
-    eprint("[deinit] Stopping proxy...")
+    eprint("[DEINIT] Stopping proxy...")
     # Use the canonical get_env() chain to resolve all proxy env vars
     # (including SUFFIX_ID, POSTGRES_HOST_* paths, and os.environ).
     try:
@@ -110,12 +110,12 @@ def _stop_proxy(cf_dir: Path) -> int:
             check=False,
         )
         if result.returncode == 0:
-            eprint("   [OK] Proxy stopped.")
+            eprint("[DEINIT] Proxy stopped.")
         else:
-            eprint("   [WARN] Proxy may not have stopped cleanly.")
+            eprint("[DEINIT] Warning: proxy may not have stopped cleanly.")
         return result.returncode
     except (subprocess.SubprocessError, FileNotFoundError) as exc:
-        eprint(f"   [WARN] Could not stop proxy: {exc}")
+        eprint(f"[DEINIT] Warning: could not stop proxy: {exc}")
         return 1
 
 
@@ -124,13 +124,13 @@ def _stop_tools() -> int:
     try:
         from codefreedom.cli.tools import stop_all as tools_stop_all
 
-        eprint("[deinit] Stopping all tools...")
+        eprint("[DEINIT] Stopping all tools...")
         return tools_stop_all()
     except ImportError as exc:
-        eprint(f"   [WARN] Could not import tools module: {exc}")
+        eprint(f"[DEINIT] Warning: could not import tools module: {exc}")
         return 1
     except Exception as exc:
-        eprint(f"   [WARN] Failed to stop tools: {exc}")
+        eprint(f"[DEINIT] Warning: failed to stop tools: {exc}")
         return 1
 
 
@@ -141,7 +141,7 @@ def _remove_codefreedom_dir(cf_dir: Path) -> None:
     survive a full teardown. Prints a message telling the user where it is.
     """
     if not cf_dir.exists():
-        eprint(f"[deinit] Directory '{cf_dir}' does not exist — nothing to remove.")
+        eprint(f"[DEINIT] Directory '{cf_dir}' does not exist — nothing to remove.")
         return
 
     # Preserve .env.user — user-managed override, never auto-created by recipes
@@ -153,12 +153,12 @@ def _remove_codefreedom_dir(cf_dir: Path) -> None:
         except OSError:
             pass
 
-    eprint(f"[deinit] Removing '{cf_dir}' (preserving .env.user)...")
+    eprint(f"[DEINIT] Removing '{cf_dir}' (preserving .env.user)...")
     try:
         shutil.rmtree(cf_dir)
-        eprint("   [OK] Directory removed.")
+        eprint("[DEINIT] Directory removed.")
     except OSError as exc:
-        eprint(f"   [ERROR] Failed to remove directory: {exc}")
+        eprint(f"[DEINIT] Failed to remove directory: {exc}")
         sys.exit(1)
 
     # Restore .env.user
@@ -166,7 +166,7 @@ def _remove_codefreedom_dir(cf_dir: Path) -> None:
         try:
             cf_dir.mkdir(parents=True, exist_ok=True)
             user_env.write_text(preserved)
-            eprint(f"   [OK] Preserved '{user_env}' (user overrides).")
+            eprint(f"[DEINIT] Preserved '{user_env}' (user overrides).")
         except OSError as exc:
             eprint(f"   [WARN] Could not restore .env.user: {exc}")
 
@@ -176,7 +176,7 @@ def run(args: argparse.Namespace) -> int:
     force = getattr(args, "force", False)
     cf_dir = get_codefreedom_dir()
 
-    eprint("[deinit] Starting CodeFreedom teardown...")
+    eprint("[DEINIT] Starting CodeFreedom teardown...")
     print()
 
     # ── Step 1: Stop the proxy ───────────────────────────────────────────
@@ -191,14 +191,14 @@ def run(args: argparse.Namespace) -> int:
     containers = _find_codefreedom_containers()
     if containers:
         eprint(
-            f"[deinit] Removing {len(containers)} remaining CodeFreedom container(s)..."
+            f"[DEINIT] Removing {len(containers)} remaining CodeFreedom container(s)..."
         )
         for name in containers:
             eprint(f"   Removing '{name}'...")
             _stop_and_remove_container(name)
-        eprint("   [OK] All remaining containers removed.")
+        eprint("[DEINIT] All remaining containers removed.")
     else:
-        eprint("[deinit] No remaining CodeFreedom containers found.")
+        eprint("[DEINIT] No remaining CodeFreedom containers found.")
     print()
 
     # ── Step 4: Remove the shared codefreedom Docker network ────────────
@@ -210,27 +210,27 @@ def run(args: argparse.Namespace) -> int:
             check=False,
         )
         if net_inspect.returncode == 0:
-            eprint("[deinit] Removing shared 'codefreedom' Docker network...")
+            eprint("[DEINIT] Removing shared 'codefreedom' Docker network...")
             subprocess.run(
                 ["docker", "network", "rm", "codefreedom"],
                 capture_output=True,
                 timeout=15,
                 check=False,
             )
-            eprint("   [OK] Network removed.")
+            eprint("[DEINIT] Network removed.")
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
     print()
 
     # ── Step 5: Confirm and remove CodeFreedom home directory ────────────
     if not cf_dir.exists():
-        eprint(f"[deinit] Directory '{cf_dir}' does not exist — nothing more to do.")
-        eprint("[deinit] Teardown complete.")
+        eprint(f"[DEINIT] Directory '{cf_dir}' does not exist — nothing more to do.")
+        eprint("[DEINIT] Teardown complete.")
         return 0
 
     if not force:
         eprint(
-            f"[deinit] This will permanently DELETE the entire '{cf_dir}' directory."
+            f"[DEINIT] This will permanently DELETE the entire '{cf_dir}' directory."
         )
         eprint("   This includes all profiles, configs, credentials, and tool data.")
         eprint()
@@ -238,13 +238,13 @@ def run(args: argparse.Namespace) -> int:
             response = input("   Are you sure? [y/N] ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             eprint()
-            eprint("[deinit] Aborted.")
+            eprint("[DEINIT] Aborted.")
             return 1
         if response not in ("y", "yes"):
-            eprint("[deinit] Aborted.")
+            eprint("[DEINIT] Aborted.")
             return 1
 
     _remove_codefreedom_dir(cf_dir)
     print()
-    eprint("[deinit] Teardown complete. CodeFreedom has been fully removed.")
+    eprint("[DEINIT] Teardown complete. CodeFreedom has been fully removed.")
     return 0
