@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import urllib.error
+from email.message import Message
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -16,13 +17,15 @@ from codefreedom.cli.vscode import (
     _VSCODE_APIKEY_PLACEHOLDER,
     _build_vscode_entry,
     _check_proxy_live,
-    cmd_vscode_proxy_config,
+    _deduplicate_models,
     _fetch_model_info,
     _model_to_vscode_entry,
     _proxy_health_url,
     _proxy_model_info_url,
     _resolve_master_key,
+    _resolve_model_id,
     _resolve_reasoning_effort,
+    cmd_vscode_proxy_config,
 )
 
 # ── _resolve_master_key ──────────────────────────────────────────────────────
@@ -208,6 +211,75 @@ class TestFetchModelInfo:
         monkeypatch.setattr("codefreedom.cli.vscode.urllib.request.urlopen", fake)
         _fetch_model_info("h", 4000, "sk-abc")
         assert captured[0].headers["Authorization"] == "Bearer sk-abc"
+
+
+# ── _resolve_model_id ────────────────────────────────────────────────────────
+
+
+class TestResolveModelId:
+    def test_uses_model_name(self):
+        assert _resolve_model_id({"model_name": "gpt-4"}) == "gpt-4"
+
+    def test_falls_back_to_model_info_id(self):
+        assert _resolve_model_id({"model_info": {"id": "from-info"}}) == "from-info"
+
+    def test_unknown_when_no_identifier(self):
+        assert _resolve_model_id({}) == "unknown"
+
+    def test_prefers_model_name_over_info_id(self):
+        assert (
+            _resolve_model_id(
+                {
+                    "model_name": "name-wins",
+                    "model_info": {"id": "info-id"},
+                }
+            )
+            == "name-wins"
+        )
+
+
+# ── _deduplicate_models ──────────────────────────────────────────────────────
+
+
+class TestDeduplicateModels:
+    def test_no_dupes_preserves_order(self):
+        models = [
+            {"model_name": "a"},
+            {"model_name": "b"},
+            {"model_name": "c"},
+        ]
+        out = _deduplicate_models(models)
+        assert [m["model_name"] for m in out] == ["a", "b", "c"]
+
+    def test_removes_duplicate_model_name(self):
+        models = [
+            {"model_name": "gpt-4", "model_info": {"supports_vision": True}},
+            {"model_name": "gpt-4", "model_info": {}},
+            {"model_name": "claude-3"},
+        ]
+        out = _deduplicate_models(models)
+        assert len(out) == 2
+        assert out[0]["model_name"] == "gpt-4"
+        assert out[1]["model_name"] == "claude-3"
+
+    def test_prefers_richer_model_info(self):
+        models = [
+            {"model_name": "m1", "model_info": {"a": 1}},
+            {"model_name": "m1", "model_info": {"a": 1, "b": 2, "c": 3}},
+        ]
+        out = _deduplicate_models(models)
+        assert len(out) == 1
+        assert len(out[0]["model_info"]) == 3
+
+    def test_preserves_first_seen_order(self):
+        models = [
+            {"model_name": "z"},
+            {"model_name": "a"},
+            {"model_name": "z"},
+            {"model_name": "m"},
+        ]
+        out = _deduplicate_models(models)
+        assert [m["model_name"] for m in out] == ["z", "a", "m"]
 
 
 # ── _model_to_vscode_entry ───────────────────────────────────────────────────
@@ -478,7 +550,7 @@ class TestCmdVscodeGenerate:
 
         def boom(h, p, k, *, timeout=10.0):
             raise urllib.error.HTTPError(
-                "http://h:4000/v1/model/info", 401, "Unauthorized", {}, None
+                "http://h:4000/v1/model/info", 401, "Unauthorized", Message(), None
             )
 
         monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
@@ -494,7 +566,7 @@ class TestCmdVscodeGenerate:
 
         def boom(h, p, k, *, timeout=10.0):
             raise urllib.error.HTTPError(
-                "http://h:4000/v1/model/info", 500, "Server Error", {}, None
+                "http://h:4000/v1/model/info", 500, "Server Error", Message(), None
             )
 
         monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
@@ -611,3 +683,26 @@ class TestCmdVscodeGenerate:
 
         result = cmd_vscode_proxy_config(_args())
         assert result == 0
+
+    def test_deduplicates_duplicate_model_names(self):
+        models = [
+            {"model_name": "gpt-4", "model_info": {"supports_vision": True}},
+            {"model_name": "gpt-4", "model_info": {}},
+            {"model_name": "claude-3-opus"},
+        ]
+        out = _build_vscode_entry("CF", "http://h:4000/v1", models)
+        ids = [m["id"] for m in out["models"]]
+        assert len(ids) == 2
+        assert ids == ["gpt-4", "claude-3-opus"]
+
+    def test_deduplication_prefers_richer_model_info(self):
+        models = [
+            {"model_name": "m1", "model_info": {"a": 1}},
+            {"model_name": "m1", "model_info": {"a": 1, "b": 2, "c": 3}},
+        ]
+        out = _build_vscode_entry("CF", "http://h:4000/v1", models)
+        assert len(out["models"]) == 1
+        entry = out["models"][0]
+        assert entry["id"] == "m1"
+        # The richer entry has vision=False (model_info had no vision key)
+        assert entry["vision"] is False

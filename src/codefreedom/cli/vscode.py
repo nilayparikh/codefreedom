@@ -599,16 +599,56 @@ def _model_to_vscode_entry(model: Dict[str, Any], base_url: str) -> Dict[str, An
     return entry
 
 
+def _resolve_model_id(model: Dict[str, Any]) -> str:
+    """Resolve the canonical ID for a model dict from the proxy.
+
+    Uses ``model_name``, falling back to ``model_info.id``, then a sentinel.
+    """
+    model_info = model.get("model_info") or {}
+    if not isinstance(model_info, dict):
+        model_info = {}
+    return str(model.get("model_name") or model_info.get("id") or "unknown")
+
+
+def _deduplicate_models(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Deduplicate *models* by their resolved ID.
+
+    When two or more entries share the same ID (e.g. from LiteLLM model
+    grouping / fallback groups), the entry with the richest ``model_info``
+    dict wins — more keys means more capability metadata for VS Code.
+
+    The input order is preserved for the first occurrence of each ID.
+    """
+    seen: Dict[str, Dict[str, Any]] = {}
+    for m in models:
+        mid = _resolve_model_id(m)
+        if mid not in seen:
+            seen[mid] = m
+            continue
+        existing = seen[mid]
+        existing_info = existing.get("model_info") or {}
+        if not isinstance(existing_info, dict):
+            existing_info = {}
+        candidate_info = m.get("model_info") or {}
+        if not isinstance(candidate_info, dict):
+            candidate_info = {}
+        # Prefer the entry with richer model_info (more capability fields).
+        if len(candidate_info) > len(existing_info):
+            seen[mid] = m
+    return list(seen.values())
+
+
 def _build_vscode_entry(
     provider_name: str, base_url: str, models: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
     """Build a single chatLanguageModels.json-compatible entry."""
+    deduped = _deduplicate_models(models)
     return {
         "name": provider_name,
         "vendor": "customendpoint",
         "apiKey": _VSCODE_APIKEY_PLACEHOLDER,
         "apiType": "chat-completions",
-        "models": [_model_to_vscode_entry(m, base_url) for m in models],
+        "models": [_model_to_vscode_entry(m, base_url) for m in deduped],
     }
 
 
