@@ -20,14 +20,14 @@ CodeFreedom ships containerized tools that your code agent can use. Each tool ru
 Every tool follows the same three commands:
 
 ```bash
-codefreedom tools <tool> start   # Start container
-codefreedom tools <tool> status  # Check status
-codefreedom tools <tool> stop    # Stop container
+codefreedom run tools <tool> start   # Start container
+codefreedom run tools <tool> status  # Check status
+codefreedom run tools <tool> stop    # Stop container
 ```
 
 ## Tool Profiles
 
-Each tool has a profile in `~/.codefreedom/profiles/<tool>.json` controlling its Docker settings (image, port, data directory). Created by `cf init`, editable afterward.
+Each tool has a profile in `~/.codefreedom/profiles/<tool>.json` controlling its Docker settings (image, port, data directory). Created by `cf setup init`, editable afterward.
 
 ## Auto-Start from Profiles
 
@@ -44,7 +44,7 @@ Declare tools in your Claude Code profile and they start automatically:
 }
 ```
 
-When you launch `codefreedom claude --profile web-dev`, the Chrome and Web containers start alongside Claude Code. When the session ends, they stop.
+When you launch `codefreedom run agent claude --profile web-dev`, the Chrome and Web containers start alongside Claude Code. When the session ends, they stop.
 
 ## When to Use Which
 

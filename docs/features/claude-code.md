@@ -10,13 +10,13 @@ Launch Claude Code through CodeFreedom. Switch models, isolate environments, use
 ## Basic Usage
 
 ```bash
-codefreedom claude              # Local mode (default)
-codefreedom claude --sandbox    # Docker sandbox
-codefreedom claude --profile bare     # Pick a profile
-codefreedom claude --list-profiles    # See what's available
+codefreedom run agent claude              # Local mode (default)
+codefreedom run agent claude --sandbox    # Docker sandbox
+codefreedom run agent claude --profile bare     # Pick a profile
+codefreedom run agent claude --list-profiles    # See what's available
 ```
 
-Short alias: `cf cc` does the same as `codefreedom claude`.
+Short alias: `cf run agent claude` does the same as `codefreedom run agent claude`.
 
 ## Profiles
 
@@ -35,8 +35,8 @@ Profiles control which AI model you use. Think of them as presets.
 ### Use a Profile
 
 ```bash
-codefreedom claude --profile ultra
-codefreedom claude --profile air
+codefreedom run agent claude --profile ultra
+codefreedom run agent claude --profile air
 ```
 
 ### Create a Custom Profile
@@ -59,7 +59,7 @@ Edit `~/.codefreedom/profiles/claude-code.json` and add your profile:
 Then use it:
 
 ```bash
-codefreedom claude --profile my-work
+codefreedom run agent claude --profile my-work
 ```
 
 ## Environment Variable Priority
@@ -93,10 +93,10 @@ export CF_CLI_ANTHROPIC_AUTH_TOKEN=sk-...
 Run Claude Code in an isolated Docker container. Fresh environment every time, cleaned up when you exit.
 
 ```bash
-codefreedom claude --sandbox           # Default (Ubuntu)
-codefreedom claude --sandbox --cuda    # NVIDIA GPU
-codefreedom claude --sandbox --rocm    # AMD GPU
-codefreedom claude --sandbox --run-as-me   # Run as your user
+codefreedom run agent claude --sandbox           # Default (Ubuntu)
+codefreedom run agent claude --sandbox --cuda    # NVIDIA GPU
+codefreedom run agent claude --sandbox --rocm    # AMD GPU
+codefreedom run agent claude --sandbox --run-as-me   # Run as your user
 ```
 
 ### Sandbox Images
@@ -128,7 +128,7 @@ No GPU? Use Ubuntu:
 
 ```bash
 export CLAUDE_CODE_IMAGE_TAG=latest
-codefreedom claude --sandbox
+codefreedom run agent claude --sandbox
 ```
 
 ## Local Mode
@@ -136,8 +136,8 @@ codefreedom claude --sandbox
 Run Claude Code directly on your machine. No Docker, no isolation.
 
 ```bash
-codefreedom claude                  # Local, through proxy
-codefreedom claude --native-models  # Local, bypass proxy (use Anthropic directly)
+codefreedom run agent claude                  # Local, through proxy
+codefreedom run agent claude --native-models  # Local, bypass proxy (use Anthropic directly)
 ```
 
 ### Local vs Sandbox
@@ -154,8 +154,8 @@ codefreedom claude --native-models  # Local, bypass proxy (use Anthropic directl
 Use `--native-models` to skip the proxy and use Anthropic directly:
 
 ```bash
-codefreedom claude --native-models
-codefreedom claude --sandbox --native-models
+codefreedom run agent claude --native-models
+codefreedom run agent claude --sandbox --native-models
 ```
 
 This uses your Anthropic credentials directly — no proxy routing.
@@ -176,7 +176,7 @@ Then `/reload-plugins` to activate.
 ## Common Commands
 
 ```bash
-codefreedom claude --list-profiles    # List profiles
-codefreedom claude --status           # Show container status (sandbox)
-codefreedom claude --stop             # Stop all sandbox containers
+codefreedom run agent claude --list-profiles    # List profiles
+codefreedom run agent claude --status           # Show container status (sandbox)
+codefreedom run agent claude --stop             # Stop all sandbox containers
 ```

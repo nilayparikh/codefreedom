@@ -38,6 +38,7 @@ Hooks used
 
 from __future__ import annotations
 
+import glob
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -65,6 +66,7 @@ _VLM_PROMPT = (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _extract_images_and_text(
     messages: List[Dict[str, Any]],
@@ -158,12 +160,16 @@ class ImageRouterLogger(CustomLogger):
     def __init__(
         self,
         config_path: Optional[str] = None,
+        proxy_config_dir: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._config_path = config_path or (
             "/app/litellm-config/plugins/image-router/image-router.yaml"
         )
+        self._proxy_config_dir = proxy_config_dir or "/app/litellm-config/providers"
+        self._model_codefreedom_cache: Dict[str, Dict[str, Any]] = {}
+        self._codes_loaded = False
         self._warned: set = set()
         self._in_vlm_call = False
 
@@ -191,6 +197,36 @@ class ImageRouterLogger(CustomLogger):
         self._config_cache[path] = (stat.st_mtime, raw)
         return raw
 
+    def _load_provider_codefreedom(self) -> Dict[str, Dict[str, Any]]:
+        """Read all provider YAMLs and build model_name -> codefreedom cache.
+
+        The ``codefreedom`` block sits at the top level of each model
+        entry in the provider YAML (sibling of ``litellm_params`` and
+        ``model_info``), so it is NOT reachable via the request-time
+        ``data["litellm_params"]`` dict.  We read the files directly.
+        """
+        if self._codes_loaded:
+            return self._model_codefreedom_cache
+        self._codes_loaded = True
+        if not os.path.isdir(self._proxy_config_dir):
+            return self._model_codefreedom_cache
+        for yp in glob.glob(os.path.join(self._proxy_config_dir, "*.yaml")):
+            try:
+                with open(yp, "r", encoding="utf-8") as f:
+                    provider_data = yaml.safe_load(f) or {}
+            except (OSError, yaml.YAMLError):
+                continue
+            if not isinstance(provider_data, dict):
+                continue
+            for entry in provider_data.get("model_list", []) or []:
+                if not isinstance(entry, dict):
+                    continue
+                name = entry.get("model_name")
+                cf = entry.get("codefreedom")
+                if isinstance(name, str) and isinstance(cf, dict):
+                    self._model_codefreedom_cache[name] = cf
+        return self._model_codefreedom_cache
+
     # ----------------------------------------------------------------- warn
 
     def _warn(self, tag: str, msg: str) -> None:
@@ -202,6 +238,7 @@ class ImageRouterLogger(CustomLogger):
     # ----------------------------------------------------------- core logic
 
     def _is_enabled(self, data: Dict[str, Any]) -> bool:
+        # Source 1: per-model plugin config from litellm_params.model_info
         lp = data.get("litellm_params") or {}
         mi = lp.get("model_info") or {}
         cf = mi.get("codefreedom") or {}
@@ -209,30 +246,68 @@ class ImageRouterLogger(CustomLogger):
         route_cfg = plugins.get("route-image-request")
         if isinstance(route_cfg, dict) and route_cfg.get("enabled") is True:
             return True
+
+        # Source 2: provider YAML files (codefreedom at model-entry level)
+        model = data.get("model")
+        if model:
+            codes = self._load_provider_codefreedom()
+            entry_cf = codes.get(model)
+            if isinstance(entry_cf, dict):
+                entry_plugins = entry_cf.get("plugins") or {}
+                entry_route = entry_plugins.get("route-image-request")
+                if isinstance(entry_route, dict) and entry_route.get("enabled") is True:
+                    return True
+
         return False
 
     async def _call_vlm(
         self, model: str, images: List[Dict[str, Any]]
     ) -> Optional[str]:
-        """Call a VLM to transcribe images.  Returns text or None on failure."""
-        user_content: List[Dict[str, Any]] = [
-            {"type": "text", "text": _VLM_PROMPT}
-        ]
+        """Call a VLM via the proxy's own API for correct model resolution.
+
+        Uses ``httpx`` to POST to the proxy's own chat completions endpoint
+        so model resolution and auth are handled by the proxy's router.
+        The port is read from ``LITELLM_PORT``, auth from ``LITELLM_MASTER_KEY``.
+
+        Checks both ``content`` and ``reasoning_content`` in the response —
+        reasoning models (Qwen, etc.) often return ``content: null`` when
+        thinking is enabled, with the actual text in ``reasoning_content``.
+        """
+        user_content: List[Dict[str, Any]] = [{"type": "text", "text": _VLM_PROMPT}]
         user_content.extend(images)
+
+        port = os.environ.get("LITELLM_PORT", "4000")
+        master_key = os.environ.get("LITELLM_MASTER_KEY", "sk-codefreedom-local")
 
         self._in_vlm_call = True
         try:
-            import litellm
+            import httpx
 
-            response = await litellm.acompletion(
-                model=model,
-                messages=[{"role": "user", "content": user_content}],
-                stream=False,
-            )
-            if response and response.choices:
-                content = response.choices[0].message.content
-                if content:
-                    return str(content)
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    f"http://127.0.0.1:{port}/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {master_key}"},
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": user_content}],
+                        "stream": False,
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices:
+                        msg = choices[0].get("message", {})
+                        # Prefer content; fall back to reasoning_content for
+                        # models that return content=null when thinking is on.
+                        text = msg.get("content") or msg.get("reasoning_content")
+                        if text:
+                            return str(text)
+                else:
+                    self._warn(
+                        f"vlm-error:{model}",
+                        f"VLM {model!r} returned HTTP {resp.status_code}: {resp.text[:200]}",
+                    )
         except Exception as exc:
             self._warn(
                 f"vlm-error:{model}",

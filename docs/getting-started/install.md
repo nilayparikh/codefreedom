@@ -46,7 +46,7 @@ Two prerequisites, one command.
 $ pip install codefreedom
 Resolved 3 packages in 320ms
 Installed 1 package in 3ms
- + codefreedom==0.1.6
+ + codefreedom==0.1.7
 ```
 
 ## Verify
@@ -56,7 +56,7 @@ codefreedom --version
 codefreedom --help
 ```
 
-You should see the version and a list of commands: `claude`, `proxy`, `tools`, `admin`, `vscode`, `update`.
+You should see the version and a list of commands: `setup`, `run`, `manage`.
 
 ## Upgrade
 

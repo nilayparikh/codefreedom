@@ -17,15 +17,15 @@ The proxy is a local server (`localhost:4000`) that routes your code agent's req
 ## Quick Start
 
 ```bash
-cf init                       # Install _default recipe (creates proxy config)
-codefreedom proxy start              # Start the proxy
-codefreedom proxy status             # Check it's running
+cf setup init                   # Install _default recipe (creates proxy config)
+codefreedom run proxy start          # Start the proxy
+codefreedom run proxy status         # Check it's running
 ```
 
 ### What It Looks Like
 
 ```bash
-$ codefreedom proxy start
+$ codefreedom run proxy start
 Pulling proxy...
 Starting proxy...
 [OK] Proxy ready at http://localhost:4000
@@ -34,20 +34,20 @@ Starting proxy...
 ## Commands
 
 ```bash
-codefreedom proxy start              # Start
-codefreedom proxy stop               # Stop
-codefreedom proxy restart            # Restart (preserves state)
-codefreedom proxy status             # Check status
-codefreedom proxy validate           # Check config
+codefreedom run proxy start          # Start
+codefreedom run proxy stop           # Stop
+codefreedom run proxy restart        # Restart (preserves state)
+codefreedom run proxy status         # Check status
+codefreedom run proxy validate       # Check config
 ```
 
-Short alias: `cf px` = `codefreedom proxy`.
+Short alias: `cf run proxy` = `codefreedom run proxy`.
 
 ### Override Port
 
 ```bash
-codefreedom proxy start --port 4001  # Use port 4001 instead of 4000
-codefreedom proxy start --host 127.0.0.1  # Bind to localhost only
+codefreedom run proxy start --port 4001  # Use port 4001 instead of 4000
+codefreedom run proxy start --host 127.0.0.1  # Bind to localhost only
 ```
 
 ## How It Routes
@@ -74,13 +74,13 @@ LITELLM_MODEL_ALIAS_OPUS_1M="DeepSeek/DeepSeek-V4-Pro"
 LITELLM_MODEL_ALIAS_OPUSPLAN="DeepSeek/DeepSeek-V4-Pro"
 ```
 
-Then in Claude Code, reference these aliases via profile selection (e.g. `codefreedom claude --profile best` or `codefreedom claude --profile sonnet`).
+Then in Claude Code, reference these aliases via profile selection (e.g. `codefreedom run agent claude --profile best` or `codefreedom run agent claude --profile sonnet`).
 
 ## Add a Provider
 
 1. Add your API key to `~/.codefreedom/.env.proxy.secrets`
 2. Uncomment the provider in `~/.codefreedom/proxy/config/config.yaml`
-3. Restart: `codefreedom proxy restart`
+3. Restart: `codefreedom run proxy restart`
 
 See [Providers](../recipes/providers/index.md) for step-by-step guides for each provider.
 

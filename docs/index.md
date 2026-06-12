@@ -61,10 +61,10 @@ CodeFreedom gives you that.
 ## How It Works
 
 ```
-You → codefreedom claude → LiteLLM Proxy → Your chosen AI model
+You → codefreedom run agent claude → LiteLLM Proxy → Your chosen AI model
 ```
 
-1. You run `codefreedom claude`
+1. You run `codefreedom run agent claude`
 2. CodeFreedom sets up environment variables from your profile
 3. Claude Code talks to your local proxy at `localhost:4000`
 4. The proxy routes the request to whichever AI model you configured
@@ -77,9 +77,9 @@ Four commands, five minutes:
 
 ```bash
 pip install codefreedom          # Install
-cf init                   # Set up config via recipe
-codefreedom proxy start          # Start the proxy
-codefreedom claude               # Launch Claude Code
+cf setup init                    # Set up config via recipe
+codefreedom run proxy start      # Start the proxy
+codefreedom run agent claude     # Launch Claude Code
 ```
 
 [Get started step by step →](getting-started/install.md)

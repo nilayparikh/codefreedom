@@ -30,8 +30,11 @@ Hooks used
 
 from __future__ import annotations
 
+import glob
 import os
 from typing import Any, Dict, List, Optional, Union
+
+import yaml
 
 try:
     from litellm.integrations.custom_logger import CustomLogger
@@ -45,6 +48,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _merge_system_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Merge consecutive system messages into a single system message.
@@ -102,6 +106,7 @@ def _merge_system_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any
 # Plugin class
 # ---------------------------------------------------------------------------
 
+
 class SystemMessageMergerLogger(CustomLogger):
     """Merge multiple system messages into one for models that require it."""
 
@@ -115,6 +120,7 @@ class SystemMessageMergerLogger(CustomLogger):
     def __init__(
         self,
         config_path: Optional[str] = None,
+        proxy_config_dir: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         if hasattr(self, "_initialized"):
@@ -124,7 +130,10 @@ class SystemMessageMergerLogger(CustomLogger):
             "/app/litellm-config/plugins/system-message-merger/"
             "system-message-merger.yaml"
         )
+        self._proxy_config_dir = proxy_config_dir or "/app/litellm-config/providers"
         self._enabled_models: Optional[set] = None
+        self._model_codefreedom_cache: Dict[str, Dict[str, Any]] = {}
+        self._codes_loaded = False
         self._warned: set = set()
         self._initialized = True
 
@@ -135,11 +144,9 @@ class SystemMessageMergerLogger(CustomLogger):
             return self._enabled_models
 
         try:
-            import yaml
-
             with open(self._config_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
-        except (OSError, yaml.YAMLError, ImportError):
+        except (OSError, yaml.YAMLError):
             data = {}
 
         models = set()
@@ -154,6 +161,36 @@ class SystemMessageMergerLogger(CustomLogger):
         self._enabled_models = models
         return models
 
+    def _load_provider_codefreedom(self) -> Dict[str, Dict[str, Any]]:
+        """Read all provider YAMLs and build model_name -> codefreedom cache.
+
+        The ``codefreedom`` block sits at the top level of each model
+        entry in the provider YAML (sibling of ``litellm_params`` and
+        ``model_info``), so it is NOT reachable via the request-time
+        ``data["litellm_params"]`` dict.  We read the files directly.
+        """
+        if self._codes_loaded:
+            return self._model_codefreedom_cache
+        self._codes_loaded = True
+        if not os.path.isdir(self._proxy_config_dir):
+            return self._model_codefreedom_cache
+        for yp in glob.glob(os.path.join(self._proxy_config_dir, "*.yaml")):
+            try:
+                with open(yp, "r", encoding="utf-8") as f:
+                    provider_data = yaml.safe_load(f) or {}
+            except (OSError, yaml.YAMLError):
+                continue
+            if not isinstance(provider_data, dict):
+                continue
+            for entry in provider_data.get("model_list", []) or []:
+                if not isinstance(entry, dict):
+                    continue
+                name = entry.get("model_name")
+                cf = entry.get("codefreedom")
+                if isinstance(name, str) and isinstance(cf, dict):
+                    self._model_codefreedom_cache[name] = cf
+        return self._model_codefreedom_cache
+
     def _is_enabled(self, model: Optional[str], data: Dict[str, Any]) -> bool:
         # Source 1: per-model plugin config from litellm_params.model_info
         lp = data.get("litellm_params") or {}
@@ -167,7 +204,20 @@ class SystemMessageMergerLogger(CustomLogger):
             if merger_cfg.get("enabled") is False:
                 return False
 
-        # Source 2: YAML config file
+        # Source 2: provider YAML files (codefreedom at model-entry level)
+        if model:
+            codes = self._load_provider_codefreedom()
+            entry_cf = codes.get(model)
+            if isinstance(entry_cf, dict):
+                entry_plugins = entry_cf.get("plugins") or {}
+                entry_merger = entry_plugins.get("system-message-merger")
+                if isinstance(entry_merger, dict):
+                    if entry_merger.get("enabled") is True:
+                        return True
+                    if entry_merger.get("enabled") is False:
+                        return False
+
+        # Source 3: YAML config file
         enabled = self._load_enabled_models()
         if enabled and model and model.lower() in enabled:
             return True
