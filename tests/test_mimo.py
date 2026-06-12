@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import stat
+import sys
 from pathlib import Path
+
+import pytest
 
 
 class TestGenerateMimoConfig:
@@ -151,6 +154,9 @@ class TestWriteMimoConfig:
         config_path = _write_mimo_config(config, nested)
         assert config_path.exists()
 
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Unix permissions not applicable on Windows"
+    )
     def test_sets_secure_permissions(self, tmp_path: Path):
         """Generated config file has 0o600 permissions (owner read/write only)."""
         from codefreedom.cli.mimo import _write_mimo_config

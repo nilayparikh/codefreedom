@@ -23,6 +23,7 @@ Designed to catch issues like the PostgreSQL ``initdb`` permission error:
 from __future__ import annotations
 
 import os
+import sys
 import shutil
 import stat
 import subprocess
@@ -395,20 +396,32 @@ def _check_pg_data_dir() -> CheckResult:
         # has uid 1000 inside the container. If the host uid maps to
         # something else, check if the directory is world-writable or
         # if the uid matches the host user running CodeFreedom.
-        host_uid = os.getuid()
+        if sys.platform != "win32":
+            host_uid = os.getuid()
+        else:
+            host_uid = None
 
         issues = []
-        if uid != host_uid and uid != 1000:
-            issues.append(
-                f"owned by uid {uid} (container expects uid 1000 or your uid {host_uid})"
-            )
-        if not (mode & stat.S_IWOTH or mode & stat.S_IWUSR or uid == host_uid):
-            issues.append("not writable by the container's user")
+        if host_uid is not None:
+            if uid != host_uid and uid != 1000:
+                issues.append(
+                    f"owned by uid {uid} (container expects uid 1000 or your uid {host_uid})"
+                )
+            if not (mode & stat.S_IWOTH or mode & stat.S_IWUSR or uid == host_uid):
+                issues.append("not writable by the container's user")
+        else:
+            if not (mode & stat.S_IWOTH or mode & stat.S_IWUSR):
+                issues.append("not writable")
 
         if issues:
+            fix = (
+                f"Fix: sudo chown -R {host_uid} {pg_data}  OR  sudo chmod -R 777 {pg_data}"
+                if host_uid is not None
+                else "Fix: adjust directory permissions"
+            )
             return _fail(
                 f"{pg_data}: {'; '.join(issues)}",
-                f"Fix: sudo chown -R {host_uid} {pg_data}  OR  sudo chmod -R 777 {pg_data}",
+                fix,
             )
         return _ok(f"{pg_data} is ready (uid {uid}, mode {oct(mode & 0o777)})")
 

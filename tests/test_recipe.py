@@ -729,6 +729,7 @@ class TestResolveStore:
     def test_local_path_with_expanduser(self, tmp_path, monkeypatch):
         """~ expansion works correctly."""
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         home_dir = tmp_path
         (home_dir / "my-recipes").mkdir()
 
