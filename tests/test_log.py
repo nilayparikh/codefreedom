@@ -1,4 +1,3 @@
-import pytest
 from codefreedom.log import eprint
 import sys
 from io import StringIO

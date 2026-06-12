@@ -69,9 +69,8 @@ Full resolution order (later sources override earlier):
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 from codefreedom.interpolate import resolve_env_vars
 
