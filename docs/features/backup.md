@@ -10,7 +10,7 @@ Protect your `~/.codefreedom/` configuration. Backup, restore, and clean up old 
 ## Backup
 
 ```bash
-codefreedom admin backup
+codefreedom manage admin backup
 ```
 
 Saves to `~/.codefreedom/backup/` with a timestamped filename:
@@ -22,9 +22,9 @@ codefreedom-backup-default-20260604-143022-my-workstation.tar.gz
 ### Options
 
 ```bash
-codefreedom admin backup --out /tmp/snapshot.tar.gz    # Custom path
-codefreedom admin backup --profile work-profile         # Tag with profile name
-codefreedom admin backup --passphrase "my-secret"       # Encrypt with AES-256
+codefreedom manage admin backup --out /tmp/snapshot.tar.gz    # Custom path
+codefreedom manage admin backup --profile work-profile         # Tag with profile name
+codefreedom manage admin backup --passphrase "my-secret"       # Encrypt with AES-256
 ```
 
 ### What Gets Backed Up
@@ -42,7 +42,7 @@ codefreedom admin backup --passphrase "my-secret"       # Encrypt with AES-256
 ## Restore
 
 ```bash
-codefreedom admin restore /path/to/backup.tar.gz
+codefreedom manage admin restore /path/to/backup.tar.gz
 ```
 
 Shows a diff before making changes:
@@ -58,16 +58,16 @@ Shows a diff before making changes:
 ### Restore Options
 
 ```bash
-codefreedom admin restore backup.tar.gz --dry-run   # Preview only
-codefreedom admin restore backup.tar.gz --force     # Skip confirmation
-codefreedom admin restore backup.tar.gz --passphrase "my-secret"  # Encrypted
+codefreedom manage admin restore backup.tar.gz --dry-run   # Preview only
+codefreedom manage admin restore backup.tar.gz --force     # Skip confirmation
+codefreedom manage admin restore backup.tar.gz --passphrase "my-secret"  # Encrypted
 ```
 
 ## List Backups
 
 ```bash
-codefreedom admin list-backups
-codefreedom admin ls    # Short alias
+codefreedom manage admin list-backups
+codefreedom manage admin ls    # Short alias
 ```
 
 ```
@@ -79,7 +79,7 @@ codefreedom admin ls    # Short alias
 ## Inspect a Backup
 
 ```bash
-codefreedom admin inspect /path/to/backup.tar.gz
+codefreedom manage admin inspect /path/to/backup.tar.gz
 ```
 
 See what's inside without extracting.
@@ -87,9 +87,9 @@ See what's inside without extracting.
 ## Clean Up Old Backups
 
 ```bash
-codefreedom admin prune --keep 5           # Keep 5 most recent
-codefreedom admin prune --older-than 30d   # Delete backups older than 30 days
-codefreedom admin prune --keep 3 --older-than 90d   # Both
+codefreedom manage admin prune --keep 5           # Keep 5 most recent
+codefreedom manage admin prune --older-than 30d   # Delete backups older than 30 days
+codefreedom manage admin prune --keep 3 --older-than 90d   # Both
 ```
 
 Duration suffixes: `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (weeks).
@@ -97,6 +97,6 @@ Duration suffixes: `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (w
 ## Short Alias
 
 ```bash
-codefreedom admin backup    # or
-cf adm backup
+codefreedom manage admin backup    # or
+cf manage adm backup
 ```

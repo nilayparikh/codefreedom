@@ -141,8 +141,8 @@ Free models use the same provider YAML pattern as paid providers. The only diffe
 
 1. **Enable the provider** -- uncomment the models in the provider YAML file.
 2. **Set the API key** -- use the key from your provider (OpenRouter, OpenCode Zen, NVIDIA, etc.).
-3. **Start the proxy** -- `codefreedom proxy start` or `codefreedom proxy start --docker`.
-4. **Launch** -- `codefreedom claude` routes through your configured free models.
+3. **Start the proxy** -- `codefreedom run proxy start`.
+4. **Launch** -- `codefreedom run agent claude` routes through your configured free models.
 
 See [Providers](../recipes/providers/index.md) for the full provider configuration guide.
 

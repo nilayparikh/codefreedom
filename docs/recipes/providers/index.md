@@ -42,4 +42,4 @@ Source YAML files live at `~/.codefreedom/proxy/config/providers/` (after recipe
 1. **Uncomment** the model entries in the provider YAML file.
 2. **Ensure** the file is in the `include` list in `config.yaml`.
 3. **Set the API key** in `~/.codefreedom/.env.proxy.secrets`.
-4. **Restart** the proxy: `codefreedom proxy restart`.
+4. **Restart** the proxy: `codefreedom run proxy restart`.

@@ -21,7 +21,6 @@ from codefreedom.recipe.store import (
     RECIPE_REPO,
 )
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Public API
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -112,7 +111,9 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     extends = manifest.get("extends")
     if extends:
         eprint(f"[RECIPE] Installing base recipe '{extends}' first...")
-        base_manifest, base_files = _store_resolve_recipe(extends, store_path=store_path)
+        base_manifest, base_files = _store_resolve_recipe(
+            extends, store_path=store_path
+        )
         if base_manifest is None:
             eprint(
                 f"[RECIPE] Warning: base recipe '{extends}' not found — continuing without it."
@@ -357,7 +358,7 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         dest = cf_dir / d
         print(f"[plan]   {'MKDIR'.ljust(8)} {'recipe'.ljust(12)} {dest}/")
     print("[plan]")
-    print(f"[plan] To apply:  cf init --apply {plan_id}")
+    print(f"[plan] To apply:  cf setup init --apply {plan_id}")
     print(f"[plan] To review: cat {plans_dir}/<patch-file>.diff")
     return 0
 

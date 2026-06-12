@@ -21,7 +21,7 @@ It orchestrates code agents through their **publicly supported interfaces** (env
 
 CodeFreedom works with any code agent that supports OpenAI-compatible or Anthropic-compatible APIs — Claude Code, Cursor, Codex CLI, VS Code extensions, and more. The architecture is agent-agnostic: each agent gets a subcommand, profile, and routes through the same proxy.
 
-Currently, **Claude Code** is the fully implemented agent. Adding a new agent is a matter of profile + subcommand — the proxy, sandbox, and tooling layers are shared.
+Currently, **Claude Code** and **MiMoCode** are the fully implemented agents. Adding a new agent is a matter of profile + subcommand — the proxy, sandbox, and tooling layers are shared.
 
 ## Web Search
 
@@ -65,7 +65,7 @@ pip install codefreedom
 ### Initialize
 
 ```bash
-codefreedom --init
+cf setup init
 ```
 
 Creates `~/.codefreedom/` with default profiles, proxy configs, and provider templates.
@@ -74,17 +74,17 @@ Creates `~/.codefreedom/` with default profiles, proxy configs, and provider tem
 
 ```bash
 # Launch Claude Code through the proxy
-codefreedom claude
+codefreedom run agent claude
 
 # Launch in a sandboxed container
-codefreedom claude --sandbox
+codefreedom run agent claude --sandbox
 
 # Use GPU images
-codefreedom claude --sandbox --cuda   # NVIDIA
-codefreedom claude --sandbox --rocm   # AMD
+codefreedom run agent claude --sandbox --cuda   # NVIDIA
+codefreedom run agent claude --sandbox --rocm   # AMD
 ```
 
-Short aliases: `cf cc` is equivalent to `codefreedom claude`.
+Short aliases: `cf run agent claude` is equivalent to `codefreedom run agent claude`.
 
 See the [Getting Started guide](https://nilayparikh.github.io/codefreedom/) for proxy setup, custom profiles, browser tools, and more.
 
@@ -93,7 +93,7 @@ See the [Getting Started guide](https://nilayparikh.github.io/codefreedom/) for 
 | Feature             | Details                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------- |
 | LLM proxy           | Self-hosted `codefreedom:litellm-latest` image (embedded PostgreSQL, multi-provider routing) |
-| Code agent launcher | `codefreedom claude` CLI -- local + sandbox modes                                           |
+| Code agent launcher | `codefreedom run agent claude` CLI -- local + sandbox modes                                 |
 | Sandboxing          | Pre-configured containers (CUDA, ROCm, Ubuntu)                                              |
 | Profile management  | Model switching, env inheritance, isolation                                                 |
 | Browser tools       | Chrome (CDP) + Camoufox (MCP) for web automation                                            |

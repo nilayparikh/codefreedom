@@ -14,18 +14,18 @@ VS Code's built-in Copilot Chat supports custom OpenAI-compatible endpoints. Cod
 ### Step 1: Start the Proxy
 
 ```bash
-codefreedom proxy start
-codefreedom proxy status
+codefreedom run proxy start
+codefreedom run proxy status
 ```
 
 ### Step 2: Generate the Config
 
 ```bash
 # On the same machine as VS Code
-codefreedom config vscode proxy config --host localhost
+codefreedom setup config vscode proxy config --host localhost
 
 # On a different machine (LAN/VPN)
-codefreedom config vscode proxy config --host 192.168.1.42
+codefreedom setup config vscode proxy config --host 192.168.1.42
 ```
 
 This prints a JSON fragment to stdout.
@@ -62,9 +62,9 @@ The [Claude Code VS Code extension](https://marketplace.visualstudio.com/items?i
 ### Step 1: Generate
 
 ```bash
-codefreedom config vscode claude config              # Default profile
-codefreedom config vscode claude config --profile ultra   # Specific profile
-codefreedom config vscode claude config --host proxy.lan --port 4000  # Remote proxy
+codefreedom setup config vscode claude config              # Default profile
+codefreedom setup config vscode claude config --profile ultra   # Specific profile
+codefreedom setup config vscode claude config --host proxy.lan --port 4000  # Remote proxy
 ```
 
 ### Step 2: Merge into VS Code
