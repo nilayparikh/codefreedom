@@ -11,7 +11,7 @@ Camoufox web_search tool.  LiteLLM's websearch_interception routes Claude
 Code's native WebSearch through this bridge.
 
 Settings are loaded from ~/.codefreedom/profiles/web-bridge.yaml.
-Use `cf init recipe` to initialize.
+Use `cf init` to initialize.
 """
 
 from __future__ import annotations
@@ -20,9 +20,8 @@ import argparse
 import subprocess
 from pathlib import Path
 
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 from codefreedom.cli.docker_utils import (
-    container_exists,
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
@@ -171,22 +170,14 @@ def restart(settings: dict) -> int:
 
 def status(settings: dict) -> int:
     """Show web-bridge container status. Returns exit code."""
-    container_name = settings["container_name"]
+    from codefreedom.cli.docker_utils import status_tool_container
+
     port = settings["port"]
-
-    if container_is_running(container_name):
-        eprint(f"[WEB-BRIDGE] Container '{container_name}' is running.")
-        eprint(f"[WEB-BRIDGE] SearXNG endpoint: http://127.0.0.1:{port}/search")
-        eprint(f"[WEB-BRIDGE] Health: http://127.0.0.1:{port}/healthz")
-        return 0
-
-    if container_exists(container_name):
-        eprint(f"[WEB-BRIDGE] Container '{container_name}' exists but is not running.")
-        return 1
-
-    eprint("[WEB-BRIDGE] No web-bridge container found.")
-    eprint("   Use: cf tools start.")
-    return 1
+    extra = (
+        f"[WEB-BRIDGE] SearXNG endpoint: http://127.0.0.1:{port}/search\n"
+        f"[WEB-BRIDGE] Health: http://127.0.0.1:{port}/healthz"
+    )
+    return status_tool_container(settings, "WEB-BRIDGE", extra_info=extra)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -194,17 +185,12 @@ def run(args: argparse.Namespace) -> int:
     settings = _load_profile()
 
     action = args.action or "status"
+    from codefreedom.cli.common import run_tool_action
 
-    if action == "start":
-        return start(settings)
-    elif action == "stop":
-        return stop(settings)
-    elif action == "restart":
-        return restart(settings)
-    elif action == "status":
-        return status(settings)
-    else:
-        eprint(f"[ERROR] Unknown action: {action}.")
-        eprint("   Valid actions: start, stop, restart, status.")
-        return 1
-        return 1
+    return run_tool_action(
+        action,
+        start_fn=lambda: start(settings),
+        stop_fn=lambda: stop(settings),
+        restart_fn=lambda: restart(settings),
+        status_fn=lambda: status(settings),
+    )

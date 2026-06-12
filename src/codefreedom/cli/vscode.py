@@ -1,8 +1,8 @@
 """VS Code subcommand -- generate config fragments for VS Code.
 
 Usage:
-    codefreedom vscode claude config [--profile NAME] [--host HOST] [--port PORT] [--out PATH]
-    codefreedom vscode proxy config --host HOST [--port PORT] [--name NAME] [--out PATH]
+    codefreedom config vscode claude config [--profile NAME] [--host HOST] [--port PORT] [--out PATH]
+    codefreedom config vscode proxy config --host HOST [--port PORT] [--name NAME] [--out PATH]
 
 Generates two different kinds of VS Code configuration:
 
@@ -29,7 +29,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from codefreedom.env_loader import eprint, load_env_chain
+from codefreedom.log import eprint
+from codefreedom.env_loader import load_env_chain
 from codefreedom.profiles import ProfileError, load_profile_env, load_profiles
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -315,7 +316,7 @@ def _resolve_profiles_path() -> Path:
 def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
     """Generate a VS Code settings.json fragment for the Claude Code extension.
 
-    Entry point for ``codefreedom vscode claude config``.  Mirrors the local
+    Entry point for ``codefreedom config vscode claude config``.  Mirrors the local
     (no-sandbox) mode of `codefreedom claude`: loads the named profile with
     local-mode overrides applied, then renders a fragment with
     ``claudeCode.environmentVariables`` plus other sensible
@@ -655,7 +656,7 @@ def _build_vscode_entry(
 def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     """Generate a chatLanguageModels.json entry from the running proxy.
 
-    Entry point for ``codefreedom vscode proxy config``.  Probes the proxy
+    Entry point for ``codefreedom config vscode proxy config``.  Probes the proxy
     at /health/liveliness, fetches /v1/model/info with LITELLM_MASTER_KEY,
     and emits a JSON object that can be dropped into VS Code's user-level
     ``chatLanguageModels.json`` file (a list of provider entries).

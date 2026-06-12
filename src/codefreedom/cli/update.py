@@ -32,7 +32,7 @@ from urllib.request import Request, urlopen
 import yaml
 
 from codefreedom.config import get_codefreedom_dir
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 

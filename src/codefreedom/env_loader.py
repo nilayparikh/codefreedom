@@ -73,9 +73,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from codefreedom.interpolate import resolve_env_vars
-
-
-from codefreedom.log import eprint  # noqa: F401
+from codefreedom.log import eprint
 
 
 def load_dotenv(path: Path) -> Dict[str, str]:

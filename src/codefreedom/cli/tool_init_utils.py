@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Dict
 
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 
 # ── Tool metadata ────────────────────────────────────────────────────────────
 

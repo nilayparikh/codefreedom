@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 import yaml
 from pydantic import ValidationError
 
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 from codefreedom.interpolate import resolve_env_vars
 from codefreedom.schemas.profiles import ClaudeCodeProfiles
 

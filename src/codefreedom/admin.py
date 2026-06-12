@@ -47,7 +47,7 @@ from typing import Dict, List, Optional, Tuple
 
 from codefreedom import __version__
 from codefreedom.config import get_backup_dir, get_codefreedom_dir
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 
 # ── Optional cryptography ─────────────────────────────────────────────────────
 

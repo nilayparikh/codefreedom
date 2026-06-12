@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 from typing import Callable
 
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 from codefreedom.cli.docker_utils import container_is_running
 from codefreedom.cli.chrome import (
     _load_profile as chrome_load_profile,

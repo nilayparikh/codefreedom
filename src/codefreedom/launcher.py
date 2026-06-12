@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from codefreedom.config import get_codefreedom_dir
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 from codefreedom.tool_registry import load_tool_mcp_endpoints
 
 # ── Constants ──────────────────────────────────────────────────────────────────

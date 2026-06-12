@@ -1,4 +1,4 @@
-"""Recipe subsystem for ``cf init --recipe <name>``.
+"""Recipe subsystem for ``cf init --plan <name>``.
 
 Fetches predefined configuration recipes from the codefreedom-recipes
 GitHub repository, then applies them to ``~/.codefreedom/`` with
@@ -77,7 +77,7 @@ import yaml
 
 from codefreedom.admin import backup as cf_backup
 from codefreedom.config import get_codefreedom_dir
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 from codefreedom.interpolate import interpolate_all_strings
 from pydantic import ValidationError
 
@@ -138,7 +138,7 @@ def list_recipes(store: Optional[str] = None, staging: bool = False) -> int:
     for name in recipes:
         eprint(f"   {name}")
     eprint("")
-    eprint("   Use:  cf init recipe --plan <name>")
+    eprint("   Use:  cf init --plan <name>")
     source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
     eprint(f"   Store: {source}")
     return 0
@@ -147,7 +147,7 @@ def list_recipes(store: Optional[str] = None, staging: bool = False) -> int:
 def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -> int:
     """Fetch and apply a recipe to ``~/.codefreedom/``.
 
-    This is the main entry point for ``cf init --recipe <name>``.
+    This is the main entry point for ``cf init --plan <name>``.
 
     Steps:
       1. Resolve custom store (if ``--store`` provided), then try
@@ -176,7 +176,7 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
             eprint(f"   Store: {source}")
             return 0
         eprint(f"[RECIPE] Recipe '{name}' not found.")
-        eprint("   Run 'cf init recipe --list' to see available recipes.")
+        eprint("   Run 'cf init --list' to see available recipes.")
         source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
         eprint(f"   Store: {source}")
         return 1
@@ -235,7 +235,7 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     manifest, files = _resolve_recipe(name, store_path=store_path)
     if manifest is None:
         print(f"[plan] Recipe '{name}' not found.")
-        print("       Run 'cf init recipe --list' to see available recipes.")
+        print("       Run 'cf init --list' to see available recipes.")
         return 1
 
     # ── 2. Resolve extends chain ───────────────────────────────────────
@@ -437,7 +437,7 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         dest = cf_dir / d
         print(f"[plan]   {'MKDIR'.ljust(8)} {'recipe'.ljust(12)} {dest}/")
     print("[plan]")
-    print(f"[plan] To apply:  cf init recipe --apply {plan_id}")
+    print(f"[plan] To apply:  cf init --apply {plan_id}")
     print(f"[plan] To review: cat {plans_dir}/<patch-file>.diff")
     return 0
 
@@ -1429,7 +1429,7 @@ def _ensure_user_env(cf_dir: Path) -> None:
         "# .env.user — User overrides (highest config priority)\n"
         "# ═══════════════════════════════════════════════════════════════════════════════\n"
         "#\n"
-        "# This file is created once by `cf init recipe` and is NEVER touched by\n"
+        "# This file is created once by `cf init` and is NEVER touched by\n"
         "# recipes again. It has the highest precedence of any config file — values\n"
         "# here override .env.proxy, .env.claude, .env, .env.secrets, and all recipe\n"
         "# defaults. Only the host OS environment (exported vars) can override it.\n"

@@ -7,7 +7,7 @@ Part of the unified tool group.  All tools are managed together:
     cf tools status    Show status of all tools
 
 Settings are loaded from ~/.codefreedom/profiles/chrome.yaml.
-Use `cf init recipe` to initialize.
+Use `cf init` to initialize.
 """
 
 from __future__ import annotations
@@ -16,9 +16,8 @@ import argparse
 import subprocess
 from pathlib import Path
 
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 from codefreedom.cli.docker_utils import (
-    container_exists,
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
@@ -206,24 +205,14 @@ def restart(settings: dict) -> int:
 
 def status(settings: dict) -> int:
     """Show Chrome container status. Returns exit code."""
-    container_name = settings["container_name"]
+    from codefreedom.cli.docker_utils import status_tool_container
+
     port = settings["port"]
-
-    if container_is_running(container_name):
-        eprint(f"[CHROME] Container '{container_name}' is running.")
-        eprint(f"[CHROME] CDP debug URL: http://127.0.0.1:{port}")
-        eprint(
-            f"[CHROME] DevTools: devtools://devtools/bundled/inspector.html?ws=127.0.0.1:{port}"
-        )
-        return 0
-
-    if container_exists(container_name):
-        eprint(f"[CHROME] Container '{container_name}' exists but is not running.")
-        return 1
-
-    eprint("[CHROME] No Chrome container found.")
-    eprint("   Use: cf tools start.")
-    return 0
+    extra = (
+        f"[CHROME] CDP debug URL: http://127.0.0.1:{port}\n"
+        f"[CHROME] DevTools: devtools://devtools/bundled/inspector.html?ws=127.0.0.1:{port}"
+    )
+    return status_tool_container(settings, "CHROME", extra_info=extra)
 
 
 def url(settings: dict) -> int:
@@ -253,18 +242,13 @@ def run(args: argparse.Namespace) -> int:
         settings["port"] = args.port
 
     action = args.action or "status"
+    from codefreedom.cli.common import run_tool_action
 
-    if action == "start":
-        return start(settings)
-    elif action == "stop":
-        return stop(settings)
-    elif action == "restart":
-        return restart(settings)
-    elif action == "status":
-        return status(settings)
-    elif action == "url":
-        return url(settings)
-    else:
-        eprint(f"[ERROR] Unknown action: {action}")
-        eprint("   Valid actions: start, stop, restart, status, url")
-        return 1
+    return run_tool_action(
+        action,
+        start_fn=lambda: start(settings),
+        stop_fn=lambda: stop(settings),
+        restart_fn=lambda: restart(settings),
+        status_fn=lambda: status(settings),
+        url_fn=lambda: url(settings),
+    )

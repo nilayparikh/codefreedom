@@ -11,7 +11,7 @@ HTTP MCP endpoint on port 8082.  Coding agents connect via
 http://127.0.0.1:8082/mcp just like the chrome and web tools.
 
 Settings are loaded from ~/.codefreedom/profiles/github.yaml.
-Use `cf init recipe` to initialize.
+Use `cf init` to initialize.
 """
 
 from __future__ import annotations
@@ -22,9 +22,8 @@ import socket
 import subprocess
 from pathlib import Path
 
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 from codefreedom.cli.docker_utils import (
-    container_exists,
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
@@ -226,22 +225,15 @@ def restart(settings: dict) -> int:
 
 def status(settings: dict) -> int:
     """Show GitHub MCP container status. Returns exit code."""
+    from codefreedom.cli.docker_utils import status_tool_container
+
     container_name = settings["container_name"]
-
-    if container_is_running(container_name):
-        port = _get_mapped_port(container_name) or "?"
-        eprint(f"[GITHUB] Container '{container_name}' is running.")
-        eprint(f"[GITHUB] MCP endpoint: http://127.0.0.1:{port}/mcp")
-        eprint("[GITHUB] Tools: GitHub API operations (issues, PRs, repos, etc.).")
-        return 0
-
-    if container_exists(container_name):
-        eprint(f"[GITHUB] Container '{container_name}' exists but is not running.")
-        return 1
-
-    eprint("[GITHUB] No GitHub MCP container found.")
-    eprint("   Use: cf tools start.")
-    return 1
+    port = _get_mapped_port(container_name) or "?"
+    extra = (
+        f"[GITHUB] MCP endpoint: http://127.0.0.1:{port}/mcp\n"
+        f"[GITHUB] Tools: GitHub API operations (issues, PRs, repos, etc.)."
+    )
+    return status_tool_container(settings, "GITHUB", extra_info=extra)
 
 
 # ── Entry point ──────────────────────────────────────────────────────────
@@ -254,15 +246,13 @@ def run(args: argparse.Namespace) -> int:
     if getattr(args, "port", None) and args.port != _DEFAULT_PORT:
         settings["port"] = args.port
 
-    if args.action == "start":
-        return start(settings)
-    elif args.action == "stop":
-        return stop(settings)
-    elif args.action == "restart":
-        return restart(settings)
-    elif args.action == "status":
-        return status(settings)
-    else:
-        eprint(f"[ERROR] Unknown action: {args.action}.")
-        eprint("   Valid actions: start, stop, restart, status.")
-        return 1
+    action = args.action or "status"
+    from codefreedom.cli.common import run_tool_action
+
+    return run_tool_action(
+        action,
+        start_fn=lambda: start(settings),
+        stop_fn=lambda: stop(settings),
+        restart_fn=lambda: restart(settings),
+        status_fn=lambda: status(settings),
+    )

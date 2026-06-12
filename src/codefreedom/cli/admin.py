@@ -29,7 +29,7 @@ from codefreedom.admin import (
     prune_backups as engine_prune,
     restore as engine_restore,
 )
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 
 # ── Arg parser ────────────────────────────────────────────────────────────────
 

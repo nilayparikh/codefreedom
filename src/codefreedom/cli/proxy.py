@@ -1,7 +1,6 @@
 """Proxy subcommand -- manage the LLM routing proxy (Docker Compose only).
 
 Usage:
-    codefreedom proxy init                  Initialize proxy configs
     codefreedom proxy start                Start the proxy (Docker Compose)
     codefreedom proxy stop                 Stop the proxy
     codefreedom proxy restart              Restart the proxy (Docker Compose)
@@ -15,7 +14,7 @@ which bakes in the WebSearch count display patch.  The web-bridge is now a
 standalone tool (``cf tools web-bridge``) — start it separately before the
 proxy if you need WebSearch support.
 
-VS Code integration: see `codefreedom vscode proxy config`.
+VS Code integration: see `codefreedom config vscode proxy config`.
 """
 
 from __future__ import annotations
@@ -27,7 +26,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from codefreedom.config import get_codefreedom_dir
-from codefreedom.env_loader import eprint, get_env, load_dotenv
+from codefreedom.log import eprint
+from codefreedom.env_loader import get_env, load_dotenv
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ def run(args: argparse.Namespace) -> int:
         return _status()
     elif action == "validate":
         return _validate()
-    # `vscode` moved to the top-level `codefreedom vscode proxy config`
+    # `vscode` moved to `codefreedom config vscode proxy config`
     # subcommand -- see codefreedom.cli.vscode.
     else:
         eprint(
@@ -269,7 +269,7 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
-        eprint("   Run: codefreedom proxy init")
+        eprint("   Run: cf init")
         return 1
 
     eprint(f"[PROXY] Starting LiteLLM via Docker Compose ({compose_file})...")
@@ -354,7 +354,7 @@ def _stop() -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
-        eprint("   Run: codefreedom proxy init")
+        eprint("   Run: cf init")
         return 1
 
     eprint("[PROXY] Stopping LiteLLM proxy...")
@@ -384,7 +384,7 @@ def _restart() -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
-        eprint("   Run: codefreedom proxy init")
+        eprint("   Run: cf init")
         return 1
 
     eprint(f"[PROXY] Restarting LiteLLM via Docker Compose ({compose_file})...")
@@ -422,7 +422,7 @@ def _status() -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
-        eprint("   Run: codefreedom proxy init")
+        eprint("   Run: cf init")
         return 1
 
     compose_env = _build_compose_env()
@@ -497,7 +497,7 @@ def _validate() -> int:
     config_file = _find_config_file()
     if not config_file:
         eprint("[ERROR] Could not find ~/.codefreedom/proxy/config/config.yaml")
-        eprint("   Run: codefreedom proxy init")
+        eprint("   Run: cf init")
         return 1
 
     errors: List[str] = []

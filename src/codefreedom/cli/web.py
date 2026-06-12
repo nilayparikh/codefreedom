@@ -11,7 +11,7 @@ The container runs an MCP-only server with two tools:
     web_fetch(url)    — fetch a page (bypasses anti-bot)
 
 Settings are loaded from ~/.codefreedom/profiles/web.yaml.
-Use `cf init recipe` to initialize.
+Use `cf init` to initialize.
 
 Search engines are configured in the profile's 'search_engines' field
 (each entry: {url, parser}) and passed to the container as the SEARCH_ENGINES
@@ -25,9 +25,8 @@ import json
 import subprocess
 from pathlib import Path
 
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 from codefreedom.cli.docker_utils import (
-    container_exists,
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
@@ -201,22 +200,11 @@ def restart(settings: dict) -> int:
 
 
 def status(settings: dict) -> int:
-    container_name = settings["container_name"]
+    from codefreedom.cli.docker_utils import status_tool_container
+
     port = settings["port"]
-
-    if container_is_running(container_name):
-        eprint(f"[WEB] Container '{container_name}' is running.")
-        eprint(f"[WEB] MCP endpoint: http://127.0.0.1:{port}/mcp")
-        eprint("[WEB] Tools: web_search, web_fetch.")
-        return 0
-
-    if container_exists(container_name):
-        eprint(f"[WEB] Container '{container_name}' exists but is not running.")
-        return 1
-
-    eprint("[WEB] No web container found.")
-    eprint("   Use: cf tools start.")
-    return 1
+    extra = f"[WEB] MCP endpoint: http://127.0.0.1:{port}/mcp\n[WEB] Tools: web_search, web_fetch."
+    return status_tool_container(settings, "WEB", extra_info=extra)
 
 
 # ── Entry point ──────────────────────────────────────────────────────────
@@ -229,15 +217,13 @@ def run(args: argparse.Namespace) -> int:
     if getattr(args, "port", None) and args.port != _DEFAULT_PORT:
         settings["port"] = args.port
 
-    if args.action == "start":
-        return start(settings)
-    elif args.action == "stop":
-        return stop(settings)
-    elif args.action == "restart":
-        return restart(settings)
-    elif args.action == "status":
-        return status(settings)
-    else:
-        eprint(f"[ERROR] Unknown action: {args.action}.")
-        eprint("   Valid actions: start, stop, restart, status.")
-        return 1
+    action = args.action or "status"
+    from codefreedom.cli.common import run_tool_action
+
+    return run_tool_action(
+        action,
+        start_fn=lambda: start(settings),
+        stop_fn=lambda: stop(settings),
+        restart_fn=lambda: restart(settings),
+        status_fn=lambda: status(settings),
+    )

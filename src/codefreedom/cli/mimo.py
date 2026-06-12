@@ -5,8 +5,8 @@ Auto-detects the running CodeFreedom LiteLLM proxy, generates a complete
 (``mimo``) with zero manual configuration.
 
 Usage:
-    codefreedom mimo [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
-    cf mc [same]
+    codefreedom agent mimo [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
+    codefreedom agent mimo [options] [-- <agent-args>]
 
 Proxy auto-config:
     - Detects the proxy at LITELLM_BASE_URL (default: http://localhost:4000)
@@ -32,16 +32,27 @@ from codefreedom.config import (
     get_codefreedom_dir,
     resolve_mimo_profiles_path,
 )
-from codefreedom.env_loader import eprint, load_env_chain
+from codefreedom.log import eprint
+from codefreedom.env_loader import load_env_chain
 from codefreedom.profiles import (
-    ProfileError,
-    get_profile_sandbox_images,
-    get_profile_tools,
     list_profiles,
-    load_profile_env,
-    load_profiles,
 )
-from codefreedom.tool_registry import acquire_tools, generate_session_id, release_tools
+from codefreedom.tool_registry import generate_session_id
+
+
+def register_args(parser: argparse.ArgumentParser) -> None:
+    """Register MiMo-specific arguments on the agent parser."""
+    parser.add_argument(
+        "--sandbox",
+        action="store_true",
+        help="Run inside a sandboxed Docker container (default: native)",
+    )
+    parser.add_argument(
+        "--run-as-me",
+        action="store_true",
+        help="Run sandbox container as host user (uid/gid match). Only valid with --sandbox.",
+    )
+
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -506,8 +517,8 @@ def init_mimo() -> int:
             "  cf proxy start",
             "",
             "To launch MiMoCode:",
-            "  cf mimo              # native mode",
-            "  cf mimo --sandbox    # isolated Docker sandbox",
+            "  cf agent mimo              # native mode",
+            "  cf agent mimo --sandbox    # isolated Docker sandbox",
         ],
         docs_url="https://github.com/XiaomiMiMo/MiMo-Code",
         include_disclaimer=False,
@@ -531,20 +542,14 @@ def cmd_config(args: argparse.Namespace) -> int:
     profile_name = getattr(args, "profile", None) or "default"
     profiles_path = resolve_mimo_profiles_path()
 
-    profile_env: Dict[str, str] = {}
-    if profiles_path.exists():
-        try:
-            profiles_dict = load_profiles(profiles_path)
-            profile_env = load_profile_env(
-                profile_name,
-                profiles_path,
-                base_env,
-                mode="local",
-                profiles=profiles_dict,
-            )
-        except ProfileError as exc:
-            eprint(f"[ERROR] {exc}")
-            return 1
+    from codefreedom.cli.common import load_profile_env_only
+
+    profile_env, exit_code = load_profile_env_only(
+        profile_name, profiles_path, base_env, error_prefix="cf proxy start"
+    )
+    if exit_code != 0 and profile_name != "default":
+        return 1
+    # For default profile, continue with empty profile_env
 
     # ── Ensure proxy API key is available ──────────────────────────────
     if not profile_env.get("PROXY_API_KEY"):
@@ -559,12 +564,9 @@ def cmd_config(args: argparse.Namespace) -> int:
     output = json.dumps(config, indent=2)
 
     if out_path:
-        out_file = Path(out_path)
-        out_file.parent.mkdir(parents=True, exist_ok=True)
-        out_file.write_text(output, encoding="utf-8")
-        out_file.chmod(0o600)
-        eprint(f"[CONFIG] Written to {out_file.resolve()}")
-        return 0
+        from codefreedom.cli.common import write_output_file
+
+        return write_output_file(output, out_path)
 
     print(output)
     return 0
@@ -663,26 +665,13 @@ def run(args: argparse.Namespace) -> int:
 
     # Fast-path flags
     if args.list_profiles:
+        from codefreedom.cli.common import display_profiles
+
         profiles_path = resolve_mimo_profiles_path()
         profiles = list_profiles(profiles_path)
-        if not profiles:
-            eprint("[PROFILES] No profiles found.")
-            return 0
-        eprint(f"[PROFILES] Available profiles ({profiles_path}):\n")
-        for p in profiles:
-            override_word = "override" if len(p["env_keys"]) == 1 else "overrides"
-            inheritance = (
-                "standalone"
-                if p["standalone"]
-                else f"inherits from 'default' — {len(p['env_keys'])} {override_word}"
-            )
-            eprint(f"  {p['name']}")
-            eprint(f"    {p['description']}")
-            eprint(f"    ({inheritance})")
-            if p.get("tools"):
-                eprint(f"    tools: {', '.join(p['tools'])}")
-            eprint()
-        return 0
+        return display_profiles(
+            profiles_path, profiles, show_env_keys=False, show_tools=True
+        )
 
     # Actions
     action = getattr(args, "mimo_action", None)
@@ -697,34 +686,15 @@ def run(args: argparse.Namespace) -> int:
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
     profiles_path = resolve_mimo_profiles_path()
-
-    profile_env: Dict[str, str] = {}
-    sandbox_images: Dict[str, str] = {}
-    tools: List[str] = []
     mode = "sandbox" if args.sandbox else "local"
 
-    if profiles_path.exists():
-        try:
-            profiles_dict = load_profiles(profiles_path)
-            profile_env = load_profile_env(
-                profile_name, profiles_path, base_env, mode, profiles=profiles_dict
-            )
-            sandbox_images = get_profile_sandbox_images(
-                profile_name, profiles_path, profiles=profiles_dict
-            )
-            tools = get_profile_tools(
-                profile_name, profiles_path, profiles=profiles_dict
-            )
-        except ProfileError as e:
-            eprint(f"[ERROR] {e}")
-            return 1
-    elif profile_name != "default":
-        eprint(
-            f"[ERROR] Profile '{profile_name}' requested but no profiles file found."
-        )
+    from codefreedom.cli.common import load_profile_with_tools
+
+    profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
+        profile_name, profiles_path, base_env, mode
+    )
+    if exit_code != 0:
         return 1
-    else:
-        eprint("[PROFILE] No profiles file found. Using defaults only.")
 
     # ── Ensure proxy API key is available ──────────────────────────────
     # Safety net: re-inject from base_env in case resolve failed
@@ -739,18 +709,14 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Tools: acquire if declared in profile ────────────────────────────
     session_id = generate_session_id(mode)
-    acquired_tools: List[str] = []
-    if tools:
-        eprint(f"[TOOLS] Profile '{profile_name}' declares tools: {', '.join(tools)}")
-        acquired_tools = acquire_tools(session_id, tools, profile_name)
-        if acquired_tools:
-            eprint(f"[TOOLS] Running: {', '.join(acquired_tools)}")
 
-    try:
+    from codefreedom.cli.common import acquire_and_run
+
+    def _run() -> int:
         if args.sandbox:
             return run_docker(
                 profile_env,
-                args.mimo_args,
+                args.agent_args,
                 workspace_dir,
                 profile_name,
                 sandbox_images=sandbox_images,
@@ -759,7 +725,6 @@ def run(args: argparse.Namespace) -> int:
         else:
             if run_as_me:
                 eprint("[WARN] --run-as-me is only valid with --sandbox; ignoring.")
-            return run_local(profile_env, args.mimo_args)
-    finally:
-        if acquired_tools:
-            release_tools(session_id, acquired_tools)
+            return run_local(profile_env, args.agent_args)
+
+    return acquire_and_run(session_id, tools, profile_name, _run)

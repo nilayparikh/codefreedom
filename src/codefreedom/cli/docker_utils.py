@@ -18,7 +18,7 @@ import yaml
 
 from pydantic import BaseModel
 
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 from codefreedom.interpolate import interpolate_all_strings
 
 
@@ -381,7 +381,7 @@ def tool_profile_path(tool_filename: str) -> Path:
 def init_tool_redirect(tool_filename: str) -> int:
     """Redirect tool init to the recipe system.
 
-    Standard init handler for all tools — points users to ``cf init recipe``.
+    Standard init handler for all tools — points users to ``cf init``.
     """
     profile_path = tool_home() / "profiles" / tool_filename
     if profile_path.exists():
@@ -392,7 +392,7 @@ def init_tool_redirect(tool_filename: str) -> int:
         return 0
     eprint(
         f"[{tool_label}] No profile found."
-        " Run 'cf init recipe' to install the default recipe."
+        " Run 'cf init' to install the default recipe."
     )
     from codefreedom.cli.tool_init_utils import print_help_section
 
@@ -400,10 +400,9 @@ def init_tool_redirect(tool_filename: str) -> int:
     print_help_section(
         f"{label} init",
         [
-            "Use:  cf init recipe              # install _default base recipe",
-            "      cf init recipe --list        # list available recipes",
-            "      cf init recipe --plan <name> # preview a recipe without applying",
-            "      cf init recipe <name>        # install a specific recipe",
+            "Use:  cf init                    # install _default base recipe",
+            "      cf init --list              # list available recipes",
+            "      cf init --plan <name>       # preview a recipe without applying",
         ],
         docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
         include_disclaimer=True,
@@ -621,7 +620,7 @@ def start_tool_init_gate(profile_filename: str, label: str) -> bool:
         return True
 
     eprint(f"[{label}] Tool profile not found.")
-    eprint("      Run:  cf init recipe")
+    eprint("      Run:  cf init")
     return False
 
 

@@ -11,7 +11,7 @@ import json
 import secrets
 from typing import Callable
 
-from codefreedom.env_loader import eprint
+from codefreedom.log import eprint
 
 # ── Tool handler dispatch ─────────────────────────────────────────────────────
 # Each tool maps to (load_settings, start, stop) — existing functions from
