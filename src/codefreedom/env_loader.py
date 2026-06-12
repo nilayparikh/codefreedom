@@ -76,9 +76,7 @@ from typing import Any, Dict, Optional
 from codefreedom.interpolate import resolve_env_vars
 
 
-def eprint(*args: Any, **kwargs: Any) -> None:
-    """Print to stderr. The canonical definition — all modules import from here."""
-    print(*args, file=sys.stderr, **kwargs)
+from codefreedom.log import eprint  # noqa: F401
 
 
 def load_dotenv(path: Path) -> Dict[str, str]:
