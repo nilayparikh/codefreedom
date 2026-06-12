@@ -27,7 +27,7 @@ import os
 import sys
 from pathlib import Path
 
-from codefreedom.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint
 
 
@@ -122,7 +122,7 @@ def _stop_proxy(cf_dir: Path) -> int:
 def _stop_tools() -> int:
     """Stop all CodeFreedom tool containers using the existing tools machinery."""
     try:
-        from codefreedom.cli.tools import stop_all as tools_stop_all
+        from codefreedom.cli.run.tools import stop_all as tools_stop_all
 
         eprint("[DEINIT] Stopping all tools...")
         return tools_stop_all()

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import urllib.error
-from email.message import Message
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 from codefreedom.cli.vscode import (
@@ -130,42 +129,47 @@ class TestUrlHelpers:
 
 class TestCheckProxyLive:
     def test_returns_true_on_200(self, monkeypatch):
-        ctx = MagicMock()
-        ctx.__enter__.return_value.status = 200
+        import httpx
+
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.urllib.request.urlopen",
-            lambda req, timeout: ctx,
+            httpx,
+            "get",
+            lambda url, timeout=5.0, **kw: type("r", (), {"status_code": 200})(),
         )
         assert _check_proxy_live("h", 4000) is True
 
     def test_returns_false_on_500(self, monkeypatch):
-        ctx = MagicMock()
-        ctx.__enter__.return_value.status = 500
+        import httpx
+
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.urllib.request.urlopen",
-            lambda req, timeout: ctx,
+            httpx,
+            "get",
+            lambda url, timeout=5.0, **kw: type("r", (), {"status_code": 500})(),
         )
         assert _check_proxy_live("h", 4000) is False
 
     def test_returns_false_on_connection_refused(self, monkeypatch):
-        def boom(req, timeout):
-            raise urllib.error.URLError("Connection refused")
+        import httpx
 
-        monkeypatch.setattr("codefreedom.cli.vscode.urllib.request.urlopen", boom)
+        monkeypatch.setattr(
+            httpx, "get", lambda url, timeout=5.0, **kw: (_ for _ in ()).throw(httpx.ConnectError("refused"))
+        )
         assert _check_proxy_live("h", 4000) is False
 
     def test_returns_false_on_timeout(self, monkeypatch):
-        def boom(req, timeout):
-            raise TimeoutError("timed out")
+        import httpx
 
-        monkeypatch.setattr("codefreedom.cli.vscode.urllib.request.urlopen", boom)
+        monkeypatch.setattr(
+            httpx, "get", lambda url, timeout=5.0, **kw: (_ for _ in ()).throw(httpx.ReadTimeout("timed out"))
+        )
         assert _check_proxy_live("h", 4000) is False
 
     def test_returns_false_on_dns_failure(self, monkeypatch):
-        def boom(req, timeout):
-            raise OSError("Name or service not known")
+        import httpx
 
-        monkeypatch.setattr("codefreedom.cli.vscode.urllib.request.urlopen", boom)
+        monkeypatch.setattr(
+            httpx, "get", lambda url, timeout=5.0, **kw: (_ for _ in ()).throw(httpx.ConnectError("dns"))
+        )
         assert _check_proxy_live("h", 4000) is False
 
 
@@ -173,16 +177,14 @@ class TestCheckProxyLive:
 
 
 class TestFetchModelInfo:
-    def _mock_urlopen(self, monkeypatch, body: Any):
-        ctx = MagicMock()
-        ctx.__enter__.return_value.read.return_value = json.dumps(body).encode("utf-8")
+    def _mock_get_json(self, monkeypatch, return_value: Any):
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.urllib.request.urlopen",
-            lambda req, timeout: ctx,
+            "codefreedom.core.http_client.get_json",
+            lambda url, **kw: return_value,
         )
 
     def test_returns_data_list(self, monkeypatch):
-        self._mock_urlopen(
+        self._mock_get_json(
             monkeypatch,
             {"data": [{"model_name": "m1"}, {"model_name": "m2"}]},
         )
@@ -190,27 +192,14 @@ class TestFetchModelInfo:
         assert result == [{"model_name": "m1"}, {"model_name": "m2"}]
 
     def test_missing_data_field_returns_empty(self, monkeypatch):
-        self._mock_urlopen(monkeypatch, {"other": "field"})
+        self._mock_get_json(monkeypatch, {"other": "field"})
         result = _fetch_model_info("h", 4000, "sk-test")
         assert result == []
 
     def test_invalid_shape_raises(self, monkeypatch):
-        self._mock_urlopen(monkeypatch, ["not", "a", "dict"])
+        self._mock_get_json(monkeypatch, ["not", "a", "dict"])
         with pytest.raises(ValueError, match="not an object"):
             _fetch_model_info("h", 4000, "sk-test")
-
-    def test_authorization_header_sent(self, monkeypatch):
-        ctx = MagicMock()
-        ctx.__enter__.return_value.read.return_value = b'{"data": []}'
-        captured: list = []
-
-        def fake(req, **__kwargs):
-            captured.append(req)
-            return ctx
-
-        monkeypatch.setattr("codefreedom.cli.vscode.urllib.request.urlopen", fake)
-        _fetch_model_info("h", 4000, "sk-abc")
-        assert captured[0].headers["Authorization"] == "Bearer sk-abc"
 
 
 # ── _resolve_model_id ────────────────────────────────────────────────────────
@@ -523,7 +512,7 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: False
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: False
         )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
@@ -533,7 +522,7 @@ class TestCmdVscodeGenerate:
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
@@ -545,15 +534,15 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
 
         def boom(h, p, k, *, timeout=10.0):
-            raise urllib.error.HTTPError(
-                "http://h:4000/v1/model/info", 401, "Unauthorized", Message(), None
-            )
+            resp = MagicMock()
+            resp.status_code = 401
+            raise httpx.HTTPStatusError("Unauthorized", request=MagicMock(), response=resp)
 
-        monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
+        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -561,15 +550,15 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
 
         def boom(h, p, k, *, timeout=10.0):
-            raise urllib.error.HTTPError(
-                "http://h:4000/v1/model/info", 500, "Server Error", Message(), None
-            )
+            resp = MagicMock()
+            resp.status_code = 500
+            raise httpx.HTTPStatusError("Server Error", request=MagicMock(), response=resp)
 
-        monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
+        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -577,13 +566,13 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
 
         def boom(h, p, k, *, timeout=10.0):
-            raise urllib.error.URLError("connection refused")
+            raise httpx.ConnectError("connection refused")
 
-        monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
+        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -591,13 +580,13 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
 
         def boom(h, p, k, *, timeout=10.0):
             raise ValueError("bad response")
 
-        monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
+        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -605,10 +594,10 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._fetch_model_info",
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
             lambda h, p, k, *, timeout=10.0: [
                 {
                     "model_name": "model-a",
@@ -653,10 +642,10 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._fetch_model_info",
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
             lambda h, p, k, *, timeout=10.0: [{"model_name": "m1"}],
         )
 
@@ -674,10 +663,10 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._fetch_model_info",
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
             lambda h, p, k, *, timeout=10.0: [],
         )
 

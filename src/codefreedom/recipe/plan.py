@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
-from codefreedom.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint
 from codefreedom.recipe.store import (
     _GITHUB_API_BASE,

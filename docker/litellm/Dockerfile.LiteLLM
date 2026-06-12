@@ -264,6 +264,7 @@ RUN python patch_responses_azure.py
 # is immutable (baked into the image).
 COPY plugins/reasoning_efforts_mapping.py /app/litellm-plugins/reasoning_efforts_mapping.py
 COPY plugins/system_message_merger.py /app/litellm-plugins/system_message_merger.py
+COPY plugins/image_router.py /app/litellm-plugins/image_router.py
 
 # Install Node.js + npm so we can run the Prisma CLI natively.  The
 # Python prisma CLI wrapper (from requirements.txt) creates only

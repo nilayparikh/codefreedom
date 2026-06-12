@@ -20,7 +20,7 @@ from unittest import mock
 import pytest
 import yaml
 
-from codefreedom.cli.recipe import (
+from codefreedom.cli.setup.recipe import (
     _deepdiff_merge,
     _merge_env,
     _recursive_merge,
@@ -612,7 +612,7 @@ class TestRecipeApply:
 
         import sys
 
-        if "codefreedom.cli.recipe" in sys.modules:
+        if "codefreedom.cli.setup.recipe" in sys.modules:
             # Force reimport to clear any state
             pass
 

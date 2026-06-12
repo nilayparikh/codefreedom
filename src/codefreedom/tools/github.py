@@ -38,7 +38,7 @@ from codefreedom.cli.docker_utils import (
     tool_profile_path,
 )
 
-from codefreedom.schemas.github import GithubConfig
+from codefreedom.tools.schemas.github import GithubConfig
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 

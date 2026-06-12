@@ -10,8 +10,8 @@ import yaml
 
 from codefreedom.admin import backup as cf_backup
 from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
-from codefreedom.config import get_codefreedom_dir
-from codefreedom.interpolate import interpolate_all_strings
+from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.interpolate import interpolate_all_strings
 from codefreedom.log import eprint
 from codefreedom.schemas.recipe import RecipeConfig
 from pydantic import ValidationError

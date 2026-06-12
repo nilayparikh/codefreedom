@@ -7,7 +7,7 @@ import pytest
 
 
 def _tool_home() -> Path:
-    from codefreedom.config import get_codefreedom_dir
+    from codefreedom.core.config import get_codefreedom_dir
     override = os.environ.get("CODEFREEDOM_TOOL_HOME")
     if override:
         return Path(override)
@@ -23,7 +23,7 @@ def _write_tool_profile(tool, data):
 
 class TestChromeToolMcpEndpoint:
     def test_defaults_when_no_profile(self):
-        from codefreedom.cli.chrome import ChromeTool
+        from codefreedom.tools.chrome import ChromeTool
         tool = ChromeTool()
         assert tool.mcp_server_name == "chrome-devtools"
         port, path = tool.mcp_endpoint
@@ -31,7 +31,7 @@ class TestChromeToolMcpEndpoint:
         assert path == "/mcp"
 
     def test_custom_port_and_path_from_profile(self):
-        from codefreedom.cli.chrome import ChromeTool
+        from codefreedom.tools.chrome import ChromeTool
         _write_tool_profile(
             "chrome",
             {
@@ -54,7 +54,7 @@ class TestChromeToolMcpEndpoint:
 
 class TestWebToolMcpEndpoint:
     def test_defaults_when_no_profile(self):
-        from codefreedom.cli.web import WebTool
+        from codefreedom.tools.web import WebTool
         tool = WebTool()
         assert tool.mcp_server_name == "web"
         port, path = tool.mcp_endpoint
@@ -62,7 +62,7 @@ class TestWebToolMcpEndpoint:
         assert path == "/mcp"
 
     def test_custom_port_and_path_from_profile(self):
-        from codefreedom.cli.web import WebTool
+        from codefreedom.tools.web import WebTool
         _write_tool_profile(
             "web",
             {
@@ -89,9 +89,9 @@ class TestGithubToolMcpEndpoint:
         _clean_profiles()
 
     def test_defaults_when_no_profile(self, monkeypatch):
-        from codefreedom.cli.github import GithubTool
+        from codefreedom.tools.github import GithubTool
         monkeypatch.setattr(
-            "codefreedom.cli.github._get_mapped_port",
+            "codefreedom.tools.github._get_mapped_port",
             lambda _: None,
         )
         tool = GithubTool()
@@ -101,7 +101,7 @@ class TestGithubToolMcpEndpoint:
         assert path == "/mcp"
 
     def test_custom_port_from_profile(self):
-        from codefreedom.cli.github import GithubTool
+        from codefreedom.tools.github import GithubTool
         _write_tool_profile(
             "github",
             {
@@ -122,7 +122,7 @@ class TestGithubToolMcpEndpoint:
 
 class TestWebBridgeToolMcpEndpoint:
     def test_defaults_when_no_profile(self):
-        from codefreedom.cli.web_bridge import WebBridgeTool
+        from codefreedom.tools.web_bridge import WebBridgeTool
         tool = WebBridgeTool()
         assert tool.mcp_server_name == "web-bridge"
         port, path = tool.mcp_endpoint
@@ -130,7 +130,7 @@ class TestWebBridgeToolMcpEndpoint:
         assert path == "/search"
 
     def test_custom_port_from_profile(self):
-        from codefreedom.cli.web_bridge import WebBridgeTool
+        from codefreedom.tools.web_bridge import WebBridgeTool
         _write_tool_profile(
             "web-bridge",
             {
@@ -164,7 +164,7 @@ class TestToolRegistryMcpEndpointsDispatch:
         _clean_profiles()
 
     def test_chrome_with_defaults(self):
-        from codefreedom.tool_registry import load_tool_mcp_endpoints
+        from codefreedom.tools.registry import load_tool_mcp_endpoints
         endpoints = load_tool_mcp_endpoints(["chrome"])
         servers = endpoints["mcpServers"]
         assert servers == {
@@ -172,7 +172,7 @@ class TestToolRegistryMcpEndpointsDispatch:
         }
 
     def test_web_with_defaults(self):
-        from codefreedom.tool_registry import load_tool_mcp_endpoints
+        from codefreedom.tools.registry import load_tool_mcp_endpoints
         endpoints = load_tool_mcp_endpoints(["web"])
         servers = endpoints["mcpServers"]
         assert servers == {
@@ -180,9 +180,9 @@ class TestToolRegistryMcpEndpointsDispatch:
         }
 
     def test_github_with_defaults(self, monkeypatch):
-        from codefreedom.tool_registry import load_tool_mcp_endpoints
+        from codefreedom.tools.registry import load_tool_mcp_endpoints
         monkeypatch.setattr(
-            "codefreedom.cli.github._get_mapped_port",
+            "codefreedom.tools.github._get_mapped_port",
             lambda _: None,
         )
         endpoints = load_tool_mcp_endpoints(["github"])
@@ -192,7 +192,7 @@ class TestToolRegistryMcpEndpointsDispatch:
         }
 
     def test_web_bridge_with_defaults(self):
-        from codefreedom.tool_registry import load_tool_mcp_endpoints
+        from codefreedom.tools.registry import load_tool_mcp_endpoints
         endpoints = load_tool_mcp_endpoints(["web-bridge"])
         servers = endpoints["mcpServers"]
         assert servers == {
@@ -200,7 +200,7 @@ class TestToolRegistryMcpEndpointsDispatch:
         }
 
     def test_all_tools_merged(self):
-        from codefreedom.tool_registry import load_tool_mcp_endpoints
+        from codefreedom.tools.registry import load_tool_mcp_endpoints
         _write_tool_profile(
             "github",
             {
@@ -222,14 +222,14 @@ class TestToolRegistryMcpEndpointsDispatch:
         assert servers["web-bridge"]["url"] == "http://127.0.0.1:8500/search"
 
     def test_unknown_tool_skipped(self):
-        from codefreedom.tool_registry import load_tool_mcp_endpoints
+        from codefreedom.tools.registry import load_tool_mcp_endpoints
         endpoints = load_tool_mcp_endpoints(["unknown-tool", "chrome"])
         servers = endpoints["mcpServers"]
         assert len(servers) == 1
         assert "chrome-devtools" in servers
 
     def test_empty_list_returns_no_servers(self):
-        from codefreedom.tool_registry import load_tool_mcp_endpoints
+        from codefreedom.tools.registry import load_tool_mcp_endpoints
         endpoints = load_tool_mcp_endpoints([])
         assert endpoints == {"mcpServers": {}}
 

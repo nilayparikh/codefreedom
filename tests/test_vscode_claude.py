@@ -412,11 +412,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -483,11 +483,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -517,11 +517,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -552,11 +552,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -575,11 +575,11 @@ class TestVscodeSettingsGenerate:
     def test_missing_profiles_file_returns_1(self, monkeypatch, tmp_path: Path, capsys):
         missing = tmp_path / "does-not-exist.json"
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: missing,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -605,20 +605,20 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
         def boom(*_a, **_kw):
-            from codefreedom.profiles import ProfileError
+            from codefreedom.core.profiles import ProfileError
 
             raise ProfileError("nope")
 
-        monkeypatch.setattr("codefreedom.cli.vscode.load_profile_env", boom)
+        monkeypatch.setattr("codefreedom.agents.vscode.claude_settings.load_profile_env", boom)
 
         result = cmd_vscode_claude_config(_args(profile="missing"))
         assert result == 1
@@ -642,11 +642,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -667,7 +667,7 @@ class TestDispatchPath:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("CODEFREEDOM_PROFILES_FILE", raising=False)
 
-        from codefreedom.config import resolve_profiles_path
+        from codefreedom.core.config import resolve_profiles_path
 
         path = resolve_profiles_path()
         assert path == tmp_path / "profiles" / "claude-code.yaml"
@@ -675,7 +675,7 @@ class TestDispatchPath:
     def test_resolve_profiles_path_env_override(self, monkeypatch, tmp_path: Path):
         custom = tmp_path / "custom-profiles.json"
         monkeypatch.setenv("CODEFREEDOM_PROFILES_FILE", str(custom))
-        from codefreedom.config import resolve_profiles_path
+        from codefreedom.core.config import resolve_profiles_path
 
         path = resolve_profiles_path()
         assert path == custom

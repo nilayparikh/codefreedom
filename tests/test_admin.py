@@ -35,7 +35,7 @@ from codefreedom.admin import (
     prune_backups,
     restore as engine_restore,
 )
-from codefreedom.cli.admin import _parse_duration
+from codefreedom.cli.manage.admin import _parse_duration
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

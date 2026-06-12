@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from codefreedom.profiles import (
+from codefreedom.core.profiles import (
     ProfileError,
     load_profiles,
     load_profile_env,

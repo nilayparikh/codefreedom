@@ -31,7 +31,7 @@ from codefreedom.cli.docker_utils import (
     tool_profile_path,
 )
 
-from codefreedom.schemas.chrome import ChromeConfig
+from codefreedom.tools.schemas.chrome import ChromeConfig
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 

@@ -26,12 +26,12 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
+import httpx
 import yaml
 
-from codefreedom.config import get_codefreedom_dir
+from codefreedom.core.http_client import get_json
+from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -205,36 +205,45 @@ def _fetch_docker_hub_manifest(namespace: str, repo: str, tag: str) -> str | Non
 
 def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
     """Make a manifest request and return the raw SHA256 hex digest."""
-    req = Request(url)
-    req.add_header("Authorization", f"Bearer {token}")
-    req.add_header(
-        "Accept",
-        "application/vnd.docker.distribution.manifest.v2+json,"
-        " application/vnd.oci.image.manifest.v1+json,"
-        " application/vnd.docker.distribution.manifest.list.v2+json,"
-        " application/vnd.oci.image.index.v1+json",
-    )
+    import httpx
+
     try:
-        with urlopen(req, timeout=15) as resp:
-            digest = resp.headers.get("Docker-Content-Digest")
-            if digest:
-                return digest.strip().removeprefix("sha256:")
-    except HTTPError as exc:
-        eprint(f"[UPDATE] Warning: Hub manifest check failed ({exc.code}): {url}.")
-    except URLError as exc:
-        eprint(f"[UPDATE] Warning: Hub unreachable ({exc.reason}): {url}.")
+        resp = httpx.get(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": (
+                    "application/vnd.docker.distribution.manifest.v2+json,"
+                    " application/vnd.oci.image.manifest.v1+json,"
+                    " application/vnd.docker.distribution.manifest.list.v2+json,"
+                    " application/vnd.oci.image.index.v1+json"
+                ),
+            },
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        digest = resp.headers.get("Docker-Content-Digest")
+        if digest:
+            return digest.strip().removeprefix("sha256:")
+    except httpx.HTTPStatusError as exc:
+        eprint(f"[UPDATE] Warning: Hub manifest check failed ({exc.response.status_code}): {url}.")
+    except httpx.HTTPError as exc:
+        eprint(f"[UPDATE] Warning: Hub unreachable ({exc}): {url}.")
     return None
 
 
 def _get_docker_hub_token(namespace: str, repo: str) -> str | None:
     """Get a Docker Hub registry auth token."""
+    import httpx
+
     scope = f"repository:{namespace}/{repo}:pull"
     url = f"{DOCKER_HUB_AUTH}?service=registry.docker.io&scope={scope}"
     try:
-        with urlopen(url, timeout=10) as resp:
-            data = json.loads(resp.read())
-            return data.get("token")
-    except (URLError, HTTPError, json.JSONDecodeError) as exc:
+        resp = httpx.get(url, timeout=10.0)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("token")
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
         eprint(f"[UPDATE] Warning: Docker Hub auth failed: {exc}.")
     return None
 
@@ -515,10 +524,9 @@ def check_pypi() -> dict[str, Any] | None:
             local_version = "unknown"
 
     try:
-        with urlopen(PYPI_URL, timeout=10) as resp:
-            data = json.loads(resp.read())
-            remote_version = data["info"]["version"]
-    except (URLError, HTTPError, json.JSONDecodeError):
+        data = get_json(PYPI_URL, timeout=10.0)
+        remote_version = data["info"]["version"]
+    except (httpx.HTTPError, json.JSONDecodeError):
         return {
             "local_version": local_version,
             "remote_version": "unknown",

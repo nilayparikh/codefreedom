@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 import yaml
 from pydantic import BaseModel, Field
 
-from codefreedom.interpolate import interpolate_all_strings
+from codefreedom.core.interpolate import interpolate_all_strings
 
 
 class ChromeSettings(BaseModel, extra="forbid"):

@@ -19,7 +19,7 @@ import yaml
 from pydantic import BaseModel
 
 from codefreedom.log import eprint
-from codefreedom.interpolate import interpolate_all_strings
+from codefreedom.core.interpolate import interpolate_all_strings
 
 # ── Tool metadata ────────────────────────────────────────────────────────────
 
@@ -207,7 +207,7 @@ def resolve_data_dir(data_dir: str) -> Path:
     Falls back to ``Path.expanduser()`` if ``CODEFREEDOM_HOME`` is not
     set or if the path doesn't start with ``~/.codefreedom``.
     """
-    from codefreedom.config import get_codefreedom_dir
+    from codefreedom.core.config import get_codefreedom_dir
 
     cf_dir = get_codefreedom_dir()
     default_cf = Path.home() / ".codefreedom"

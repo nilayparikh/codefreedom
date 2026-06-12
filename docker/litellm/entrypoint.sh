@@ -166,6 +166,18 @@ if [ -f "$PLUGIN2_SRC" ]; then
     fi
 fi
 
+PLUGIN3_SRC="/app/litellm-plugins/image_router.py"
+PLUGIN3_DST="/app/litellm-config/plugins/image-router/image_router.py"
+if [ -f "$PLUGIN3_SRC" ]; then
+    mkdir -p "$(dirname "$PLUGIN3_DST")" 2>/dev/null || true
+    [ -f "$PLUGIN3_DST" ] && [ ! -L "$PLUGIN3_DST" ] && rm -f "$PLUGIN3_DST"
+    if ln -sf "$PLUGIN3_SRC" "$PLUGIN3_DST" 2>/dev/null; then
+        echo "[entrypoint] Plugin .py symlinked: $PLUGIN3_DST -> $PLUGIN3_SRC"
+    else
+        echo "[entrypoint] WARNING: Could not symlink image-router plugin."
+    fi
+fi
+
 # ── Start LiteLLM ───────────────────────────────────────────────────────────
 echo "[entrypoint] Starting LiteLLM on $LITELLM_BIND_HOST:$LITELLM_PORT..."
 # --use_prisma_db_push: we already ran `prisma db push` above; tells LiteLLM

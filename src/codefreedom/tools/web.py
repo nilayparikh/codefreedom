@@ -40,7 +40,7 @@ from codefreedom.cli.docker_utils import (
     tool_profile_path,
 )
 
-from codefreedom.schemas.web import WebConfig
+from codefreedom.tools.schemas.web import WebConfig
 
 # ── Defaults ─────────────────────────────────────────────────────────────
 

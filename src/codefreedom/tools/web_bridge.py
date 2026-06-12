@@ -35,7 +35,7 @@ from codefreedom.cli.docker_utils import (
     tool_profile_path,
 )
 
-from codefreedom.schemas.web_bridge import WebBridgeConfig
+from codefreedom.tools.schemas.web_bridge import WebBridgeConfig
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 

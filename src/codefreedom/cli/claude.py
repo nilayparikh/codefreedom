@@ -12,14 +12,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from codefreedom.config import resolve_profiles_path
+from codefreedom.core.config import resolve_profiles_path
 from codefreedom.log import eprint
 from codefreedom.env_loader import load_env_chain
 from codefreedom.launcher import run_docker, run_local
-from codefreedom.profiles import (
+from codefreedom.core.profiles import (
     list_profiles,
 )
-from codefreedom.tool_registry import generate_session_id
+from codefreedom.tools.registry import generate_session_id
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:

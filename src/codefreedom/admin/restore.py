@@ -15,7 +15,7 @@ from codefreedom.admin._utils import (
     BackupManifest,
     FileDiff,
 )
-from codefreedom.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir
 
 
 def restore(

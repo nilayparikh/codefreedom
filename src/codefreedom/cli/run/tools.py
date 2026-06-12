@@ -17,22 +17,22 @@ from typing import Callable
 
 from codefreedom.log import eprint
 from codefreedom.cli.docker_utils import container_is_running
-from codefreedom.cli.chrome import (
+from codefreedom.tools.chrome import (
     _load_profile as chrome_load_profile,
     start as chrome_start,
     stop as chrome_stop,
 )
-from codefreedom.cli.web import (
+from codefreedom.tools.web import (
     _load_profile as web_load_profile,
     start as web_start,
     stop as web_stop,
 )
-from codefreedom.cli.github import (
+from codefreedom.tools.github import (
     _load_profile as github_load_profile,
     start as github_start,
     stop as github_stop,
 )
-from codefreedom.cli.web_bridge import (
+from codefreedom.tools.web_bridge import (
     _load_profile as web_bridge_load_profile,
     start as web_bridge_start,
     stop as web_bridge_stop,

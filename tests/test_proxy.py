@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from codefreedom.cli.proxy import (
+from codefreedom.cli.run.proxy import (
     _find_compose_file,
     _find_config_file,
     _validate,
@@ -28,14 +28,14 @@ class TestFindComposeFile:
         compose.parent.mkdir(parents=True)
         compose.write_text("")
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
         )
         result = _find_compose_file()
         assert result == compose
 
     def test_returns_none_when_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
         )
         result = _find_compose_file()
         assert result is None
@@ -49,14 +49,14 @@ class TestFindConfigFile:
         config.parent.mkdir(parents=True)
         config.write_text("")
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
         )
         result = _find_config_file()
         assert result == config
 
     def test_returns_none_when_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
         )
         result = _find_config_file()
         assert result is None
@@ -76,14 +76,14 @@ class TestValidate:
             },
         )
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
         )
         result = _validate()
         assert result == 0
 
     def test_missing_config_file(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
         )
         result = _validate()
         assert result == 1
@@ -93,7 +93,7 @@ class TestValidate:
         config_path = tmp_path / "proxy" / "config" / "config.yaml"
         config_path.write_text(": invalid yaml : :")
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
         )
         result = _validate()
         assert result == 1
@@ -109,7 +109,7 @@ class TestValidate:
             },
         )
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
         )
         result = _validate()
         assert result == 1  # missing provider = validation failure
@@ -171,7 +171,7 @@ class TestRun:
             port=4000,
             host="0.0.0.0",
         )
-        monkeypatch.setattr("codefreedom.cli.proxy._find_compose_file", lambda: None)
+        monkeypatch.setattr("codefreedom.cli.run.proxy._find_compose_file", lambda: None)
         result = run(args)
         assert result == 1
 
@@ -192,9 +192,9 @@ class TestRun:
             return _R()
 
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
         )
-        monkeypatch.setattr("codefreedom.cli.proxy.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.cli.run.proxy.subprocess.run", fake_run)
 
         args = argparse.Namespace(
             action="restart",
@@ -219,7 +219,7 @@ class TestRun:
             port=4000,
             host="0.0.0.0",
         )
-        monkeypatch.setattr("codefreedom.cli.proxy._find_compose_file", lambda: None)
+        monkeypatch.setattr("codefreedom.cli.run.proxy._find_compose_file", lambda: None)
         result = run(args)
         assert result == 1
 
@@ -237,9 +237,9 @@ class TestRun:
             return _R()
 
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
         )
-        monkeypatch.setattr("codefreedom.cli.proxy.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.cli.run.proxy.subprocess.run", fake_run)
 
         args = argparse.Namespace(
             action="restart",
@@ -268,10 +268,10 @@ class TestRun:
             return _R()
 
         monkeypatch.setattr(
-            "codefreedom.cli.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
         )
-        monkeypatch.setattr("codefreedom.cli.proxy.subprocess.run", fake_run)
-        monkeypatch.setattr("codefreedom.cli.proxy._ensure_web_bridge_image", lambda: 0)
+        monkeypatch.setattr("codefreedom.cli.run.proxy.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.cli.run.proxy._ensure_web_bridge_image", lambda: 0)
 
         args = argparse.Namespace(
             action="start",
@@ -306,7 +306,7 @@ class TestWebBridgeBuildContext:
         """When the package is installed editable, the helper should find
         the real ``docker/web-bridge/Dockerfile.Bridge`` shipped with the
         source tree."""
-        from codefreedom.cli.proxy import _web_bridge_build_context
+        from codefreedom.cli.run.proxy import _web_bridge_build_context
 
         ctx = _web_bridge_build_context()
         # We only assert if the source tree is available — when installed
@@ -339,7 +339,7 @@ class TestWebBridgeBuildContext:
 
             monkeypatch.setattr(codefreedom, "__file__", str(pkg_dir / "__init__.py"))
 
-            from codefreedom.cli.proxy import _web_bridge_build_context
+            from codefreedom.cli.run.proxy import _web_bridge_build_context
 
             assert _web_bridge_build_context() is None
 
@@ -349,7 +349,7 @@ class TestEnsureWebBridgeImage:
 
     def test_image_present_skips_build(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When ``docker image inspect`` succeeds, no build is invoked."""
-        from codefreedom.cli import proxy as proxy_mod
+        from codefreedom.cli.run import proxy as proxy_mod
 
         calls: list[list[str]] = []
 
@@ -380,7 +380,7 @@ class TestEnsureWebBridgeImage:
         the helper should warn (not crash) and return 0 — the rest of the
         proxy stack can still come up; only the bridge will be unhealthy.
         """
-        from codefreedom.cli import proxy as proxy_mod
+        from codefreedom.cli.run import proxy as proxy_mod
 
         def fake_run(*_args, **_kwargs):
             class _R:
@@ -403,7 +403,7 @@ class TestEnsureWebBridgeImage:
     ) -> None:
         """When the image is missing but the source tree is present and
         the build succeeds, the helper should return 0."""
-        from codefreedom.cli import proxy as proxy_mod
+        from codefreedom.cli.run import proxy as proxy_mod
 
         calls: list[list[str]] = []
 
@@ -443,7 +443,7 @@ class TestEnsureWebBridgeImage:
 
     def test_build_failure_returns_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When the build subprocess returns non-zero, helper returns 1."""
-        from codefreedom.cli import proxy as proxy_mod
+        from codefreedom.cli.run import proxy as proxy_mod
 
         def fake_run(cmd, *_args, **_kwargs):
             if "inspect" in cmd:

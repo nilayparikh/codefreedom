@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict
 
 
-from codefreedom.cli.doctor import (
+from codefreedom.cli.manage.doctor import (
     CheckResult,
     _clear_checks,
     _section,
@@ -113,13 +113,13 @@ class TestCFDirChecks:
     def test_cf_dir_exists_passes(self, monkeypatch, tmp_path):
         """_check_cf_dir_exists should pass when the dir exists."""
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("CodeFreedom Home")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_cf_dir_exists
+            from codefreedom.cli.manage.doctor import _check_cf_dir_exists
 
             return _check_cf_dir_exists()
 
@@ -129,14 +129,14 @@ class TestCFDirChecks:
     def test_cf_dir_missing_fails(self, monkeypatch):
         """_check_cf_dir_exists should fail when the dir does not exist."""
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir",
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir",
             lambda: Path("/nonexistent/cf"),
         )
         _clear_checks()
 
         @_section("CodeFreedom Home")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_cf_dir_exists
+            from codefreedom.cli.manage.doctor import _check_cf_dir_exists
 
             return _check_cf_dir_exists()
 
@@ -147,13 +147,13 @@ class TestCFDirChecks:
         """_check_cf_dir_permissions should pass when dir is accessible."""
         tmp_path.chmod(0o755)
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("CodeFreedom Home")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_cf_dir_permissions
+            from codefreedom.cli.manage.doctor import _check_cf_dir_permissions
 
             return _check_cf_dir_permissions()
 
@@ -187,13 +187,13 @@ class TestConfigFileChecks:
             },
         )
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("Config Files")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_env_files
+            from codefreedom.cli.manage.doctor import _check_env_files
 
             return _check_env_files()
 
@@ -204,13 +204,13 @@ class TestConfigFileChecks:
         """Missing env files should produce a warning, not a failure."""
         self._setup_cf_dir(tmp_path, {})  # empty cf_dir
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("Config Files")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_env_files
+            from codefreedom.cli.manage.doctor import _check_env_files
 
             return _check_env_files()
 
@@ -226,13 +226,13 @@ class TestConfigFileChecks:
             },
         )
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("Config Files")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_proxy_config_files
+            from codefreedom.cli.manage.doctor import _check_proxy_config_files
 
             return _check_proxy_config_files()
 
@@ -242,13 +242,13 @@ class TestConfigFileChecks:
     def test_proxy_config_files_missing_fails(self, monkeypatch, tmp_path):
         self._setup_cf_dir(tmp_path, {})
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("Config Files")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_proxy_config_files
+            from codefreedom.cli.manage.doctor import _check_proxy_config_files
 
             return _check_proxy_config_files()
 
@@ -263,13 +263,13 @@ class TestConfigFileChecks:
             },
         )
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("CodeFreedom Home")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_recipe_instruction
+            from codefreedom.cli.manage.doctor import _check_recipe_instruction
 
             return _check_recipe_instruction()
 
@@ -279,13 +279,13 @@ class TestConfigFileChecks:
     def test_recipe_instruction_missing_skips(self, monkeypatch, tmp_path):
         """Missing RECIPE.md is expected pre-init — should skip, not warn."""
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("CodeFreedom Home")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_recipe_instruction
+            from codefreedom.cli.manage.doctor import _check_recipe_instruction
 
             return _check_recipe_instruction()
 
@@ -305,13 +305,13 @@ class TestPostgresChecks:
     def test_pg_data_dir_not_exists_ok(self, monkeypatch, tmp_path):
         """If pg/data doesn't exist yet, it should pass (will be auto-created)."""
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("PostgreSQL / Proxy Data")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_pg_data_dir
+            from codefreedom.cli.manage.doctor import _check_pg_data_dir
 
             return _check_pg_data_dir()
 
@@ -323,13 +323,13 @@ class TestPostgresChecks:
         pg_data = tmp_path / "pg" / "data"
         pg_data.mkdir(parents=True)
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("PostgreSQL / Proxy Data")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_pg_data_dir
+            from codefreedom.cli.manage.doctor import _check_pg_data_dir
 
             return _check_pg_data_dir()
 
@@ -348,13 +348,13 @@ class TestEnvVarChecks:
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("Environment Variables (Proxy)")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_litellm_master_key
+            from codefreedom.cli.manage.doctor import _check_litellm_master_key
 
             return _check_litellm_master_key()
 
@@ -364,13 +364,13 @@ class TestEnvVarChecks:
     def test_litellm_master_key_in_env_passes(self, monkeypatch, tmp_path):
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-key")
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("Environment Variables (Proxy)")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_litellm_master_key
+            from codefreedom.cli.manage.doctor import _check_litellm_master_key
 
             return _check_litellm_master_key()
 
@@ -382,13 +382,13 @@ class TestEnvVarChecks:
         secrets_file = tmp_path / ".env.proxy.secrets"
         secrets_file.write_text("LITELLM_MASTER_KEY=sk-from-file\n")
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("Environment Variables (Proxy)")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_litellm_master_key
+            from codefreedom.cli.manage.doctor import _check_litellm_master_key
 
             return _check_litellm_master_key()
 
@@ -400,13 +400,13 @@ class TestEnvVarChecks:
         monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-cf-cli-override")
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("Environment Variables (Proxy)")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_litellm_master_key
+            from codefreedom.cli.manage.doctor import _check_litellm_master_key
 
             return _check_litellm_master_key()
 
@@ -418,13 +418,13 @@ class TestEnvVarChecks:
         monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-cf-cli-wins")
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-direct")
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
         _clear_checks()
 
         @_section("Environment Variables (Proxy)")
         def _check() -> CheckResult:
-            from codefreedom.cli.doctor import _check_litellm_master_key
+            from codefreedom.cli.manage.doctor import _check_litellm_master_key
 
             return _check_litellm_master_key()
 
@@ -511,9 +511,9 @@ class TestRun:
     def test_run_with_empty_cf_dir(self, monkeypatch, tmp_path):
         """run() should not crash when cf_dir exists but has no config."""
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
-        monkeypatch.setattr("codefreedom.cli.doctor.shutil.which", lambda _: None)
+        monkeypatch.setattr("codefreedom.cli.manage.doctor.shutil.which", lambda _: None)
 
         # run() should return non-zero since many checks will fail
         result = run()
@@ -522,9 +522,9 @@ class TestRun:
     def test_run_with_verbose(self, monkeypatch, tmp_path):
         """run(verbose=True) should not crash."""
         monkeypatch.setattr(
-            "codefreedom.cli.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
-        monkeypatch.setattr("codefreedom.cli.doctor.shutil.which", lambda _: None)
+        monkeypatch.setattr("codefreedom.cli.manage.doctor.shutil.which", lambda _: None)
 
         result = run(verbose=True)
         assert result in (0, 1, 2)

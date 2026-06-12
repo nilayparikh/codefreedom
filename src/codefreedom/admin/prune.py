@@ -11,7 +11,7 @@ from codefreedom.admin._utils import (
     _read_manifest_from_archive,
     PruneResult,
 )
-from codefreedom.config import get_backup_dir
+from codefreedom.core.config import get_backup_dir
 from codefreedom.log import eprint
 
 

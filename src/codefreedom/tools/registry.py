@@ -17,22 +17,22 @@ from codefreedom.log import eprint
 # Each tool maps to (load_settings, start, stop) — existing functions from
 # the tool CLI modules that accept/return the same signatures.
 
-from codefreedom.cli.chrome import (  # noqa: E402
+from codefreedom.tools.chrome import (  # noqa: E402
     _load_profile as chrome_load_profile,
     start as chrome_start,
     stop as chrome_stop,
 )
-from codefreedom.cli.web import (  # noqa: E402
+from codefreedom.tools.web import (  # noqa: E402
     _load_profile as web_load_profile,
     start as web_start,
     stop as web_stop,
 )
-from codefreedom.cli.github import (  # noqa: E402
+from codefreedom.tools.github import (  # noqa: E402
     _load_profile as github_load_profile,
     start as github_start,
     stop as github_stop,
 )
-from codefreedom.cli.web_bridge import (  # noqa: E402
+from codefreedom.tools.web_bridge import (  # noqa: E402
     _load_profile as web_bridge_load_profile,
     start as web_bridge_start,
     stop as web_bridge_stop,
@@ -57,10 +57,10 @@ class _McpTool(Protocol):
     def mcp_server_name(self) -> str: ...
 
 
-from codefreedom.cli.chrome import ChromeTool  # noqa: E402
-from codefreedom.cli.web import WebTool  # noqa: E402
-from codefreedom.cli.github import GithubTool  # noqa: E402
-from codefreedom.cli.web_bridge import WebBridgeTool  # noqa: E402
+from codefreedom.tools.chrome import ChromeTool  # noqa: E402
+from codefreedom.tools.web import WebTool  # noqa: E402
+from codefreedom.tools.github import GithubTool  # noqa: E402
+from codefreedom.tools.web_bridge import WebBridgeTool  # noqa: E402
 
 _MCP_TOOLS: dict[str, _McpTool] = {
     "chrome": ChromeTool(),

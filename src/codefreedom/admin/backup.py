@@ -18,7 +18,7 @@ from codefreedom.admin._utils import (
     BackupManifest,
     BackupSummary,
 )
-from codefreedom.config import get_backup_dir, get_codefreedom_dir
+from codefreedom.core.config import get_backup_dir, get_codefreedom_dir
 
 
 def backup(

@@ -1,22 +1,12 @@
-"""Top-level CLI entry point -- parses args and dispatches to subcommands.
+"""Top-level CLI entry point — parses args and dispatches to subcommands.
 
 Entry point: codefreedom | cf
 
-New CLI structure (v2):
-    cf agent <name> [options] [-- <agent-args>]   # Launch agent
-    cf agent list                                  # List agents
-    cf config <target> [options]                   # Unified config
-    cf proxy start|stop|restart|status|validate    # Manage proxy
-    cf tools start|stop|restart|status             # Manage tools
-    cf init [--plan/--apply/--list]                # Initialize recipes
-    cf admin backup|restore|list|inspect|prune     # Config management
-    cf doctor [--verbose]                          # Validate environment
-    cf update [--services...]                      # Check for updates
-    cf deinit [--force]                            # Tear down
+Lifecycle grouping (v3):
+    cf setup init|config|deinit      # one-time setup & configuration
+    cf run agent|proxy|tools          # daily workflows
+    cf manage doctor|update|admin     # occasional maintenance
 
-Aliases:
-    cf px     -> cf proxy
-    cf adm    -> cf admin
 """
 
 from __future__ import annotations
@@ -28,7 +18,6 @@ from codefreedom.log import eprint
 
 
 def main() -> None:
-    """Top-level CLI entry point: codefreedom | cf."""
     parser = argparse.ArgumentParser(
         prog="codefreedom",
         description=(
@@ -39,195 +28,95 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="command", title="commands")
 
-    # ── agent subcommand ─────────────────────────────────────────────────
-    agent_parser = subparsers.add_parser(
-        "agent",
-        help="Launch coding agents (claude, mimo, ...)",
-        description="Launch and manage coding agents with profile-based routing.",
+    # ── setup — one-time setup and configuration ────────────────────────────
+    setup_parser = subparsers.add_parser(
+        "setup",
+        help="One-time setup and configuration (init, config, deinit)",
     )
-    from codefreedom.cli.agent import build_parser as build_agent_parser
+    setup_sub = setup_parser.add_subparsers(dest="setup_command", title="setup commands")
 
-    build_agent_parser(agent_parser)
-
-    # ── config subcommand ────────────────────────────────────────────────
-    config_parser = subparsers.add_parser(
-        "config",
-        help="Generate configuration for targets (claude, mimo, vscode)",
-        description="Unified configuration generation for all targets.",
-    )
-    from codefreedom.cli.config import build_parser as build_config_parser
-
-    build_config_parser(config_parser)
-
-    # ── init subcommand (flattened) ──────────────────────────────────────
-    init_parser = subparsers.add_parser(
+    # setup init
+    init_parser = setup_sub.add_parser(
         "init",
         help="Initialize CodeFreedom config via recipes",
-        description=(
-            "Initialize CodeFreedom configuration via recipes. "
-            "Without flags, installs the _default base recipe."
-        ),
+        description="Initialize CodeFreedom configuration via recipes. Without flags, installs the _default base recipe.",
     )
-    init_group = init_parser.add_mutually_exclusive_group()
-    init_group.add_argument(
-        "--plan",
-        type=str,
-        metavar="NAME",
-        help="Preview a recipe: generate .patch files without applying",
-    )
-    init_group.add_argument(
-        "--apply",
-        type=str,
-        metavar="PLAN_ID",
-        help="Apply a previously generated plan by ID",
-    )
-    init_group.add_argument(
-        "--list",
-        action="store_true",
-        help="List all available recipes from the repository",
-    )
-    init_parser.add_argument(
-        "--store",
-        type=str,
-        metavar="URL_OR_PATH",
-        default=None,
-        help="Custom recipe store: GitHub URL or local folder path",
-    )
-    init_parser.add_argument(
-        "--staging",
-        action="store_true",
-        help="Use recipes from the 'staging' branch instead of 'main'",
-    )
+    _build_init_args(init_parser)
 
-    # ── proxy subcommand ─────────────────────────────────────────────────
-    proxy_parser = subparsers.add_parser(
+    # setup config
+    config_parser = setup_sub.add_parser(
+        "config",
+        help="Generate configuration for targets (claude, mimo, vscode)",
+    )
+    from codefreedom.cli.setup.config import build_parser as build_config_parser
+    build_config_parser(config_parser)
+
+    # setup deinit
+    deinit_parser = setup_sub.add_parser(
+        "deinit",
+        help="Tear down CodeFreedom: stop containers and remove config",
+    )
+    _build_deinit_args(deinit_parser)
+
+    # ── run — daily workflows ──────────────────────────────────────────────
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Daily workflows (agent, proxy, tools)",
+    )
+    run_sub = run_parser.add_subparsers(dest="run_command", title="run commands")
+
+    # run agent
+    agent_parser = run_sub.add_parser(
+        "agent",
+        help="Launch coding agents (claude, mimo, ...)",
+    )
+    from codefreedom.cli.run.agent import build_parser as build_agent_parser
+    build_agent_parser(agent_parser)
+
+    # run proxy
+    proxy_parser = run_sub.add_parser(
         "proxy",
         aliases=["px"],
         help="Manage the LLM proxy (start, stop, status, validate)",
-        description=(
-            "Manage the LLM proxy lifecycle. The proxy always runs via "
-            "`docker compose` against ~/.codefreedom/proxy/docker-compose.yaml."
-        ),
     )
-    proxy_sub = proxy_parser.add_subparsers(dest="action", title="actions")
-    proxy_sub.required = False
-    proxy_sub.add_parser(
-        "status",
-        help="Show proxy status",
-        description="Show whether the proxy is running and on which port.",
-    )
-    proxy_parser.set_defaults(action="status")
+    _build_proxy_args(proxy_parser)
 
-    start_parser = proxy_sub.add_parser(
-        "start",
-        help="Start the proxy (Docker Compose)",
-        description=(
-            "Start the proxy via `docker compose up -d`. The proxy runs "
-            "inside the `codefreedom:litellm-latest` image."
-        ),
-    )
-    start_parser.add_argument(
-        "--port",
-        type=int,
-        default=None,
-        help="Port to publish on the host (sets LITELLM_PORT for this run only)",
-    )
-    start_parser.add_argument(
-        "--host",
-        type=str,
-        default=None,
-        help="Host bind address (sets LITELLM_BIND_HOST for this run only)",
-    )
-
-    proxy_sub.add_parser(
-        "stop",
-        help="Stop the proxy",
-        description="Stop the running proxy Docker Compose stack.",
-    )
-    proxy_sub.add_parser(
-        "restart",
-        help="Restart the proxy (Docker Compose)",
-        description="Restart the proxy via `docker compose restart`.",
-    )
-    proxy_sub.add_parser(
-        "validate",
-        help="Validate proxy configuration",
-        description="Validate the proxy configuration file (config.yaml).",
-    )
-
-    # ── tools subcommand ─────────────────────────────────────────────────
-    tools_parser = subparsers.add_parser(
+    # run tools
+    tools_parser = run_sub.add_parser(
         "tools",
         help="Manage auxiliary tools (Chrome, web search, GitHub MCP, web bridge)",
-        description=(
-            "Manage all auxiliary tools as a group. "
-            "Tools are auto-started by 'cf proxy start' when needed."
-        ),
     )
-    tools_parser.add_argument(
-        "action",
-        nargs="?",
-        default="status",
-        choices=["start", "stop", "restart", "status"],
-        help="Action to perform on all tools (default: status)",
-    )
+    _build_tools_args(tools_parser)
 
-    # ── admin subcommand ─────────────────────────────────────────────────
-    admin_parser = subparsers.add_parser(
+    # ── manage — occasional maintenance ────────────────────────────────────
+    manage_parser = subparsers.add_parser(
+        "manage",
+        help="Occasional maintenance (doctor, update, admin)",
+    )
+    manage_sub = manage_parser.add_subparsers(dest="manage_command", title="manage commands")
+
+    # manage doctor
+    doctor_parser = manage_sub.add_parser(
+        "doctor",
+        help="Validate the full CodeFreedom environment",
+    )
+    _build_doctor_args(doctor_parser)
+
+    # manage update
+    update_parser = manage_sub.add_parser(
+        "update",
+        help="Check Docker images and PyPI package for updates",
+    )
+    _build_update_args(update_parser)
+
+    # manage admin
+    admin_parser = manage_sub.add_parser(
         "admin",
         aliases=["adm"],
         help="Backup, restore, list, inspect, and prune configuration",
     )
-    from codefreedom.cli.admin import build_parser as build_admin_parser
-
+    from codefreedom.cli.manage.admin import build_parser as build_admin_parser
     build_admin_parser(admin_parser)
-
-    # ── doctor subcommand ────────────────────────────────────────────────
-    doctor_parser = subparsers.add_parser(
-        "doctor",
-        help="Validate the full CodeFreedom environment",
-        description=(
-            "Run comprehensive diagnostics on your CodeFreedom setup. "
-            "Checks config files, Docker availability, profiles, and proxy status."
-        ),
-    )
-    doctor_parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Show detailed information for all checks (not just failures)",
-    )
-
-    # ── update subcommand ────────────────────────────────────────────────
-    update_parser = subparsers.add_parser(
-        "update",
-        help="Check Docker images and PyPI package for updates",
-        description=(
-            "Check CodeFreedom-managed Docker images and the installed PyPI "
-            "package for available updates."
-        ),
-    )
-    update_parser.add_argument(
-        "services",
-        nargs="*",
-        metavar="SERVICE",
-        help="Filter by service: sandbox, chrome, web, proxy, tools, all (default)",
-    )
-
-    # ── deinit subcommand ────────────────────────────────────────────────
-    deinit_parser = subparsers.add_parser(
-        "deinit",
-        help="Tear down CodeFreedom: stop containers and remove config",
-        description=(
-            "Fully tear down CodeFreedom configuration. Stops all managed "
-            "Docker containers, then prompts for confirmation before deleting "
-            "the entire CodeFreedom home directory (~/.codefreedom/)."
-        ),
-    )
-    deinit_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Skip confirmation prompt before removing the CodeFreedom directory",
-    )
 
     # ══════════════════════════════════════════════════════════════════════
     # Argument parsing & dispatch
@@ -235,89 +124,146 @@ def main() -> None:
 
     args, unknown = parser.parse_known_args()
 
-    # ── Helper: lazy-import-and-run pattern ──────────────────────────────
     def _dispatch(module: str, fn: str, *fn_args, **fn_kwargs) -> None:
         if unknown:
             eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
             sys.exit(2)
         import importlib
-
         mod = importlib.import_module(module)
         sys.exit(getattr(mod, fn)(*fn_args, **fn_kwargs))
 
-    # ── agent subcommand ─────────────────────────────────────────────────
-    if args.command == "agent":
-        from codefreedom.cli.agent import handle_args
+    cmd = args.command
 
-        # Forward unknown args as agent_args
-        agent_name = getattr(args, "agent_name", None)
-        if agent_name and agent_name != "list":
-            args.agent_args = unknown
-        elif unknown:
-            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-            sys.exit(2)
-        sys.exit(handle_args(args))
+    # ── setup ──────────────────────────────────────────────────────────────
+    if cmd == "setup":
+        sc = args.setup_command
+        if sc == "init":
+            _dispatch_init(args)
+        elif sc == "config":
+            _dispatch_config(args)
+        elif sc == "deinit":
+            _dispatch_deinit(args)
+        else:
+            setup_parser.print_help()
+            sys.exit(1)
 
-    # ── config subcommand ────────────────────────────────────────────────
-    if args.command == "config":
-        from codefreedom.cli.config import handle_args
+    # ── run ────────────────────────────────────────────────────────────────
+    elif cmd == "run":
+        rc = args.run_command
+        if rc == "agent":
+            _dispatch_agent(args, unknown)
+        elif rc in ("proxy", "px"):
+            _dispatch("codefreedom.cli.run.proxy", "run", args)
+        elif rc == "tools":
+            _dispatch("codefreedom.cli.run.tools", "run", args)
+        else:
+            run_parser.print_help()
+            sys.exit(1)
 
-        sys.exit(handle_args(args))
+    # ── manage ─────────────────────────────────────────────────────────────
+    elif cmd == "manage":
+        mc = args.manage_command
+        if mc == "doctor":
+            _dispatch("codefreedom.cli.manage.doctor", "run", verbose=getattr(args, "verbose", False))
+        elif mc == "update":
+            _dispatch("codefreedom.cli.manage.update", "run", args)
+        elif mc in ("admin", "adm"):
+            _dispatch("codefreedom.cli.manage.admin", "run", args)
+        else:
+            manage_parser.print_help()
+            sys.exit(1)
 
-    # ── init subcommand (flattened) ──────────────────────────────────────
-    if args.command == "init":
-        if unknown:
-            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
-            sys.exit(2)
+    # ── Fallback ───────────────────────────────────────────────────────────
+    else:
+        parser.print_help()
+        sys.exit(0)
 
-        store = getattr(args, "store", None)
-        staging = getattr(args, "staging", False)
 
-        if args.list:
-            from codefreedom.cli.recipe import list_recipes
+# ══════════════════════════════════════════════════════════════════════════════
+# Parser builders for inline subcommands
+# ══════════════════════════════════════════════════════════════════════════════
 
-            sys.exit(list_recipes(store=store, staging=staging))
-        if args.apply:
-            from codefreedom.cli.recipe import apply_plan
 
-            sys.exit(apply_plan(args.apply))
-        if args.plan:
-            from codefreedom.cli.recipe import plan_recipe
+def _build_init_args(p: argparse.ArgumentParser) -> None:
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--plan", type=str, metavar="NAME", help="Preview a recipe: generate .patch files without applying")
+    group.add_argument("--apply", type=str, metavar="PLAN_ID", help="Apply a previously generated plan by ID")
+    group.add_argument("--list", action="store_true", help="List all available recipes from the repository")
+    p.add_argument("--store", type=str, metavar="URL_OR_PATH", default=None, help="Custom recipe store: GitHub URL or local folder path")
+    p.add_argument("--staging", action="store_true", help="Use recipes from the 'staging' branch instead of 'main'")
 
-            sys.exit(plan_recipe(args.plan, store=store, staging=staging))
 
-        # No flags → install _default base recipe
-        from codefreedom.cli.recipe import init_recipe
+def _build_proxy_args(p: argparse.ArgumentParser) -> None:
+    sub = p.add_subparsers(dest="action", title="actions")
+    sub.required = False
+    sub.add_parser("status", help="Show proxy status")
+    p.set_defaults(action="status")
+    start_p = sub.add_parser("start", help="Start the proxy (Docker Compose)")
+    start_p.add_argument("--port", type=int, default=None, help="Port to publish on the host")
+    start_p.add_argument("--host", type=str, default=None, help="Host bind address")
+    sub.add_parser("stop", help="Stop the proxy")
+    sub.add_parser("restart", help="Restart the proxy (Docker Compose)")
+    sub.add_parser("validate", help="Validate proxy configuration")
 
-        sys.exit(init_recipe("_default", store=store, staging=staging))
 
-    # ── proxy subcommand ─────────────────────────────────────────────────
-    if args.command in ("proxy", "px"):
-        _dispatch("codefreedom.cli.proxy", "run", args)
+def _build_tools_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("action", nargs="?", default="status", choices=["start", "stop", "restart", "status"])
 
-    # ── tools subcommand ─────────────────────────────────────────────────
-    if args.command == "tools":
-        _dispatch("codefreedom.cli.tools", "run", args)
 
-    # ── admin subcommand ─────────────────────────────────────────────────
-    if args.command in ("admin", "adm"):
-        _dispatch("codefreedom.cli.admin", "run", args)
+def _build_doctor_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--verbose", action="store_true", help="Show detailed information for all checks")
 
-    # ── doctor subcommand ────────────────────────────────────────────────
-    if args.command == "doctor":
-        _dispatch("codefreedom.cli.doctor", "run", verbose=args.verbose)
 
-    # ── update subcommand ────────────────────────────────────────────────
-    if args.command == "update":
-        _dispatch("codefreedom.cli.update", "run", args)
+def _build_update_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("services", nargs="*", metavar="SERVICE", help="Filter by service: sandbox, chrome, web, proxy, tools, all (default)")
 
-    # ── deinit subcommand ────────────────────────────────────────────────
-    if args.command == "deinit":
-        _dispatch("codefreedom.cli.deinit", "run", args)
 
-    # ── Fallback ─────────────────────────────────────────────────────────
-    parser.print_help()
-    sys.exit(0)
+def _build_deinit_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--force", action="store_true", help="Skip confirmation prompt before removing the CodeFreedom directory")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Dispatch helpers
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _dispatch_agent(args, unknown) -> None:
+    from codefreedom.cli.run.agent import handle_args
+    agent_name = getattr(args, "agent_name", None)
+    if agent_name and agent_name != "list":
+        args.agent_args = unknown
+    elif unknown:
+        eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+        sys.exit(2)
+    sys.exit(handle_args(args))
+
+
+def _dispatch_config(args) -> None:
+    from codefreedom.cli.setup.config import handle_args
+    sys.exit(handle_args(args))
+
+
+def _dispatch_init(args) -> None:
+    store = getattr(args, "store", None)
+    staging = getattr(args, "staging", False)
+
+    if getattr(args, "list", False):
+        from codefreedom.cli.setup.recipe import list_recipes
+        sys.exit(list_recipes(store=store, staging=staging))
+    if getattr(args, "apply", None):
+        from codefreedom.cli.setup.recipe import apply_plan
+        sys.exit(apply_plan(args.apply))
+    if getattr(args, "plan", None):
+        from codefreedom.cli.setup.recipe import plan_recipe
+        sys.exit(plan_recipe(args.plan, store=store, staging=staging))
+
+    from codefreedom.cli.setup.recipe import init_recipe
+    sys.exit(init_recipe("_default", store=store, staging=staging))
+
+
+def _dispatch_deinit(args) -> None:
+    from codefreedom.cli.setup.deinit import run
+    sys.exit(run(args))
 
 
 if __name__ == "__main__":

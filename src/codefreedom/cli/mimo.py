@@ -28,16 +28,18 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from codefreedom.config import (
+from codefreedom.core.config import (
     get_codefreedom_dir,
     resolve_mimo_profiles_path,
 )
-from codefreedom.log import eprint
-from codefreedom.env_loader import load_env_chain
-from codefreedom.profiles import (
+from codefreedom.core.profiles import (
     list_profiles,
 )
-from codefreedom.tool_registry import generate_session_id
+from codefreedom.env_loader import load_env_chain
+from codefreedom.log import eprint
+from codefreedom.tools.registry import generate_session_id
+from codefreedom.sandbox.signals import forward_signal
+from codefreedom.sandbox.terminal import terminal_size
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:
@@ -95,30 +97,22 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> List[Dict[str, Any
     Returns a list of model dicts (with at least an ``id`` key).
     Returns an empty list if the proxy is unreachable or returns an error.
     """
-    import urllib.error
-    import urllib.request
+    from codefreedom.core.http_client import get_json
+
+    import httpx
 
     models_url = f"{proxy_url.rstrip('/')}/v1/models"
     try:
-        req = urllib.request.Request(models_url)
-        if api_key:
-            req.add_header("Authorization", f"Bearer {api_key}")
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data.get("data", [])
-    except urllib.error.HTTPError as exc:
-        # 401/403 = auth problem — warn so the user knows why fallback kicked in
-        if exc.code in (401, 403):
+        data = get_json(models_url, timeout=5, bearer=api_key)
+        return data.get("data", [])
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (401, 403):
             eprint(
-                f"[MIMO] Proxy returned {exc.code} — is LITELLM_MASTER_KEY set "
+                f"[MIMO] Proxy returned {exc.response.status_code} — is LITELLM_MASTER_KEY set "
                 f"in ~/.codefreedom/.env.claude.secrets?"
             )
         return []
-    except (
-        urllib.error.URLError,
-        json.JSONDecodeError,
-        OSError,
-    ):
+    except (httpx.HTTPError, json.JSONDecodeError):
         return []
 
 
@@ -252,39 +246,6 @@ def _ensure_mimo_sandbox_dir(profile_name: str) -> Tuple[Path, Path]:
     return mimo_home, config_dir
 
 
-# ── Terminal helpers ──────────────────────────────────────────────────────────
-
-
-def terminal_size() -> Tuple[str, str]:
-    """Get terminal width and height as strings."""
-    cols = os.environ.get("MIMO_CODE_COLUMNS")
-    lines = os.environ.get("MIMO_CODE_LINES")
-    try:
-        result = subprocess.run(
-            ["stty", "size"], capture_output=True, text=True, timeout=2, check=False
-        )
-        if result.returncode == 0:
-            parts = result.stdout.strip().split()
-            if len(parts) == 2:
-                if not lines:
-                    lines = parts[0]
-                if not cols:
-                    cols = parts[1]
-    except (subprocess.SubprocessError, FileNotFoundError):
-        pass
-    return cols or "80", lines or "24"
-
-
-def _forward_signal(
-    proc: subprocess.Popen,  # type: ignore[type-arg]
-    signum: int,
-    _frame: object,
-) -> None:
-    """Forward a signal to the child process (docker exec or native)."""
-    if proc and proc.poll() is None:
-        proc.send_signal(signum)
-
-
 # ── Execution ─────────────────────────────────────────────────────────────────
 
 
@@ -318,8 +279,8 @@ def run_local(
 
     try:
         proc = subprocess.Popen(cmd, env=env)
-        signal.signal(signal.SIGINT, lambda s, f: _forward_signal(proc, s, f))
-        signal.signal(signal.SIGTERM, lambda s, f: _forward_signal(proc, s, f))
+        signal.signal(signal.SIGINT, lambda s, f: forward_signal(proc, s, f))
+        signal.signal(signal.SIGTERM, lambda s, f: forward_signal(proc, s, f))
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
@@ -339,9 +300,10 @@ def run_docker(
 ) -> int:
     """Run ``mimo`` inside an ephemeral Docker container.
 
-    Each session gets a fresh container with a random name, cleaned up
-    on exit (including Ctrl+C).
+    Delegates container lifecycle to the shared sandbox launcher.
     """
+    from codefreedom.sandbox.launcher import run_sandbox
+
     sandbox_images = sandbox_images or {}
     image = sandbox_images.get("default") or DEFAULT_MIMO_IMAGE
 
@@ -350,13 +312,13 @@ def run_docker(
     eprint(f"[IMAGE] Using sandbox image: {image}.")
     eprint(f"[CONTAINER] Name: {container_name}.")
 
-    # ── Generate proxy config first (used both for env vars and mounting) ──
+    # ── Generate proxy config first ────────────────────────────────────────────
     proxy_url = _detect_proxy_url(profile_env)
     config = _generate_mimo_config(proxy_url, profile_env)
     mimo_home_dir, config_dir = _ensure_mimo_sandbox_dir(profile_name)
     config_path = _write_mimo_config(config, config_dir)
 
-    # ── Build env flags ─────────────────────────────────────────────────────
+    # ── Build env flags ───────────────────────────────────────────────────────
     env_flags: List[str] = []
     for key in sorted(profile_env.keys()):
         val = profile_env[key]
@@ -366,135 +328,57 @@ def run_docker(
     cols, lines = terminal_size()
     env_flags.extend(["-e", f"COLUMNS={cols}", "-e", f"LINES={lines}"])
 
+    # ── Container identity ────────────────────────────────────────────────────
     host_uid = os.getuid()
     host_gid = os.getgid()
-
-    # ── Resolve container identity ──────────────────────────────────────────
     if run_as_me:
         container_home = f"/home/{Path.home().name}"
         container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
-        eprint(
-            f"[SANDBOX] --run-as-me: container will run as "
-            f"uid={host_uid}({Path.home().name}) gid={host_gid}"
-        )
+        eprint(f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}")
     else:
         container_home = "/home/codefreedom"
         container_user_flag = []
         eprint("[SANDBOX] Running as default container user 'codefreedom' (uid 1000).")
 
-    # ── Build docker options ───────────────────────────────────────────────
+    # ── Docker run base options ───────────────────────────────────────────────
     base_opts = [
-        "--network",
-        "host",
+        "--network", "host",
         *container_user_flag,
         "--ipc=host",
-        "-v",
-        f"{workspace_dir}:/workspace",
-        "-w",
-        "/workspace",
-        "-v",
-        f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
-        "-v",
-        f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
-        # Isolated MIMOCODE_HOME
-        "-v",
-        f"{mimo_home_dir}:{container_home}/.local/share/mimocode",
-        # Proxy config
-        "-v",
-        f"{config_path}:{container_home}/.config/mimocode/mimocode.json:ro",
-        "-e",
-        f"HOME={container_home}",
-        "-e",
-        f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
-        "-e",
-        "IS_SANDBOX=1",
-        "-e",
-        "MIMOCODE_DISABLE_AUTOUPDATE=1",
+        "-v", f"{workspace_dir}:/workspace",
+        "-w", "/workspace",
+        "-v", f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
+        "-v", f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
+        "-v", f"{mimo_home_dir}:{container_home}/.local/share/mimocode",
+        "-v", f"{config_path}:{container_home}/.config/mimocode/mimocode.json:ro",
+        "-e", f"HOME={container_home}",
+        "-e", f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+        "-e", "IS_SANDBOX=1",
+        "-e", "MIMOCODE_DISABLE_AUTOUPDATE=1",
     ]
 
-    # ── Ensure image is available ──────────────────────────────────────────
-    _inspect = subprocess.run(
-        ["docker", "image", "inspect", image],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
-    if _inspect.returncode != 0:
-        eprint(f"[IMAGE] Pulling '{image}'...")
-        pull = subprocess.run(
-            ["docker", "pull", image],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-        if pull.returncode != 0:
-            eprint(f"[ERROR] Failed to pull image '{image}'.")
-            if pull.stderr:
-                eprint(f"   {pull.stderr.strip()}")
-            return 1
-    else:
-        eprint(f"[IMAGE] Using cached image '{image}'.")
-
-    # ── Start ephemeral container ─────────────────────────────────────────
-    eprint(f"[RUN] Creating ephemeral container '{container_name}'...")
-    create = subprocess.run(
-        ["docker", "run", "-d", "--rm", "--name", container_name]
-        + base_opts
-        + env_flags
-        + [image, "sleep", "infinity"],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    if create.returncode != 0:
-        eprint("[ERROR] Failed to start container.")
-        if create.stderr:
-            eprint(f"   {create.stderr.strip()}")
-        return 1
-    eprint("[SANDBOX] Container started.")
-
-    # ── Exec mimo into the container ───────────────────────────────────────
-    eprint("[EXEC] Attaching MiMoCode session...")
-
-    exec_cmd = (
+    # ── Exec command ──────────────────────────────────────────────────────────
+    exec_image_cmd = (
         ["docker", "exec", "-it"]
         + container_user_flag
         + ["-e", f"HOME={container_home}"]
-        + ["-e", f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json"]
-        + env_flags
         + [container_name, "mimo"]
         + mimo_args
     )
 
-    exit_code = 1
-    try:
-        proc = subprocess.Popen(exec_cmd)
-        signal.signal(signal.SIGINT, lambda s, f: _forward_signal(proc, s, f))
-        signal.signal(signal.SIGTERM, lambda s, f: _forward_signal(proc, s, f))
-        proc.wait()
-        exit_code = proc.returncode
-    except KeyboardInterrupt:
-        exit_code = 130
-    finally:
-        eprint(f"[CLEAN] Stopping container '{container_name}'...")
-        subprocess.run(
-            ["docker", "stop", container_name],
-            capture_output=True,
-            timeout=15,
-            check=False,
-        )
-        subprocess.run(
-            ["docker", "rm", "-f", container_name],
-            capture_output=True,
-            timeout=5,
-            check=False,
-        )
-        eprint("[SANDBOX] Container cleaned up.")
+    exec_extra_env = [
+        "-e",
+        f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+    ]
 
-    return exit_code
+    return run_sandbox(
+        image=image,
+        container_name=container_name,
+        base_opts=base_opts,
+        env_flags=env_flags,
+        exec_image_cmd=exec_image_cmd,
+        exec_extra_env=exec_extra_env,
+    )
 
 
 # ── Init command ─────────────────────────────────────────────────────────────
@@ -577,84 +461,16 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 def status() -> int:
     """Show all codefreedom mimo sandbox containers. Returns exit code."""
-    try:
-        result = subprocess.run(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                f"name={_CONTAINER_PREFIX}",
-                "--format",
-                "{{.Names}}\t{{.Status}}\t{{.CreatedAt}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
+    from codefreedom.sandbox.launcher import sandbox_status
 
-        containers = [line for line in result.stdout.strip().split("\n") if line]
-        if containers:
-            eprint(f"[STATUS] {len(containers)} MiMoCode sandbox container(s):")
-            for line in containers:
-                name, status_line, _created = line.split("\t", 2)
-                marker = "RUNNING" if "Up " in status_line else "STOPPED"
-                eprint(f"   {marker} {name}  ({status_line})")
-        else:
-            eprint("[STATUS] No MiMoCode sandbox containers found.")
-        return 0
-    except subprocess.TimeoutExpired:
-        eprint("[STATUS] Docker command timed out. Is Docker running?")
-        return 1
-    except FileNotFoundError:
-        eprint("[ERROR] Docker not found.")
-        return 1
+    return sandbox_status(_CONTAINER_PREFIX)
 
 
 def stop() -> int:
     """Stop and remove all codefreedom mimo sandbox containers. Returns exit code."""
-    try:
-        result = subprocess.run(
-            [
-                "docker",
-                "ps",
-                "-aq",
-                "--filter",
-                f"name={_CONTAINER_PREFIX}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
+    from codefreedom.sandbox.launcher import sandbox_stop
 
-        ids = [c for c in result.stdout.strip().split("\n") if c]
-        if not ids:
-            eprint("[CLEAN] No MiMoCode sandbox containers to remove.")
-            return 0
-
-        eprint(f"[CLEAN] Stopping {len(ids)} container(s)...")
-        subprocess.run(
-            ["docker", "stop"] + ids,
-            capture_output=True,
-            timeout=30,
-            check=False,
-        )
-        subprocess.run(
-            ["docker", "rm", "-f"] + ids,
-            capture_output=True,
-            timeout=30,
-            check=False,
-        )
-        eprint("[SANDBOX] All MiMoCode sandbox containers removed.")
-        return 0
-    except subprocess.TimeoutExpired:
-        eprint("[ERROR] Docker command timed out.")
-        return 1
-    except FileNotFoundError:
-        eprint("[ERROR] Docker not found.")
-        return 1
+    return sandbox_stop(_CONTAINER_PREFIX)
 
 
 # ── Main entry point ─────────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from codefreedom.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint
 from codefreedom.env_loader import get_env, load_dotenv
 
@@ -277,7 +277,7 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     # Ensure tools are running (needed for WebSearch, browser automation, etc.)
     # Non-fatal — proxy starts regardless.
     try:
-        from codefreedom.cli.tools import ensure_tools
+        from codefreedom.cli.run.tools import ensure_tools
 
         ensure_tools()
     except Exception as exc:

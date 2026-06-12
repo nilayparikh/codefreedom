@@ -6,14 +6,16 @@ import json
 import os
 import re
 import shutil
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import httpx
+
+from codefreedom.core.http_client import get_text
+
 import yaml
 
-from codefreedom.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -252,13 +254,11 @@ def _raw_url(recipe_name: str, path: str = "") -> str:
 def _fetch_text(url: str, timeout: int = 15) -> str:
     """Fetch text content from a URL with a short timeout."""
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "codefreedom/0.1"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read().decode("utf-8")
-    except urllib.error.HTTPError as e:
-        raise RecipeError(f"HTTP {e.code} fetching {url}") from e
-    except urllib.error.URLError as e:
-        raise RecipeError(f"URL error for {url}: {e.reason}") from e
+        return get_text(url, timeout=timeout, headers={"User-Agent": "codefreedom/0.1"})
+    except httpx.HTTPStatusError as e:
+        raise RecipeError(f"HTTP {e.response.status_code} fetching {url}") from e
+    except httpx.HTTPError as e:
+        raise RecipeError(f"URL error for {url}: {e}") from e
 
 
 def _fetch_recipe_manifest(recipe_name: str) -> Dict[str, Any]:

@@ -6,7 +6,7 @@ import argparse
 import subprocess
 
 
-from codefreedom.cli.deinit import (
+from codefreedom.cli.setup.deinit import (
     _find_codefreedom_containers,
     _stop_and_remove_container,
     _stop_proxy,
@@ -155,7 +155,7 @@ class TestStopTools:
         def fake_stop_all(*a, **kw):
             return 0
 
-        monkeypatch.setattr("codefreedom.cli.tools.stop_all", fake_stop_all)
+        monkeypatch.setattr("codefreedom.cli.run.tools.stop_all", fake_stop_all)
 
         assert _stop_tools() == 0
 
@@ -165,7 +165,7 @@ class TestStopTools:
         def fake_stop_all(*a, **kw):
             raise RuntimeError("tools failure")
 
-        monkeypatch.setattr("codefreedom.cli.tools.stop_all", fake_stop_all)
+        monkeypatch.setattr("codefreedom.cli.run.tools.stop_all", fake_stop_all)
 
         assert _stop_tools() == 1
 
@@ -244,7 +244,7 @@ class TestRun:
         def fake_stop_all(*a, **kw):
             return 0
 
-        monkeypatch.setattr("codefreedom.cli.tools.stop_all", fake_stop_all)
+        monkeypatch.setattr("codefreedom.cli.run.tools.stop_all", fake_stop_all)
 
     def test_force_flag_skips_prompt(self, monkeypatch, tmp_path):
         """With --force, deletes the directory without prompting."""

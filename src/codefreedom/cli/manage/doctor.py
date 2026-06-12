@@ -33,7 +33,7 @@ from codefreedom.cli.docker_utils import (
     get_codefreedom_container_ports,
     is_port_available,
 )
-from codefreedom.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.env_loader import load_dotenv
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -72,45 +72,26 @@ import os
 from pathlib import Path
 from typing import Dict, Optional
 
-from codefreedom.interpolate import resolve_env_vars
+from dotenv import dotenv_values
+
+from codefreedom.core.interpolate import resolve_env_vars
 from codefreedom.log import eprint
 
 
 def load_dotenv(path: Path) -> Dict[str, str]:
     """Parse a .env-style file and return a dict of key=value pairs.
 
-    Handles:
-      - Comment lines (# …)
-      - Quoted values ("foo", 'foo')
-      - Variable references like ${VAR_NAME} (substituted from current env)
+    Delegates parsing to python-dotenv, then applies ${VAR} and ${VAR:-default}
+    interpolation via our own resolver (python-dotenv interpolates only from
+    os.environ, not from intra-file references or fallback defaults).
     """
-    env: Dict[str, str] = {}
     if not path.exists():
-        return env
+        return {}
 
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" not in line:
-                continue
-            key, _, raw_val = line.partition("=")
-            key = key.strip()
-            raw_val = raw_val.strip()
+    raw = {k: v for k, v in dotenv_values(str(path)).items() if v is not None}
+    context: Dict[str, str] = {**os.environ, **raw}
 
-            # Strip surrounding quotes
-            if (
-                len(raw_val) >= 2
-                and raw_val[0] in ('"', "'")
-                and raw_val[0] == raw_val[-1]
-            ):
-                raw_val = raw_val[1:-1]
-
-            # Resolve ${VAR} references from current env + already-parsed vars
-            raw_val = resolve_env_vars(raw_val, {**os.environ, **env})
-            env[key] = raw_val
-    return env
+    return {key: resolve_env_vars(val, context) for key, val in raw.items()}
 
 
 def load_env_chain(
@@ -149,7 +130,7 @@ def load_env_chain(
     function with support for extra injections (e.g. proxy POSTGRES_* paths)
     and is the single canonical env-resolution entry point.
     """
-    from codefreedom.config import get_codefreedom_dir
+    from codefreedom.core.config import get_codefreedom_dir
 
     codefreedom_dir = get_codefreedom_dir()
     merged: Dict[str, str] = {}

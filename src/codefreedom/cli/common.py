@@ -95,7 +95,7 @@ def load_profile_env_only(
         Tuple of (profile_env, exit_code) where exit_code is 0 on success,
         1 on error.
     """
-    from codefreedom.profiles import (
+    from codefreedom.core.profiles import (
         ProfileError,
         load_profile_env,
         load_profiles,
@@ -217,7 +217,7 @@ def load_profile_with_tools(
         Tuple of (profile_env, sandbox_images, tools, exit_code)
         exit_code is 0 on success, 1 on error.
     """
-    from codefreedom.profiles import (
+    from codefreedom.core.profiles import (
         ProfileError,
         get_profile_sandbox_images,
         get_profile_tools,
@@ -280,7 +280,7 @@ def acquire_and_run(
     Returns:
         Exit code from run_fn
     """
-    from codefreedom.tool_registry import acquire_tools, release_tools
+    from codefreedom.tools.registry import acquire_tools, release_tools
 
     acquired_tools: list[str] = []
     if tools:
