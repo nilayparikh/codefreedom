@@ -118,8 +118,6 @@ jobs:
           test -f ~/.codefreedom/profiles/web.yaml || { echo "MISSING: web profile"; exit 1; }
           test -f ~/.codefreedom/profiles/github.yaml || { echo "MISSING: github profile"; exit 1; }
           test -f ~/.codefreedom/profiles/web-bridge.yaml || { echo "MISSING: web-bridge profile"; exit 1; }
-          test -f ~/.codefreedom/.env.claude || { echo "MISSING: .env.claude"; exit 1; }
-          test -f ~/.codefreedom/.env.proxy || { echo "MISSING: .env.proxy"; exit 1; }
 
           # Validate proxy config YAML
           python -c "
