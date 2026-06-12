@@ -85,7 +85,13 @@ def _resolve_store(
     store = store.strip()
 
     # ── Local path ──────────────────────────────────────────────────────
-    expanded = os.path.expanduser(store)
+    if store.startswith("~"):
+        home = os.environ.get("HOME") or os.environ.get("USERPROFILE") or str(
+            Path.home()
+        )
+        expanded = home + store[1:]
+    else:
+        expanded = os.path.expanduser(store)
     if os.path.isabs(expanded) or store.startswith("."):
         p = Path(expanded)
         if p.is_dir():
