@@ -548,8 +548,8 @@ class TestSummary:
         _print_summary(manifest_fixture, Path("/tmp"))
         captured = capsys.readouterr()
         assert "NEXT STEPS" in captured.out
-        assert "cf proxy start" in captured.out
-        assert "cf cc" in captured.out
+        assert "cf run proxy start" in captured.out
+        assert "cf run agent claude" in captured.out
 
     def test_no_required_secrets(self, capsys):
         """Summary works without required_secrets."""

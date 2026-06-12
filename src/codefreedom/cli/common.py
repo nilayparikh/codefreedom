@@ -17,7 +17,6 @@ from typing import Any, Callable
 
 from codefreedom.log import eprint
 
-
 # ── Profile display ─────────────────────────────────────────────────────────
 
 
@@ -78,7 +77,7 @@ def load_profile_env_only(
     profile_name: str,
     profiles_path: Path,
     base_env: dict[str, str],
-    error_prefix: str = "codefreedom claude init",
+    error_prefix: str = "codefreedom setup init",
 ) -> tuple[dict[str, str], int]:
     """Load profile env without tools or sandbox images.
 
@@ -89,7 +88,7 @@ def load_profile_env_only(
         profile_name: Name of the profile to load
         profiles_path: Path to the profiles file
         base_env: Base environment from load_env_chain()
-        error_prefix: Prefix for error messages (e.g. "codefreedom claude init")
+        error_prefix: Prefix for error messages (e.g. "codefreedom setup init")
 
     Returns:
         Tuple of (profile_env, exit_code) where exit_code is 0 on success,
@@ -177,7 +176,9 @@ def confirm_stdout_output(
     Returns:
         0 on success, 1 if user declines or aborts
     """
-    eprint(f"{warning_prefix} Outputting to stdout. Values may be captured in terminal logs.")
+    eprint(
+        f"{warning_prefix} Outputting to stdout. Values may be captured in terminal logs."
+    )
     try:
         response = input(f"{warning_prefix} Proceed? [y/N] ")
         if response.lower() not in ("y", "yes"):

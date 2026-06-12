@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from codefreedom.env_loader import load_env_chain
 from codefreedom.log import eprint
 from codefreedom.core.profiles import ProfileError, load_profile_env, load_profiles
+
 # ╔═══════════════════════════════════════════════════════════════════════════╗
 # ║ Section 1: Claude Code VS Code config (`vscode claude config`)            ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
@@ -195,7 +196,7 @@ def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
     profiles_path = _resolve_profiles_path()
     if not profiles_path.exists():
         eprint(f"[ERROR] Profiles file not found: {profiles_path}")
-        eprint("   Run: codefreedom claude init")
+        eprint("   Run: codefreedom setup init")
         return 1
 
     try:
@@ -255,5 +256,3 @@ def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
         " (e.g. %APPDATA%\\Code\\User\\settings.json on Windows) to activate."
     )
     return 0
-
-

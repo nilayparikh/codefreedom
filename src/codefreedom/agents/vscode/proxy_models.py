@@ -7,14 +7,18 @@ Probes /health/liveliness and /v1/model/info to auto-discover models.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
+import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import httpx
+import yaml
 
 from codefreedom.env_loader import load_env_chain
 from codefreedom.log import eprint
+
 # ╔═══════════════════════════════════════════════════════════════════════════╗
 # ║ Section 2: Proxy VS Code config (`vscode proxy config`)                  ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
@@ -86,6 +90,84 @@ def _resolve_reasoning_effort(_model_name: str) -> List[str]:
     return list(_STANDARD_REASONING_EFFORT_LEVELS)
 
 
+def _load_route_image_models(codefreedom_dir: Optional[Path] = None) -> Set[str]:
+    """Return model names that have ``route-image-request: enabled``.
+
+    Reads provider YAML files from ``~/.codefreedom/proxy/config/providers/``
+    (or ``$CODEFREEDOM_HOME/proxy/config/providers/``) and collects every
+    ``model_name`` whose ``codefreedom.plugins.route-image-request.enabled``
+    is ``true``.  These models can process images through the proxy's
+    image-router middleware, even if the upstream model_info does not
+    advertise ``supports_vision``.
+
+    The logic mirrors ``image_router.py``'s ``_load_provider_codefreedom()``
+    method so the same source of truth is used.
+    """
+    if codefreedom_dir is None:
+        from codefreedom.core.config import get_codefreedom_dir
+
+        codefreedom_dir = get_codefreedom_dir()
+    providers_dir = codefreedom_dir / "proxy" / "config" / "providers"
+    if not os.path.isdir(providers_dir):
+        return set()
+    result: Set[str] = set()
+    for yp in glob.glob(os.path.join(providers_dir, "*.yaml")):
+        try:
+            with open(yp, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        for entry in data.get("model_list", []) or []:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("model_name")
+            cf = entry.get("codefreedom")
+            if not (isinstance(name, str) and isinstance(cf, dict)):
+                continue
+            plugins = cf.get("plugins") or {}
+            route_cfg = plugins.get("route-image-request")
+            if isinstance(route_cfg, dict) and route_cfg.get("enabled") is True:
+                result.add(name)
+    return result
+
+
+def _load_alias_models(codefreedom_dir: Optional[Path] = None) -> Set[str]:
+    """Return model names that are ``model_group_alias`` entries.
+
+    Reads ``~/.codefreedom/proxy/config/config.yaml`` (or
+    ``$CODEFREEDOM_HOME/proxy/config/config.yaml``) and collects the
+    keys of ``router_settings.model_group_alias``.  These are shorthand
+    aliases (e.g. ``opus``, ``sonnet``) that LiteLLM resolves to real
+    model groups at runtime.  By default the VS Code config skips them
+    so users only see the actual model entries.
+
+    Pass ``--keep-alias`` to include them.
+    """
+    if codefreedom_dir is None:
+        from codefreedom.core.config import get_codefreedom_dir
+
+        codefreedom_dir = get_codefreedom_dir()
+    config_path = codefreedom_dir / "proxy" / "config" / "config.yaml"
+    if not config_path.is_file():
+        return set()
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return set()
+    if not isinstance(config, dict):
+        return set()
+    router = config.get("router_settings") or {}
+    if not isinstance(router, dict):
+        return set()
+    aliases = router.get("model_group_alias") or {}
+    if not isinstance(aliases, dict):
+        return set()
+    return set(aliases.keys())
+
+
 def _resolve_master_key() -> Optional[str]:
     """Return LITELLM_MASTER_KEY from the canonical :func:`get_env` chain.
 
@@ -149,7 +231,11 @@ def _fetch_model_info(
     return data
 
 
-def _model_to_vscode_entry(model: Dict[str, Any], base_url: str) -> Dict[str, Any]:
+def _model_to_vscode_entry(
+    model: Dict[str, Any],
+    base_url: str,
+    route_image_models: Optional[Set[str]] = None,
+) -> Dict[str, Any]:
     """Convert a single proxy model dict to a VS Code chatLanguageModels entry.
 
     `toolCalling` is always advertised as `True` so VS Code's chat UI shows
@@ -177,7 +263,11 @@ def _model_to_vscode_entry(model: Dict[str, Any], base_url: str) -> Dict[str, An
     model_name = model.get("model_name") or model_info.get("id") or "unknown"
 
     # Vision: be permissive -- anything truthy under these keys counts.
+    # Also treat models with route-image-request enabled as vision-capable
+    # since the proxy middleware handles image-to-text transcription.
     vision = bool(model_info.get("supports_vision") or model_info.get("vision"))
+    if not vision and route_image_models and model_name in route_image_models:
+        vision = True
 
     # Token limits: prefer explicit fields, fall back to defaults.
     max_input = (
@@ -257,7 +347,10 @@ def _deduplicate_models(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _build_vscode_entry(
-    provider_name: str, base_url: str, models: List[Dict[str, Any]]
+    provider_name: str,
+    base_url: str,
+    models: List[Dict[str, Any]],
+    route_image_models: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     """Build a single chatLanguageModels.json-compatible entry."""
     deduped = _deduplicate_models(models)
@@ -266,7 +359,9 @@ def _build_vscode_entry(
         "vendor": "customendpoint",
         "apiKey": _VSCODE_APIKEY_PLACEHOLDER,
         "apiType": "chat-completions",
-        "models": [_model_to_vscode_entry(m, base_url) for m in deduped],
+        "models": [
+            _model_to_vscode_entry(m, base_url, route_image_models) for m in deduped
+        ],
     }
 
 
@@ -294,7 +389,7 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     if not _check_proxy_live(host, port):
         eprint(
             f"[ERROR] Proxy is not responding at http://{host}:{port}."
-            " Is `codefreedom proxy start` running?"
+            " Is `codefreedom run proxy start` running?"
         )
         return 1
 
@@ -328,7 +423,23 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
         return 1
 
     base_url = f"http://{host}:{port}/v1"
-    entry = _build_vscode_entry(provider_name, base_url, models)
+    route_image_models = _load_route_image_models()
+
+    keep_alias = getattr(args, "keep_alias", False)
+    if not keep_alias:
+        alias_models = _load_alias_models()
+        if alias_models:
+            before = len(models)
+            models = [m for m in models if _resolve_model_id(m) not in alias_models]
+            skipped = before - len(models)
+            if skipped:
+                eprint(
+                    f"[vscode] Skipped {skipped} alias model(s)"
+                    f" ({', '.join(sorted(alias_models))});"
+                    " use --keep-alias to include them."
+                )
+
+    entry = _build_vscode_entry(provider_name, base_url, models, route_image_models)
     rendered = json.dumps(entry, indent=2)
 
     if out_path:

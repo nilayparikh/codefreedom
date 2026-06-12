@@ -1,11 +1,11 @@
 """Proxy subcommand -- manage the LLM routing proxy (Docker Compose only).
 
 Usage:
-    codefreedom proxy start                Start the proxy (Docker Compose)
-    codefreedom proxy stop                 Stop the proxy
-    codefreedom proxy restart              Restart the proxy (Docker Compose)
-    codefreedom proxy status               Show proxy status
-    codefreedom proxy validate             Validate configuration
+    codefreedom run proxy start                Start the proxy (Docker Compose)
+    codefreedom run proxy stop                 Stop the proxy
+    codefreedom run proxy restart              Restart the proxy (Docker Compose)
+    codefreedom run proxy status               Show proxy status
+    codefreedom run proxy validate             Validate configuration
 
 The proxy is always run via `docker compose` against
 `~/.codefreedom/proxy/docker-compose.yaml`. The LiteLLM process runs inside
@@ -14,7 +14,7 @@ which bakes in the WebSearch count display patch.  The web-bridge is now a
 standalone tool (``cf tools web-bridge``) — start it separately before the
 proxy if you need WebSearch support.
 
-VS Code integration: see `codefreedom config vscode proxy config`.
+VS Code integration: see `codefreedom setup config vscode proxy`.
 """
 
 from __future__ import annotations

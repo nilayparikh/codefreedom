@@ -587,7 +587,7 @@ class TestVscodeSettingsGenerate:
         assert result == 1
         captured = capsys.readouterr()
         assert "Profiles file not found" in captured.err
-        assert "codefreedom claude init" in captured.err
+        assert "codefreedom setup init" in captured.err
 
     def test_profile_error_returns_1(self, monkeypatch, tmp_path: Path, capsys):
         profiles_file = tmp_path / "profiles" / "claude-code.yaml"

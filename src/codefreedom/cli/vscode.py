@@ -24,6 +24,8 @@ from codefreedom.agents.vscode.proxy_models import (
     _check_proxy_live,
     _deduplicate_models,
     _fetch_model_info,
+    _load_alias_models,
+    _load_route_image_models,
     _model_to_vscode_entry,
     _proxy_health_url,
     _proxy_model_info_url,
@@ -46,6 +48,8 @@ __all__ = [
     "_deduplicate_models",
     "_fetch_model_info",
     "_is_secret_env_var",
+    "_load_alias_models",
+    "_load_route_image_models",
     "_model_to_vscode_entry",
     "_proxy_health_url",
     "_proxy_model_info_url",
@@ -131,4 +135,11 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
         default=None,
         metavar="PATH",
         help="Write output to a file instead of stdout",
+    )
+    vscode_proxy.add_argument(
+        "--keep-alias",
+        action="store_true",
+        default=False,
+        help="Include alias models (e.g. opus, sonnet) in the output"
+        " (default: skip them)",
     )

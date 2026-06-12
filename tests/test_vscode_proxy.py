@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
+import yaml
 
 from codefreedom.cli.vscode import (
     _STANDARD_REASONING_EFFORT_LEVELS,
@@ -18,6 +19,8 @@ from codefreedom.cli.vscode import (
     _check_proxy_live,
     _deduplicate_models,
     _fetch_model_info,
+    _load_alias_models,
+    _load_route_image_models,
     _model_to_vscode_entry,
     _proxy_health_url,
     _proxy_model_info_url,
@@ -107,6 +110,186 @@ class TestResolveMasterKey:
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-from-cf-cli-only")
         assert _resolve_master_key() == "sk-from-cf-cli-only"
+
+
+# ── _load_route_image_models ─────────────────────────────────────────────────
+
+
+class TestLoadRouteImageModels:
+    def test_empty_dir_returns_empty_set(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        assert _load_route_image_models(tmp_path) == set()
+
+    def test_no_providers_dir_returns_empty_set(self, tmp_path: Path):
+        assert _load_route_image_models(tmp_path) == set()
+
+    def test_reads_enabled_models(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "a.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "MiMo-V2.5",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                        {
+                            "model_name": "DeepSeek-V4-Flash",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        result = _load_route_image_models(tmp_path)
+        assert result == {"MiMo-V2.5", "DeepSeek-V4-Flash"}
+
+    def test_skips_disabled_models(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "a.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "some-model",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": False},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        assert _load_route_image_models(tmp_path) == set()
+
+    def test_skips_models_without_codefreedom(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "a.yaml").write_text(
+            yaml.safe_dump({"model_list": [{"model_name": "bare-model"}]})
+        )
+        assert _load_route_image_models(tmp_path) == set()
+
+    def test_skips_malformed_yaml(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "bad.yaml").write_text("{{{{not yaml")
+        (providers / "good.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "ok-model",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        assert _load_route_image_models(tmp_path) == {"ok-model"}
+
+    def test_aggregates_across_multiple_yaml_files(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "a.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "model-a",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        (providers / "b.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "model-b",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        assert _load_route_image_models(tmp_path) == {"model-a", "model-b"}
+
+
+# ── _load_alias_models ───────────────────────────────────────────────────────
+
+
+class TestLoadAliasModels:
+    def test_empty_config_returns_empty_set(self, tmp_path: Path):
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text("router_settings:\n")
+        assert _load_alias_models(tmp_path) == set()
+
+    def test_no_config_file_returns_empty_set(self, tmp_path: Path):
+        assert _load_alias_models(tmp_path) == set()
+
+    def test_reads_aliases(self, tmp_path: Path):
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "router_settings": {
+                        "model_group_alias": {
+                            "fable": "Qwen3.7-Max",
+                            "opus": "Qwen3.7-Plus",
+                            "sonnet": "DeepSeek-V4-Pro",
+                            "haiku": "DeepSeek-V4-Flash",
+                            "custom": "Qwen3.6-27B",
+                        }
+                    }
+                }
+            )
+        )
+        result = _load_alias_models(tmp_path)
+        assert result == {"fable", "opus", "sonnet", "haiku", "custom"}
+
+    def test_skips_malformed_yaml(self, tmp_path: Path):
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text("{{{{not yaml")
+        assert _load_alias_models(tmp_path) == set()
+
+    def test_missing_router_settings(self, tmp_path: Path):
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text(
+            yaml.safe_dump({"general_settings": {}})
+        )
+        assert _load_alias_models(tmp_path) == set()
 
 
 # ── URL helpers ──────────────────────────────────────────────────────────────
@@ -401,6 +584,53 @@ class TestModelToVscodeEntry:
             out = _model_to_vscode_entry({"model_name": name}, self.BASE_URL)
             assert out["supportsReasoningEffort"] == self.STD
 
+    def test_route_image_request_enables_vision(self):
+        route_models = {"MiMo-V2.5", "DeepSeek-V4-Flash"}
+        out = _model_to_vscode_entry(
+            {
+                "model_name": "MiMo-V2.5",
+                "model_info": {"supports_vision": False},
+            },
+            self.BASE_URL,
+            route_image_models=route_models,
+        )
+        assert out["vision"] is True
+
+    def test_route_image_request_not_in_set_no_override(self):
+        route_models = {"MiMo-V2.5"}
+        out = _model_to_vscode_entry(
+            {
+                "model_name": "Some-Other-Model",
+                "model_info": {"supports_vision": False},
+            },
+            self.BASE_URL,
+            route_image_models=route_models,
+        )
+        assert out["vision"] is False
+
+    def test_route_image_request_none_set_no_override(self):
+        out = _model_to_vscode_entry(
+            {
+                "model_name": "MiMo-V2.5",
+                "model_info": {"supports_vision": False},
+            },
+            self.BASE_URL,
+            route_image_models=None,
+        )
+        assert out["vision"] is False
+
+    def test_vision_true_from_model_info_preserved_even_with_route_set(self):
+        route_models = set()
+        out = _model_to_vscode_entry(
+            {
+                "model_name": "Kimi-K2.6",
+                "model_info": {"supports_vision": True},
+            },
+            self.BASE_URL,
+            route_image_models=route_models,
+        )
+        assert out["vision"] is True
+
 
 # ── _resolve_reasoning_effort ────────────────────────────────────────────────
 
@@ -503,8 +733,9 @@ def _args(
     port: int = 4000,
     name: str = "CodeFreedom",
     out: Any = None,
+    keep_alias: bool = False,
 ) -> argparse.Namespace:
-    return argparse.Namespace(host=host, port=port, name=name, out=out)
+    return argparse.Namespace(host=host, port=port, name=name, out=out, keep_alias=keep_alias)
 
 
 class TestCmdVscodeGenerate:
@@ -695,3 +926,109 @@ class TestCmdVscodeGenerate:
         assert entry["id"] == "m1"
         # The richer entry has vision=False (model_info had no vision key)
         assert entry["vision"] is False
+
+    def test_aliases_skipped_by_default(self, monkeypatch, tmp_path: Path, capsys):
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+        )
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
+            lambda h, p, k, *, timeout=10.0: [
+                {"model_name": "fable"},
+                {"model_name": "opus"},
+                {"model_name": "Qwen3.7-Max"},
+                {"model_name": "DeepSeek-V4-Flash"},
+            ],
+        )
+        # Write alias config
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "router_settings": {
+                        "model_group_alias": {
+                            "fable": "Qwen3.7-Max",
+                            "opus": "Qwen3.7-Plus",
+                        }
+                    }
+                }
+            )
+        )
+
+        result = cmd_vscode_proxy_config(_args())
+        assert result == 0
+
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        ids = [m["id"] for m in payload["models"]]
+        assert "fable" not in ids
+        assert "opus" not in ids
+        assert "Qwen3.7-Max" in ids
+        assert "DeepSeek-V4-Flash" in ids
+
+    def test_aliases_included_with_keep_alias(self, monkeypatch, tmp_path: Path, capsys):
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+        )
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
+            lambda h, p, k, *, timeout=10.0: [
+                {"model_name": "fable"},
+                {"model_name": "opus"},
+                {"model_name": "Qwen3.7-Max"},
+            ],
+        )
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "router_settings": {
+                        "model_group_alias": {
+                            "fable": "Qwen3.7-Max",
+                            "opus": "Qwen3.7-Plus",
+                        }
+                    }
+                }
+            )
+        )
+
+        result = cmd_vscode_proxy_config(_args(keep_alias=True))
+        assert result == 0
+
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        ids = [m["id"] for m in payload["models"]]
+        assert "fable" in ids
+        assert "opus" in ids
+        assert "Qwen3.7-Max" in ids
+
+    def test_no_aliases_config_keeps_all_models(self, monkeypatch, tmp_path: Path, capsys):
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+        )
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
+            lambda h, p, k, *, timeout=10.0: [
+                {"model_name": "fable"},
+                {"model_name": "opus"},
+                {"model_name": "Qwen3.7-Max"},
+            ],
+        )
+        # No config.yaml → no aliases to filter
+        result = cmd_vscode_proxy_config(_args())
+        assert result == 0
+
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        ids = [m["id"] for m in payload["models"]]
+        assert "fable" in ids
+        assert "opus" in ids
+        assert "Qwen3.7-Max" in ids

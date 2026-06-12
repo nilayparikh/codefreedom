@@ -160,6 +160,7 @@ def _generate_mimo_config(
     1. Fetches the live model list from the proxy
     2. Falls back to an empty model list if proxy is unreachable
     3. Creates a ``codefreedom`` provider entry with all models
+    4. Skips alias models unless MIMOCODE_SHOW_ALIAS_MODELS is set
 
     Returns the config dict ready to be serialised to JSON.
     """
@@ -173,6 +174,31 @@ def _generate_mimo_config(
             f"[MIMO] Proxy responded with {len(proxy_models)} model(s), "
             f"mapped {len(provider_models)} provider model(s)."
         )
+
+        # Filter alias models unless profile explicitly enables them
+        show_aliases = profile_env.get("MIMOCODE_SHOW_ALIAS_MODELS", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if not show_aliases:
+            from codefreedom.agents.vscode.proxy_models import _load_alias_models
+
+            alias_models = _load_alias_models()
+            if alias_models:
+                before = len(provider_models)
+                provider_models = {
+                    k: v
+                    for k, v in provider_models.items()
+                    if k not in alias_models
+                }
+                skipped = before - len(provider_models)
+                if skipped:
+                    eprint(
+                        f"[MIMO] Skipped {skipped} alias model(s)"
+                        f" ({', '.join(sorted(alias_models))});"
+                        " set MIMOCODE_SHOW_ALIAS_MODELS=1 to include them."
+                    )
     else:
         provider_models = {}
         eprint(
@@ -476,6 +502,68 @@ def stop() -> int:
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 
+def _update_mimocode_mcp(tools: List[str]) -> None:
+    """Register MCP servers in MiMoCode config.
+
+    Writes tool endpoints into ``~/.config/mimocode/mimocode.jsonc``
+    using the ``"type": "remote"`` format required by MiMoCode/OpenCode.
+    Preserves existing non-tool MCP entries.
+    """
+    from codefreedom.tools.registry import _MCP_TOOLS
+
+    if not tools:
+        return
+
+    config_path = Path.home() / ".config" / "mimocode" / "mimocode.jsonc"
+    if not config_path.parent.exists():
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: Dict[str, Any] = {}
+    if config_path.exists():
+        try:
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            eprint(f"[MIMO] Could not parse {config_path} — starting fresh.")
+            existing = {}
+
+    existing.setdefault("mcp", {})
+    before_keys = set(existing["mcp"].keys())
+
+    for tool_name in tools:
+        if tool_name not in _MCP_TOOLS:
+            continue
+
+        tool = _MCP_TOOLS[tool_name]
+        try:
+            port, path = tool.mcp_endpoint
+        except (FileNotFoundError, json.JSONDecodeError):
+            continue
+
+        if not path.startswith("/"):
+            path = "/" + path
+
+        url = f"http://127.0.0.1:{port}{path}"
+        existing["mcp"][tool.mcp_server_name] = {
+            "type": "remote",
+            "url": url,
+            "enabled": True,
+        }
+
+    after_keys = set(existing["mcp"].keys())
+    added = after_keys - before_keys
+
+    if added:
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n", encoding="utf-8"
+        )
+        eprint(
+            f"[MIMO] Registered MCP in {config_path}:"
+            f" {', '.join(sorted(added))}"
+        )
+    else:
+        eprint("[MIMO] All MCP servers already registered.")
+
+
 def run(args: argparse.Namespace) -> int:
     """Execute the ``mimo`` subcommand. Returns exit code."""
 
@@ -534,6 +622,8 @@ def run(args: argparse.Namespace) -> int:
             from codefreedom.launcher import _write_mcp_json
 
             _write_mcp_json(workspace_dir, acquired_tools)
+            # Also register MCP servers in mimocode.jsonc for MiMoCode
+            _update_mimocode_mcp(acquired_tools)
         if args.sandbox:
             return run_docker(
                 profile_env,

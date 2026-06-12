@@ -473,6 +473,68 @@ def stop() -> int:
     return sandbox_stop(_CONTAINER_PREFIX)
 
 
+def _update_opencode_mcp(tools: List[str]) -> None:
+    """Register MCP servers in OpenCode config.
+
+    Writes tool endpoints into ``~/.config/opencode/opencode.json``
+    using the ``"type": "remote"`` format required by OpenCode/MiMoCode.
+    Preserves existing non-tool MCP entries.
+    """
+    from codefreedom.tools.registry import _MCP_TOOLS
+
+    if not tools:
+        return
+
+    config_path = Path.home() / ".config" / "opencode" / "opencode.json"
+    if not config_path.parent.exists():
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: Dict[str, Any] = {}
+    if config_path.exists():
+        try:
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            eprint(f"[OPENCODE] Could not parse {config_path} — starting fresh.")
+            existing = {}
+
+    existing.setdefault("mcp", {})
+    before_keys = set(existing["mcp"].keys())
+
+    for tool_name in tools:
+        if tool_name not in _MCP_TOOLS:
+            continue
+
+        tool = _MCP_TOOLS[tool_name]
+        try:
+            port, path = tool.mcp_endpoint
+        except (FileNotFoundError, json.JSONDecodeError):
+            continue
+
+        if not path.startswith("/"):
+            path = "/" + path
+
+        url = f"http://127.0.0.1:{port}{path}"
+        existing["mcp"][tool.mcp_server_name] = {
+            "type": "remote",
+            "url": url,
+            "enabled": True,
+        }
+
+    after_keys = set(existing["mcp"].keys())
+    added = after_keys - before_keys
+
+    if added:
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n", encoding="utf-8"
+        )
+        eprint(
+            f"[OPENCODE] Registered MCP in {config_path}:"
+            f" {', '.join(sorted(added))}"
+        )
+    else:
+        eprint("[OPENCODE] All MCP servers already registered.")
+
+
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 
@@ -532,6 +594,8 @@ def run(args: argparse.Namespace) -> int:
             from codefreedom.launcher import _write_mcp_json
 
             _write_mcp_json(workspace_dir, acquired_tools)
+            # Also register MCP servers in opencode config for OpenCode
+            _update_opencode_mcp(acquired_tools)
         if args.sandbox:
             return run_docker(
                 profile_env,

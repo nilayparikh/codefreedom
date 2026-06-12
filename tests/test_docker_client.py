@@ -6,13 +6,11 @@ import docker
 import pytest
 
 from codefreedom.docker.client import (
-    DockerUnavailableError,
     check_docker_available,
     container_exists,
     container_is_running,
     ensure_image,
     list_containers,
-    remove_container,
     stop_and_remove,
     stop_container,
 )

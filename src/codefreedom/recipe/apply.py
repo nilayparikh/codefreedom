@@ -301,12 +301,12 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     for env_file in env_secrets_files:
         print(f"    1. Edit {env_file} and add your API keys")
     if env_secrets_files:
-        print("    2. Start the proxy:  cf proxy start")
-        print("    3. Launch the agent: cf cc")
+        print("    2. Start the proxy:  cf run proxy start")
+        print("    3. Launch the agent: cf run agent claude")
     else:
-        print("    1. Start the proxy:  cf proxy start")
-        print("    2. Launch the agent: cf cc")
-    print("    4. Customize:         cf proxy start --port 4000")
+        print("    1. Start the proxy:  cf run proxy start")
+        print("    2. Launch the agent: cf run agent claude")
+    print("    4. Customize:         cf run proxy start --port 4000")
 
     # ── Sandbox permissions ────────────────────────────────────────────
     cf_dir_str = str(cf_dir)
@@ -363,8 +363,8 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
     lines.append("## Quick Start")
     lines.append("")
     lines.append("1. Edit the `.secrets` files and add your API keys")
-    lines.append("1. Start the proxy: `cf proxy start`")
-    lines.append("2. Launch the agent: `cf cc`")
+    lines.append("1. Start the proxy: `cf run proxy start`")
+    lines.append("2. Launch the agent: `cf run agent claude`")
     lines.append("3. Run diagnostics: `cf doctor`")
     lines.append("")
 
