@@ -24,8 +24,10 @@ Three layers. Each layer calls only the layer below it. No cross-layer or sidewa
 | --------------- | ---------------------------------- | --------------------------------------------------------------------- |
 | `config`        | `src/codefreedom/config.py`        | `CODEFREEDOM_HOME` path (defaults `~/.codefreedom`)                   |
 | `env_loader`    | `src/codefreedom/env_loader.py`    | 9-layer `.env` chain, `${VAR}` interpolation                          |
+| `log`           | `src/codefreedom/log.py`           | Shared logging (`eprint`) used by all modules                         |
 | `profiles`      | `src/codefreedom/profiles.py`      | Profile JSON, inheritance, env resolution, tools list                 |
-| `tool_registry` | `src/codefreedom/tool_registry.py` | Reference-counted tool container lifecycle via `~/.codefreedom/proc/` |
+| `tool_registry` | `src/codefreedom/tool_registry.py` | Tool container lifecycle, MCP endpoint dispatch via tool classes      |
+| `admin`         | `src/codefreedom/admin/`           | Backup, restore, prune (subpackage: backup.py, restore.py, prune.py)  |
 
 Details on env chain layers and profile inheritance: see `CLAUDE.md` > Key Patterns.
 
@@ -38,11 +40,10 @@ Details on env chain layers and profile inheritance: see `CLAUDE.md` > Key Patte
 | `proxy`           | `src/codefreedom/cli/proxy.py`           | `codefreedom proxy` — init, start/stop/status/validate                          |
 | `chrome`          | `src/codefreedom/cli/chrome.py`          | `codefreedom tools chrome` — browser container lifecycle                        |
 | `web`             | `src/codefreedom/cli/web.py`             | `codefreedom tools web` — Camoufox MCP container lifecycle                      |
-| `docker_utils`    | `src/codefreedom/cli/docker_utils.py`    | Shared Docker helpers — container exists/running, ensure image, ephemeral names |
-| `recipe`          | `src/codefreedom/cli/recipe.py`          | Recipe system — fetch, plan, and apply configuration recipes                    |
-| `tool_init_utils` | `src/codefreedom/cli/tool_init_utils.py` | Tool acceptance gates, notices, tool metadata                                   |
-| `admin`           | `src/codefreedom/cli/admin.py`           | `codefreedom admin` — backup/restore/prune                                      |
-| `vscode`          | `src/codefreedom/cli/vscode.py`          | `codefreedom vscode` — VS Code config generation (claude, proxy)                |
+| `docker_utils`    | `src/codefreedom/cli/docker_utils.py`    | Shared Docker helpers — `start_tool_container` seam, tool notices, tool metadata |
+| `recipe`          | `src/codefreedom/recipe/`               | Recipe system (subpackage: store.py, merge.py, plan.py, apply.py)                |
+| `admin`           | `src/codefreedom/cli/admin.py`           | `codefreedom admin` CLI entry point                                              |
+| `vscode`          | `src/codefreedom/cli/vscode.py`          | `codefreedom vscode` — VS Code config generation (claude, proxy)                 |
 
 ### Infrastructure (runtime assets)
 
@@ -77,18 +78,16 @@ Details on Docker naming, image families, proxy system: see `CLAUDE.md` > Docker
 ## Dependency Graph
 
 ```
-config.py, env_loader.py, profiles.py, tool_registry.py  (leaf — no intra-package deps)
+config.py, env_loader.py, log.py, profiles.py, tool_registry.py  (leaf — no intra-package deps)
   |
-cli/docker_utils.py                                       (stdlib only)
-cli/init_utils.py                                         (stdlib only)
-cli/tool_init_utils.py                                    -> env_loader
+cli/docker_utils.py                                               (log only)
   |
-cli/main.py                                               -> env_loader
-cli/launcher.py                                            -> config, env_loader
-cli/claude.py                                              -> init_utils, config, env_loader, launcher, profiles, tool_registry
-cli/proxy.py                                               -> init_utils, config, env_loader
-cli/chrome.py, cli/web.py                                  -> docker_utils, init_utils, tool_init_utils, config, env_loader
-cli/vscode.py                                              -> config, env_loader, profiles
+cli/main.py                                                       -> log
+cli/launcher.py                                                    -> config, log
+cli/claude.py                                                      -> config, log, launcher, profiles, tool_registry
+cli/proxy.py                                                       -> config, log
+cli/chrome.py, cli/web.py                                          -> docker_utils, config, log
+cli/vscode.py                                                      -> config, log, profiles
 ```
 
 ## Request Flow
