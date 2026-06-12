@@ -19,7 +19,7 @@ A headless browser container for web search and scraping. Runs an MCP server on 
 
 ```bash
 # Install the _default recipe to create the web profile
-cf init recipe
+cf init
 
 codefreedom tools web start     # Start container
 codefreedom tools web status    # Check status

@@ -502,7 +502,7 @@ def run_docker(
 
 def init_mimo() -> int:
     """Print initialization help for MiMoCode."""
-    from codefreedom.cli.tool_init_utils import print_help_section
+    from codefreedom.cli.docker_utils import print_help_section
 
     print_help_section(
         "mimo init",

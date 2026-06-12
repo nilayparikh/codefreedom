@@ -25,7 +25,7 @@ A **GitHub Personal Access Token (PAT)** with appropriate scopes:
 
 ```bash
 # Install the _default recipe to create the github profile
-cf init recipe
+cf init
 
 codefreedom tools github start    # Validate token, pull image
 codefreedom tools github status   # Check status

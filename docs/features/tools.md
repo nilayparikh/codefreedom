@@ -27,7 +27,7 @@ codefreedom tools <tool> stop    # Stop container
 
 ## Tool Profiles
 
-Each tool has a profile in `~/.codefreedom/profiles/<tool>.json` controlling its Docker settings (image, port, data directory). Created by `cf init recipe`, editable afterward.
+Each tool has a profile in `~/.codefreedom/profiles/<tool>.json` controlling its Docker settings (image, port, data directory). Created by `cf init`, editable afterward.
 
 ## Auto-Start from Profiles
 

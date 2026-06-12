@@ -17,7 +17,7 @@ The proxy is a local server (`localhost:4000`) that routes your code agent's req
 ## Quick Start
 
 ```bash
-cf init recipe                       # Install _default recipe (creates proxy config)
+cf init                       # Install _default recipe (creates proxy config)
 codefreedom proxy start              # Start the proxy
 codefreedom proxy status             # Check it's running
 ```

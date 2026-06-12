@@ -10,7 +10,7 @@ Three commands. No editing required — defaults work out of the box.
 ## Step 1: Install a Recipe
 
 ```bash
-cf init recipe
+cf init
 ```
 
 This applies the **`_default` base recipe** — it creates profiles, proxy config,
@@ -36,7 +36,7 @@ existing settings.
 See available recipes:
 
 ```bash
-cf init recipe --list
+cf init --list
 ```
 
 ## Step 2: Start the Proxy
@@ -75,7 +75,7 @@ codefreedom claude --list-profiles    # see all profiles
 
 ## What Happened
 
-- `cf init recipe` applied the `_default` recipe (profiles, proxy config, env files)
+- `cf init` applied the `_default` recipe (profiles, proxy config, env files)
 - `codefreedom proxy start` brought up the proxy container
 - `codefreedom claude` loaded your profile, pointed Claude Code at `localhost:4000`
 

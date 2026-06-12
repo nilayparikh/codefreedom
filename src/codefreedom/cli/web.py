@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 from pathlib import Path
 
 from codefreedom.log import eprint
@@ -30,18 +29,15 @@ from codefreedom.cli.docker_utils import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
+    print_tool_notice,
     resolve_data_dir,
     restart_tool_container,
+    start_tool_container,
     start_tool_docker_guard,
-    start_tool_ensure_image,
     start_tool_init_gate,
-    start_tool_remove_stopped,
     stop_tool_container,
     tool_data_dir,
     tool_profile_path,
-)
-from codefreedom.cli.tool_init_utils import (
-    _print_tool_notice,
 )
 
 from codefreedom.schemas.web import WebConfig
@@ -110,12 +106,10 @@ def start(settings: dict) -> int:
     if not start_tool_init_gate("web.yaml", "web"):
         return 1
 
-    _print_tool_notice("web")
+    print_tool_notice("web")
 
-    image = settings["image"]
     container_name = settings["container_name"]
     port = settings["port"]
-    data_dir = settings["data_dir"]
 
     if container_is_running(container_name):
         eprint(f"[WEB] Container '{container_name}' is already running.")
@@ -124,65 +118,30 @@ def start(settings: dict) -> int:
     if not start_tool_docker_guard("WEB"):
         return 1
 
-    resolved_data = resolve_data_dir(data_dir)
-    eprint(f"[WEB] Using data dir: {resolved_data}")
-
-    start_tool_remove_stopped(container_name, "WEB")
-
-    if not start_tool_ensure_image(settings, "WEB"):
-        return 1
-
-    # Build environment flags from profile
-    env_vars = dict(settings.get("env", {}))
-    # Serialize search_engines as SEARCH_ENGINES env var for the container
     search_engines = settings.get("search_engines", {})
     if isinstance(search_engines, dict) and search_engines:
-        env_vars["SEARCH_ENGINES"] = json.dumps(search_engines)
-    # Serialize parser_registry as PARSER_REGISTRY env var for the container
+        settings["env"]["SEARCH_ENGINES"] = json.dumps(search_engines)
     parser_registry = settings.get("parser_registry", {})
     if isinstance(parser_registry, dict) and parser_registry:
-        env_vars["PARSER_REGISTRY"] = json.dumps(parser_registry)
-    # Pass the search cooldown (seconds) into the container
+        settings["env"]["PARSER_REGISTRY"] = json.dumps(parser_registry)
     cooldown = settings.get("search_cooldown_seconds", _DEFAULT_SEARCH_COOLDOWN_SECONDS)
     if cooldown is not None:
-        env_vars["SEARCH_COOLDOWN_SECONDS"] = str(float(cooldown))
-    env_flags: list[str] = []
-    for key, val in env_vars.items():
-        env_flags.extend(["-e", f"{key}={val}"])
+        settings["env"]["SEARCH_COOLDOWN_SECONDS"] = str(float(cooldown))
 
-    eprint(f"[WEB] Starting container '{container_name}'...")
-    result = subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            container_name,
-            "--restart",
-            "unless-stopped",
-            "--shm-size=192m",
-            "-m",
-            "2g",
-            "--memory-swap",
-            "2g",
-            "-p",
-            f"{port}:8420",
-            "-v",
-            f"{resolved_data}:/userdata",
-            *env_flags,
-            image,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
+    resolved_data = resolve_data_dir(settings["data_dir"])
+    docker_args = [
+        "--shm-size=192m",
+        "-m", "2g",
+        "--memory-swap", "2g",
+        "-p", f"{port}:8420",
+        "-v", f"{resolved_data}:/userdata",
+    ]
 
-    if result.returncode != 0:
-        eprint(f"[ERROR] Failed to start container: {result.stderr.strip()}")
+    rc = start_tool_container(settings, "WEB", docker_args)
+    if rc != 0:
         return 1
 
-    eprint(f"[WEB] Container started: {result.stdout.strip()[:12]}")
+    eprint("[WEB] Container started.")
     eprint(f"[WEB] MCP endpoint: http://127.0.0.1:{port}/mcp")
     return 0
 
@@ -227,3 +186,19 @@ def run(args: argparse.Namespace) -> int:
         restart_fn=lambda: restart(settings),
         status_fn=lambda: status(settings),
     )
+
+
+# ── Tool class for MCP endpoint registration ──────────────────────────────
+
+
+class WebTool:
+    @property
+    def mcp_server_name(self) -> str:
+        return "web"
+
+    @property
+    def mcp_endpoint(self) -> tuple[int, str]:
+        settings = _load_profile()
+        port = settings.get("port", 8420)
+        path = settings.get("mcp_path", "/mcp")
+        return port, path

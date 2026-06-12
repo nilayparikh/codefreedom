@@ -67,7 +67,7 @@ def init_claude() -> int:
     Bundled examples have been replaced by the recipe system.
     Use ``cf init`` or ``cf init --plan <name>`` instead.
     """
-    from codefreedom.cli.tool_init_utils import print_help_section
+    from codefreedom.cli.docker_utils import print_help_section
 
     print_help_section(
         "claude init",

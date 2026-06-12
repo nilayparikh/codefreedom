@@ -639,8 +639,6 @@ async def web_fetch(
     url: str,
     timeout: float = 15.0,
     use_browser: bool | None = None,
-    _include_screenshot: bool = False,
-    _wait_until: str = "domcontentloaded",
 ) -> str:
     """Fetch a web page and return its text content. No cooldown.
 
@@ -656,10 +654,6 @@ async def web_fetch(
         timeout: Per-attempt timeout in seconds (default 15)
         use_browser: Force browser mode (True), force HTTP only (False),
                      or auto (default None = try HTTP first, fallback to browser)
-        include_screenshot: (deprecated) Ignored — screenshots are no longer
-                            captured. Use a separate screenshot tool if needed.
-        wait_until: (deprecated) Ignored — page load strategy is now always
-                    "domcontentloaded" with a network-idle grace period.
     """
     if not url or not urlparse(url).scheme.startswith("http"):
         return json.dumps({"url": url, "error": "Invalid URL — must be http(s)"})

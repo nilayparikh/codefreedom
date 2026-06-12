@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import json
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional
 
 from codefreedom.admin._utils import (
     _read_manifest_from_archive,

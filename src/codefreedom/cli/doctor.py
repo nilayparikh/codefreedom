@@ -160,7 +160,7 @@ def _check_cf_dir_exists() -> CheckResult:
     cf_dir = get_codefreedom_dir()
     if cf_dir.exists():
         return _ok(f"{cf_dir} exists")
-    return _fail(f"{cf_dir} does not exist -- run 'cf init recipe'")
+    return _fail(f"{cf_dir} does not exist -- run 'cf init'")
 
 
 @_section("CodeFreedom Home")
@@ -176,7 +176,7 @@ def _check_recipe_instruction() -> CheckResult:
                 return _ok(f"Recipe installed: {recipe_name}")
         return _ok("RECIPE.md found")
     return _skip(
-        "No RECIPE.md — run 'cf init recipe' to install a recipe and download one"
+        "No RECIPE.md — run 'cf init' to install a recipe and download one"
     )
 
 
@@ -202,7 +202,7 @@ def _check_cf_dir_structure() -> CheckResult:
     if missing:
         return _warn(
             f"Missing subdirectories: {', '.join(missing)}",
-            "Run 'cf init recipe' to create them",
+            "Run 'cf init' to create them",
         )
     return _ok("All key subdirectories present")
 
@@ -301,7 +301,7 @@ def _check_env_files() -> CheckResult:
     if missing:
         return _warn(
             f"Missing env files: {', '.join(missing)}",
-            "Run 'cf init recipe' to create defaults",
+            "Run 'cf init' to create defaults",
         )
     return _ok("All essential env files present")
 
@@ -319,7 +319,7 @@ def _check_profile_files() -> CheckResult:
     if missing:
         return _warn(
             f"Missing profile files: {', '.join(missing)}",
-            "Run 'cf init recipe' to create defaults",
+            "Run 'cf init' to create defaults",
         )
     return _ok("All essential profile files present")
 
@@ -334,7 +334,7 @@ def _check_proxy_config_files() -> CheckResult:
     if missing:
         return _fail(
             f"Missing proxy files: {', '.join(missing)}",
-            "Run 'cf proxy init' to create them",
+            "Run 'cf init' to create them",
         )
     return _ok("All essential proxy config files present")
 
@@ -543,7 +543,7 @@ def _check_tool_profile(name: str, label: str) -> CheckResult:
     if not profile_file.exists():
         return _warn(
             f"{label} profile not found",
-            f"Run 'cf tools {name} init' or 'cf init recipe' to create it",
+            f"Run 'cf tools {name} init' or 'cf init' to create it",
         )
 
     try:

@@ -13,7 +13,6 @@ Use `cf init` to initialize.
 from __future__ import annotations
 
 import argparse
-import subprocess
 from pathlib import Path
 
 from codefreedom.log import eprint
@@ -21,18 +20,15 @@ from codefreedom.cli.docker_utils import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
+    print_tool_notice,
     resolve_data_dir,
     restart_tool_container,
+    start_tool_container,
     start_tool_docker_guard,
-    start_tool_ensure_image,
     start_tool_init_gate,
-    start_tool_remove_stopped,
     stop_tool_container,
     tool_data_dir,
     tool_profile_path,
-)
-from codefreedom.cli.tool_init_utils import (
-    _print_tool_notice,
 )
 
 from codefreedom.schemas.chrome import ChromeConfig
@@ -94,12 +90,10 @@ def start(settings: dict) -> int:
     if not start_tool_init_gate("chrome.yaml", "chrome"):
         return 1
 
-    _print_tool_notice("chrome")
+    print_tool_notice("chrome")
 
-    image = settings["image"]
     container_name = settings["container_name"]
     port = settings["port"]
-    data_dir = settings["data_dir"]
     env_vars = settings.get("env", {})
 
     if container_is_running(container_name):
@@ -109,76 +103,31 @@ def start(settings: dict) -> int:
     if not start_tool_docker_guard("CHROME"):
         return 1
 
-    # Resolve & create data directory
-    resolved_data = resolve_data_dir(data_dir)
-    eprint(f"[CHROME] Using data dir: {resolved_data}")
-
-    start_tool_remove_stopped(container_name, "CHROME")
-
-    if not start_tool_ensure_image(settings, "CHROME"):
-        return 1
-
-    # Build environment flags
-    env_flags: list[str] = []
-    for key, val in env_vars.items():
-        env_flags.extend(["-e", f"{key}={val}"])
-    # Ensure CHROME_DEBUG_PORT is set (used by the wrapper + healthcheck)
     if "CHROME_DEBUG_PORT" not in env_vars:
-        env_flags.extend(["-e", f"CHROME_DEBUG_PORT={port}"])
+        settings["env"]["CHROME_DEBUG_PORT"] = str(port)
 
-    # Set MCP_PORT for the container's mcp-proxy bridge
     mcp_port = settings.get("mcp_port", 9223)
     if "MCP_PORT" not in env_vars:
-        env_flags.extend(["-e", f"MCP_PORT={mcp_port}"])
+        settings["env"]["MCP_PORT"] = str(mcp_port)
 
-    # Set CDP_PROXY_PORT for the socat forwarder.
     cdp_proxy_port = settings.get("cdp_proxy_port", 9220)
     if "CDP_PROXY_PORT" not in env_vars:
-        env_flags.extend(["-e", f"CDP_PROXY_PORT={cdp_proxy_port}"])
+        settings["env"]["CDP_PROXY_PORT"] = str(cdp_proxy_port)
 
-    # Start container — headless Chrome + MCP proxy.
-    # Uses explicit port mapping (not --network host) so the ports are
-    # visible in `docker inspect` / `docker ps` and the container is
-    # reachable from other Docker containers (e.g. sandboxes) via the
-    # Docker bridge network.
-    # CDP is exposed via a socat forwarder inside the container
-    # (0.0.0.0:CDP_PROXY_PORT -> 127.0.0.1:CHROME_DEBUG_PORT) because
-    # Chrome 149+ ignores --remote-debugging-address=0.0.0.0 and only
-    # binds to localhost.
-    # --shm-size=512m prevents Chrome from crashing on /dev/shm in containers.
-    eprint(f"[CHROME] Starting container '{container_name}'...")
+    resolved_data = resolve_data_dir(settings["data_dir"])
     eprint(f"[CHROME]   CDP port: {port}  MCP port: {mcp_port}")
-    create = subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            container_name,
-            "--shm-size=512m",
-            "--restart",
-            "unless-stopped",
-            "-p",
-            f"0.0.0.0:{port}:{cdp_proxy_port}",
-            "-p",
-            f"0.0.0.0:{mcp_port}:{mcp_port}",
-            "-v",
-            f"{resolved_data}:/data/chrome",
-            *env_flags,
-            image,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    if create.returncode != 0:
-        eprint("[ERROR] Failed to start Chrome container.")
-        if create.stderr:
-            eprint(f"   {create.stderr.strip()}")
+
+    docker_args = [
+        "--shm-size=512m",
+        "-p", f"0.0.0.0:{port}:{cdp_proxy_port}",
+        "-p", f"0.0.0.0:{mcp_port}:{mcp_port}",
+        "-v", f"{resolved_data}:/data/chrome",
+    ]
+
+    rc = start_tool_container(settings, "CHROME", docker_args)
+    if rc != 0:
         return 1
 
-    eprint("[CHROME] Container started.")
     eprint(f"   CDP debug URL: http://127.0.0.1:{port}")
     eprint(
         f"   MCP endpoint:  http://127.0.0.1:{mcp_port}{settings.get('mcp_path', '/mcp')}"
@@ -252,3 +201,19 @@ def run(args: argparse.Namespace) -> int:
         status_fn=lambda: status(settings),
         url_fn=lambda: url(settings),
     )
+
+
+# ── Tool class for MCP endpoint registration ──────────────────────────────
+
+
+class ChromeTool:
+    @property
+    def mcp_server_name(self) -> str:
+        return "chrome-devtools"
+
+    @property
+    def mcp_endpoint(self) -> tuple[int, str]:
+        settings = _load_profile()
+        port = settings.get("mcp_port", 9223)
+        path = settings.get("mcp_path", "/mcp")
+        return port, path

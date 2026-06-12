@@ -27,18 +27,15 @@ from codefreedom.cli.docker_utils import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
+    print_tool_notice,
     resolve_data_dir,
     restart_tool_container,
+    start_tool_container,
     start_tool_docker_guard,
-    start_tool_ensure_image,
     start_tool_init_gate,
-    start_tool_remove_stopped,
     stop_tool_container,
     tool_data_dir,
     tool_profile_path,
-)
-from codefreedom.cli.tool_init_utils import (
-    _print_tool_notice,
 )
 
 from codefreedom.schemas.github import GithubConfig
@@ -132,14 +129,11 @@ def start(settings: dict) -> int:
     if not start_tool_init_gate("github.yaml", "github"):
         return 1
 
-    _print_tool_notice("github")
+    print_tool_notice("github")
 
-    image = settings["image"]
     container_name = settings["container_name"]
-    data_dir = settings["data_dir"]
     env_vars = dict(settings.get("env", {}))
 
-    # Validate required token
     token = env_vars.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
     if not token:
         eprint("[ERROR] GITHUB_PERSONAL_ACCESS_TOKEN is not set.")
@@ -156,55 +150,21 @@ def start(settings: dict) -> int:
     if not start_tool_docker_guard("GITHUB"):
         return 1
 
-    # Resolve & create data directory
-    resolved_data = resolve_data_dir(data_dir)
-    eprint(f"[GITHUB] Using data dir: {resolved_data}")
-
-    start_tool_remove_stopped(container_name, "GITHUB")
-
-    if not start_tool_ensure_image(settings, "GITHUB"):
-        return 1
-
-    # Pick port: use explicit setting, or auto-pick from random range
     host_port = settings["port"]
     if host_port == 0:
         host_port = _find_free_port()
 
-    # Build environment flags
-    env_flags: list[str] = []
-    for key, val in env_vars.items():
-        env_flags.extend(["-e", f"{key}={val}"])
-
-    eprint(f"[GITHUB] Starting container '{container_name}'...")
     eprint(f"[GITHUB]   HTTP MCP port: {host_port}")
-    create = subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            container_name,
-            "--restart",
-            "unless-stopped",
-            "-p",
-            f"0.0.0.0:{host_port}:8082",
-            "-v",
-            f"{resolved_data}:/data",
-            *env_flags,
-            image,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    if create.returncode != 0:
-        eprint("[ERROR] Failed to start GitHub MCP container.")
-        if create.stderr:
-            eprint(f"   {create.stderr.strip()}")
+
+    docker_args = [
+        "-p", f"0.0.0.0:{host_port}:8082",
+        "-v", f"{resolve_data_dir(settings['data_dir'])}:/data",
+    ]
+
+    rc = start_tool_container(settings, "GITHUB", docker_args)
+    if rc != 0:
         return 1
 
-    eprint("[GITHUB] Container started.")
     eprint(f"   MCP endpoint: http://127.0.0.1:{host_port}/mcp")
     return 0
 
@@ -256,3 +216,21 @@ def run(args: argparse.Namespace) -> int:
         restart_fn=lambda: restart(settings),
         status_fn=lambda: status(settings),
     )
+
+
+# ── Tool class for MCP endpoint registration ──────────────────────────────
+
+
+class GithubTool:
+    @property
+    def mcp_server_name(self) -> str:
+        return "github"
+
+    @property
+    def mcp_endpoint(self) -> tuple[int, str]:
+        settings = _load_profile()
+        port = settings.get("port", 0)
+        if port == 0:
+            container_name = settings.get("container_name", _DEFAULT_CONTAINER_NAME)
+            port = _get_mapped_port(container_name) or 8082
+        return port, "/mcp"

@@ -443,7 +443,7 @@ class TestGitHubFetch:
         )
 
         with mock.patch(
-            "codefreedom.cli.recipe._fetch_text",
+            "codefreedom.recipe.store._fetch_text",
             return_value=manifest_yaml,
         ):
             manifest = _fetch_recipe_manifest("test-recipe")
@@ -453,9 +453,9 @@ class TestGitHubFetch:
     def test_fetch_manifest_http_error(self):
         """HTTP error raises RecipeError."""
         with mock.patch(
-            "codefreedom.cli.recipe._fetch_text",
+            "codefreedom.recipe.store._fetch_text",
             side_effect=__import__(
-                "codefreedom.cli.recipe",
+                "codefreedom.recipe.store",
                 fromlist=["RecipeError"],
             ).RecipeError("HTTP 404"),
         ):
@@ -479,7 +479,7 @@ class TestGitHubFetch:
             return ""
 
         with mock.patch(
-            "codefreedom.cli.recipe._fetch_text",
+            "codefreedom.recipe.store._fetch_text",
             side_effect=mock_fetch,
         ):
             files = _fetch_recipe_files("test", manifest)
@@ -505,13 +505,13 @@ class TestLocalResolution:
         """When local is missing, tries to use GitHub (mocked fallback)."""
         with (
             mock.patch(
-                "codefreedom.cli.recipe._find_local_recipe",
+                "codefreedom.recipe.store._find_local_recipe",
                 return_value=None,
             ),
             mock.patch(
-                "codefreedom.cli.recipe._fetch_recipe_manifest",
+                "codefreedom.recipe.store._fetch_recipe_manifest",
                 side_effect=__import__(
-                    "codefreedom.cli.recipe",
+                    "codefreedom.recipe.store",
                     fromlist=["RecipeError"],
                 ).RecipeError("not found"),
             ),
@@ -773,7 +773,7 @@ class TestResolveRecipeWithStore:
 
         # Mock local submodule to return a different recipe — store should win
         with mock.patch(
-            "codefreedom.cli.recipe._find_local_recipe",
+            "codefreedom.recipe.store._find_local_recipe",
             return_value=tmp_path / "local" / "my-recipe",
         ):
             manifest, files = _resolve_recipe(
@@ -786,7 +786,7 @@ class TestResolveRecipeWithStore:
     def test_returns_none_when_not_in_store(self, tmp_path):
         """When recipe not in store, returns None (no GitHub HTTP fallback)."""
         with mock.patch(
-            "codefreedom.cli.recipe._find_local_recipe",
+            "codefreedom.recipe.store._find_local_recipe",
             return_value=None,
         ):
             store = tmp_path / "empty-store"

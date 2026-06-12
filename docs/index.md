@@ -77,7 +77,7 @@ Four commands, five minutes:
 
 ```bash
 pip install codefreedom          # Install
-cf init recipe                   # Set up config via recipe
+cf init                   # Set up config via recipe
 codefreedom proxy start          # Start the proxy
 codefreedom claude               # Launch Claude Code
 ```

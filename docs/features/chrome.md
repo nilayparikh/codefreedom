@@ -19,7 +19,7 @@ A headless Google Chrome container for browser automation. Code agents connect v
 
 ```bash
 # Install the _default recipe to create the chrome profile
-cf init recipe
+cf init
 
 codefreedom tools chrome start    # Start container
 codefreedom tools chrome url      # Get CDP debug URL

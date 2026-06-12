@@ -704,11 +704,9 @@ class TestSubprocessDispatch:
         )
 
     def test_vscode_claude_config_help_succeeds(self):
-        result = self._run("vscode", "claude", "config", "--help")
+        """New structure: cf config vscode claude --help"""
+        result = self._run("config", "vscode", "claude", "--help")
         assert result.returncode == 0, result.stderr
-        # The help text describes a settings fragment for the Claude Code
-        # extension.  Be liberal in what we match: any of "settings" /
-        # "fragment" / "claudeCode" indicates the right help rendered.
         low = result.stdout.lower()
         assert "settings" in low or "fragment" in low or "claudecode" in low
         assert "--profile" in result.stdout
@@ -716,37 +714,28 @@ class TestSubprocessDispatch:
         assert "--port" in result.stdout
         assert "--out" in result.stdout
 
-    def test_claude_init_rejected(self):
-        """init subcommand was removed — use cf init recipe instead."""
-        result = self._run("claude", "init", "--help")
-        assert result.returncode != 0
-        assert "invalid choice" in result.stderr
-
-    def test_claude_help_lists_subactions(self):
-        result = self._run("claude", "--help")
+    def test_agent_claude_help_succeeds(self):
+        """New structure: cf agent claude --help"""
+        result = self._run("agent", "claude", "--help")
         assert result.returncode == 0, result.stderr
-        # Only the `config` sub-action remains under `claude` (vscode moved
-        # to the top-level `vscode` subcommand).
-        assert "config" in result.stdout
-        assert "vscode" not in result.stdout
+        assert "--sandbox" in result.stdout
+        assert "--profile" in result.stdout
 
-    def test_claude_unknown_subaction_fails(self):
-        # Ensures the subparser is strict and rejects invalid sub-actions
-        result = self._run("claude", "not-a-real-subaction")
-        assert result.returncode != 0
-        # argparse writes the error to stderr
-        assert (
-            "invalid choice" in result.stderr
-            or "unrecognized arguments" in result.stderr
-        )
+    def test_agent_list_succeeds(self):
+        """New structure: cf agent list"""
+        result = self._run("agent", "list")
+        assert result.returncode == 0
+        # Output goes to stderr (eprint)
+        output = result.stdout + result.stderr
+        assert "claude" in output.lower()
+        assert "mimo" in output.lower()
 
     def test_vscode_claude_config_with_host_flag_parses(self):
-        # Use --help to short-circuit before any I/O.  Confirms the flag
-        # is registered on the subparser.
+        """New structure: cf config vscode claude --host ... --help"""
         result = self._run(
+            "config",
             "vscode",
             "claude",
-            "config",
             "--host",
             "192.168.1.10",
             "--port",
@@ -754,13 +743,6 @@ class TestSubprocessDispatch:
             "--help",
         )
         assert result.returncode == 0, result.stderr
-
-    def test_claude_vscode_path_now_fails(self):
-        # Regression: `codefreedom claude vscode` is no longer valid.
-        # VS Code config moved to the top-level `vscode` subcommand.
-        result = self._run("claude", "vscode")
-        assert result.returncode != 0
-        assert "invalid choice" in result.stderr
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

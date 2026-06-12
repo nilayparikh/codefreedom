@@ -17,14 +17,16 @@ src/codefreedom/
 ├── admin.py             # Backup/restore engine
 ├── cli/
 │   ├── main.py          # Top-level parser, dispatch
+│   ├── agent.py         # Agent launcher with registry
+│   ├── config.py        # Unified config dispatcher
+│   ├── common.py        # Shared CLI utilities
 │   ├── chrome.py        # Chrome tool subcommand
 │   ├── web.py           # Web tool subcommand
 │   ├── github.py        # GitHub MCP tool subcommand
 │   ├── web_bridge.py    # Web bridge tool subcommand
 │   ├── tools.py         # Unified tool management
 │   ├── docker_utils.py  # Shared Docker helpers
-│   ├── tool_init_utils.py # Shared init/acceptance prompts
-│   └── ...              # Other subcommands
+│   └── tool_init_utils.py # Shared init/acceptance prompts
 └── schemas/             # Pydantic validation models
 ```
 
@@ -38,7 +40,7 @@ Defined once in `env_loader.py`. All modules import from there:
 from codefreedom.env_loader import eprint
 ```
 
-**Do not** duplicate `eprint()` in other modules. If a circular import would result, refactor the dependency instead.
+**Do not** duplicate `eprint()` in other modules.
 
 ### `_VAR_REF_RE` Regex
 
@@ -48,7 +50,7 @@ Defined once in `interpolate.py`. All modules import from there:
 from codefreedom.interpolate import _VAR_REF_RE
 ```
 
-**Do not** duplicate this regex in `env_loader.py`, `profiles.py`, or any other module.
+**Do not** duplicate this regex in other modules.
 
 ### `resolve_env_vars()` / `resolve_env_dict()`
 
@@ -58,7 +60,7 @@ Defined in `interpolate.py`. Use these for all `${VAR}` resolution:
 from codefreedom.interpolate import resolve_env_vars, resolve_env_dict
 ```
 
-**Do not** inline regex substitution in `env_loader.py` or `profiles.py`. Use the shared functions.
+**Do not** inline regex substitution in other modules.
 
 ## 3. Tool Module Pattern
 
@@ -106,31 +108,28 @@ profile_name = args.profile  # if not always set
 
 Use shared helpers from `docker_utils.py`:
 
-| Helper                                     | Purpose                              |
-| ------------------------------------------ | ------------------------------------ |
-| `container_is_running(name)`               | Check if running                     |
-| `container_exists(name)`                   | Check if exists (running or stopped) |
-| `start_tool_init_gate(profile, tool)`      | Pre-start validation                 |
-| `start_tool_remove_stopped(name, label)`   | Clean up old container               |
-| `start_tool_ensure_image(settings, label)` | Verify/pull image                    |
-| `start_tool_docker_guard(label)`           | Check Docker available               |
-| `stop_tool_container(settings, label)`     | Stop and remove                      |
-| `restart_tool_container(settings, label)`  | Restart via docker                   |
-| `load_tool_profile(...)`                   | Load YAML profile with defaults      |
-| `resolve_data_dir(data_dir)`               | Resolve + create data directory      |
+| Helper | Purpose |
+|--------|---------|
+| `container_is_running(name)` | Check if running |
+| `container_exists(name)` | Check if exists |
+| `start_tool_init_gate(profile, tool)` | Pre-start validation |
+| `start_tool_remove_stopped(name, label)` | Clean up old container |
+| `start_tool_ensure_image(settings, label)` | Verify/pull image |
+| `start_tool_docker_guard(label)` | Check Docker available |
+| `stop_tool_container(settings, label)` | Stop and remove |
+| `restart_tool_container(settings, label)` | Restart via docker |
+| `load_tool_profile(...)` | Load YAML profile with defaults |
+| `resolve_data_dir(data_dir)` | Resolve + create data directory |
 
-## 6. Port Checking
-
-Use `is_port_available(port, host)` from `docker_utils.py` for checking specific ports. For finding a free port, use the pattern from `github.py` (`_find_free_port()`).
-
-## 7. Type Annotations
+## 6. Type Annotations
 
 - Use `dict` (not `Dict`) for modern Python 3.10+ style.
 - Use `str | None` (not `Optional[str]`) for modern union types.
 - Use `list[str]` (not `List[str]`) for modern generic syntax.
 
-## 8. Testing
+## 7. Testing
 
 - All tests use `tmp_path` fixtures and `monkeypatch` for path isolation.
 - Never touch real `~/.codefreedom/` during tests.
 - Test files mirror source structure: `tests/test_<module>.py`.
+- Run tests: `python -m pytest tests/ -v`

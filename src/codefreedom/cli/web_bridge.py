@@ -17,7 +17,6 @@ Use `cf init` to initialize.
 from __future__ import annotations
 
 import argparse
-import subprocess
 from pathlib import Path
 
 from codefreedom.log import eprint
@@ -25,18 +24,15 @@ from codefreedom.cli.docker_utils import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
+    print_tool_notice,
     resolve_data_dir,
     restart_tool_container,
+    start_tool_container,
     start_tool_docker_guard,
-    start_tool_ensure_image,
     start_tool_init_gate,
-    start_tool_remove_stopped,
     stop_tool_container,
     tool_data_dir,
     tool_profile_path,
-)
-from codefreedom.cli.tool_init_utils import (
-    _print_tool_notice,
 )
 
 from codefreedom.schemas.web_bridge import WebBridgeConfig
@@ -94,13 +90,10 @@ def start(settings: dict) -> int:
     if not start_tool_init_gate("web-bridge.yaml", "web-bridge"):
         return 1
 
-    _print_tool_notice("web-bridge")
+    print_tool_notice("web-bridge")
 
-    image = settings["image"]
     container_name = settings["container_name"]
     port = settings["port"]
-    data_dir = settings["data_dir"]
-    env_vars = dict(settings.get("env", {}))
 
     if container_is_running(container_name):
         eprint(f"[WEB-BRIDGE] Container '{container_name}' is already running.")
@@ -109,46 +102,17 @@ def start(settings: dict) -> int:
     if not start_tool_docker_guard("WEB-BRIDGE"):
         return 1
 
-    resolved_data = resolve_data_dir(data_dir)
-    eprint(f"[WEB-BRIDGE] Using data dir: {resolved_data}")
+    resolved_data = resolve_data_dir(settings["data_dir"])
+    docker_args = [
+        "-p", f"{port}:8500",
+        "-v", f"{resolved_data}:/app/data",
+    ]
 
-    start_tool_remove_stopped(container_name, "WEB-BRIDGE")
-
-    if not start_tool_ensure_image(settings, "WEB-BRIDGE"):
+    rc = start_tool_container(settings, "WEB-BRIDGE", docker_args)
+    if rc != 0:
         return 1
 
-    env_flags: list[str] = []
-    for key, val in env_vars.items():
-        env_flags.extend(["-e", f"{key}={val}"])
-
-    eprint(f"[WEB-BRIDGE] Starting container '{container_name}'...")
-    result = subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            container_name,
-            "--restart",
-            "unless-stopped",
-            "-p",
-            f"{port}:8500",
-            "-v",
-            f"{resolved_data}:/app/data",
-            *env_flags,
-            image,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-
-    if result.returncode != 0:
-        eprint(f"[ERROR] Failed to start container: {result.stderr.strip()}")
-        return 1
-
-    eprint(f"[WEB-BRIDGE] Container started: {result.stdout.strip()[:12]}")
+    eprint("[WEB-BRIDGE] Container started.")
     eprint(f"[WEB-BRIDGE] SearXNG endpoint: http://127.0.0.1:{port}/search")
     eprint(f"[WEB-BRIDGE] Health: http://127.0.0.1:{port}/healthz")
     return 0
@@ -194,3 +158,18 @@ def run(args: argparse.Namespace) -> int:
         restart_fn=lambda: restart(settings),
         status_fn=lambda: status(settings),
     )
+
+
+# ── Tool class for MCP endpoint registration ──────────────────────────────
+
+
+class WebBridgeTool:
+    @property
+    def mcp_server_name(self) -> str:
+        return "web-bridge"
+
+    @property
+    def mcp_endpoint(self) -> tuple[int, str]:
+        settings = _load_profile()
+        port = settings.get("port", 8500)
+        return port, "/search"
