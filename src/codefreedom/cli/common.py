@@ -265,7 +265,7 @@ def acquire_and_run(
     session_id: str,
     tools: list[str],
     profile_name: str,
-    run_fn: Callable[[], int],
+    run_fn: Callable[[list[str]], int],
 ) -> int:
     """Acquire tools, run function, and release tools.
 
@@ -275,7 +275,8 @@ def acquire_and_run(
         session_id: Unique session identifier
         tools: List of tools to acquire
         profile_name: Profile name for tool acquisition
-        run_fn: Function to call while tools are acquired
+        run_fn: Function to call while tools are acquired.
+                Receives the list of successfully acquired tool names.
 
     Returns:
         Exit code from run_fn
@@ -290,7 +291,7 @@ def acquire_and_run(
             eprint(f"[TOOLS] Running: {', '.join(acquired_tools)}")
 
     try:
-        return run_fn()
+        return run_fn(acquired_tools)
     finally:
         if acquired_tools:
             release_tools(session_id, acquired_tools)

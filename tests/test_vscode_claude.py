@@ -618,7 +618,9 @@ class TestVscodeSettingsGenerate:
 
             raise ProfileError("nope")
 
-        monkeypatch.setattr("codefreedom.agents.vscode.claude_settings.load_profile_env", boom)
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.claude_settings.load_profile_env", boom
+        )
 
         result = cmd_vscode_claude_config(_args(profile="missing"))
         assert result == 1
@@ -704,8 +706,8 @@ class TestSubprocessDispatch:
         )
 
     def test_vscode_claude_config_help_succeeds(self):
-        """New structure: cf config vscode claude --help"""
-        result = self._run("config", "vscode", "claude", "--help")
+        """cf setup config vscode claude --help"""
+        result = self._run("setup", "config", "vscode", "claude", "--help")
         assert result.returncode == 0, result.stderr
         low = result.stdout.lower()
         assert "settings" in low or "fragment" in low or "claudecode" in low
@@ -715,15 +717,15 @@ class TestSubprocessDispatch:
         assert "--out" in result.stdout
 
     def test_agent_claude_help_succeeds(self):
-        """New structure: cf agent claude --help"""
-        result = self._run("agent", "claude", "--help")
+        """cf run agent claude --help"""
+        result = self._run("run", "agent", "claude", "--help")
         assert result.returncode == 0, result.stderr
         assert "--sandbox" in result.stdout
         assert "--profile" in result.stdout
 
     def test_agent_list_succeeds(self):
-        """New structure: cf agent list"""
-        result = self._run("agent", "list")
+        """cf run agent list"""
+        result = self._run("run", "agent", "list")
         assert result.returncode == 0
         # Output goes to stderr (eprint)
         output = result.stdout + result.stderr
@@ -731,8 +733,9 @@ class TestSubprocessDispatch:
         assert "mimo" in output.lower()
 
     def test_vscode_claude_config_with_host_flag_parses(self):
-        """New structure: cf config vscode claude --host ... --help"""
+        """cf setup config vscode claude --host ... --help"""
         result = self._run(
+            "setup",
             "config",
             "vscode",
             "claude",

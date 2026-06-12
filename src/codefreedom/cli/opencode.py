@@ -1,19 +1,19 @@
-"""MiMoCode subcommand -- sandboxed or local launch with 0-click proxy config.
+"""OpenCode subcommand -- sandboxed or local launch with 0-click proxy config.
 
 Auto-detects the running CodeFreedom LiteLLM proxy, generates a complete
-``mimocode.json`` config with all proxy models, and launches MiMoCode
-(``mimo``) with zero manual configuration.
+``opencode.json`` config with all proxy models, and launches OpenCode
+(``opencode``) with zero manual configuration.
 
 Usage:
-    codefreedom agent mimo [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
-    codefreedom agent mimo [options] [-- <agent-args>]
+    codefreedom agent opencode [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
+    codefreedom agent opencode [options] [-- <agent-args>]
 
 Proxy auto-config:
     - Detects the proxy at LITELLM_BASE_URL (default: http://localhost:4000)
     - Fetches model list from ``/v1/models``
-    - Generates ``~/.codefreedom/mimo-code/mimocode.json`` with all models
-    - Sets ``MIMOCODE_CONFIG`` env var to point at the generated config
-    - MiMoCode loads all proxy models as ``codefreedom/<model-id>``
+    - Generates ``~/.codefreedom/opencode/config/opencode.json`` with all models
+    - Sets ``OPENCODE_CONFIG`` env var to point at the generated config
+    - OpenCode loads all proxy models as ``codefreedom/<model-id>``
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from codefreedom.core.config import (
     get_codefreedom_dir,
-    resolve_mimo_profiles_path,
+    resolve_opencode_profiles_path,
 )
 from codefreedom.core.profiles import (
     list_profiles,
@@ -43,7 +43,7 @@ from codefreedom.sandbox.terminal import terminal_size
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:
-    """Register MiMo-specific arguments on the agent parser."""
+    """Register OpenCode-specific arguments on the agent parser."""
     parser.add_argument(
         "--sandbox",
         action="store_true",
@@ -58,19 +58,19 @@ def register_args(parser: argparse.ArgumentParser) -> None:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_MIMO_IMAGE = "docker.io/nilayparikh/codefreedom:mimo-code"
+DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:opencode"
 PROXY_MODELS_CACHE_FILE = "proxy-models.json"
-MIMOCODE_CONFIG_NAME = "mimocode.json"
-_CONTAINER_PREFIX = "codefreedom-mimo-"
+OPENCODE_CONFIG_NAME = "opencode.json"
+_CONTAINER_PREFIX = "codefreedom-opencode-"
 
 CODEFREEDOM_DIR = get_codefreedom_dir()
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def find_mimo_binary() -> Optional[str]:
-    """Locate the ``mimo`` CLI binary on PATH."""
-    return shutil.which("mimo")
+def find_opencode_binary() -> Optional[str]:
+    """Locate the ``opencode`` CLI binary on PATH."""
+    return shutil.which("opencode")
 
 
 def _detect_proxy_url(base_env: Dict[str, str]) -> str:
@@ -108,8 +108,8 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> List[Dict[str, Any
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code in (401, 403):
             eprint(
-                f"[MIMO] Proxy returned {exc.response.status_code} — is LITELLM_MASTER_KEY set "
-                f"in ~/.codefreedom/.env.claude.secrets?"
+                f"[OPENCODE] Proxy returned {exc.response.status_code} — is LITELLM_MASTER_KEY set "
+                f"in ~/.codefreedom/.env.opencode.secrets?"
             )
         return []
     except (httpx.HTTPError, json.JSONDecodeError):
@@ -123,7 +123,7 @@ def _build_provider_models(
 
     Each model gets a minimal capability profile — just ``tool_call: True``
     and a display name.  Context limits and reasoning support are discovered
-    by MiMoCode at runtime; the proxy handles the actual routing.
+    by OpenCode at runtime; the proxy handles the actual routing.
     """
     provider_models: Dict[str, Dict[str, Any]] = {}
 
@@ -151,11 +151,11 @@ def _build_provider_models(
     return provider_models
 
 
-def _generate_mimo_config(
+def _generate_opencode_config(
     proxy_url: str,
     profile_env: Dict[str, str],
 ) -> Dict[str, Any]:
-    """Generate a complete ``mimocode.json`` config pointing at the proxy.
+    """Generate a complete ``opencode.json`` config pointing at the proxy.
 
     1. Fetches the live model list from the proxy
     2. Falls back to an empty model list if proxy is unreachable
@@ -163,21 +163,21 @@ def _generate_mimo_config(
 
     Returns the config dict ready to be serialised to JSON.
     """
-    eprint(f"[MIMO] Detecting proxy at {proxy_url}...")
+    eprint(f"[OPENCODE] Detecting proxy at {proxy_url}...")
     api_key = profile_env.get("PROXY_API_KEY", "")
     proxy_models = _fetch_proxy_models(proxy_url, api_key=api_key)
 
     if proxy_models:
         provider_models = _build_provider_models(proxy_models)
         eprint(
-            f"[MIMO] Proxy responded with {len(proxy_models)} model(s), "
+            f"[OPENCODE] Proxy responded with {len(proxy_models)} model(s), "
             f"mapped {len(provider_models)} provider model(s)."
         )
     else:
         provider_models = {}
         eprint(
-            f"[MIMO] Proxy not reachable at {proxy_url}.\n"
-            f"       Start the proxy (``cf proxy start``) and restart MiMoCode\n"
+            f"[OPENCODE] Proxy not reachable at {proxy_url}.\n"
+            f"       Start the proxy (``cf proxy start``) and restart OpenCode\n"
             f"       to load the full proxy model list."
         )
 
@@ -198,52 +198,52 @@ def _generate_mimo_config(
     }
 
     # Set default model from profile env var if specified
-    default_model = profile_env.get("MIMOCODE_DEFAULT_MODEL")
+    default_model = profile_env.get("OPENCODE_DEFAULT_MODEL")
     if default_model:
         # Prepend "codefreedom/" prefix if not already qualified
         if "/" not in default_model:
             default_model = f"codefreedom/{default_model}"
         config["model"] = default_model
-        eprint(f"[MIMO] Default model set to '{default_model}' from profile.")
+        eprint(f"[OPENCODE] Default model set to '{default_model}' from profile.")
 
     return config
 
 
-def _write_mimo_config(
+def _write_opencode_config(
     config: Dict[str, Any],
     config_dir: Path,
 ) -> Path:
-    """Write the generated ``mimocode.json`` to *config_dir*.
+    """Write the generated ``opencode.json`` to *config_dir*.
 
     Creates parent directories if they don't exist.
     Returns the path to the written config file.
     """
     config_dir.mkdir(parents=True, exist_ok=True)
-    config_path = config_dir / MIMOCODE_CONFIG_NAME
+    config_path = config_dir / OPENCODE_CONFIG_NAME
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
     config_path.chmod(0o600)
-    eprint(f"[MIMO] Generated proxy config at {config_path}")
+    eprint(f"[OPENCODE] Generated proxy config at {config_path}")
     return config_path
 
 
-def _ensure_mimo_sandbox_dir(profile_name: str) -> Tuple[Path, Path]:
-    """Create isolated sandbox directories for MiMoCode.
+def _ensure_opencode_sandbox_dir(profile_name: str) -> Tuple[Path, Path]:
+    """Create isolated sandbox directories for OpenCode.
 
-    Returns (mimo_data_dir, config_path) — the MIMOCODE_HOME data directory
-    and the path to the generated ``mimocode.json`` config file.
+    Returns (opencode_data_dir, config_path) — the OPENCODE_HOME data directory
+    and the path to the generated ``opencode.json`` config file.
     """
-    profile_dir = CODEFREEDOM_DIR / "mimo-code" / "sandbox" / profile_name
+    profile_dir = CODEFREEDOM_DIR / "opencode" / "sandbox" / profile_name
     profile_dir.mkdir(parents=True, exist_ok=True)
 
-    # Isolated MIMOCODE_HOME structure: data/config/cache/state subdirs
-    mimo_home = profile_dir / "home"
+    # Isolated OPENCODE_HOME structure: data/config/cache/state subdirs
+    opencode_home = profile_dir / "home"
     for sub in ("data", "config", "cache", "state"):
-        (mimo_home / sub).mkdir(parents=True, exist_ok=True)
+        (opencode_home / sub).mkdir(parents=True, exist_ok=True)
 
     config_dir = profile_dir / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
 
-    return mimo_home, config_dir
+    return opencode_home, config_dir
 
 
 # ── Execution ─────────────────────────────────────────────────────────────────
@@ -251,31 +251,31 @@ def _ensure_mimo_sandbox_dir(profile_name: str) -> Tuple[Path, Path]:
 
 def run_local(
     profile_env: Dict[str, str],
-    mimo_args: List[str],
+    opencode_args: List[str],
 ) -> int:
-    """Run ``mimo`` natively on the host. Returns exit code."""
-    mimo_bin = find_mimo_binary()
-    if not mimo_bin:
+    """Run ``opencode`` natively on the host. Returns exit code."""
+    opencode_bin = find_opencode_binary()
+    if not opencode_bin:
         eprint(
-            "[ERROR] MiMoCode (mimo) not found on PATH.\n"
-            "       Install: npm install -g @mimo-ai/cli"
+            "[ERROR] OpenCode (opencode) not found on PATH.\n"
+            "       Install: curl -fsSL https://opencode.ai/install | bash"
         )
         return 1
 
-    eprint("[LOCAL] Running MiMoCode natively...")
+    eprint("[LOCAL] Running OpenCode natively...")
 
     env = {**os.environ}
     env.update(profile_env)
 
-    # 0-click proxy config: generate mimocode.json and inject MIMOCODE_CONFIG
+    # 0-click proxy config: generate opencode.json and inject OPENCODE_CONFIG
     proxy_url = _detect_proxy_url(profile_env)
-    config = _generate_mimo_config(proxy_url, profile_env)
-    config_dir = CODEFREEDOM_DIR / "mimo-code" / "config"
-    config_path = _write_mimo_config(config, config_dir)
-    env["MIMOCODE_CONFIG"] = str(config_path)
+    config = _generate_opencode_config(proxy_url, profile_env)
+    config_dir = CODEFREEDOM_DIR / "opencode" / "config"
+    config_path = _write_opencode_config(config, config_dir)
+    env["OPENCODE_CONFIG"] = str(config_path)
 
-    cmd = [mimo_bin]
-    cmd.extend(mimo_args)
+    cmd = [opencode_bin]
+    cmd.extend(opencode_args)
 
     try:
         proc = subprocess.Popen(cmd, env=env)
@@ -284,7 +284,7 @@ def run_local(
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
-        eprint(f"[ERROR] MiMoCode binary not found at {mimo_bin}.")
+        eprint(f"[ERROR] OpenCode binary not found at {opencode_bin}.")
         return 1
     except KeyboardInterrupt:
         return 130
@@ -292,20 +292,20 @@ def run_local(
 
 def run_docker(
     profile_env: Dict[str, str],
-    mimo_args: List[str],
+    opencode_args: List[str],
     workspace_dir: Path,
     profile_name: str,
     sandbox_images: Dict[str, str] | None = None,
     run_as_me: bool = False,
 ) -> int:
-    """Run ``mimo`` inside an ephemeral Docker container.
+    """Run ``opencode`` inside an ephemeral Docker container.
 
     Delegates container lifecycle to the shared sandbox launcher.
     """
     from codefreedom.sandbox.launcher import run_sandbox
 
     sandbox_images = sandbox_images or {}
-    image = sandbox_images.get("default") or DEFAULT_MIMO_IMAGE
+    image = sandbox_images.get("default") or DEFAULT_OPENCODE_IMAGE
 
     container_name = f"{_CONTAINER_PREFIX}{secrets.token_hex(2)}"
 
@@ -314,9 +314,9 @@ def run_docker(
 
     # ── Generate proxy config first ────────────────────────────────────────────
     proxy_url = _detect_proxy_url(profile_env)
-    config = _generate_mimo_config(proxy_url, profile_env)
-    mimo_home_dir, config_dir = _ensure_mimo_sandbox_dir(profile_name)
-    config_path = _write_mimo_config(config, config_dir)
+    config = _generate_opencode_config(proxy_url, profile_env)
+    opencode_home_dir, config_dir = _ensure_opencode_sandbox_dir(profile_name)
+    config_path = _write_opencode_config(config, config_dir)
 
     # ── Build env flags ───────────────────────────────────────────────────────
     env_flags: List[str] = []
@@ -349,12 +349,12 @@ def run_docker(
         "-w", "/workspace",
         "-v", f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
         "-v", f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
-        "-v", f"{mimo_home_dir}:{container_home}/.local/share/mimocode",
-        "-v", f"{config_path}:{container_home}/.config/mimocode/mimocode.json:ro",
+        "-v", f"{opencode_home_dir}:{container_home}/.local/share/opencode",
+        "-v", f"{config_path}:{container_home}/.config/opencode/opencode.json:ro",
         "-e", f"HOME={container_home}",
-        "-e", f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+        "-e", f"OPENCODE_CONFIG={container_home}/.config/opencode/opencode.json",
         "-e", "IS_SANDBOX=1",
-        "-e", "MIMOCODE_DISABLE_AUTOUPDATE=1",
+        "-e", "OPENCODE_DISABLE_AUTOUPDATE=1",
     ]
 
     # ── Exec command ──────────────────────────────────────────────────────────
@@ -362,13 +362,13 @@ def run_docker(
         ["docker", "exec", "-it"]
         + container_user_flag
         + ["-e", f"HOME={container_home}"]
-        + [container_name, "mimo"]
-        + mimo_args
+        + [container_name, "opencode"]
+        + opencode_args
     )
 
     exec_extra_env = [
         "-e",
-        f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+        f"OPENCODE_CONFIG={container_home}/.config/opencode/opencode.json",
     ]
 
     return run_sandbox(
@@ -384,27 +384,27 @@ def run_docker(
 # ── Init command ─────────────────────────────────────────────────────────────
 
 
-def init_mimo() -> int:
-    """Print initialization help for MiMoCode."""
+def init_opencode() -> int:
+    """Print initialization help for OpenCode."""
     from codefreedom.cli.docker_utils import print_help_section
 
     print_help_section(
-        "mimo init",
+        "opencode init",
         [
-            "MiMoCode requires no init -- 0-click proxy config is generated",
+            "OpenCode requires no init -- 0-click proxy config is generated",
             "automatically on first launch.",
             "",
-            "To install MiMoCode (mimo):",
-            "  npm install -g @mimo-ai/cli",
+            "To install OpenCode:",
+            "  curl -fsSL https://opencode.ai/install | bash",
             "",
             "To start the proxy (for model routing):",
             "  cf proxy start",
             "",
-            "To launch MiMoCode:",
-            "  cf agent mimo              # native mode",
-            "  cf agent mimo --sandbox    # isolated Docker sandbox",
+            "To launch OpenCode:",
+            "  cf agent opencode              # native mode",
+            "  cf agent opencode --sandbox    # isolated Docker sandbox",
         ],
-        docs_url="https://github.com/XiaomiMiMo/MiMo-Code",
+        docs_url="https://opencode.ai/docs/",
         include_disclaimer=False,
     )
     return 0
@@ -414,17 +414,17 @@ def init_mimo() -> int:
 
 
 def cmd_config(args: argparse.Namespace) -> int:
-    """Generate and print a proxy-resolved ``mimocode.json`` for standalone use.
+    """Generate and print a proxy-resolved ``opencode.json`` for standalone use.
 
     Loads the full env chain, detects the proxy, fetches model list,
-    generates a complete ``mimocode.json`` and outputs it.
+    generates a complete ``opencode.json`` and outputs it.
     """
     workspace_dir = Path.cwd()
     eprint("[ENV] Loading configuration...")
     base_env = load_env_chain(workspace_dir, component="claude")
 
     profile_name = getattr(args, "profile", None) or "default"
-    profiles_path = resolve_mimo_profiles_path()
+    profiles_path = resolve_opencode_profiles_path()
 
     from codefreedom.cli.common import load_profile_env_only
 
@@ -442,7 +442,7 @@ def cmd_config(args: argparse.Namespace) -> int:
             profile_env["PROXY_API_KEY"] = master_key
 
     proxy_url = _detect_proxy_url(profile_env)
-    config = _generate_mimo_config(proxy_url, profile_env)
+    config = _generate_opencode_config(proxy_url, profile_env)
 
     out_path = getattr(args, "out", None)
     output = json.dumps(config, indent=2)
@@ -460,14 +460,14 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def status() -> int:
-    """Show all codefreedom mimo sandbox containers. Returns exit code."""
+    """Show all codefreedom opencode sandbox containers. Returns exit code."""
     from codefreedom.sandbox.launcher import sandbox_status
 
     return sandbox_status(_CONTAINER_PREFIX)
 
 
 def stop() -> int:
-    """Stop and remove all codefreedom mimo sandbox containers. Returns exit code."""
+    """Stop and remove all codefreedom opencode sandbox containers. Returns exit code."""
     from codefreedom.sandbox.launcher import sandbox_stop
 
     return sandbox_stop(_CONTAINER_PREFIX)
@@ -477,20 +477,20 @@ def stop() -> int:
 
 
 def run(args: argparse.Namespace) -> int:
-    """Execute the ``mimo`` subcommand. Returns exit code."""
+    """Execute the ``opencode`` subcommand. Returns exit code."""
 
     # Fast-path flags
     if args.list_profiles:
         from codefreedom.cli.common import display_profiles
 
-        profiles_path = resolve_mimo_profiles_path()
+        profiles_path = resolve_opencode_profiles_path()
         profiles = list_profiles(profiles_path)
         return display_profiles(
             profiles_path, profiles, show_env_keys=False, show_tools=True
         )
 
     # Actions
-    action = getattr(args, "mimo_action", None)
+    action = getattr(args, "opencode_action", None)
     if action == "config":
         return cmd_config(args)
 
@@ -501,7 +501,7 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
-    profiles_path = resolve_mimo_profiles_path()
+    profiles_path = resolve_opencode_profiles_path()
     mode = "sandbox" if args.sandbox else "local"
 
     from codefreedom.cli.common import load_profile_with_tools
@@ -514,8 +514,6 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Ensure proxy API key is available ──────────────────────────────
     # Safety net: re-inject from base_env in case resolve failed
-    # (e.g. if load_profiles had premature interpolation — fixed now,
-    # but kept as defense-in-depth).
     if not profile_env.get("PROXY_API_KEY"):
         master_key = base_env.get("LITELLM_MASTER_KEY", "")
         if master_key:

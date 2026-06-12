@@ -228,7 +228,7 @@ def run(args: argparse.Namespace) -> int:
 
     from codefreedom.cli.common import acquire_and_run
 
-    def _run() -> int:
+    def _run(acquired_tools: list[str]) -> int:
         if args.sandbox:
             # --run-as-me is only meaningful with --sandbox; silently ignore otherwise
             return run_docker(
@@ -240,10 +240,16 @@ def run(args: argparse.Namespace) -> int:
                 sandbox_images=sandbox_images,
                 run_as_me=run_as_me,
                 container_name=session_id,
+                acquired_tools=acquired_tools,
             )
         else:
             if run_as_me:
                 eprint("[WARN] --run-as-me is only valid with --sandbox; ignoring.")
+            # Write .mcp.json so the agent discovers MCP tool endpoints
+            if acquired_tools:
+                from codefreedom.launcher import _write_mcp_json
+
+                _write_mcp_json(workspace_dir, acquired_tools)
             return run_local(profile_env, args.agent_args, dangerously_skip)
 
     return acquire_and_run(session_id, tools, profile_name, _run)

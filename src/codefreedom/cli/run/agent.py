@@ -29,6 +29,11 @@ _AGENTS: dict[str, tuple[str, str, str]] = {
         "run",
         "MiMoCode — Xiaomi's coding agent with 0-click proxy config",
     ),
+    "opencode": (
+        "codefreedom.cli.opencode",
+        "run",
+        "OpenCode — terminal-native AI coding agent with 0-click proxy config",
+    ),
 }
 
 
