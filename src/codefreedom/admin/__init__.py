@@ -5,7 +5,13 @@ from __future__ import annotations
 from codefreedom.admin.backup import backup, inspect_backup, list_backups
 from codefreedom.admin.prune import prune_backups
 from codefreedom.admin.restore import restore
-from codefreedom.admin._utils import (
+from codefreedom.admin._utils import (  # noqa: F401
+    BackupCategory,
+    BackupFileEntry,
+    BackupManifest,
+    BackupSummary,
+    CURRENT_SCHEMA_VERSION,
+    FileDiff,
     _backup_filename,
     _categorize,
     _decrypt_data,
@@ -19,12 +25,6 @@ from codefreedom.admin._utils import (
     _PG_DUMP_PREFIX,
     _read_manifest_from_archive,
     _sha256_file,
-    BackupCategory,
-    BackupFileEntry,
-    BackupManifest,
-    BackupSummary,
-    CURRENT_SCHEMA_VERSION,
-    FileDiff,
 )
 
 __all__ = [
@@ -33,4 +33,6 @@ __all__ = [
     "inspect_backup",
     "restore",
     "prune_backups",
+    "BackupSummary",
+    "FileDiff",
 ]
