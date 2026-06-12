@@ -1,10 +1,10 @@
 """Code agent subcommand — launch with profile-based routing and sandboxing.
 
 Usage:
-    codefreedom claude [--profile NAME] [--sandbox] [--list-profiles] [agent-args...]
-    cf cc [same]
+    codefreedom agent claude [--profile NAME] [--sandbox] [--list-profiles] [agent-args...]
+    codefreedom agent claude [options] [-- <agent-args>]
 
-VS Code integration: see `codefreedom vscode claude config`.
+VS Code integration: see `codefreedom config vscode`.
 """
 
 from __future__ import annotations
@@ -12,35 +12,69 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from codefreedom.config import resolve_profiles_path
-from codefreedom.env_loader import eprint, load_env_chain
+from codefreedom.core.config import resolve_profiles_path
+from codefreedom.log import eprint
+from codefreedom.env_loader import load_env_chain
 from codefreedom.launcher import run_docker, run_local
-from codefreedom.profiles import (
-    ProfileError,
-    get_profile_sandbox_images,
-    get_profile_tools,
+from codefreedom.core.profiles import (
     list_profiles,
-    load_profile_env,
-    load_profiles,
 )
-from codefreedom.tool_registry import acquire_tools, generate_session_id, release_tools
+from codefreedom.tools.registry import generate_session_id
+
+
+def register_args(parser: argparse.ArgumentParser) -> None:
+    """Register Claude-specific arguments on the agent parser."""
+    # GPU image flags (mutually exclusive, only meaningful with --sandbox)
+    gpu_group = parser.add_mutually_exclusive_group()
+    gpu_group.add_argument(
+        "--cuda",
+        action="store_true",
+        dest="gpu_cuda",
+        help="Use CUDA sandbox image for NVIDIA GPUs (only with --sandbox)",
+    )
+    gpu_group.add_argument(
+        "--rocm",
+        action="store_true",
+        dest="gpu_rocm",
+        help="Use ROCm sandbox image for AMD GPUs (only with --sandbox)",
+    )
+
+    parser.add_argument(
+        "--sandbox",
+        action="store_true",
+        help="Run inside a sandboxed Docker container (default: native)",
+    )
+    parser.add_argument(
+        "--run-as-me",
+        action="store_true",
+        help="Run sandbox container as host user (uid/gid match). Only valid with --sandbox.",
+    )
+    parser.add_argument(
+        "--native-models",
+        action="store_true",
+        help="Use native Anthropic models/auth (/login)",
+    )
+    parser.add_argument(
+        "--dangerously-skip-permissions",
+        action="store_true",
+        help="Skip Claude Code permission prompts (use in CI/non-interactive environments)",
+    )
 
 
 def init_claude() -> int:
     """Initialize Claude Code configuration via recipes.
 
     Bundled examples have been replaced by the recipe system.
-    Use ``cf init recipe`` or ``cf init recipe --plan <name>`` instead.
+    Use ``cf init`` or ``cf init --plan <name>`` instead.
     """
-    from codefreedom.cli.tool_init_utils import print_help_section
+    from codefreedom.cli.docker_utils import print_help_section
 
     print_help_section(
         "claude init",
         [
-            "Use:  cf init recipe              # install _default base recipe",
-            "      cf init recipe --list        # list available recipes",
-            "      cf init recipe --plan <name> # preview a recipe without applying",
-            "      cf init recipe <name>        # install a specific recipe",
+            "Use:  cf init                    # install _default base recipe",
+            "      cf init --list              # list available recipes",
+            "      cf init --plan <name>       # preview a recipe without applying",
         ],
         docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
         include_disclaimer=True,
@@ -71,31 +105,12 @@ def cmd_config(args: argparse.Namespace) -> int:
     profile_name = getattr(args, "profile", None) or "default"
     profiles_path = resolve_profiles_path()
 
-    profile_env: dict[str, str] = {}
-    if profiles_path.exists():
-        try:
-            profiles_dict = load_profiles(profiles_path)
-            profile_env = load_profile_env(
-                profile_name,
-                profiles_path,
-                base_env,
-                mode="local",
-                profiles=profiles_dict,
-            )
-        except ProfileError as exc:
-            eprint(f"[ERROR] {exc}")
-            return 1
-    elif profile_name != "default":
-        eprint(
-            f"[ERROR] Profile '{profile_name}' requested but no profiles file found."
-        )
-        return 1
-    else:
-        eprint("[ERROR] No profiles file found. Run `codefreedom claude init` first.")
-        return 1
+    from codefreedom.cli.common import load_profile_env_only
 
-    if not profile_env:
-        eprint("[ERROR] Profile resolved to an empty environment.")
+    profile_env, exit_code = load_profile_env_only(
+        profile_name, profiles_path, base_env, error_prefix="codefreedom claude init"
+    )
+    if exit_code != 0:
         return 1
 
     # ── Determine format ────────────────────────────────────────────────────
@@ -141,28 +156,15 @@ def cmd_config(args: argparse.Namespace) -> int:
 
     if out_path:
         eprint(warning)
-        out_file = Path(out_path)
-        out_file.parent.mkdir(parents=True, exist_ok=True)
-        out_file.write_text(output, encoding="utf-8")
-        out_file.chmod(0o600)
-        eprint(f"[CONFIG] Written to {out_file.resolve()}")
-        return 0
+        from codefreedom.cli.common import write_output_file
+
+        return write_output_file(output, out_path)
 
     # ── stdout path: warn and confirm ──────────────────────────────────────
     eprint(warning)
-    eprint("[CONFIG] Outputting to stdout. Values may be captured in terminal logs.")
-    try:
-        response = input("[CONFIG] Proceed? [y/N] ")
-        if response.lower() not in ("y", "yes"):
-            eprint("[CONFIG] Aborted.")
-            return 1
-    except (EOFError, KeyboardInterrupt):
-        eprint()
-        eprint("[CONFIG] Aborted.")
-        return 1
+    from codefreedom.cli.common import confirm_stdout_output
 
-    print(output)
-    return 0
+    return confirm_stdout_output(output)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -170,35 +172,11 @@ def run(args: argparse.Namespace) -> int:
 
     # Fast-path flags (no env loading needed)
     if args.list_profiles:
+        from codefreedom.cli.common import display_profiles
+
         profiles_path = resolve_profiles_path()
         profiles = list_profiles(profiles_path)
-        if not profiles:
-            eprint("[PROFILES] No profiles found.")
-            return 0
-        eprint(f"[PROFILES] Available profiles ({profiles_path}):\n")
-        for p in profiles:
-            override_word = "override" if len(p["env_keys"]) == 1 else "overrides"
-            inheritance = (
-                "standalone"
-                if p["standalone"]
-                else f"inherits from 'default' — {len(p['env_keys'])} {override_word}"
-            )
-            eprint(f"  {p['name']}")
-            eprint(f"    {p['description']}")
-            eprint(f"    ({inheritance})")
-            if p["env_keys"]:
-                keys_summary = ", ".join(p["env_keys"][:5])
-                if len(p["env_keys"]) > 5:
-                    keys_summary += ", …"
-                eprint(f"    sets: {keys_summary}")
-            if p.get("sandbox_env_keys"):
-                eprint(f"    sandbox: {', '.join(p['sandbox_env_keys'])}")
-            if p.get("local_env_keys"):
-                eprint(f"    local: {', '.join(p['local_env_keys'])}")
-            if p.get("tools"):
-                eprint(f"    tools: {', '.join(p['tools'])}")
-            eprint()
-        return 0
+        return display_profiles(profiles_path, profiles)
 
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()
@@ -215,33 +193,15 @@ def run(args: argparse.Namespace) -> int:
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
     profiles_path = resolve_profiles_path()
-
-    profile_env: dict = {}
-    sandbox_images: dict[str, str] = {}
-    tools: list[str] = []
     mode = "sandbox" if args.sandbox else "local"
-    if profiles_path.exists():
-        try:
-            profiles_dict = load_profiles(profiles_path)
-            profile_env = load_profile_env(
-                profile_name, profiles_path, base_env, mode, profiles=profiles_dict
-            )
-            sandbox_images = get_profile_sandbox_images(
-                profile_name, profiles_path, profiles=profiles_dict
-            )
-            tools = get_profile_tools(
-                profile_name, profiles_path, profiles=profiles_dict
-            )
-        except ProfileError as e:
-            eprint(f"[ERROR] {e}")
-            return 1
-    elif profile_name != "default":
-        eprint(
-            f"[ERROR] Profile '{profile_name}' requested but no profiles file found."
-        )
+
+    from codefreedom.cli.common import load_profile_with_tools
+
+    profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
+        profile_name, profiles_path, base_env, mode
+    )
+    if exit_code != 0:
         return 1
-    else:
-        eprint("[PROFILE] No profiles file found. Using defaults only.")
 
     # ── Route execution ────────────────────────────────────────────────────
     if args.native_models:
@@ -265,19 +225,15 @@ def run(args: argparse.Namespace) -> int:
     # Tools are shared and persistent.  Start them if not already running.
     # They stay running until explicitly stopped via `cf tools stop`.
     session_id = generate_session_id(mode)
-    acquired_tools: list[str] = []
-    if tools:
-        eprint(f"[TOOLS] Profile '{profile_name}' declares tools: {', '.join(tools)}")
-        acquired_tools = acquire_tools(session_id, tools, profile_name)
-        if acquired_tools:
-            eprint(f"[TOOLS] Running: {', '.join(acquired_tools)}")
 
-    try:
+    from codefreedom.cli.common import acquire_and_run
+
+    def _run(acquired_tools: list[str]) -> int:
         if args.sandbox:
             # --run-as-me is only meaningful with --sandbox; silently ignore otherwise
             return run_docker(
                 profile_env,
-                args.claude_args,
+                args.agent_args,
                 workspace_dir,
                 profile_name,
                 gpu_type=gpu_type,
@@ -289,8 +245,11 @@ def run(args: argparse.Namespace) -> int:
         else:
             if run_as_me:
                 eprint("[WARN] --run-as-me is only valid with --sandbox; ignoring.")
-            return run_local(profile_env, args.claude_args, dangerously_skip)
-    finally:
-        # release_tools is a no-op — tools persist until `cf tools stop`
-        if acquired_tools:
-            release_tools(session_id, acquired_tools)
+            # Write .mcp.json so the agent discovers MCP tool endpoints
+            if acquired_tools:
+                from codefreedom.launcher import _write_mcp_json
+
+                _write_mcp_json(workspace_dir, acquired_tools)
+            return run_local(profile_env, args.agent_args, dangerously_skip)
+
+    return acquire_and_run(session_id, tools, profile_name, _run)

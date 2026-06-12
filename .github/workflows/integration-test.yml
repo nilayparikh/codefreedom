@@ -102,13 +102,13 @@ jobs:
           # CLI entry points
           codefreedom --help
           cf --help
-          codefreedom claude --help
-          cf cc --help
-          codefreedom proxy --help
-          cf px --help
+          codefreedom run agent claude --help
+          cf run agent claude --help
+          codefreedom run proxy --help
+          cf run proxy --help
 
           # Init (install _default base recipe)
-          codefreedom init recipe
+          codefreedom setup init
 
           # Verify core structure was created
           test -f ~/.codefreedom/.env.user || { echo "MISSING: .env.user"; exit 1; }
@@ -118,8 +118,6 @@ jobs:
           test -f ~/.codefreedom/profiles/web.yaml || { echo "MISSING: web profile"; exit 1; }
           test -f ~/.codefreedom/profiles/github.yaml || { echo "MISSING: github profile"; exit 1; }
           test -f ~/.codefreedom/profiles/web-bridge.yaml || { echo "MISSING: web-bridge profile"; exit 1; }
-          test -f ~/.codefreedom/.env.claude || { echo "MISSING: .env.claude"; exit 1; }
-          test -f ~/.codefreedom/.env.proxy || { echo "MISSING: .env.proxy"; exit 1; }
 
           # Validate proxy config YAML
           python -c "
@@ -146,11 +144,11 @@ jobs:
           "
 
           # Profile listing
-          codefreedom claude --list-profiles
+          codefreedom run agent claude --list-profiles
 
           # Proxy validate
-          codefreedom proxy validate 2>&1 || true
+          codefreedom run proxy validate 2>&1 || true
 
           # CLI dry-run
           export LITELLM_MASTER_KEY="sk-test-dummy-key-for-ci"
-          codefreedom claude --help 2>&1 || true
+          codefreedom run agent claude --help 2>&1 || true

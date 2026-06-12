@@ -4,32 +4,44 @@ from __future__ import annotations
 
 import argparse
 import json
-import urllib.error
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
+import yaml
 
 from codefreedom.cli.vscode import (
     _STANDARD_REASONING_EFFORT_LEVELS,
     _VSCODE_APIKEY_PLACEHOLDER,
     _build_vscode_entry,
     _check_proxy_live,
-    cmd_vscode_proxy_config,
+    _deduplicate_models,
     _fetch_model_info,
+    _load_alias_models,
+    _load_route_image_models,
     _model_to_vscode_entry,
     _proxy_health_url,
     _proxy_model_info_url,
     _resolve_master_key,
+    _resolve_model_id,
     _resolve_reasoning_effort,
+    cmd_vscode_proxy_config,
 )
 
 # ── _resolve_master_key ──────────────────────────────────────────────────────
 
 
 class TestResolveMasterKey:
+    # Helper: clean up CF_CLI_ prefix from the real env so it doesn't bleed
+    # into tests that aren't explicitly testing the CF_CLI_ prefix.
+    @staticmethod
+    def _clean_cf_cli(monkeypatch):
+        monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
+
     def test_from_os_environ_wins(self, monkeypatch, tmp_path: Path):
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
         # Even if the file has a different key, env wins.
@@ -39,6 +51,7 @@ class TestResolveMasterKey:
         assert _resolve_master_key() == "sk-from-env"
 
     def test_from_secrets_file_when_env_missing(self, monkeypatch, tmp_path: Path):
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         (tmp_path / ".env.proxy.secrets").write_text(
@@ -47,25 +60,236 @@ class TestResolveMasterKey:
         assert _resolve_master_key() == "sk-from-file"
 
     def test_missing_in_both(self, monkeypatch, tmp_path: Path):
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         # No secrets file
         assert _resolve_master_key() is None
 
-    def test_empty_string_in_env_treated_as_missing(self, monkeypatch, tmp_path: Path):
+    def test_empty_string_in_env_treated_as_set(self, monkeypatch, tmp_path: Path):
+        """Empty-string env var is a valid override (env wins over files).
+
+        Per CLAUDE.md: "Empty-string env vars are valid overrides
+        (export FOO="" does NOT fall through to defaults)."
+        """
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
-        monkeypatch.setenv("LITELLM_MASTER_KEY", "   ")
+        monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "")
         (tmp_path / ".env.proxy.secrets").write_text(
             "LITELLM_MASTER_KEY=sk-from-file\n"
         )
-        # Whitespace-only env falls through to the file.
-        assert _resolve_master_key() == "sk-from-file"
+        # Env (empty string) beats file — returns None since empty is falsy.
+        assert _resolve_master_key() is None
 
     def test_secrets_file_missing_key(self, monkeypatch, tmp_path: Path):
+        self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         (tmp_path / ".env.proxy.secrets").write_text("OTHER_KEY=foo\n")
         assert _resolve_master_key() is None
+
+    def test_cf_cli_prefix_wins_over_env(self, monkeypatch, tmp_path: Path):
+        """CF_CLI_LITELLM_MASTER_KEY beats direct LITELLM_MASTER_KEY."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
+        monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-from-cf-cli")
+        assert _resolve_master_key() == "sk-from-cf-cli"
+
+    def test_cf_cli_prefix_falls_through_to_env(self, monkeypatch, tmp_path: Path):
+        """When CF_CLI_ is absent, direct env var is used."""
+        self._clean_cf_cli(monkeypatch)
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
+        monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
+        assert _resolve_master_key() == "sk-from-env"
+
+    def test_cf_cli_prefix_alone(self, monkeypatch, tmp_path: Path):
+        """Only CF_CLI_LITELLM_MASTER_KEY is set (no LITELLM_MASTER_KEY)."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+        monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-from-cf-cli-only")
+        assert _resolve_master_key() == "sk-from-cf-cli-only"
+
+
+# ── _load_route_image_models ─────────────────────────────────────────────────
+
+
+class TestLoadRouteImageModels:
+    def test_empty_dir_returns_empty_set(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        assert _load_route_image_models(tmp_path) == set()
+
+    def test_no_providers_dir_returns_empty_set(self, tmp_path: Path):
+        assert _load_route_image_models(tmp_path) == set()
+
+    def test_reads_enabled_models(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "a.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "MiMo-V2.5",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                        {
+                            "model_name": "DeepSeek-V4-Flash",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        result = _load_route_image_models(tmp_path)
+        assert result == {"MiMo-V2.5", "DeepSeek-V4-Flash"}
+
+    def test_skips_disabled_models(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "a.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "some-model",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": False},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        assert _load_route_image_models(tmp_path) == set()
+
+    def test_skips_models_without_codefreedom(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "a.yaml").write_text(
+            yaml.safe_dump({"model_list": [{"model_name": "bare-model"}]})
+        )
+        assert _load_route_image_models(tmp_path) == set()
+
+    def test_skips_malformed_yaml(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "bad.yaml").write_text("{{{{not yaml")
+        (providers / "good.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "ok-model",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        assert _load_route_image_models(tmp_path) == {"ok-model"}
+
+    def test_aggregates_across_multiple_yaml_files(self, tmp_path: Path):
+        providers = tmp_path / "proxy" / "config" / "providers"
+        providers.mkdir(parents=True)
+        (providers / "a.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "model-a",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        (providers / "b.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "model_list": [
+                        {
+                            "model_name": "model-b",
+                            "codefreedom": {
+                                "plugins": {
+                                    "route-image-request": {"enabled": True},
+                                },
+                            },
+                        },
+                    ]
+                }
+            )
+        )
+        assert _load_route_image_models(tmp_path) == {"model-a", "model-b"}
+
+
+# ── _load_alias_models ───────────────────────────────────────────────────────
+
+
+class TestLoadAliasModels:
+    def test_empty_config_returns_empty_set(self, tmp_path: Path):
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text("router_settings:\n")
+        assert _load_alias_models(tmp_path) == set()
+
+    def test_no_config_file_returns_empty_set(self, tmp_path: Path):
+        assert _load_alias_models(tmp_path) == set()
+
+    def test_reads_aliases(self, tmp_path: Path):
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "router_settings": {
+                        "model_group_alias": {
+                            "fable": "Qwen3.7-Max",
+                            "opus": "Qwen3.7-Plus",
+                            "sonnet": "DeepSeek-V4-Pro",
+                            "haiku": "DeepSeek-V4-Flash",
+                            "custom": "Qwen3.6-27B",
+                        }
+                    }
+                }
+            )
+        )
+        result = _load_alias_models(tmp_path)
+        assert result == {"fable", "opus", "sonnet", "haiku", "custom"}
+
+    def test_skips_malformed_yaml(self, tmp_path: Path):
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text("{{{{not yaml")
+        assert _load_alias_models(tmp_path) == set()
+
+    def test_missing_router_settings(self, tmp_path: Path):
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text(
+            yaml.safe_dump({"general_settings": {}})
+        )
+        assert _load_alias_models(tmp_path) == set()
 
 
 # ── URL helpers ──────────────────────────────────────────────────────────────
@@ -88,42 +312,47 @@ class TestUrlHelpers:
 
 class TestCheckProxyLive:
     def test_returns_true_on_200(self, monkeypatch):
-        ctx = MagicMock()
-        ctx.__enter__.return_value.status = 200
+        import httpx
+
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.urllib.request.urlopen",
-            lambda req, timeout: ctx,
+            httpx,
+            "get",
+            lambda url, timeout=5.0, **kw: type("r", (), {"status_code": 200})(),
         )
         assert _check_proxy_live("h", 4000) is True
 
     def test_returns_false_on_500(self, monkeypatch):
-        ctx = MagicMock()
-        ctx.__enter__.return_value.status = 500
+        import httpx
+
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.urllib.request.urlopen",
-            lambda req, timeout: ctx,
+            httpx,
+            "get",
+            lambda url, timeout=5.0, **kw: type("r", (), {"status_code": 500})(),
         )
         assert _check_proxy_live("h", 4000) is False
 
     def test_returns_false_on_connection_refused(self, monkeypatch):
-        def boom(req, timeout):
-            raise urllib.error.URLError("Connection refused")
+        import httpx
 
-        monkeypatch.setattr("codefreedom.cli.vscode.urllib.request.urlopen", boom)
+        monkeypatch.setattr(
+            httpx, "get", lambda url, timeout=5.0, **kw: (_ for _ in ()).throw(httpx.ConnectError("refused"))
+        )
         assert _check_proxy_live("h", 4000) is False
 
     def test_returns_false_on_timeout(self, monkeypatch):
-        def boom(req, timeout):
-            raise TimeoutError("timed out")
+        import httpx
 
-        monkeypatch.setattr("codefreedom.cli.vscode.urllib.request.urlopen", boom)
+        monkeypatch.setattr(
+            httpx, "get", lambda url, timeout=5.0, **kw: (_ for _ in ()).throw(httpx.ReadTimeout("timed out"))
+        )
         assert _check_proxy_live("h", 4000) is False
 
     def test_returns_false_on_dns_failure(self, monkeypatch):
-        def boom(req, timeout):
-            raise OSError("Name or service not known")
+        import httpx
 
-        monkeypatch.setattr("codefreedom.cli.vscode.urllib.request.urlopen", boom)
+        monkeypatch.setattr(
+            httpx, "get", lambda url, timeout=5.0, **kw: (_ for _ in ()).throw(httpx.ConnectError("dns"))
+        )
         assert _check_proxy_live("h", 4000) is False
 
 
@@ -131,16 +360,14 @@ class TestCheckProxyLive:
 
 
 class TestFetchModelInfo:
-    def _mock_urlopen(self, monkeypatch, body: Any):
-        ctx = MagicMock()
-        ctx.__enter__.return_value.read.return_value = json.dumps(body).encode("utf-8")
+    def _mock_get_json(self, monkeypatch, return_value: Any):
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.urllib.request.urlopen",
-            lambda req, timeout: ctx,
+            "codefreedom.core.http_client.get_json",
+            lambda url, **kw: return_value,
         )
 
     def test_returns_data_list(self, monkeypatch):
-        self._mock_urlopen(
+        self._mock_get_json(
             monkeypatch,
             {"data": [{"model_name": "m1"}, {"model_name": "m2"}]},
         )
@@ -148,27 +375,83 @@ class TestFetchModelInfo:
         assert result == [{"model_name": "m1"}, {"model_name": "m2"}]
 
     def test_missing_data_field_returns_empty(self, monkeypatch):
-        self._mock_urlopen(monkeypatch, {"other": "field"})
+        self._mock_get_json(monkeypatch, {"other": "field"})
         result = _fetch_model_info("h", 4000, "sk-test")
         assert result == []
 
     def test_invalid_shape_raises(self, monkeypatch):
-        self._mock_urlopen(monkeypatch, ["not", "a", "dict"])
+        self._mock_get_json(monkeypatch, ["not", "a", "dict"])
         with pytest.raises(ValueError, match="not an object"):
             _fetch_model_info("h", 4000, "sk-test")
 
-    def test_authorization_header_sent(self, monkeypatch):
-        ctx = MagicMock()
-        ctx.__enter__.return_value.read.return_value = b'{"data": []}'
-        captured: list = []
 
-        def fake(req, timeout):
-            captured.append(req)
-            return ctx
+# ── _resolve_model_id ────────────────────────────────────────────────────────
 
-        monkeypatch.setattr("codefreedom.cli.vscode.urllib.request.urlopen", fake)
-        _fetch_model_info("h", 4000, "sk-abc")
-        assert captured[0].headers["Authorization"] == "Bearer sk-abc"
+
+class TestResolveModelId:
+    def test_uses_model_name(self):
+        assert _resolve_model_id({"model_name": "gpt-4"}) == "gpt-4"
+
+    def test_falls_back_to_model_info_id(self):
+        assert _resolve_model_id({"model_info": {"id": "from-info"}}) == "from-info"
+
+    def test_unknown_when_no_identifier(self):
+        assert _resolve_model_id({}) == "unknown"
+
+    def test_prefers_model_name_over_info_id(self):
+        assert (
+            _resolve_model_id(
+                {
+                    "model_name": "name-wins",
+                    "model_info": {"id": "info-id"},
+                }
+            )
+            == "name-wins"
+        )
+
+
+# ── _deduplicate_models ──────────────────────────────────────────────────────
+
+
+class TestDeduplicateModels:
+    def test_no_dupes_preserves_order(self):
+        models = [
+            {"model_name": "a"},
+            {"model_name": "b"},
+            {"model_name": "c"},
+        ]
+        out = _deduplicate_models(models)
+        assert [m["model_name"] for m in out] == ["a", "b", "c"]
+
+    def test_removes_duplicate_model_name(self):
+        models = [
+            {"model_name": "gpt-4", "model_info": {"supports_vision": True}},
+            {"model_name": "gpt-4", "model_info": {}},
+            {"model_name": "claude-3"},
+        ]
+        out = _deduplicate_models(models)
+        assert len(out) == 2
+        assert out[0]["model_name"] == "gpt-4"
+        assert out[1]["model_name"] == "claude-3"
+
+    def test_prefers_richer_model_info(self):
+        models = [
+            {"model_name": "m1", "model_info": {"a": 1}},
+            {"model_name": "m1", "model_info": {"a": 1, "b": 2, "c": 3}},
+        ]
+        out = _deduplicate_models(models)
+        assert len(out) == 1
+        assert len(out[0]["model_info"]) == 3
+
+    def test_preserves_first_seen_order(self):
+        models = [
+            {"model_name": "z"},
+            {"model_name": "a"},
+            {"model_name": "z"},
+            {"model_name": "m"},
+        ]
+        out = _deduplicate_models(models)
+        assert [m["model_name"] for m in out] == ["z", "a", "m"]
 
 
 # ── _model_to_vscode_entry ───────────────────────────────────────────────────
@@ -282,20 +565,14 @@ class TestModelToVscodeEntry:
         out = _model_to_vscode_entry({"model_name": "Azure/GPT-5.4"}, self.BASE_URL)
         assert out["supportsReasoningEffort"] == self.STD
 
-    def test_known_model_only_none_omits_field(self):
-        # A model that matches a rule with `None` (only supports "none")
-        # gets the field OMITTED entirely — not `["none"]`, not `None`.
-        out = _model_to_vscode_entry(
-            {"model_name": "Azure/GPT-5.4-Nano"}, self.BASE_URL
-        )
-        assert "supportsReasoningEffort" not in out
-        # The rest of the entry is still intact.
-        assert out["id"] == "Azure/GPT-5.4-Nano"
-        assert out["toolCalling"] is True
-
-    def test_only_none_for_all_only_none_families(self):
-        # Spot-check several "only none" families from the research.
+    def test_model_with_any_name_emits_list(self):
+        # Every model now unconditionally gets the full standard set,
+        # because the proxy's reasoning-efforts mapping plugin handles
+        # translation to model-native values (including mapping all
+        # levels to "none" for models that don't actually reason).
         for name in (
+            "Azure/GPT-5.4",
+            "Azure/GPT-5.4-Nano",
             "NVIDIA/GLM-5.1",
             "NVIDIA/Kimi-K2.6",
             "DGX/Qwen3.6-27B",
@@ -305,27 +582,64 @@ class TestModelToVscodeEntry:
             "OpenRouter/FreeRouter",
         ):
             out = _model_to_vscode_entry({"model_name": name}, self.BASE_URL)
-            assert (
-                "supportsReasoningEffort" not in out
-            ), f"{name} should omit supportsReasoningEffort but got {out.get('supportsReasoningEffort')!r}"
+            assert out["supportsReasoningEffort"] == self.STD
+
+    def test_route_image_request_enables_vision(self):
+        route_models = {"MiMo-V2.5", "DeepSeek-V4-Flash"}
+        out = _model_to_vscode_entry(
+            {
+                "model_name": "MiMo-V2.5",
+                "model_info": {"supports_vision": False},
+            },
+            self.BASE_URL,
+            route_image_models=route_models,
+        )
+        assert out["vision"] is True
+
+    def test_route_image_request_not_in_set_no_override(self):
+        route_models = {"MiMo-V2.5"}
+        out = _model_to_vscode_entry(
+            {
+                "model_name": "Some-Other-Model",
+                "model_info": {"supports_vision": False},
+            },
+            self.BASE_URL,
+            route_image_models=route_models,
+        )
+        assert out["vision"] is False
+
+    def test_route_image_request_none_set_no_override(self):
+        out = _model_to_vscode_entry(
+            {
+                "model_name": "MiMo-V2.5",
+                "model_info": {"supports_vision": False},
+            },
+            self.BASE_URL,
+            route_image_models=None,
+        )
+        assert out["vision"] is False
+
+    def test_vision_true_from_model_info_preserved_even_with_route_set(self):
+        route_models = set()
+        out = _model_to_vscode_entry(
+            {
+                "model_name": "Kimi-K2.6",
+                "model_info": {"supports_vision": True},
+            },
+            self.BASE_URL,
+            route_image_models=route_models,
+        )
+        assert out["vision"] is True
 
 
 # ── _resolve_reasoning_effort ────────────────────────────────────────────────
 
 
 class TestResolveReasoningEffort:
-    """Reasoning-effort lookup — always returns the standard set for any
-    model that supports reasoning.
-
-    The helper has a two-way return contract:
-      * ``list[str]`` — model supports reasoning; always the full standard
-        set (``["none", "low", "medium", "high", "xhigh", "max"]``).
-      * ``None`` — model has no real reasoning capability; the caller
-        should OMIT the field.
-
-    Models not in the hardcoded table are treated permissively (full standard
-    set).  Order matters: more specific patterns must come first so they win
-    over less-specific ones (e.g. ``gpt-5.4-nano`` before ``gpt-5.4``).
+    """Reasoning-effort lookup now unconditionally returns the full
+    standard set for every model.  The proxy's reasoning-efforts mapping
+    plugin handles translation to model-native values at runtime; there
+    is no longer a per-model rule table in this code.
     """
 
     STD = list(_STANDARD_REASONING_EFFORT_LEVELS)
@@ -333,88 +647,50 @@ class TestResolveReasoningEffort:
     @pytest.mark.parametrize(
         "model_name",
         [
-            # ── Native OpenAI Tier (Azure) ──────────────────────────────
             "Azure/GPT-5.4",
             "openai/gpt-5.4",
             "Azure/GPT-5.4-Mini",
             "openai/gpt-5.4-mini",
-            # ── DeepSeek V4 ─────────────────────────────────────────────
+            "Azure/GPT-5.4-Nano",
+            "openai/gpt-5.4-nano",
             "DeepSeek/DeepSeek-V4-Pro",
             "NVIDIA/DeepSeek-V4-Pro",
             "DeepSeek/DeepSeek-V4-Flash",
             "NVIDIA/DeepSeek-V4-Flash",
             "OpenCodeZen/DeepSeek-V4-Flash-FREE",
-            # ── NVIDIA & Moonshot backends ───────────────────────────────
             "OpenRouter/Nemotron-3-Ultra-550B-A55B",
             "OpenCodeZen/Nemotron-3-Ultra-FREE",
-            # ── OpenCodeZen custom models ────────────────────────────────
+            "OpenCodeZen/Nemotron-3-Super-FREE",
             "OpenCodeZen/MiMo-V2.5-FREE",
             "OpenCodeZen/Minimax-M3-FREE",
-            # ── Alibaba Qwen 3.6 MoE ─────────────────────────────────────
             "DGX/Qwen3.6-35B-A3B",
-            # ── CodeFreedom internal fallbacks ───────────────────────────
-            "CodeFreedom/Ultra",
-            "CodeFreedom/Flash",
-        ],
-    )
-    def test_known_models_with_gradient(self, model_name):
-        assert _resolve_reasoning_effort(model_name) == self.STD
-
-    @pytest.mark.parametrize(
-        "model_name",
-        [
-            # ── Native OpenAI Tier ─────────────────────────────────────────
-            "Azure/GPT-5.4-Nano",
-            "openai/gpt-5.4-nano",
-            # ── Zhipu AI GLM ───────────────────────────────────────────────
-            "Azure/GLM-5.1",
+            "DGX/Qwen3.6-27B",
             "NVIDIA/GLM-5.1",
-            # ── NVIDIA & Moonshot backends ─────────────────────────────────
             "NVIDIA/Kimi-K2.6",
-            "OpenCodeZen/Nemotron-3-Super-FREE",
-            # ── OpenCodeZen custom models ──────────────────────────────────
             "OpenCodeZen/Big-Pickle",
             "OpenRouter/FreeRouter",
-            # ── Alibaba Qwen 3.6 MoE ───────────────────────────────────────
-            "DGX/Qwen3.6-27B",
-            # ── CodeFreedom internal fallbacks ─────────────────────────────
+            "CodeFreedom/Ultra",
+            "CodeFreedom/Flash",
             "CodeFreedom/Pro",
             "CodeFreedom/Air",
-        ],
-    )
-    def test_known_models_only_none_returns_None(self, model_name):
-        # ``None`` tells the caller to OMIT the field — not the same as
-        # an empty list.  See the helper's docstring.
-        assert _resolve_reasoning_effort(model_name) is None
-
-    def test_unknown_models_return_standard_set(self):
-        # Unknown models are treated permissively — get the full standard set.
-        for model_name in [
+            "Azure/GLM-5.1",
             "some-org/Some-Random-Model",
             "totally/unknown",
             "foo",
-            "NVIDIA/Step-3.7-Flash",  # in nvidia.yaml but not in rules
             "",
             "unknown",
-        ]:
-            assert _resolve_reasoning_effort(model_name) == self.STD
+        ],
+    )
+    def test_every_model_gets_standard_set(self, model_name):
+        """Every model, regardless of name, gets the full standard set."""
+        assert _resolve_reasoning_effort(model_name) == self.STD
 
-    def test_case_insensitive_match(self):
-        # The lookup is case-insensitive on the substring pattern.
+    def test_case_insensitive(self):
         assert _resolve_reasoning_effort("azure/gpt-5.4") == self.STD
         assert _resolve_reasoning_effort("AZURE/GPT-5.4-MINI") == self.STD
-        # The "only none" branch is also case-insensitive.
-        assert _resolve_reasoning_effort("azure/gpt-5.4-nano") is None
-
-    def test_specific_pattern_wins_over_general(self):
-        # gpt-5.4-nano must NOT fall through to the general gpt-5.4 rule.
-        assert _resolve_reasoning_effort("Azure/GPT-5.4-Nano") is None
-        # gpt-5.4-mini must NOT fall through to the general gpt-5.4 rule.
+        assert _resolve_reasoning_effort("azure/gpt-5.4-nano") == self.STD
+        assert _resolve_reasoning_effort("Azure/GPT-5.4-Nano") == self.STD
         assert _resolve_reasoning_effort("Azure/GPT-5.4-Mini") == self.STD
-        # nemotron-3-super must NOT be shadowed by nemotron-3-ultra
-        # (different substrings — verify the order in the rules table).
-        assert _resolve_reasoning_effort("OpenCodeZen/Nemotron-3-Super-FREE") is None
-        assert _resolve_reasoning_effort("OpenCodeZen/Nemotron-3-Ultra-FREE") == self.STD
 
     def test_returned_list_is_fresh(self):
         # Calling twice returns a new list each time (not a shared mutable).
@@ -457,8 +733,9 @@ def _args(
     port: int = 4000,
     name: str = "CodeFreedom",
     out: Any = None,
+    keep_alias: bool = False,
 ) -> argparse.Namespace:
-    return argparse.Namespace(host=host, port=port, name=name, out=out)
+    return argparse.Namespace(host=host, port=port, name=name, out=out, keep_alias=keep_alias)
 
 
 class TestCmdVscodeGenerate:
@@ -466,7 +743,7 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: False
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: False
         )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
@@ -474,12 +751,13 @@ class TestCmdVscodeGenerate:
     def test_missing_master_key_returns_1(self, monkeypatch, tmp_path: Path, capsys):
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+        monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
-        # Error message names the env file.
+        # Error message mentions LITELLM_MASTER_KEY.
         captured = capsys.readouterr()
         assert "LITELLM_MASTER_KEY" in captured.err
 
@@ -487,15 +765,15 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
 
         def boom(h, p, k, *, timeout=10.0):
-            raise urllib.error.HTTPError(
-                "http://h:4000/v1/model/info", 401, "Unauthorized", {}, None
-            )
+            resp = MagicMock()
+            resp.status_code = 401
+            raise httpx.HTTPStatusError("Unauthorized", request=MagicMock(), response=resp)
 
-        monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
+        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -503,15 +781,15 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
 
         def boom(h, p, k, *, timeout=10.0):
-            raise urllib.error.HTTPError(
-                "http://h:4000/v1/model/info", 500, "Server Error", {}, None
-            )
+            resp = MagicMock()
+            resp.status_code = 500
+            raise httpx.HTTPStatusError("Server Error", request=MagicMock(), response=resp)
 
-        monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
+        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -519,13 +797,13 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
 
         def boom(h, p, k, *, timeout=10.0):
-            raise urllib.error.URLError("connection refused")
+            raise httpx.ConnectError("connection refused")
 
-        monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
+        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -533,13 +811,13 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
 
         def boom(h, p, k, *, timeout=10.0):
             raise ValueError("bad response")
 
-        monkeypatch.setattr("codefreedom.cli.vscode._fetch_model_info", boom)
+        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -547,10 +825,10 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._fetch_model_info",
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
             lambda h, p, k, *, timeout=10.0: [
                 {
                     "model_name": "model-a",
@@ -595,10 +873,10 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._fetch_model_info",
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
             lambda h, p, k, *, timeout=10.0: [{"model_name": "m1"}],
         )
 
@@ -616,12 +894,141 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._fetch_model_info",
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
             lambda h, p, k, *, timeout=10.0: [],
         )
 
         result = cmd_vscode_proxy_config(_args())
         assert result == 0
+
+    def test_deduplicates_duplicate_model_names(self):
+        models = [
+            {"model_name": "gpt-4", "model_info": {"supports_vision": True}},
+            {"model_name": "gpt-4", "model_info": {}},
+            {"model_name": "claude-3-opus"},
+        ]
+        out = _build_vscode_entry("CF", "http://h:4000/v1", models)
+        ids = [m["id"] for m in out["models"]]
+        assert len(ids) == 2
+        assert ids == ["gpt-4", "claude-3-opus"]
+
+    def test_deduplication_prefers_richer_model_info(self):
+        models = [
+            {"model_name": "m1", "model_info": {"a": 1}},
+            {"model_name": "m1", "model_info": {"a": 1, "b": 2, "c": 3}},
+        ]
+        out = _build_vscode_entry("CF", "http://h:4000/v1", models)
+        assert len(out["models"]) == 1
+        entry = out["models"][0]
+        assert entry["id"] == "m1"
+        # The richer entry has vision=False (model_info had no vision key)
+        assert entry["vision"] is False
+
+    def test_aliases_skipped_by_default(self, monkeypatch, tmp_path: Path, capsys):
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+        )
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
+            lambda h, p, k, *, timeout=10.0: [
+                {"model_name": "fable"},
+                {"model_name": "opus"},
+                {"model_name": "Qwen3.7-Max"},
+                {"model_name": "DeepSeek-V4-Flash"},
+            ],
+        )
+        # Write alias config
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "router_settings": {
+                        "model_group_alias": {
+                            "fable": "Qwen3.7-Max",
+                            "opus": "Qwen3.7-Plus",
+                        }
+                    }
+                }
+            )
+        )
+
+        result = cmd_vscode_proxy_config(_args())
+        assert result == 0
+
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        ids = [m["id"] for m in payload["models"]]
+        assert "fable" not in ids
+        assert "opus" not in ids
+        assert "Qwen3.7-Max" in ids
+        assert "DeepSeek-V4-Flash" in ids
+
+    def test_aliases_included_with_keep_alias(self, monkeypatch, tmp_path: Path, capsys):
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+        )
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
+            lambda h, p, k, *, timeout=10.0: [
+                {"model_name": "fable"},
+                {"model_name": "opus"},
+                {"model_name": "Qwen3.7-Max"},
+            ],
+        )
+        config_dir = tmp_path / "proxy" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "router_settings": {
+                        "model_group_alias": {
+                            "fable": "Qwen3.7-Max",
+                            "opus": "Qwen3.7-Plus",
+                        }
+                    }
+                }
+            )
+        )
+
+        result = cmd_vscode_proxy_config(_args(keep_alias=True))
+        assert result == 0
+
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        ids = [m["id"] for m in payload["models"]]
+        assert "fable" in ids
+        assert "opus" in ids
+        assert "Qwen3.7-Max" in ids
+
+    def test_no_aliases_config_keeps_all_models(self, monkeypatch, tmp_path: Path, capsys):
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+        )
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info",
+            lambda h, p, k, *, timeout=10.0: [
+                {"model_name": "fable"},
+                {"model_name": "opus"},
+                {"model_name": "Qwen3.7-Max"},
+            ],
+        )
+        # No config.yaml → no aliases to filter
+        result = cmd_vscode_proxy_config(_args())
+        assert result == 0
+
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        ids = [m["id"] for m in payload["models"]]
+        assert "fable" in ids
+        assert "opus" in ids
+        assert "Qwen3.7-Max" in ids

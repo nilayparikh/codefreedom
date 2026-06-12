@@ -25,11 +25,11 @@ A **GitHub Personal Access Token (PAT)** with appropriate scopes:
 
 ```bash
 # Install the _default recipe to create the github profile
-cf init recipe
+cf setup init
 
-codefreedom tools github start    # Validate token, pull image
-codefreedom tools github status   # Check status
-codefreedom tools github stop     # No-op (ephemeral)
+codefreedom run tools github start    # Validate token, pull image
+codefreedom run tools github status   # Check status
+codefreedom run tools github stop     # No-op (ephemeral)
 ```
 
 ## Add Your Token

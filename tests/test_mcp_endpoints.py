@@ -5,8 +5,8 @@ from pathlib import Path
 
 import yaml
 
-from codefreedom.config import get_codefreedom_dir
-from codefreedom.tool_registry import load_tool_mcp_endpoints
+from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.tools.registry import load_tool_mcp_endpoints
 
 
 def _tool_home() -> Path:
@@ -143,7 +143,7 @@ class TestLoadToolMcpEndpoints:
     def test_github_with_defaults(self, monkeypatch):
         """GitHub returns HTTP endpoint (port=8082 fallback, /mcp) when profile missing and no container running."""
         monkeypatch.setattr(
-            "codefreedom.tool_registry._github_mapped_port",
+            "codefreedom.tools.github._get_mapped_port",
             lambda _: None,
         )
         endpoints = load_tool_mcp_endpoints(["github"])
@@ -176,7 +176,7 @@ class TestLoadToolMcpEndpoints:
     def test_all_tools_merged(self, monkeypatch):
         """Chrome, Web, and GitHub MCP all produce distinct entries."""
         monkeypatch.setattr(
-            "codefreedom.tool_registry._github_mapped_port",
+            "codefreedom.tools.github._get_mapped_port",
             lambda _: None,
         )
         _write_tool_profile(

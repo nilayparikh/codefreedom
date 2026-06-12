@@ -4,7 +4,7 @@ import argparse
 
 import pytest
 
-from codefreedom.cli.web import restart, run
+from codefreedom.tools.web import restart, run
 
 
 def _settings(**overrides) -> dict:
@@ -112,8 +112,8 @@ class TestRunDispatch:
             called.append(settings)
             return 0
 
-        monkeypatch.setattr("codefreedom.cli.web._load_profile", _settings)
-        monkeypatch.setattr("codefreedom.cli.web.restart", fake_restart)
+        monkeypatch.setattr("codefreedom.tools.web._load_profile", _settings)
+        monkeypatch.setattr("codefreedom.tools.web.restart", fake_restart)
 
         args = argparse.Namespace(action="restart", port=8420)
         result = run(args)
@@ -127,9 +127,9 @@ class TestRunDispatch:
         The profile loader falls back to defaults if the file is missing,
         so restart should work even without a prior `init`.
         """
-        monkeypatch.setattr("codefreedom.cli.web._load_profile", lambda: _settings())
+        monkeypatch.setattr("codefreedom.tools.web._load_profile", lambda: _settings())
         monkeypatch.setattr(
-            "codefreedom.cli.web.restart",
+            "codefreedom.tools.web.restart",
             lambda settings: 0,
         )
 
@@ -149,10 +149,10 @@ class TestRunDispatch:
 
             return fake
 
-        monkeypatch.setattr("codefreedom.cli.web._load_profile", _settings)
-        monkeypatch.setattr("codefreedom.cli.web.start", make_fake("start"))
-        monkeypatch.setattr("codefreedom.cli.web.stop", make_fake("stop"))
-        monkeypatch.setattr("codefreedom.cli.web.status", make_fake("status"))
+        monkeypatch.setattr("codefreedom.tools.web._load_profile", _settings)
+        monkeypatch.setattr("codefreedom.tools.web.start", make_fake("start"))
+        monkeypatch.setattr("codefreedom.tools.web.stop", make_fake("stop"))
+        monkeypatch.setattr("codefreedom.tools.web.status", make_fake("status"))
 
         args = argparse.Namespace(action=action, port=8420)
         result = run(args)

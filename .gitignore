@@ -35,4 +35,8 @@ site/
 # .mcp.json
 .mcp*.json
 
-.bak/
+.bak
+.commands
+.mimocode
+.agents/skills/
+docs/superpowers/

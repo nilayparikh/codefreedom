@@ -412,11 +412,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -483,11 +483,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -517,11 +517,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -552,11 +552,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -575,11 +575,11 @@ class TestVscodeSettingsGenerate:
     def test_missing_profiles_file_returns_1(self, monkeypatch, tmp_path: Path, capsys):
         missing = tmp_path / "does-not-exist.json"
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: missing,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -587,7 +587,7 @@ class TestVscodeSettingsGenerate:
         assert result == 1
         captured = capsys.readouterr()
         assert "Profiles file not found" in captured.err
-        assert "codefreedom claude init" in captured.err
+        assert "codefreedom setup init" in captured.err
 
     def test_profile_error_returns_1(self, monkeypatch, tmp_path: Path, capsys):
         profiles_file = tmp_path / "profiles" / "claude-code.yaml"
@@ -605,20 +605,22 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
         def boom(*_a, **_kw):
-            from codefreedom.profiles import ProfileError
+            from codefreedom.core.profiles import ProfileError
 
             raise ProfileError("nope")
 
-        monkeypatch.setattr("codefreedom.cli.vscode.load_profile_env", boom)
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.claude_settings.load_profile_env", boom
+        )
 
         result = cmd_vscode_claude_config(_args(profile="missing"))
         assert result == 1
@@ -642,11 +644,11 @@ class TestVscodeSettingsGenerate:
         )
 
         monkeypatch.setattr(
-            "codefreedom.cli.vscode._resolve_profiles_path",
+            "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.vscode.load_env_chain",
+            "codefreedom.agents.vscode.claude_settings.load_env_chain",
             lambda *a, **kw: {},
         )
 
@@ -667,7 +669,7 @@ class TestDispatchPath:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("CODEFREEDOM_PROFILES_FILE", raising=False)
 
-        from codefreedom.config import resolve_profiles_path
+        from codefreedom.core.config import resolve_profiles_path
 
         path = resolve_profiles_path()
         assert path == tmp_path / "profiles" / "claude-code.yaml"
@@ -675,7 +677,7 @@ class TestDispatchPath:
     def test_resolve_profiles_path_env_override(self, monkeypatch, tmp_path: Path):
         custom = tmp_path / "custom-profiles.json"
         monkeypatch.setenv("CODEFREEDOM_PROFILES_FILE", str(custom))
-        from codefreedom.config import resolve_profiles_path
+        from codefreedom.core.config import resolve_profiles_path
 
         path = resolve_profiles_path()
         assert path == custom
@@ -704,11 +706,9 @@ class TestSubprocessDispatch:
         )
 
     def test_vscode_claude_config_help_succeeds(self):
-        result = self._run("vscode", "claude", "config", "--help")
+        """cf setup config vscode claude --help"""
+        result = self._run("setup", "config", "vscode", "claude", "--help")
         assert result.returncode == 0, result.stderr
-        # The help text describes a settings fragment for the Claude Code
-        # extension.  Be liberal in what we match: any of "settings" /
-        # "fragment" / "claudeCode" indicates the right help rendered.
         low = result.stdout.lower()
         assert "settings" in low or "fragment" in low or "claudecode" in low
         assert "--profile" in result.stdout
@@ -716,37 +716,29 @@ class TestSubprocessDispatch:
         assert "--port" in result.stdout
         assert "--out" in result.stdout
 
-    def test_claude_init_rejected(self):
-        """init subcommand was removed — use cf init recipe instead."""
-        result = self._run("claude", "init", "--help")
-        assert result.returncode != 0
-        assert "invalid choice" in result.stderr
-
-    def test_claude_help_lists_subactions(self):
-        result = self._run("claude", "--help")
+    def test_agent_claude_help_succeeds(self):
+        """cf run agent claude --help"""
+        result = self._run("run", "agent", "claude", "--help")
         assert result.returncode == 0, result.stderr
-        # Only the `config` sub-action remains under `claude` (vscode moved
-        # to the top-level `vscode` subcommand).
-        assert "config" in result.stdout
-        assert "vscode" not in result.stdout
+        assert "--sandbox" in result.stdout
+        assert "--profile" in result.stdout
 
-    def test_claude_unknown_subaction_fails(self):
-        # Ensures the subparser is strict and rejects invalid sub-actions
-        result = self._run("claude", "not-a-real-subaction")
-        assert result.returncode != 0
-        # argparse writes the error to stderr
-        assert (
-            "invalid choice" in result.stderr
-            or "unrecognized arguments" in result.stderr
-        )
+    def test_agent_list_succeeds(self):
+        """cf run agent list"""
+        result = self._run("run", "agent", "list")
+        assert result.returncode == 0
+        # Output goes to stderr (eprint)
+        output = result.stdout + result.stderr
+        assert "claude" in output.lower()
+        assert "mimo" in output.lower()
 
     def test_vscode_claude_config_with_host_flag_parses(self):
-        # Use --help to short-circuit before any I/O.  Confirms the flag
-        # is registered on the subparser.
+        """cf setup config vscode claude --host ... --help"""
         result = self._run(
+            "setup",
+            "config",
             "vscode",
             "claude",
-            "config",
             "--host",
             "192.168.1.10",
             "--port",
@@ -754,13 +746,6 @@ class TestSubprocessDispatch:
             "--help",
         )
         assert result.returncode == 0, result.stderr
-
-    def test_claude_vscode_path_now_fails(self):
-        # Regression: `codefreedom claude vscode` is no longer valid.
-        # VS Code config moved to the top-level `vscode` subcommand.
-        result = self._run("claude", "vscode")
-        assert result.returncode != 0
-        assert "invalid choice" in result.stderr
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

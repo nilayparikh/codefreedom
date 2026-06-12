@@ -35,7 +35,7 @@ from codefreedom.admin import (
     prune_backups,
     restore as engine_restore,
 )
-from codefreedom.cli.admin import _parse_duration
+from codefreedom.cli.manage.admin import _parse_duration
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -494,7 +494,7 @@ class TestEncryption:
             _decrypt_data(encrypted, "wrong-pass")
 
     def test_no_cryptography_raises(self, monkeypatch):
-        monkeypatch.setattr("codefreedom.admin._HAS_CRYPTOGRAPHY", False)
+        monkeypatch.setattr("codefreedom.admin._utils._HAS_CRYPTOGRAPHY", False)
         with pytest.raises(RuntimeError, match="cryptography"):
             _encrypt_data(b"data", "pass")
 
@@ -616,7 +616,7 @@ class TestPostgresDump:
                 args[0] if args else [], returncode=0, stdout="", stderr=""
             )
 
-        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_subprocess_run)
+        monkeypatch.setattr("codefreedom.admin._utils.subprocess.run", mock_subprocess_run)
 
         _out_path, manifest = engine_backup(profile="pg-success-test")
 
@@ -632,12 +632,16 @@ class TestPostgresDump:
     @pytest.mark.usefixtures("cf_home_dir")
     def test_backup_with_skip_pg_dump(self, monkeypatch):
         """skip_pg_dump=True should skip the pg_dump call entirely."""
+        import sys
+
         called = [False]
 
         def mock_run(*_: Any, **__: Any) -> None:
             called[0] = True
 
-        monkeypatch.setattr("codefreedom.admin._dump_postgresql", mock_run)
+        monkeypatch.setattr(
+            sys.modules["codefreedom.admin.backup"], "_dump_postgresql", mock_run
+        )
 
         engine_backup(profile="skip-pg-test", skip_pg_dump=True)
 
@@ -647,12 +651,16 @@ class TestPostgresDump:
     @pytest.mark.usefixtures("cf_home_dir")
     def test_backup_without_skip_pg_dump_calls_dump(self, monkeypatch):
         """skip_pg_dump=False (default) should call _dump_postgresql."""
+        import sys
+
         called = [False]
 
         def mock_dump(*_: Any, **__: Any) -> None:
             called[0] = True
 
-        monkeypatch.setattr("codefreedom.admin._dump_postgresql", mock_dump)
+        monkeypatch.setattr(
+            sys.modules["codefreedom.admin.backup"], "_dump_postgresql", mock_dump
+        )
 
         engine_backup(profile="call-pg-test")
 
@@ -664,7 +672,7 @@ class TestPostgresDump:
         def mock_run(*args: Any, **_kwargs: Any) -> Any:
             raise FileNotFoundError("docker not found")
 
-        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        monkeypatch.setattr("codefreedom.admin._utils.subprocess.run", mock_run)
         result = _find_litellm_container()
         assert result is None
 
@@ -681,7 +689,7 @@ class TestPostgresDump:
                 stderr="",
             )
 
-        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        monkeypatch.setattr("codefreedom.admin._utils.subprocess.run", mock_run)
         result = _find_litellm_container()
         assert result == "litellm-codefreedom-0000"
 
@@ -698,13 +706,13 @@ class TestPostgresDump:
                 stderr="",
             )
 
-        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        monkeypatch.setattr("codefreedom.admin._utils.subprocess.run", mock_run)
         result = _find_litellm_container()
         assert result is None
 
     def test_dump_postgresql_no_container(self, cf_home_dir: Path, monkeypatch):
         """_dump_postgresql returns None when no container is running."""
-        monkeypatch.setattr("codefreedom.admin._find_litellm_container", lambda: None)
+        monkeypatch.setattr("codefreedom.admin._utils._find_litellm_container", lambda: None)
         pg_backup = cf_home_dir / "pg" / "backup"
         result = _dump_postgresql(pg_backup)
         assert result is None
@@ -719,11 +727,11 @@ class TestPostgresDump:
         )
 
         monkeypatch.setattr(
-            "codefreedom.admin._find_litellm_container",
+            "codefreedom.admin._utils._find_litellm_container",
             lambda: "litellm-codefreedom-0000",
         )
         monkeypatch.setattr(
-            "codefreedom.admin.datetime.datetime",
+            "codefreedom.admin._utils.datetime.datetime",
             # Mock datetime.now to return frozen time
             type(
                 "MockDateTime",
@@ -756,7 +764,7 @@ class TestPostgresDump:
                 stderr="",
             )
 
-        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        monkeypatch.setattr("codefreedom.admin._utils.subprocess.run", mock_run)
         result = _dump_postgresql(pg_backup)
         assert result is not None
         assert result.exists()
@@ -768,7 +776,7 @@ class TestPostgresDump:
         pg_backup.mkdir(parents=True, exist_ok=True)
 
         monkeypatch.setattr(
-            "codefreedom.admin._find_litellm_container",
+            "codefreedom.admin._utils._find_litellm_container",
             lambda: "litellm-codefreedom-0000",
         )
 
@@ -782,6 +790,6 @@ class TestPostgresDump:
                 stderr="pg_dump: error: connection to server failed",
             )
 
-        monkeypatch.setattr("codefreedom.admin.subprocess.run", mock_run)
+        monkeypatch.setattr("codefreedom.admin._utils.subprocess.run", mock_run)
         result = _dump_postgresql(pg_backup)
         assert result is None

@@ -4,7 +4,7 @@ import argparse
 
 import pytest
 
-from codefreedom.cli.chrome import restart, run
+from codefreedom.tools.chrome import restart, run
 
 
 def _settings(**overrides) -> dict:
@@ -119,8 +119,8 @@ class TestRunDispatch:
             return 0
 
         # Bypass profile loading — return a minimal settings dict
-        monkeypatch.setattr("codefreedom.cli.chrome._load_profile", _settings)
-        monkeypatch.setattr("codefreedom.cli.chrome.restart", fake_restart)
+        monkeypatch.setattr("codefreedom.tools.chrome._load_profile", _settings)
+        monkeypatch.setattr("codefreedom.tools.chrome.restart", fake_restart)
 
         args = argparse.Namespace(action="restart", port=9222)
         result = run(args)
@@ -138,9 +138,9 @@ class TestRunDispatch:
         def fake_load():
             return _settings()
 
-        monkeypatch.setattr("codefreedom.cli.chrome._load_profile", fake_load)
+        monkeypatch.setattr("codefreedom.tools.chrome._load_profile", fake_load)
         monkeypatch.setattr(
-            "codefreedom.cli.chrome.restart",
+            "codefreedom.tools.chrome.restart",
             lambda settings: 0,
         )
 
@@ -160,11 +160,11 @@ class TestRunDispatch:
 
             return fake
 
-        monkeypatch.setattr("codefreedom.cli.chrome._load_profile", _settings)
-        monkeypatch.setattr("codefreedom.cli.chrome.start", make_fake("start"))
-        monkeypatch.setattr("codefreedom.cli.chrome.stop", make_fake("stop"))
-        monkeypatch.setattr("codefreedom.cli.chrome.status", make_fake("status"))
-        monkeypatch.setattr("codefreedom.cli.chrome.url", make_fake("url"))
+        monkeypatch.setattr("codefreedom.tools.chrome._load_profile", _settings)
+        monkeypatch.setattr("codefreedom.tools.chrome.start", make_fake("start"))
+        monkeypatch.setattr("codefreedom.tools.chrome.stop", make_fake("stop"))
+        monkeypatch.setattr("codefreedom.tools.chrome.status", make_fake("status"))
+        monkeypatch.setattr("codefreedom.tools.chrome.url", make_fake("url"))
 
         args = argparse.Namespace(action=action, port=9222)
         result = run(args)

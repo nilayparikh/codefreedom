@@ -2,7 +2,7 @@
 
 import argparse
 
-from codefreedom.cli.github import restart, run
+from codefreedom.tools.github import restart, run
 
 
 def _settings(**overrides) -> dict:
@@ -38,7 +38,7 @@ class TestRestart:
 
         monkeypatch.setattr("codefreedom.cli.docker_utils.container_exists", lambda n: True)
         monkeypatch.setattr("codefreedom.cli.docker_utils.subprocess.run", fake_run)
-        monkeypatch.setattr("codefreedom.cli.github.subprocess.run", fake_run)
+        monkeypatch.setattr("codefreedom.tools.github.subprocess.run", fake_run)
 
         assert restart(_settings(container_name="gh")) == 0
         # First call is docker restart (from restart_tool_container)
@@ -68,8 +68,8 @@ class TestRunDispatch:
             called.append(s)
             return 0
 
-        monkeypatch.setattr("codefreedom.cli.github._load_profile", _settings)
-        monkeypatch.setattr("codefreedom.cli.github.restart", fake_restart)
+        monkeypatch.setattr("codefreedom.tools.github._load_profile", _settings)
+        monkeypatch.setattr("codefreedom.tools.github.restart", fake_restart)
 
         assert run(argparse.Namespace(action="restart", port=0)) == 0
         assert len(called) == 1

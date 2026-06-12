@@ -69,79 +69,36 @@ Full resolution order (later sources override earlier):
 from __future__ import annotations
 
 import os
-import re
-import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
-# Pre-compiled regex for ${VAR} and ${VAR:-default} patterns in .env files.
-# Uses greedy .* to correctly capture defaults containing '}' characters
-# (e.g., ${JSON:-{"key":"val"}}).
-_VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-(.*))?\}")
+from dotenv import dotenv_values
 
-
-def eprint(*args: Any, **kwargs: Any) -> None:
-    """Print to stderr."""
-    print(*args, file=sys.stderr, **kwargs)
+from codefreedom.core.interpolate import resolve_env_vars
+from codefreedom.log import eprint
 
 
 def load_dotenv(path: Path) -> Dict[str, str]:
     """Parse a .env-style file and return a dict of key=value pairs.
 
-    Handles:
-      - Comment lines (# …)
-      - Quoted values ("foo", 'foo')
-      - Variable references like ${VAR_NAME} (substituted from current env)
+    Delegates parsing to python-dotenv, then applies ${VAR} and ${VAR:-default}
+    interpolation via our own resolver (python-dotenv interpolates only from
+    os.environ, not from intra-file references or fallback defaults).
     """
-    env: Dict[str, str] = {}
     if not path.exists():
-        return env
+        return {}
 
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" not in line:
-                continue
-            key, _, raw_val = line.partition("=")
-            key = key.strip()
-            raw_val = raw_val.strip()
+    raw = {k: v for k, v in dotenv_values(str(path)).items() if v is not None}
+    context: Dict[str, str] = {**os.environ, **raw}
 
-            # Strip surrounding quotes
-            if (
-                len(raw_val) >= 2
-                and raw_val[0] in ('"', "'")
-                and raw_val[0] == raw_val[-1]
-            ):
-                raw_val = raw_val[1:-1]
-
-            # Resolve ${VAR} references from current env + already-parsed vars
-            def _replace_var(m: re.Match) -> str:
-                varname = m.group(1)
-                default = m.group(2)
-                # Use `in` check rather than `or` — an empty-string env var
-                # (e.g., export FOO="") is a valid override and must not
-                # fall through to a lower-precedence value.
-                if varname in os.environ:
-                    resolved = os.environ[varname]
-                elif varname in env:
-                    resolved = env[varname]
-                else:
-                    resolved = None
-                if resolved is not None:
-                    return resolved
-                return default if default is not None else ""
-
-            raw_val = _VAR_REF_RE.sub(_replace_var, raw_val)
-            env[key] = raw_val
-    return env
+    return {key: resolve_env_vars(val, context) for key, val in raw.items()}
 
 
 def load_env_chain(
     workspace_dir: Path,
     *,
     component: Optional[str] = None,
+    verbose: bool = True,
 ) -> Dict[str, str]:
     """Load env vars in precedence order: component → shared → workspace → system env.
 
@@ -151,6 +108,7 @@ def load_env_chain(
                    .env.claude/.env.claude.secrets, "proxy" loads
                    .env.proxy/.env.proxy.secrets.  If None, only shared
                    and workspace envs are loaded (used by tools).
+        verbose: Print ``[ENV]`` log lines for each loaded file.
 
     Resolution order (later sources override earlier):
       Config files (lowest priority):
@@ -167,8 +125,12 @@ def load_env_chain(
         8. process environment                        (highest precedence)
 
     Returns a merged dict. Later sources override earlier ones.
+
+    Note: Most call sites should use :func:`get_env` instead — it wraps this
+    function with support for extra injections (e.g. proxy POSTGRES_* paths)
+    and is the single canonical env-resolution entry point.
     """
-    from codefreedom.config import get_codefreedom_dir
+    from codefreedom.core.config import get_codefreedom_dir
 
     codefreedom_dir = get_codefreedom_dir()
     merged: Dict[str, str] = {}
@@ -215,7 +177,8 @@ def load_env_chain(
     for path, label, _optional in env_sources:
         if path.exists():
             merged.update(load_dotenv(path))
-            eprint(f"  [ENV] Loaded {label} from {path}")
+            if verbose:
+                eprint(f"  [ENV] Loaded {label} from {path}")
 
     # Process environment (highest precedence — machine-level overrides)
     for key, val in os.environ.items():
@@ -225,6 +188,48 @@ def load_env_chain(
     # Users can export CF_CLI_LITELLM_MASTER_KEY=sk-... in their shell
     # to force-set configuration values without touching .env files.
     merged = apply_cf_cli_overrides(merged)
+
+    return merged
+
+
+def get_env(
+    workspace_dir: Path,
+    *,
+    component: Optional[str] = None,
+    verbose: bool = True,
+    extra_injections: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
+    """THE single canonical env resolver for all CodeFreedom components.
+
+    Loads the full env precedence chain via :func:`load_env_chain`, applies
+    ``CF_CLI_*`` overrides, and injects any *extra_injections* with
+    ``setdefault`` semantics (they won't override an existing value).
+
+    Every subcommand (claude, proxy, tools, vscode, doctor, deinit) should
+    use this function — and ONLY this function — to resolve environment
+    variables.  No more custom env loading in individual call sites.
+
+    Args:
+        workspace_dir: Path to the project workspace (for .env overrides).
+        component: Which subcommand is loading envs — ``"claude"`` loads
+                   ``.env.claude`` / ``.env.claude.secrets``, ``"proxy"``
+                   loads ``.env.proxy`` / ``.env.proxy.secrets``.  If
+                   ``None``, only shared and workspace envs are loaded
+                   (used by tools).
+        verbose: Print ``[ENV]`` log lines for each loaded file.
+        extra_injections: Additional vars to inject with ``setdefault``
+            (e.g. ``{"POSTGRES_HOST_DATA_DIR": "/path/to/pg/data"}``).
+            These won't override existing values from env files or
+            ``os.environ``.
+
+    Returns:
+        A merged ``Dict[str, str]`` with the full resolved environment.
+    """
+    merged = load_env_chain(workspace_dir, component=component, verbose=verbose)
+
+    if extra_injections:
+        for key, val in extra_injections.items():
+            merged.setdefault(key, val)
 
     return merged
 
