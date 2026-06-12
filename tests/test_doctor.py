@@ -320,6 +320,12 @@ class TestPostgresChecks:
 
     def test_pg_data_dir_writable_ok(self, monkeypatch, tmp_path):
         """If pg/data exists and is writable, it should pass."""
+        import sys
+
+        if sys.platform == "win32":
+            import os
+
+            monkeypatch.setattr(os, "getuid", lambda: 1000, raising=False)
         pg_data = tmp_path / "pg" / "data"
         pg_data.mkdir(parents=True)
         monkeypatch.setattr(
