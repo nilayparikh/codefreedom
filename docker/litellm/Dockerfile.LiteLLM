@@ -7,7 +7,7 @@
 #                  ├─ run `prisma db push` to create the schema
 #                  └─ exec litellm on :4000
 #   Working dir: /app
-#   Run as:      root (no uid mapping needed across platforms)
+#   Run as:      litellm (UID 999) — PG refuses to run as root
 #   Healthcheck: TCP port check (avoids triggering LiteLLM middleware re-init)
 #
 # ── Source control ──────────────────────────────────────────────────────
@@ -350,12 +350,14 @@ RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        gosu \
         libatomic1 \
         nodejs \
         npm \
         tini \
         $(apt-cache search '^libicu[0-9]+$' | grep -oP 'libicu\d+' | head -1) \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && gosu --version
 
 # Pull in the prebuilt PG (binaries + ICU support files) and the
 # prebuilt LiteLLM site-packages.
@@ -379,6 +381,16 @@ COPY --from=litellm-builder \
 COPY --from=litellm-builder \
     /root/.cache/ /root/.cache/
 
+# Create the litellm user that PG runs as.  PG refuses to initdb/run as
+# root; LiteLLM also runs as this user so Prisma cache paths resolve
+# consistently (~/.cache/prisma-python/).  UID 999 is a safe cross-distro
+# pick that avoids collisions with the base image's existing accounts.
+RUN groupadd -g 999 litellm \
+    && useradd -u 999 -g litellm -m -d /home/litellm -s /bin/bash litellm \
+    && cp -a /root/.cache /home/litellm/.cache \
+    && chown -R litellm:litellm /home/litellm/.cache \
+    && chown -R litellm:litellm /app/litellm-plugins
+
 # Make sure both PG and the python wheels are on the path the entrypoint
 # expects.  /usr/local/bin and /usr/local/lib are already on PATH / the
 # dynamic loader path in the python:3.13-slim base; we just need to
@@ -387,7 +399,8 @@ ENV PATH="/usr/local/pgsql/bin:/usr/local/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PGDATA=/var/lib/postgresql/data \
-    PGSOCKET=/var/run/postgresql
+    PGSOCKET=/var/run/postgresql \
+    HOME=/home/litellm
 
 # Drop the entrypoint and the supporting files in.  The entrypoint boots
 # PG, runs `prisma db push`, and execs litellm; see entrypoint.sh for
@@ -396,10 +409,11 @@ ENV PATH="/usr/local/pgsql/bin:/usr/local/bin:${PATH}" \
 COPY --chown=root:root entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 0755 /usr/local/bin/entrypoint.sh
 
-# PG and LiteLLM run as root inside the container (simplest path across
-# Windows / macOS / Linux — no uid/gid mapping, no volume permission
-# issues).  PG listens on localhost:5432 only, never exposed externally.
-RUN mkdir -p /app /var/lib/postgresql/data /var/lib/postgresql/backup /var/run/postgresql
+# PG and LiteLLM run as the litellm user inside the container.  PG
+# refuses to run as root; LiteLLM runs as the same user so Prisma
+# cache paths (~/.cache/prisma-python/) resolve consistently.
+RUN mkdir -p /app /var/lib/postgresql/data /var/lib/postgresql/backup /var/run/postgresql \
+    && chown -R litellm:litellm /var/lib/postgresql /var/run/postgresql /app
 
 WORKDIR /app
 

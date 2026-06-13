@@ -23,13 +23,14 @@ LITELLM_CONFIG="${LITELLM_CONFIG:-}"
 
 export PATH="/usr/local/pgsql/bin:/usr/local/bin:${PATH}"
 mkdir -p "$PG_DATA" "$PG_BACKUP"
+chown litellm:litellm "$PG_DATA" "$PG_BACKUP"
 
 # ── Init PG cluster (first run only) ────────────────────────────────────────
 FIRST_RUN=false
 if [ ! -f "$PG_DATA/PG_VERSION" ]; then
     FIRST_RUN=true
     echo "[entrypoint] Initialising PostgreSQL cluster at $PG_DATA (locale=C, encoding=UTF8)"
-    initdb -D "$PG_DATA" --username="$PG_USER" \
+    gosu litellm initdb -D "$PG_DATA" --username="$PG_USER" \
         --auth=trust --auth-host=trust --auth-local=trust \
         --locale=C --encoding=UTF8
 fi
@@ -62,14 +63,17 @@ host    all   all   127.0.0.1/32  trust
 host    all   all   ::1/128       trust
 HBA
 
+chown litellm:litellm "$PG_DATA/postgresql.conf" "$PG_DATA/pg_hba.conf"
+
 # ── Start PG ────────────────────────────────────────────────────────────────
 echo "[entrypoint] Starting PostgreSQL..."
-pg_ctl -D "$PG_DATA" -l "$PG_BACKUP/postgres.log" start -w -t 30
+chown litellm:litellm "$PG_DATA" "$PG_BACKUP"
+gosu litellm pg_ctl -D "$PG_DATA" -l "$PG_BACKUP/postgres.log" start -w -t 30
 
 # ── Create the app database (first run only, AFTER PG is up) ────────────────
 if $FIRST_RUN; then
     echo "[entrypoint] Creating database $PG_DB..."
-    createdb -h 127.0.0.1 -U "$PG_USER" "$PG_DB" 2>&1 || \
+    gosu litellm createdb -h 127.0.0.1 -U "$PG_USER" "$PG_DB" 2>&1 || \
         echo "[entrypoint] (createdb returned non-zero; will continue)"
 fi
 
@@ -78,12 +82,12 @@ export DATABASE_URL="postgresql://${PG_USER}@127.0.0.1:5432/${PG_DB}"
 echo "[entrypoint] DATABASE_URL=$DATABASE_URL"
 
 # ── Prisma schema push ──────────────────────────────────────────────────────
-SCHEMA=$(python3 -c "import litellm; from pathlib import Path; print(Path(litellm.__file__).parent / 'proxy' / 'schema.prisma')")
+SCHEMA=$(gosu litellm python3 -c "import litellm; from pathlib import Path; print(Path(litellm.__file__).parent / 'proxy' / 'schema.prisma')")
 echo "[entrypoint] Pushing Prisma schema..."
-cd /tmp && prisma db push --schema="$SCHEMA" --accept-data-loss --skip-generate
+cd /tmp && gosu litellm prisma db push --schema="$SCHEMA" --accept-data-loss --skip-generate
 
 # ── Query engine binary ─────────────────────────────────────────────────────
-QE=$(find /root/.cache/prisma-python/binaries -name 'prisma-query-engine-*' -type f 2>/dev/null | head -1)
+QE=$(find /home/litellm/.cache/prisma-python/binaries -name 'prisma-query-engine-*' -type f 2>/dev/null | head -1)
 [ -n "$QE" ] && [ -x "$QE" ] && export PRISMA_QUERY_ENGINE_BINARY="$QE"
 
 # ── Warm up the Prisma engine (pre-starts the binary subprocess) ─────────────
@@ -97,7 +101,7 @@ QE=$(find /root/.cache/prisma-python/binaries -name 'prisma-query-engine-*' -typ
 # the binary subprocess to start and exit cleanly, proving the binary is
 # functional and leaving no stale state.
 echo "[entrypoint] Warming up Prisma engine..."
-python3 -c "
+gosu litellm python3 -c "
 import os, asyncio
 os.environ['DATABASE_URL'] = 'postgresql://litellm@127.0.0.1:5432/litellm'
 from prisma import Prisma
@@ -123,8 +127,8 @@ cleanup() {
     # Only try to stop PG if it's still running — tini may have already
     # forwarded SIGTERM to it, in which case pg_ctl stop would just print
     # "PID file does not exist" noise.
-    if [ -f "$PG_DATA/postmaster.pid" ] && pg_ctl -D "$PG_DATA" status 2>/dev/null; then
-        pg_ctl -D "$PG_DATA" stop -m fast 2>&1 || true
+    if [ -f "$PG_DATA/postmaster.pid" ] && gosu litellm pg_ctl -D "$PG_DATA" status 2>/dev/null; then
+        gosu litellm pg_ctl -D "$PG_DATA" stop -m fast 2>&1 || true
     fi
 }
 trap cleanup EXIT TERM INT
@@ -191,6 +195,6 @@ LITELLM_ARGS=(--host "$LITELLM_BIND_HOST" --port "$LITELLM_PORT" --use_prisma_db
 # Forward docker-compose command: args (e.g. --config /app/litellm-config/config.yaml).
 # Entrypoint defaults (--host, --port) come first so docker-compose overrides win.
 LITELLM_ARGS+=("$@")
-litellm "${LITELLM_ARGS[@]}" &
+gosu litellm litellm "${LITELLM_ARGS[@]}" &
 LITELLM_PID=$!
 wait "$LITELLM_PID" || true
