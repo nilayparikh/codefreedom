@@ -108,7 +108,8 @@ nav:
               - First run: getting-started/first-run.md
               - Free models: getting-started/free-models.md
       - Features:
-              - Overview: features/claude-code.md
+              - Claude Code: features/claude-code.md
+              - MiMoCode: features/mimo-code.md
               - Proxy: features/proxy.md
               - Tools:
                       - Overview: features/tools.md
@@ -117,7 +118,10 @@ nav:
                       - GitHub: features/github.md
               - VS Code: features/vscode.md
               - Backup: features/backup.md
-
+      - Guides:
+              - Recipes: guides/recipes-guide.md
+              - Troubleshooting: guides/troubleshooting.md
+              - FAQ: guides/faq.md
       - Recipes:
               - Overview: recipes/index.md
               - Provider Reference:
@@ -130,7 +134,6 @@ nav:
                       - OpenAI Compatible: recipes/providers/openai-compatible/index.md
                       - Anthropic Compatible: recipes/providers/anthropic-compatible/index.md
                       - Local: recipes/providers/local/index.md
-
       - License:
               - License: license.md
               - Terms & Conditions: terms.md
