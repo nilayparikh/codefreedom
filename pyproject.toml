@@ -60,6 +60,7 @@ dev = [
     "mypy>=1.0",
     "ruff>=0.1",
     "pytest>=7.0",
+    "pytest-cov>=5.0",
     "types-PyYAML",
     "httpx>=0.28",
     "fastapi>=0.115",
@@ -111,3 +112,15 @@ ignored-modules = ["tests.*"]
 
 [tool.mypy]
 ignore_missing_imports = true
+
+# ── Coverage ────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["codefreedom"]
+omit = [
+    "tests/*",
+    "src/codefreedom/admin/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
