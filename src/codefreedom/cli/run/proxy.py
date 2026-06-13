@@ -179,6 +179,10 @@ def _ensure_web_bridge_image() -> int:
 
     Returns 0 on success, 1 on hard failure (Docker error, source tree
     missing, build failure).  A pre-built image is a no-op.
+
+    Follows the same pull-first pattern as other tools (chrome, web,
+    github): check local cache, try ``docker pull`` for the correct
+    multi-arch image, and only fall back to a local build if both fail.
     """
     image = _web_bridge_image()
 
@@ -191,7 +195,22 @@ def _ensure_web_bridge_image() -> int:
     if check.returncode == 0:
         return 0
 
-    # Try to auto-build from the source tree.
+    # Pull the multi-arch image from the registry.  The published image
+    # contains both linux/arm64 and linux/amd64; Docker selects the
+    # correct manifest for the host architecture.
+    eprint(f"[PROXY] Web-bridge image '{image}' not found locally, pulling...")
+    pull = subprocess.run(
+        ["docker", "pull", image],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if pull.returncode == 0:
+        eprint("[PROXY] Web-bridge image pulled.")
+        return 0
+
+    # Pull failed — fall back to a local build from the source tree.
     build_ctx = _web_bridge_build_context()
     if build_ctx is None:
         eprint(
