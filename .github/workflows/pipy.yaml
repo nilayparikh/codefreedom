@@ -3,11 +3,14 @@
 #
 # Triggered on: version tags (v*), or manual dispatch.
 #
+# RC tags (v*rc*) are published as prereleases — users must `pip install --pre`.
+# Final tags (v*) create a proper GitHub Release.
+#
 # Uses PyPI Trusted Publishing (OIDC) — no API tokens needed.
 # Project must be configured on PyPI: https://pypi.org/manage/project/codefreedom/settings/publishing/
 # ────────────────────────────────────────────────────────────────────────────────
 
-name: Publish to PyPI
+name: Release
 
 on:
   push:
@@ -96,3 +99,21 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           attestations: true
+
+  github-release:
+    name: GitHub Release
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, 'rc') }}
+          generate_release_notes: true
