@@ -50,8 +50,8 @@ _CONTAINER_PREFIX = "codefreedom-"
 
 
 def _generate_container_name() -> str:
-    """Generate a random container name: codefreedom-XXXX (4 alphanumeric chars)."""
-    suffix = secrets.token_hex(2)
+    """Generate a random container name: codefreedom-XXXXXX (6 hex chars)."""
+    suffix = secrets.token_hex(3)
     return f"{_CONTAINER_PREFIX}{suffix}"
 
 
@@ -71,7 +71,9 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
         try:
             existing = json.loads(mcp_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
-            eprint(f"{tag('MCP')} Could not parse existing {mcp_path} — backing up and replacing.")
+            eprint(
+                f"{tag('MCP')} Could not parse existing {mcp_path} — backing up and replacing."
+            )
             backup = mcp_path.with_suffix(".mcp.json.bak")
             try:
                 mcp_path.rename(backup)
@@ -81,11 +83,16 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
     existing.setdefault("mcpServers", {})
     existing["mcpServers"].update(auto_servers)
     mcp_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
-    eprint(f"{tag('MCP')} Wrote {len(auto_servers)} MCP server(s) to {mcp_path}: " + ", ".join(auto_servers.keys()))
+    eprint(
+        f"{tag('MCP')} Wrote {len(auto_servers)} MCP server(s) to {mcp_path}: "
+        + ", ".join(auto_servers.keys())
+    )
 
     other = [s for s in existing["mcpServers"] if s not in auto_servers]
     if other:
-        eprint(f"{tag('MCP')} Preserved {len(other)} existing MCP server(s): {', '.join(other)}")
+        eprint(
+            f"{tag('MCP')} Preserved {len(other)} existing MCP server(s): {', '.join(other)}"
+        )
 
 
 def find_claude_binary() -> str | None:
@@ -218,7 +225,9 @@ def run_docker(
 
     # ── Resolve image ──────────────────────────────────────────────────────────
     if gpu_type:
-        image = sandbox_images.get(gpu_type) or f"{REGISTRY}/{IMAGE_NAME}:{gpu_type}-latest"
+        image = (
+            sandbox_images.get(gpu_type) or f"{REGISTRY}/{IMAGE_NAME}:{gpu_type}-latest"
+        )
         eprint(f"{tag('GPU')} Selected '{gpu_type}' sandbox image: {image}.")
     else:
         image = sandbox_images.get("default") or TARGET_IMAGE
@@ -248,30 +257,49 @@ def run_docker(
     if run_as_me:
         container_home = f"/home/{HOME_DIR.name}"
         container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
-        eprint(f"{tag('SANDBOX')} --run-as-me: uid={host_uid}({HOME_DIR.name}) gid={host_gid}")
+        eprint(
+            f"{tag('SANDBOX')} --run-as-me: uid={host_uid}({HOME_DIR.name}) gid={host_gid}"
+        )
     else:
         container_home = "/home/codefreedom"
         container_user_flag = []
-        eprint(f"{tag('SANDBOX')} Running as default container user 'codefreedom' (uid 1000).")
-        eprint(f"{tag('SANDBOX')} If you see permission errors on /workspace, grant access with:")
+        eprint(
+            f"{tag('SANDBOX')} Running as default container user 'codefreedom' (uid 1000)."
+        )
+        eprint(
+            f"{tag('SANDBOX')} If you see permission errors on /workspace, grant access with:"
+        )
         eprint(f"           sudo chown -R 1000:1000 {workspace_dir}")
-        eprint("           Or re-run with --run-as-me to match your host user identity.")
+        eprint(
+            "           Or re-run with --run-as-me to match your host user identity."
+        )
 
     # ── Docker run base options ───────────────────────────────────────────────
     base_opts = [
-        "--gpus", "all",
-        "--network", "host",
+        "--gpus",
+        "all",
+        "--network",
+        "host",
         *container_user_flag,
         "--ipc=host",
-        "-v", f"{workspace_dir}:/workspace",
-        "-w", "/workspace",
-        "-v", f"{HOME_DIR / '.gitconfig'}:{container_home}/.gitconfig:ro",
-        "-v", f"{HOME_DIR / '.ssh'}:{container_home}/.ssh:ro",
-        "-v", f"{sandbox_claude_dir}:{container_home}/.claude",
-        "-v", f"{sandbox_claude_json}:{container_home}/.claude.json",
-        "-e", f"HOME={container_home}",
-        "-v", f"{workspace_dir / '.claude'}:/workspace/.claude",
-        "-v", f"{CODEFREEDOM_DIR / 'sandbox' / 'tools' / '.cache'}:{container_home}/.cache",
+        "-v",
+        f"{workspace_dir}:/workspace",
+        "-w",
+        "/workspace",
+        "-v",
+        f"{HOME_DIR / '.gitconfig'}:{container_home}/.gitconfig:ro",
+        "-v",
+        f"{HOME_DIR / '.ssh'}:{container_home}/.ssh:ro",
+        "-v",
+        f"{sandbox_claude_dir}:{container_home}/.claude",
+        "-v",
+        f"{sandbox_claude_json}:{container_home}/.claude.json",
+        "-e",
+        f"HOME={container_home}",
+        "-v",
+        f"{workspace_dir / '.claude'}:/workspace/.claude",
+        "-v",
+        f"{CODEFREEDOM_DIR / 'sandbox' / 'tools' / '.cache'}:{container_home}/.cache",
     ]
 
     # ── MCP JSON for tools ────────────────────────────────────────────────────
@@ -295,4 +323,3 @@ def run_docker(
         env_flags=env_flags,
         exec_image_cmd=exec_image_cmd,
     )
-

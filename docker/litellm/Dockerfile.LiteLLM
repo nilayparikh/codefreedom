@@ -364,6 +364,40 @@ RUN apt-get update \
 COPY --from=pg-builder      /usr/local/pgsql /usr/local/pgsql
 COPY --from=litellm-builder /install         /usr/local
 
+# Pre-build an immutable, pre-restructured UI tree outside site-packages.
+# LiteLLM warns if it has to restructure extensionless routes inside the
+# packaged UI directory at runtime because site-packages is read-only for the
+# non-root user.  Bake the restructured copy into /usr/local/share/litellm-ui;
+# the entrypoint seeds the writable runtime path from this source on startup.
+RUN mkdir -p /usr/local/share/litellm-ui \
+    && python3 - <<'PY'
+import os
+import shutil
+from pathlib import Path
+
+import litellm
+
+packaged_ui = Path(litellm.__file__).parent / 'proxy' / '_experimental' / 'out'
+target_ui = Path('/usr/local/share/litellm-ui')
+
+shutil.copytree(packaged_ui, target_ui, dirs_exist_ok=True)
+
+for file_path in sorted(target_ui.rglob('*.html')):
+    if file_path.name == 'index.html':
+        continue
+
+    rel_parts = file_path.relative_to(target_ui).parts
+    if rel_parts and rel_parts[0] in {'_next', 'litellm-asset-prefix'}:
+        continue
+
+    target_path = file_path.with_suffix('') / 'index.html'
+    os.makedirs(target_path.parent, exist_ok=True)
+    if target_path.exists():
+        file_path.unlink()
+        continue
+    os.replace(file_path, target_path)
+PY
+
 # Pull in the baked reasoning-efforts mapping plugin.  The entrypoint
 # symlinks this into the host-mounted config directory at container
 # start so LiteLLM's callback loader can find it (no cp to host).
@@ -381,6 +415,9 @@ COPY --from=litellm-builder \
 COPY --from=litellm-builder \
     /root/.cache/ /root/.cache/
 
+COPY --from=litellm-builder \
+    /root/.npm/ /root/.npm/
+
 # Create the litellm user that PG runs as.  PG refuses to initdb/run as
 # root; LiteLLM also runs as this user so Prisma cache paths resolve
 # consistently (~/.cache/prisma-python/).  UID 999 is a safe cross-distro
@@ -388,8 +425,12 @@ COPY --from=litellm-builder \
 RUN groupadd -g 999 litellm \
     && useradd -u 999 -g litellm -m -d /home/litellm -s /bin/bash litellm \
     && cp -a /root/.cache /home/litellm/.cache \
-    && chown -R litellm:litellm /home/litellm/.cache \
-    && chown -R litellm:litellm /app/litellm-plugins
+    && cp -a /root/.npm /home/litellm/.npm \
+    && chown -R litellm:litellm /home/litellm/.cache /home/litellm/.npm \
+    && chown -R litellm:litellm /app/litellm-plugins \
+    && ln -sf /home/litellm/.npm /root/.npm \
+    && chmod 755 /root \
+    && chmod -R a+rX /home/litellm/.npm
 
 # Make sure both PG and the python wheels are on the path the entrypoint
 # expects.  /usr/local/bin and /usr/local/lib are already on PATH / the
@@ -400,6 +441,8 @@ ENV PATH="/usr/local/pgsql/bin:/usr/local/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
     PGDATA=/var/lib/postgresql/data \
     PGSOCKET=/var/run/postgresql \
+    LITELLM_NON_ROOT=true \
+    LITELLM_UI_PATH=/app/litellm-ui \
     HOME=/home/litellm
 
 # Drop the entrypoint and the supporting files in.  The entrypoint boots

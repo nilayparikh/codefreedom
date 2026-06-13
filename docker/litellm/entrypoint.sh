@@ -20,10 +20,16 @@ PG_MAX_CONNECTIONS="${POSTGRES_MAX_CONNECTIONS:-100}"
 LITELLM_PORT="${LITELLM_PORT:-4000}"
 LITELLM_BIND_HOST="${LITELLM_BIND_HOST:-0.0.0.0}"
 LITELLM_CONFIG="${LITELLM_CONFIG:-}"
+LITELLM_UI_SOURCE_PATH="/usr/local/share/litellm-ui"
+LITELLM_UI_PATH="${LITELLM_UI_PATH:-/app/litellm-ui}"
 
 export PATH="/usr/local/pgsql/bin:/usr/local/bin:${PATH}"
-mkdir -p "$PG_DATA" "$PG_BACKUP"
+mkdir -p "$PG_DATA" "$PG_BACKUP" "$LITELLM_UI_PATH"
+if [ -d "$LITELLM_UI_SOURCE_PATH" ] && [ -z "$(find "$LITELLM_UI_PATH" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+    cp -a "$LITELLM_UI_SOURCE_PATH"/. "$LITELLM_UI_PATH"/
+fi
 chown litellm:litellm "$PG_DATA" "$PG_BACKUP"
+chown -R litellm:litellm "$LITELLM_UI_PATH"
 
 # ── Init PG cluster (first run only) ────────────────────────────────────────
 FIRST_RUN=false
@@ -87,8 +93,21 @@ echo "[entrypoint] Pushing Prisma schema..."
 cd /tmp && gosu litellm prisma db push --schema="$SCHEMA" --accept-data-loss --skip-generate
 
 # ── Query engine binary ─────────────────────────────────────────────────────
+# The Prisma Python client resolves the engine via multiple paths:
+#   1. PRISMA_QUERY_ENGINE_BINARY env var (highest priority)
+#   2. ./<engine-name> in CWD
+#   3. ~/.npm/_npx/…/prisma/query-engine-* (npx cache from build)
+#   4. ~/.cache/prisma-python/binaries/…/prisma-query-engine-* (global_path)
+# We set the env var to the prisma-python cache first; if that doesn't exist,
+# fall back to the npx cache path so LiteLLM's internal client also finds it.
 QE=$(find /home/litellm/.cache/prisma-python/binaries -name 'prisma-query-engine-*' -type f 2>/dev/null | head -1)
-[ -n "$QE" ] && [ -x "$QE" ] && export PRISMA_QUERY_ENGINE_BINARY="$QE"
+if [ -z "$QE" ]; then
+    QE=$(find /home/litellm/.npm/_npx -name 'prisma-query-engine-*' -type f 2>/dev/null | head -1)
+fi
+if [ -n "$QE" ] && [ -x "$QE" ]; then
+    export PRISMA_QUERY_ENGINE_BINARY="$QE"
+    echo "[entrypoint] PRISMA_QUERY_ENGINE_BINARY=$QE"
+fi
 
 # ── Warm up the Prisma engine (pre-starts the binary subprocess) ─────────────
 # The Prisma Python client resolves the engine via `_ensure_file()` →
