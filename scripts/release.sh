@@ -193,8 +193,8 @@ fi
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 if $IS_RC; then
-  if [[ "$BRANCH" != rc-* ]]; then
-    echo "Error: RC tags require an 'rc-*' branch. Current branch: $BRANCH"
+  if [[ "$BRANCH" != "prerelease" ]]; then
+    echo "Error: RC tags require the 'prerelease' branch. Current branch: $BRANCH"
     exit 1
   fi
 else
