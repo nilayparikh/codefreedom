@@ -35,7 +35,8 @@ class TestFindComposeFile:
 
     def test_returns_none_when_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
+            "codefreedom.cli.run.proxy.get_codefreedom_dir",
+            lambda: Path("/nonexistent"),
         )
         result = _find_compose_file()
         assert result is None
@@ -56,7 +57,8 @@ class TestFindConfigFile:
 
     def test_returns_none_when_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
+            "codefreedom.cli.run.proxy.get_codefreedom_dir",
+            lambda: Path("/nonexistent"),
         )
         result = _find_config_file()
         assert result is None
@@ -83,7 +85,8 @@ class TestValidate:
 
     def test_missing_config_file(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: Path("/nonexistent")
+            "codefreedom.cli.run.proxy.get_codefreedom_dir",
+            lambda: Path("/nonexistent"),
         )
         result = _validate()
         assert result == 1
@@ -171,7 +174,9 @@ class TestRun:
             port=4000,
             host="0.0.0.0",
         )
-        monkeypatch.setattr("codefreedom.cli.run.proxy._find_compose_file", lambda: None)
+        monkeypatch.setattr(
+            "codefreedom.cli.run.proxy._find_compose_file", lambda: None
+        )
         result = run(args)
         assert result == 1
 
@@ -219,7 +224,9 @@ class TestRun:
             port=4000,
             host="0.0.0.0",
         )
-        monkeypatch.setattr("codefreedom.cli.run.proxy._find_compose_file", lambda: None)
+        monkeypatch.setattr(
+            "codefreedom.cli.run.proxy._find_compose_file", lambda: None
+        )
         result = run(args)
         assert result == 1
 
@@ -271,7 +278,9 @@ class TestRun:
             "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
         )
         monkeypatch.setattr("codefreedom.cli.run.proxy.subprocess.run", fake_run)
-        monkeypatch.setattr("codefreedom.cli.run.proxy._ensure_web_bridge_image", lambda: 0)
+        monkeypatch.setattr(
+            "codefreedom.cli.run.proxy._ensure_web_bridge_image", lambda: 0
+        )
 
         args = argparse.Namespace(
             action="start",
@@ -373,6 +382,38 @@ class TestEnsureWebBridgeImage:
         assert any("inspect" in c for c in calls)
         assert not any("build" in c for c in calls)
 
+    def test_image_missing_pull_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When the image is missing but ``docker pull`` succeeds,
+        the helper should return 0 without building."""
+        from codefreedom.cli.run import proxy as proxy_mod
+
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, *_args, **_kwargs):
+            calls.append(cmd)
+            if "inspect" in cmd:
+                rc = 1  # image not found
+            else:
+                rc = 0  # pull succeeds
+
+            class _R:
+                returncode = rc
+                stderr = ""
+                stdout = ""
+
+            return _R()
+
+        monkeypatch.setattr(proxy_mod.subprocess, "run", fake_run)
+
+        rc = (
+            proxy_mod._ensure_web_bridge_image()
+        )  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        assert rc == 0
+        # inspect + pull, no build
+        assert any("inspect" in c for c in calls)
+        assert any("pull" in c for c in calls)
+        assert not any("build" in c for c in calls)
+
     def test_image_missing_and_source_tree_missing_warns(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -410,12 +451,16 @@ class TestEnsureWebBridgeImage:
         def fake_run(cmd, *_args, **_kwargs):
             calls.append(cmd)
             # The first call is `docker image inspect` (returns 1 because
-            # the image is missing). The second call is `docker build`
-            # (returns 0 to simulate a successful build).
+            # the image is missing). The second call is `docker pull`
+            # (returns 1 to simulate registry unavailable). The third
+            # call is `docker build` (returns 0 to simulate a successful
+            # local build).
             if "inspect" in cmd:
                 rc = 1
+            elif "pull" in cmd:
+                rc = 1  # pull fails — fall back to local build
             else:
-                rc = 0
+                rc = 0  # build succeeds
 
             class _R:
                 returncode = rc
@@ -435,7 +480,7 @@ class TestEnsureWebBridgeImage:
             proxy_mod._ensure_web_bridge_image()
         )  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         assert rc == 0
-        # Second call: docker build (after inspect failed).
+        # Third call: docker build (after inspect and pull both failed).
         build_calls = [c for c in calls if "build" in c]
         assert len(build_calls) == 1
         # Tag should be the full registry reference (pushable without retag).
