@@ -8,7 +8,7 @@ ENTRYPOINT = PROJECT_ROOT / "docker" / "litellm" / "entrypoint.sh"
 
 
 def test_dockerfile_prebuilds_writable_ui_directory() -> None:
-    content = DOCKERFILE.read_text()
+    content = DOCKERFILE.read_text(encoding="utf-8")
 
     assert "LITELLM_NON_ROOT=true" in content
     assert "LITELLM_UI_PATH=/app/litellm-ui" in content
@@ -18,7 +18,7 @@ def test_dockerfile_prebuilds_writable_ui_directory() -> None:
 
 
 def test_entrypoint_prepares_runtime_ui_directory() -> None:
-    content = ENTRYPOINT.read_text()
+    content = ENTRYPOINT.read_text(encoding="utf-8")
 
     assert 'LITELLM_UI_PATH="${LITELLM_UI_PATH:-/app/litellm-ui}"' in content
     assert 'LITELLM_UI_SOURCE_PATH="/usr/local/share/litellm-ui"' in content
