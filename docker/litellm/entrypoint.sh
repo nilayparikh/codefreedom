@@ -20,16 +20,23 @@ PG_MAX_CONNECTIONS="${POSTGRES_MAX_CONNECTIONS:-100}"
 LITELLM_PORT="${LITELLM_PORT:-4000}"
 LITELLM_BIND_HOST="${LITELLM_BIND_HOST:-0.0.0.0}"
 LITELLM_CONFIG="${LITELLM_CONFIG:-}"
+LITELLM_UI_SOURCE_PATH="/usr/local/share/litellm-ui"
+LITELLM_UI_PATH="${LITELLM_UI_PATH:-/app/litellm-ui}"
 
 export PATH="/usr/local/pgsql/bin:/usr/local/bin:${PATH}"
-mkdir -p "$PG_DATA" "$PG_BACKUP"
+mkdir -p "$PG_DATA" "$PG_BACKUP" "$LITELLM_UI_PATH"
+if [ -d "$LITELLM_UI_SOURCE_PATH" ] && [ -z "$(find "$LITELLM_UI_PATH" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+    cp -a "$LITELLM_UI_SOURCE_PATH"/. "$LITELLM_UI_PATH"/
+fi
+chown litellm:litellm "$PG_DATA" "$PG_BACKUP"
+chown -R litellm:litellm "$LITELLM_UI_PATH"
 
 # ── Init PG cluster (first run only) ────────────────────────────────────────
 FIRST_RUN=false
 if [ ! -f "$PG_DATA/PG_VERSION" ]; then
     FIRST_RUN=true
     echo "[entrypoint] Initialising PostgreSQL cluster at $PG_DATA (locale=C, encoding=UTF8)"
-    initdb -D "$PG_DATA" --username="$PG_USER" \
+    gosu litellm initdb -D "$PG_DATA" --username="$PG_USER" \
         --auth=trust --auth-host=trust --auth-local=trust \
         --locale=C --encoding=UTF8
 fi
@@ -62,14 +69,17 @@ host    all   all   127.0.0.1/32  trust
 host    all   all   ::1/128       trust
 HBA
 
+chown litellm:litellm "$PG_DATA/postgresql.conf" "$PG_DATA/pg_hba.conf"
+
 # ── Start PG ────────────────────────────────────────────────────────────────
 echo "[entrypoint] Starting PostgreSQL..."
-pg_ctl -D "$PG_DATA" -l "$PG_BACKUP/postgres.log" start -w -t 30
+chown litellm:litellm "$PG_DATA" "$PG_BACKUP"
+gosu litellm pg_ctl -D "$PG_DATA" -l "$PG_BACKUP/postgres.log" start -w -t 30
 
 # ── Create the app database (first run only, AFTER PG is up) ────────────────
 if $FIRST_RUN; then
     echo "[entrypoint] Creating database $PG_DB..."
-    createdb -h 127.0.0.1 -U "$PG_USER" "$PG_DB" 2>&1 || \
+    gosu litellm createdb -h 127.0.0.1 -U "$PG_USER" "$PG_DB" 2>&1 || \
         echo "[entrypoint] (createdb returned non-zero; will continue)"
 fi
 
@@ -78,13 +88,26 @@ export DATABASE_URL="postgresql://${PG_USER}@127.0.0.1:5432/${PG_DB}"
 echo "[entrypoint] DATABASE_URL=$DATABASE_URL"
 
 # ── Prisma schema push ──────────────────────────────────────────────────────
-SCHEMA=$(python3 -c "import litellm; from pathlib import Path; print(Path(litellm.__file__).parent / 'proxy' / 'schema.prisma')")
+SCHEMA=$(gosu litellm python3 -c "import litellm; from pathlib import Path; print(Path(litellm.__file__).parent / 'proxy' / 'schema.prisma')")
 echo "[entrypoint] Pushing Prisma schema..."
-cd /tmp && prisma db push --schema="$SCHEMA" --accept-data-loss --skip-generate
+cd /tmp && gosu litellm prisma db push --schema="$SCHEMA" --accept-data-loss --skip-generate
 
 # ── Query engine binary ─────────────────────────────────────────────────────
-QE=$(find /root/.cache/prisma-python/binaries -name 'prisma-query-engine-*' -type f 2>/dev/null | head -1)
-[ -n "$QE" ] && [ -x "$QE" ] && export PRISMA_QUERY_ENGINE_BINARY="$QE"
+# The Prisma Python client resolves the engine via multiple paths:
+#   1. PRISMA_QUERY_ENGINE_BINARY env var (highest priority)
+#   2. ./<engine-name> in CWD
+#   3. ~/.npm/_npx/…/prisma/query-engine-* (npx cache from build)
+#   4. ~/.cache/prisma-python/binaries/…/prisma-query-engine-* (global_path)
+# We set the env var to the prisma-python cache first; if that doesn't exist,
+# fall back to the npx cache path so LiteLLM's internal client also finds it.
+QE=$(find /home/litellm/.cache/prisma-python/binaries -name 'prisma-query-engine-*' -type f 2>/dev/null | head -1)
+if [ -z "$QE" ]; then
+    QE=$(find /home/litellm/.npm/_npx -name 'prisma-query-engine-*' -type f 2>/dev/null | head -1)
+fi
+if [ -n "$QE" ] && [ -x "$QE" ]; then
+    export PRISMA_QUERY_ENGINE_BINARY="$QE"
+    echo "[entrypoint] PRISMA_QUERY_ENGINE_BINARY=$QE"
+fi
 
 # ── Warm up the Prisma engine (pre-starts the binary subprocess) ─────────────
 # The Prisma Python client resolves the engine via `_ensure_file()` →
@@ -97,7 +120,7 @@ QE=$(find /root/.cache/prisma-python/binaries -name 'prisma-query-engine-*' -typ
 # the binary subprocess to start and exit cleanly, proving the binary is
 # functional and leaving no stale state.
 echo "[entrypoint] Warming up Prisma engine..."
-python3 -c "
+gosu litellm python3 -c "
 import os, asyncio
 os.environ['DATABASE_URL'] = 'postgresql://litellm@127.0.0.1:5432/litellm'
 from prisma import Prisma
@@ -123,8 +146,8 @@ cleanup() {
     # Only try to stop PG if it's still running — tini may have already
     # forwarded SIGTERM to it, in which case pg_ctl stop would just print
     # "PID file does not exist" noise.
-    if [ -f "$PG_DATA/postmaster.pid" ] && pg_ctl -D "$PG_DATA" status 2>/dev/null; then
-        pg_ctl -D "$PG_DATA" stop -m fast 2>&1 || true
+    if [ -f "$PG_DATA/postmaster.pid" ] && gosu litellm pg_ctl -D "$PG_DATA" status 2>/dev/null; then
+        gosu litellm pg_ctl -D "$PG_DATA" stop -m fast 2>&1 || true
     fi
 }
 trap cleanup EXIT TERM INT
@@ -191,6 +214,6 @@ LITELLM_ARGS=(--host "$LITELLM_BIND_HOST" --port "$LITELLM_PORT" --use_prisma_db
 # Forward docker-compose command: args (e.g. --config /app/litellm-config/config.yaml).
 # Entrypoint defaults (--host, --port) come first so docker-compose overrides win.
 LITELLM_ARGS+=("$@")
-litellm "${LITELLM_ARGS[@]}" &
+gosu litellm litellm "${LITELLM_ARGS[@]}" &
 LITELLM_PID=$!
 wait "$LITELLM_PID" || true

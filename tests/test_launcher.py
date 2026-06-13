@@ -23,12 +23,12 @@ class TestGenerateContainerName:
         name = _generate_container_name()
         assert name.startswith("codefreedom-")
 
-    def test_suffix_is_four_hex_chars(self):
+    def test_suffix_is_six_hex_chars(self):
         from codefreedom.launcher import _generate_container_name
 
         name = _generate_container_name()
         suffix = name.removeprefix("codefreedom-")
-        assert len(suffix) == 4
+        assert len(suffix) == 6
         int(suffix, 16)
 
     def test_names_are_unique(self):
