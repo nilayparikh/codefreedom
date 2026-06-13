@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RECIPE_COMPOSE_FILES = [
     PROJECT_ROOT / "recipes" / "_default" / "proxy" / "docker-compose.yaml",
@@ -13,7 +15,16 @@ RECIPE_COMPOSE_FILES = [
     / "docker-compose.yaml",
 ]
 
+_missing = [str(f) for f in RECIPE_COMPOSE_FILES if not f.exists()]
+_has_submodule = len(_missing) == 0
+_skip_reason = (
+    f"recipes submodule not checked out (missing: {', '.join(_missing)})"
+    if _missing
+    else ""
+)
 
+
+@pytest.mark.skipif(not _has_submodule, reason=_skip_reason)
 def test_recipe_compose_files_stay_multi_arch_friendly() -> None:
     for compose_file in RECIPE_COMPOSE_FILES:
         content = compose_file.read_text()
@@ -23,6 +34,7 @@ def test_recipe_compose_files_stay_multi_arch_friendly() -> None:
         assert "\n    platform:" not in content
 
 
+@pytest.mark.skipif(not _has_submodule, reason=_skip_reason)
 def test_recipe_compose_files_use_cross_platform_runtime_primitives() -> None:
     for compose_file in RECIPE_COMPOSE_FILES:
         content = compose_file.read_text()
