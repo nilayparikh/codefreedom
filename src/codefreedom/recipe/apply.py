@@ -103,7 +103,13 @@ def apply_plan(plan_id: str) -> int:
                 continue
             content = content_file.read_text(encoding="utf-8")
 
-        dst.write_text(content, encoding="utf-8")
+        if dst.suffix == ".ps1":
+            dst.write_text(content, encoding="utf-8-sig")
+        else:
+            dst.write_text(content, encoding="utf-8")
+        if dst.suffix == ".sh":
+            import stat
+            dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         label = "CREATE" if action == "create" else "REPLACE"
         print(f"  [{label}] {target}")
         count += 1
@@ -316,6 +322,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
 
     # ── Show advice from recipe YAML ──────────────────────────────────
     if advice:
+        advice = advice.replace("{cf_dir}", str(cf_dir))
         print()
         for line in advice.strip().splitlines():
             print(f"  {line}")

@@ -413,6 +413,7 @@ def _resolve_recipe(
         if manifest_path.exists():
             try:
                 manifest = _parse_yaml_file(manifest_path)
+                manifest["_recipe_dir"] = str(recipe_dir)
                 files = _read_local_files(recipe_dir, manifest)
                 return manifest, files
             except RecipeError as e:
@@ -426,6 +427,7 @@ def _resolve_recipe(
         if manifest_path.exists():
             try:
                 manifest = _parse_yaml_file(manifest_path)
+                manifest["_recipe_dir"] = str(local_path)
                 files = _read_local_files(local_path, manifest)
                 return manifest, files
             except RecipeError as e:
