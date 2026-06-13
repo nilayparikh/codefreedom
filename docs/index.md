@@ -24,7 +24,7 @@ hide:
 
 ## What Problem Does This Solve
 
-You have code agents (Claude Code, Cursor, etc.). You want to switch between AI models (DeepSeek, GPT, Claude) without reconfiguring everything. You want isolated environments. You want one place for all your settings.
+You have code agents (Claude Code, MiMo Code, OpenCode, etc.). You want to switch between AI models (DeepSeek, GPT, Claude) without reconfiguring everything. You want isolated environments. You want one place for all your settings.
 
 CodeFreedom gives you that.
 
@@ -36,7 +36,7 @@ CodeFreedom gives you that.
 
   DeepSeek for drafting, GPT for reasoning, free models for testing. Same command, different profile. No code changes.
 
-  [:octicons-arrow-right-24: Claude Code](features/claude-code.md)
+  [:octicons-arrow-right-24: Agents](features/claude-code.md)
 
 - :material-docker:{ .lg .middle } **Isolated sandboxes**
 
@@ -61,10 +61,10 @@ CodeFreedom gives you that.
 ## How It Works
 
 ```
-You → codefreedom run agent claude → LiteLLM Proxy → Your chosen AI model
+You → cf run agent claude-code → LiteLLM Proxy → Your chosen AI model
 ```
 
-1. You run `codefreedom run agent claude`
+1. You run `cf run agent claude-code`
 2. CodeFreedom sets up environment variables from your profile
 3. Claude Code talks to your local proxy at `localhost:4000`
 4. The proxy routes the request to whichever AI model you configured
@@ -78,8 +78,21 @@ Four commands, five minutes:
 ```bash
 pip install codefreedom          # Install
 cf setup init                    # Set up config via recipe
-codefreedom run proxy start      # Start the proxy
-codefreedom run agent claude     # Launch Claude Code
+cf run proxy start               # Start the proxy
+cf run agent claude-code         # Launch Claude Code
+```
+
+### Short aliases
+
+All commands have short aliases for faster workflows:
+
+```bash
+cf s i                           # cf setup init
+cf r px start                    # cf run proxy start
+cf r ag cc                       # cf run agent claude-code
+cf r ag mc                       # cf run agent mimo-code
+cf r ag oc                       # cf run agent open-code
+cf m dr                          # cf manage doctor
 ```
 
 [Get started step by step →](getting-started/install.md)

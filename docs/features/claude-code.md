@@ -1,182 +1,193 @@
 ---
-title: Claude Code
-description: Launch Claude Code with profile-based model routing, sandbox isolation, and GPU support.
+title: Agents
+description: Launch coding agents with profile-based model routing, sandbox isolation, and GPU support.
 ---
 
-# Claude Code
+# Agents
 
-Launch Claude Code through CodeFreedom. Switch models, isolate environments, use GPUs — all with flags.
+Launch coding agents through CodeFreedom. Switch models, isolate environments, use GPUs — all with flags.
+
+## Available Agents
+
+| Agent | Full name | Alias | Description |
+|-------|-----------|-------|-------------|
+| Claude Code | `claude-code` | `cc` | Anthropic's coding agent |
+| MiMo Code | `mimo-code` | `mc` | Xiaomi's coding agent |
+| OpenCode | `open-code` | `oc` | Terminal-native AI coding agent |
+
+List available agents:
+
+```bash
+cf run agent list
+# or
+cf r ag list
+```
 
 ## Basic Usage
 
 ```bash
-codefreedom run agent claude              # Local mode (default)
-codefreedom run agent claude --sandbox    # Docker sandbox
-codefreedom run agent claude --profile bare     # Pick a profile
-codefreedom run agent claude --list-profiles    # See what's available
-```
+# Full commands
+cf run agent claude-code              # Local mode (default)
+cf run agent claude-code --sandbox    # Docker sandbox
+cf run agent claude-code --profile bare     # Pick a profile
+cf run agent claude-code --list-profiles    # See what's available
 
-Short alias: `cf run agent claude` does the same as `codefreedom run agent claude`.
+# Short aliases
+cf r ag cc                            # Same as above
+cf r ag cc --sandbox                  # Sandbox mode
+cf r ag cc -p bare                    # Pick a profile
+cf r ag cc -l                         # List profiles
+```
 
 ## Profiles
 
-Profiles control which AI model you use. Think of them as presets.
-
-### Built-in Profiles
-
-| Profile   | Model                 | When to Use                     |
-| --------- | --------------------- | ------------------------------- |
-| `default` | `${MODEL_NAME}`       | Everyday work                   |
-| `bare`    | _(none)_              | Minimal setup, no model aliases |
-| `ultra`   | `${MODEL_NAME_ULTRA}` | Architecture, complex reasoning |
-| `pro`     | `${MODEL_NAME_PRO}`   | Balanced — implementation work  |
-| `air`     | `${MODEL_NAME_AIR}`   | Quick tasks, fast responses     |
-
-### Use a Profile
+Profiles define which AI model your agent uses. Each profile maps to a different model in your proxy config.
 
 ```bash
-codefreedom run agent claude --profile ultra
-codefreedom run agent claude --profile air
+# Switch models
+cf run agent claude-code --profile bare      # DeepSeek R1 (fast, free)
+cf run agent claude-code --profile air       # DeepSeek V3 (balanced)
+cf run agent claude-code --profile ultra     # Claude Opus (strongest)
+cf run agent claude-code --profile local     # Local Qwen3.6-27B
+
+# Short form
+cf r ag cc -p bare
+cf r ag cc -p air
+cf r ag cc -p ultra
+cf r ag cc -p local
 ```
 
-### Create a Custom Profile
+### Default Profile
 
-Edit `~/.codefreedom/profiles/claude-code.json` and add your profile:
+If you don't specify `--profile`, the agent uses the `default` profile.
 
-```json
-{
-  "profiles": {
-    "my-work": {
-      "description": "My daily driver",
-      "env": {
-        "CLAUDE_MODEL": "CodeFreedom/Ultra"
-      }
-    }
-  }
-}
-```
-
-Then use it:
+### Listing Profiles
 
 ```bash
-codefreedom run agent claude --profile my-work
+cf run agent claude-code --list-profiles
+# or
+cf r ag cc -l
 ```
-
-## Environment Variable Priority
-
-Claude Code configuration is resolved from multiple sources. Later sources override earlier ones:
-
-| Priority    | Source                               | Example                                     |
-| ----------- | ------------------------------------ | ------------------------------------------- |
-| 1 (lowest)  | `~/.codefreedom/.env.claude`         | Component config                            |
-| 2           | `~/.codefreedom/.env`                | Shared config                               |
-| 3           | `{workspace}/.env`                   | Workspace config                            |
-| 4           | `~/.codefreedom/.env.claude.secrets` | Component secrets                           |
-| 5           | `~/.codefreedom/.env.secrets`        | Shared secrets                              |
-| 6           | `{workspace}/.env.secrets`           | Workspace secrets                           |
-| 7           | `~/.codefreedom/.env.user`           | User overrides (never touched by recipes)   |
-| 8           | Machine environment (`os.environ`)   | Exported shell vars                         |
-| 9 (highest) | `CF_CLI_*` overrides                 | `export CF_CLI_ANTHROPIC_AUTH_TOKEN=sk-...` |
-
-**`CF_CLI_*` overrides** let you force-set any value from your shell without editing `.env` files. The prefix is stripped and the value is applied as the final override — above files, above `os.environ`, above everything:
-
-```bash
-# In ~/.bashrc — always wins
-export CF_CLI_LITELLM_MASTER_KEY=sk-d3k5Zz9gWx...
-export CF_CLI_ANTHROPIC_AUTH_TOKEN=sk-...
-```
-
-**Inheritance:** Custom profiles automatically inherit from `default`. You only set what differs.
 
 ## Sandbox Mode
 
-Run Claude Code in an isolated Docker container. Fresh environment every time, cleaned up when you exit.
+Run agents in isolated Docker containers. Clean environment, no host pollution.
 
 ```bash
-codefreedom run agent claude --sandbox           # Default (Ubuntu)
-codefreedom run agent claude --sandbox --cuda    # NVIDIA GPU
-codefreedom run agent claude --sandbox --rocm    # AMD GPU
-codefreedom run agent claude --sandbox --run-as-me   # Run as your user
+# Basic sandbox
+cf run agent claude-code --sandbox
+# or
+cf r ag cc --sandbox
+
+# Sandbox with GPU
+cf run agent claude-code --sandbox --gpu
+# or
+cf r ag cc --sandbox --gpu
+
+# Sandbox with specific image
+cf run agent claude-code --sandbox --image ubuntu:24.04
+# or
+cf r ag cc --sandbox --image ubuntu:24.04
+
+# Sandbox with volume mount
+cf run agent claude-code --sandbox --volume /path/on/host:/path/in/container
+# or
+cf r ag cc --sandbox --volume /path/on/host:/path/in/container
 ```
 
-### Sandbox Images
-
-| Image  | Use Case                  | Tag           |
-| ------ | ------------------------- | ------------- |
-| Ubuntu | CPU-only, general purpose | `latest`      |
-| CUDA   | NVIDIA GPU (AI workloads) | `cuda-latest` |
-| ROCm   | AMD GPU (AI workloads)    | `rocm-latest` |
-
-All images include Claude Code, Node.js, Python, Git, and essential dev tools.
-
-### How Sandboxes Work
-
-- Each session gets a random container name (`codefreedom-XXXX`)
-- Container is destroyed when you exit (`Ctrl+C` or `/exit`)
-- Your profile's state is isolated at `~/.codefreedom/sandbox/<profile>/.claude/`
-- No state leaks between sessions
-
-### GPU Requirements
-
-| Image  | Requirement                                                                                                                          |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| CUDA   | NVIDIA GPU + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) |
-| ROCm   | AMD GPU + ROCm support                                                                                                               |
-| Ubuntu | No GPU needed                                                                                                                        |
-
-No GPU? Use Ubuntu:
+### GPU Support
 
 ```bash
-export CLAUDE_CODE_IMAGE_TAG=latest
-codefreedom run agent claude --sandbox
+# Auto-detect GPU
+cf run agent claude-code --sandbox --gpu
+
+# Force CUDA
+cf run agent claude-code --sandbox --gpu --gpu-type cuda
+
+# Force ROCm
+cf run agent claude-code --sandbox --gpu --gpu-type rocm
 ```
 
-## Local Mode
+### Sandbox Options
 
-Run Claude Code directly on your machine. No Docker, no isolation.
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--sandbox` | — | Run in Docker container |
+| `--gpu` | — | Enable GPU passthrough |
+| `--gpu-type` | — | `cuda` or `rocm` |
+| `--image` | — | Container image (default: `ubuntu:24.04`) |
+| `--volume` | — | Mount host directory |
+| `--workspace` | — | Working directory inside container |
+
+## MiMo Code
+
+MiMo Code is Xiaomi's coding agent. It uses the same profile system.
 
 ```bash
-codefreedom run agent claude                  # Local, through proxy
-codefreedom run agent claude --native-models  # Local, bypass proxy (use Anthropic directly)
+# Launch MiMo Code
+cf run agent mimo-code
+# or
+cf r ag mc
+
+# With profile
+cf run agent mimo-code --profile bare
+# or
+cf r ag mc -p bare
+
+# Sandbox mode
+cf run agent mimo-code --sandbox
+# or
+cf r ag mc --sandbox
 ```
 
-### Local vs Sandbox
+## OpenCode
 
-| Aspect    | Sandbox                  | Local              |
-| --------- | ------------------------ | ------------------ |
-| Isolation | Full container           | Host environment   |
-| GPU       | Automatic (`--gpus all`) | Manual setup       |
-| State     | Per-profile, isolated    | Shared `~/.claude` |
-| Cleanup   | Auto on exit             | N/A                |
-
-## Bypass the Proxy
-
-Use `--native-models` to skip the proxy and use Anthropic directly:
+OpenCode is a terminal-native AI coding agent.
 
 ```bash
-codefreedom run agent claude --native-models
-codefreedom run agent claude --sandbox --native-models
+# Launch OpenCode
+cf run agent open-code
+# or
+cf r ag oc
+
+# With profile
+cf run agent open-code --profile bare
+# or
+cf r ag oc -p bare
+
+# Sandbox mode
+cf run agent open-code --sandbox
+# or
+cf r ag oc --sandbox
 ```
 
-This uses your Anthropic credentials directly — no proxy routing.
+## Command Reference
 
-## Code Intelligence (LSP)
+### `cf run agent`
 
-Sandbox images include language server binaries. Install plugins inside a session:
+```
+usage: codefreedom run agent [-h] [-p PROFILE] [-l] {list,claude-code,mimo-code,open-code} ...
 
-```bash
-/plugin install typescript-lsp@claude-plugins-official
-/plugin install pyright-lsp@claude-plugins-official
-/plugin install rust-analyzer-lsp@claude-plugins-official
-/plugin install clangd-lsp@claude-plugins-official
+agents:
+  {list,claude-code,mimo-code,open-code}
+    list                     List available agents
+    claude-code (cc)         Claude Code — Anthropic's coding agent
+    mimo-code (mc)           MiMoCode — Xiaomi's coding agent with 0-click proxy config
+    open-code (oc)           OpenCode — terminal-native AI coding agent with proxy support
+
+options:
+  -h, --help            show this help message and exit
+  -p, --profile NAME    Load a named profile (default: 'default')
+  -l, --list-profiles   List available profiles and exit
 ```
 
-Then `/reload-plugins` to activate.
+### Short Aliases
 
-## Common Commands
-
-```bash
-codefreedom run agent claude --list-profiles    # List profiles
-codefreedom run agent claude --status           # Show container status (sandbox)
-codefreedom run agent claude --stop             # Stop all sandbox containers
-```
+| Full command | Short form |
+|--------------|------------|
+| `cf run agent claude-code` | `cf r ag cc` |
+| `cf run agent mimo-code` | `cf r ag mc` |
+| `cf run agent open-code` | `cf r ag oc` |
+| `cf run agent claude-code --profile bare` | `cf r ag cc -p bare` |
+| `cf run agent claude-code --list-profiles` | `cf r ag cc -l` |
+| `cf run agent claude-code --sandbox` | `cf r ag cc --sandbox` |

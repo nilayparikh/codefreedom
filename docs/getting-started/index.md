@@ -1,36 +1,73 @@
 ---
-title: Get Started
-description: Install CodeFreedom, run your first session, and try a free model in under five minutes.
-hide:
-  - toc
+title: Getting Started
+description: Install CodeFreedom and launch your first agent in five minutes.
 ---
 
-# Get Started
+# Getting Started
 
-Four pages to get from `pip install` to a working session. No proxy, no providers, no configuration theory.
+Install CodeFreedom and launch your first agent in five minutes.
 
-<div class="grid cards" markdown>
+## What You'll Need
 
-- :material-download:{ .lg .middle } **Install**
+- **Python 3.10+** — for the CLI
+- **Docker** — for proxy and sandbox containers
+- **Docker Compose** — for multi-container setups
 
-  Install the CLI and verify Docker. Two minutes.
+## Install
 
-  [:octicons-arrow-right-24: Install](install.md)
+```bash
+pip install codefreedom
+```
 
-- :material-rocket-launch:{ .lg .middle } **First run**
+## Quick Start
 
-  Initialize `~/.codefreedom`, start the proxy, launch a code agent. Three minutes.
+Four commands:
 
-  [:octicons-arrow-right-24: First run](first-run.md)
+```bash
+pip install codefreedom          # Install
+cf setup init                    # Set up config
+cf run proxy start               # Start the proxy
+cf run agent claude-code         # Launch Claude Code
+```
 
-- :material-gift:{ .lg .middle } **Free models**
+Or with short aliases:
 
-  Zero-cost providers to try before you spend anything. Useful for testing profiles and routing.
+```bash
+cf s i                           # cf setup init
+cf r px start                    # cf run proxy start
+cf r ag cc                       # cf run agent claude-code
+```
 
-  [:octicons-arrow-right-24: Free models](free-models.md)
+## Available Agents
 
-</div>
+| Agent | Full name | Alias | Command |
+|-------|-----------|-------|---------|
+| Claude Code | `claude-code` | `cc` | `cf r ag cc` |
+| MiMo Code | `mimo-code` | `mc` | `cf r ag mc` |
+| OpenCode | `open-code` | `oc` | `cf r ag oc` |
 
-## After this section
+## Command Aliases
 
-When you're up and running, the next stop is **[Recipes](../recipes/index.md)** for deep configuration details.
+All commands have short aliases for faster workflows:
+
+| Full command | Short form |
+|--------------|------------|
+| `cf setup` | `cf s` |
+| `cf run` | `cf r` |
+| `cf manage` | `cf m` |
+| `cf setup init` | `cf s i` |
+| `cf setup config` | `cf s c` |
+| `cf setup deinit` | `cf s di` |
+| `cf run agent` | `cf r ag` |
+| `cf run proxy` | `cf r px` |
+| `cf run tools` | `cf r tl` |
+| `cf manage doctor` | `cf m dr` |
+| `cf manage update` | `cf m up` |
+| `cf manage admin` | `cf m ad` |
+
+## Next Steps
+
+- **[First Run](first-run.md)** — step-by-step walkthrough
+- **[Agents](../features/claude-code.md)** — launch coding agents
+- **[Proxy](../features/proxy.md)** — self-hosted LiteLLM proxy
+- **[Tools](../features/tools.md)** — browser and API tools

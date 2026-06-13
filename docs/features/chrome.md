@@ -1,59 +1,63 @@
 ---
-title: Chrome Tool
-description: Headless Chrome container for browser automation via CDP.
+title: Chrome
+description: Headless Chrome browser for web automation.
 ---
 
-# Chrome Tool
+# Chrome
 
-A headless Google Chrome container for browser automation. Code agents connect via the Chrome DevTools Protocol (CDP) on port 9222.
+Headless Chrome browser for web automation.
 
-## When to Use
-
-- Automate browser interactions (click, fill forms, navigate)
-- Run Playwright or Puppeteer scripts
-- Need a simple, fast browser target
-
-> For web search and stealth scraping, use the [Web tool](web.md) instead.
-
-## Usage
+## Quick Start
 
 ```bash
-# Install the _default recipe to create the chrome profile
-cf setup init
+# Start Chrome
+cf run tools start --chrome
+# or
+cf r tl start -c
 
-codefreedom run tools chrome start    # Start container
-codefreedom run tools chrome url      # Get CDP debug URL
-codefreedom run tools chrome status   # Check status
-codefreedom run tools chrome stop     # Stop
+# Check status
+cf run tools status
+# or
+cf r tl status
+
+# Stop Chrome
+cf run tools stop --chrome
+# or
+cf r tl stop -c
 ```
 
-## Connecting from an Agent
-
-Get the CDP URL:
-
-```bash
-codefreedom run tools chrome url
-```
-
-Output:
+## How It Works
 
 ```
-devtools://devtools/bundled/inspector.html?ws=127.0.0.1:9222
+Agent → MCP → Docker Container → Chrome
 ```
 
-Or point Playwright/Puppeteer to `ws://127.0.0.1:9222`.
+Chrome runs in a Docker container on port 9223. Your code agent connects via MCP.
 
 ## Configuration
 
-Settings live in `~/.codefreedom/profiles/chrome.json`:
+Chrome is configured in your profile's `tools` section:
 
-| Setting          | Default                               | Description     |
-| ---------------- | ------------------------------------- | --------------- |
-| `image`          | `codefreedom:chrome`                  | Docker image    |
-| `container_name` | `codefreedom-chrome`                  | Container name  |
-| `port`           | `9222`                                | CDP debug port  |
-| `data_dir`       | `~/.codefreedom/sandbox/tools/chrome` | Persistent data |
+```yaml
+tools:
+  - chrome
+```
 
-## Data Persistence
+## Troubleshooting
 
-Browser data (cookies, localStorage, extensions) persists in `~/.codefreedom/sandbox/tools/chrome/` across restarts.
+### Container Won't Start
+
+```bash
+# Check Docker
+docker ps -a
+
+# Check logs
+docker logs codefreedom-chrome
+```
+
+### Agent Can't Connect
+
+```bash
+# Test connectivity
+curl http://localhost:9223/mcp
+```

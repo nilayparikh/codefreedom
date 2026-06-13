@@ -13,6 +13,8 @@ Three commands. No editing required — defaults work out of the box.
 cf setup init
 ```
 
+Short alias: `cf s i`
+
 This applies the **`_default` base recipe** — it creates profiles, proxy config,
 env files, and Docker Compose files in `~/.codefreedom/`.
 
@@ -37,12 +39,16 @@ See available recipes:
 
 ```bash
 cf setup init --list
+# or
+cf s i -l
 ```
 
 ## Step 2: Start the Proxy
 
 ```bash
-codefreedom run proxy start
+cf run proxy start
+# or
+cf r px start
 ```
 
 This pulls and starts the proxy Docker container. First run takes a moment to pull the image.
@@ -56,36 +62,57 @@ Wait for:
 Check it's running:
 
 ```bash
-codefreedom run proxy status
+cf run proxy status
+# or
+cf r px status
 ```
 
-## Step 3: Launch Claude Code
+## Step 3: Launch an Agent
 
 ```bash
-codefreedom run agent claude
+cf run agent claude-code
+# or
+cf r ag cc
 ```
 
 You're now in Claude Code, routed through your proxy. Try switching models:
 
 ```bash
-codefreedom run agent claude --profile ultra    # strongest model
-codefreedom run agent claude --profile air      # fastest, lightweight
-codefreedom run agent claude --list-profiles    # see all profiles
+cf run agent claude-code --profile ultra    # strongest model
+cf run agent claude-code --profile air      # fastest, lightweight
+cf run agent claude-code --list-profiles    # see all profiles
 ```
+
+Short aliases:
+
+```bash
+cf r ag cc -p ultra    # cf run agent claude-code --profile ultra
+cf r ag cc -l          # cf run agent claude-code --list-profiles
+```
+
+## Available Agents
+
+| Agent | Full name | Alias | Command |
+|-------|-----------|-------|---------|
+| Claude Code | `claude-code` | `cc` | `cf r ag cc` |
+| MiMo Code | `mimo-code` | `mc` | `cf r ag mc` |
+| OpenCode | `open-code` | `oc` | `cf r ag oc` |
 
 ## What Happened
 
 - `cf setup init` applied the `_default` recipe (profiles, proxy config, env files)
-- `codefreedom run proxy start` brought up the proxy container
-- `codefreedom run agent claude` loaded your profile, pointed Claude Code at `localhost:4000`
+- `cf run proxy start` brought up the proxy container
+- `cf run agent claude-code` loaded your profile, pointed Claude Code at `localhost:4000`
 
 ## Stop the Proxy
 
 ```bash
-codefreedom run proxy stop
+cf run proxy stop
+# or
+cf r px stop
 ```
 
-The proxy is independent of Claude Code sessions. Leave it running between sessions, or stop it to free resources.
+The proxy is independent of agent sessions. Leave it running between sessions, or stop it to free resources.
 
 ## Next Steps
 

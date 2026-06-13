@@ -1,69 +1,73 @@
 ---
 title: Install
-description: Install CodeFreedom in under a minute.
+description: Install CodeFreedom and get started in five minutes.
 ---
 
 # Install
 
-Two prerequisites, one command.
+Install CodeFreedom and get started in five minutes.
 
 ## Prerequisites
 
-| What | Why You Need It | Check |
-|------|----------------|-------|
-| Python 3.10+ | Runs the CLI | `python3 --version` |
-| Docker | Sandbox + proxy | `docker --version` |
+- **Python 3.10+** — for the CLI
+- **Docker** — for proxy and sandbox containers
+- **Docker Compose** — for multi-container setups
 
-**Docker is required for the proxy.** The proxy runs in a Docker container — no host-side `litellm` install needed.
-
-[Install Docker →](https://docs.docker.com/engine/install/)
-
-## Install the CLI
-
-=== "Linux / macOS"
-
-    ```bash
-    pip install codefreedom
-    ```
-
-=== "Windows"
-
-    ```powershell
-    py -3 -m pip install codefreedom
-    ```
-
-=== "From source"
-
-    ```bash
-    git clone https://github.com/nilayparikh/codefreedom.git
-    cd codefreedom
-    pip install -e ".[all]"
-    ```
-
-### What It Looks Like
+## Install
 
 ```bash
-$ pip install codefreedom
-Resolved 3 packages in 320ms
-Installed 1 package in 3ms
- + codefreedom==0.1.7
+pip install codefreedom
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/nilayparikh/codefreedom.git
+cd codefreedom
+pip install -e .
 ```
 
 ## Verify
 
 ```bash
-codefreedom --version
-codefreedom --help
+cf --help
+# or
+cf -h
 ```
 
-You should see the version and a list of commands: `setup`, `run`, `manage`.
+You should see:
 
-## Upgrade
+```
+usage: codefreedom [-h] {setup,run,manage} ...
+
+Unified CLI for code agents.
+LLM proxy routing, Docker sandboxing, profile management.
+
+commands:
+  setup (s)           One-time setup and configuration (init, config, deinit)
+  run (r)             Daily workflows (agent, proxy, tools)
+  manage (m)          Occasional maintenance (doctor, update, admin)
+```
+
+## Quick Start
 
 ```bash
-pip install --upgrade codefreedom
+cf setup init                    # Set up config
+cf run proxy start               # Start the proxy
+cf run agent claude-code         # Launch Claude Code
 ```
 
-## Next Step
+Or with short aliases:
 
-[First run →](first-run.md) — initialize config, start the proxy, launch your first session.
+```bash
+cf s i                           # cf setup init
+cf r px start                    # cf run proxy start
+cf r ag cc                       # cf run agent claude-code
+```
+
+## Next Steps
+
+- **[First Run](first-run.md)** — step-by-step walkthrough
+- **[Agents](../features/claude-code.md)** — launch coding agents
+- **[Proxy](../features/proxy.md)** — self-hosted LiteLLM proxy
+- **[Tools](../features/tools.md)** — browser and API tools
