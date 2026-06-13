@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codefreedom"
-version = "0.1.8"
+version = "0.1.9"
 description = "Unified CLI for code agents — LLM proxy routing, Docker sandboxing, profile management, and browser tools. All config in ~/.codefreedom."
 readme = "README.md"
 license = { text = "Apache-2.0" }
