@@ -1,71 +1,63 @@
 ---
-title: GitHub Tool
-description: GitHub API tools (issues, PRs, repos) via MCP server.
+title: GitHub
+description: GitHub API access for repository operations.
 ---
 
-# GitHub Tool
+# GitHub
 
-Exposes GitHub's API as MCP tools. Your code agent can manage repos, issues, pull requests, and more — all through `http://127.0.0.1:8082/mcp`.
+GitHub API access for repository operations.
 
-## What It Does
-
-- **Repository operations** — create repos, manage branches, view code
-- **Issue management** — create, update, search, comment on issues
-- **Pull requests** — create, review, merge
-- **Code search** — search across repos, code, and users
-
-## Requirements
-
-A **GitHub Personal Access Token (PAT)** with appropriate scopes:
-
-- Classic tokens: `repo` and `read:org`
-- Fine-grained tokens: permissions matching your target repos
-
-## Usage
+## Quick Start
 
 ```bash
-# Install the _default recipe to create the github profile
-cf setup init
+# Start GitHub
+cf run tools start --github
+# or
+cf r tl start -g
 
-codefreedom run tools github start    # Validate token, pull image
-codefreedom run tools github status   # Check status
-codefreedom run tools github stop     # No-op (ephemeral)
+# Check status
+cf run tools status
+# or
+cf r tl status
+
+# Stop GitHub
+cf run tools stop --github
+# or
+cf r tl stop -g
 ```
 
-## Add Your Token
+## How It Works
 
-Edit `~/.codefreedom/profiles/github.json`:
-
-```json
-{
-  "github": {
-    "env": {
-      "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_your_token_here"
-    }
-  }
-}
+```
+Agent → MCP → Docker Container → GitHub
 ```
 
-Or reference a system env var:
-
-```json
-{
-  "github": {
-    "env": {
-      "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
-    }
-  }
-}
-```
+GitHub runs in a Docker container on port 8129. Your code agent connects via MCP.
 
 ## Configuration
 
-| Setting          | Default                                           | Description    |
-| ---------------- | ------------------------------------------------- | -------------- |
-| `image`          | `docker.io/nilayparikh/codefreedom:github-latest` | Docker image   |
-| `container_name` | `codefreedom-tools-github`                        | Container name |
-| `port`           | `8082`                                            | HTTP MCP port  |
+GitHub is configured in your profile's `tools` section:
 
-## Ephemeral Design
+```yaml
+tools:
+  - github
+```
 
-The GitHub tool runs per-session — it pulls the image, validates your token, and exits. No long-running container. `stop` and `restart` are no-ops.
+## Troubleshooting
+
+### Container Won't Start
+
+```bash
+# Check Docker
+docker ps -a
+
+# Check logs
+docker logs codefreedom-github
+```
+
+### Agent Can't Connect
+
+```bash
+# Test connectivity
+curl http://localhost:8129/mcp
+```

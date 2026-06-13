@@ -1,8 +1,8 @@
 """Code agent subcommand — launch with profile-based routing and sandboxing.
 
 Usage:
-    codefreedom agent claude [--profile NAME] [--sandbox] [--list-profiles] [agent-args...]
-    codefreedom agent claude [options] [-- <agent-args>]
+    codefreedom run agent claude-code [--profile NAME] [--sandbox] [--list-profiles] [agent-args...]
+    codefreedom run agent claude-code [options] [-- <agent-args>]
 
 VS Code integration: see `codefreedom config vscode`.
 """

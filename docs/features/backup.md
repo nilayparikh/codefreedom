@@ -1,102 +1,115 @@
 ---
-title: Backup & Restore
+title: Backup
 description: Backup, restore, and manage your CodeFreedom configuration.
 ---
 
-# Backup & Restore
+# Backup
 
-Protect your `~/.codefreedom/` configuration. Backup, restore, and clean up old snapshots.
+Backup, restore, and manage your CodeFreedom configuration.
+
+## Quick Start
+
+```bash
+# Full commands
+cf manage admin backup                    # Backup config
+cf manage admin restore                   # Restore from latest backup
+cf manage admin list                      # List backups
+cf manage admin inspect                   # Inspect a backup
+cf manage admin prune                     # Clean old backups
+
+# Short aliases
+cf m ad backup
+cf m ad restore
+cf m ad list
+cf m ad inspect
+cf m ad prune
+```
 
 ## Backup
 
-```bash
-codefreedom manage admin backup
-```
-
-Saves to `~/.codefreedom/backup/` with a timestamped filename:
-
-```
-codefreedom-backup-default-20260604-143022-my-workstation.tar.gz
-```
-
-### Options
+Create a timestamped backup of your CodeFreedom config:
 
 ```bash
-codefreedom manage admin backup --out /tmp/snapshot.tar.gz    # Custom path
-codefreedom manage admin backup --profile work-profile         # Tag with profile name
-codefreedom manage admin backup --passphrase "my-secret"       # Encrypt with AES-256
+cf manage admin backup
+# or
+cf m ad backup
 ```
 
-### What Gets Backed Up
+Backups are stored in `~/.codefreedom/backups/` as tar.gz archives:
 
-| What | Included |
-|------|----------|
-| Profile JSON files | Yes |
-| Proxy config | Yes |
-| `.env` files | Yes |
-| Secrets | **Redacted** by default (keys preserved, values masked) |
-| Encrypted backup (`--passphrase`) | Full secrets included |
-| Sandbox data | No |
-| Runtime state | No |
+```
+~/.codefreedom/backups/
+├── codefreedom-backup-20250101-120000.tar.gz
+├── codefreedom-backup-20250102-120000.tar.gz
+└── codefreedom-backup-20250103-120000.tar.gz
+```
 
 ## Restore
 
-```bash
-codefreedom manage admin restore /path/to/backup.tar.gz
-```
-
-Shows a diff before making changes:
-
-```
-  Status   Path                            Size       Action
-  -------- ------------------------------ ---------- ------------
-  [ADD]    .env.claude                    45 B       New file
-  [MOD]    profiles/claude-code.json      4.2 KB     SHA256 differs
-  [OK]     proxy/config/config.yaml       2.1 KB     Unchanged
-```
-
-### Restore Options
+Restore from the latest backup:
 
 ```bash
-codefreedom manage admin restore backup.tar.gz --dry-run   # Preview only
-codefreedom manage admin restore backup.tar.gz --force     # Skip confirmation
-codefreedom manage admin restore backup.tar.gz --passphrase "my-secret"  # Encrypted
+cf manage admin restore
+# or
+cf m ad restore
+```
+
+Restore from a specific backup:
+
+```bash
+cf manage admin restore --file codefreedom-backup-20250101-120000.tar.gz
+# or
+cf m ad restore --file codefreedom-backup-20250101-120000.tar.gz
 ```
 
 ## List Backups
 
 ```bash
-codefreedom manage admin list-backups
-codefreedom manage admin ls    # Short alias
+cf manage admin list
+# or
+cf m ad list
 ```
 
-```
-  Date                      Profile          Hostname             Files       Size Secrets
-  ------------------------ ---------------- -------------------- ------ ---------- --------
-  2026-06-04T14:30:22Z     default          my-workstation          12    45.2 KB redacted
-```
+## Inspect
 
-## Inspect a Backup
+View the contents of a backup:
 
 ```bash
-codefreedom manage admin inspect /path/to/backup.tar.gz
+cf manage admin inspect --file codefreedom-backup-20250101-120000.tar.gz
+# or
+cf m ad inspect --file codefreedom-backup-20250101-120000.tar.gz
 ```
 
-See what's inside without extracting.
+## Prune
 
-## Clean Up Old Backups
+Remove old backups:
 
 ```bash
-codefreedom manage admin prune --keep 5           # Keep 5 most recent
-codefreedom manage admin prune --older-than 30d   # Delete backups older than 30 days
-codefreedom manage admin prune --keep 3 --older-than 90d   # Both
+# Keep last 5
+cf manage admin prune --keep 5
+# or
+cf m ad prune --keep 5
+
+# Keep last 30 days
+cf manage admin prune --days 30
+# or
+cf m ad prune --days 30
 ```
 
-Duration suffixes: `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (weeks).
+## Command Reference
 
-## Short Alias
+### `cf manage admin`
 
-```bash
-codefreedom manage admin backup    # or
-cf manage adm backup
+```
+usage: codefreedom manage admin [-h] {backup,restore,list,inspect,prune} ...
+
+positional arguments:
+  backup                Backup CodeFreedom config
+  restore               Restore from latest backup
+  list                  List backups
+  inspect               Inspect a backup
+  prune                 Clean old backups
+
+options:
+  -h, --help            show this help message and exit
 ```

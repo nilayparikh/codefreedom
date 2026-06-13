@@ -1,8 +1,12 @@
-"""Shared sandbox launcher — creates ephemeral Docker containers for agents.
+"""Shared sandbox launcher — CANONICAL OWNER of container lifecycle.
 
-Both Claude and MiMo agents use the same pattern: pull image, create container,
-exec into it with signal forwarding, cleanup in finally. This module provides
-a single implementation.
+This module owns:
+- Container creation and cleanup (run_sandbox)
+- Container status queries (sandbox_status)
+- Container stop operations (sandbox_stop)
+
+launcher.py owns agent-specific orchestration (MCP config, sandbox dirs,
+Claude binary lookup) and delegates container operations here.
 """
 
 from __future__ import annotations

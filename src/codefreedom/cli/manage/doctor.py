@@ -828,6 +828,38 @@ def _cf_tool_label_for_port(port: int) -> str | None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Agent Prerequisites
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@_section("Agent Prerequisites")
+def _check_claude_binary() -> CheckResult:
+    claude = shutil.which("claude")
+    if claude:
+        return _ok(f"Claude CLI found ({claude})")
+    return _warn(
+        "Claude CLI not found",
+        "Install: npm install -g @anthropic-ai/claude-code",
+    )
+
+
+@_section("Agent Prerequisites")
+def _check_mimo_binary() -> CheckResult:
+    mimo = shutil.which("mimo")
+    if mimo:
+        return _ok(f"MiMoCode CLI found ({mimo})")
+    return _warn("MiMoCode CLI not found", "See MiMoCode documentation")
+
+
+@_section("Agent Prerequisites")
+def _check_opencode_binary() -> CheckResult:
+    opencode = shutil.which("opencode")
+    if opencode:
+        return _ok(f"OpenCode CLI found ({opencode})")
+    return _warn("OpenCode CLI not found", "See OpenCode documentation")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Public API
 # ═══════════════════════════════════════════════════════════════════════════════
 

@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.9]
+
+### Documentation & Discoverability
+
+- Added WebSearch interception documentation (`docs/proxy/websearch-interception.md`)
+- Added MiMoCode feature page (`docs/features/mimo-code.md`)
+- Clarified recipe sourcing (bundled vs external) in `docs/recipes/index.md` and `recipes/README.md`
+- Added troubleshooting guide (`docs/guides/troubleshooting.md`)
+- Added FAQ page (`docs/guides/faq.md`)
+- Added recipes guide (`docs/guides/recipes-guide.md`)
+- Updated navigation with Guides section in `mkdocs.yml`
+
+### Reliability & Test Coverage
+
+- Added launcher tests (`tests/test_launcher.py` — 18 tests)
+- Added sandbox launcher tests (`tests/test_sandbox_launcher.py` — 11 tests)
+- Added agent dispatch tests (`tests/test_agent_dispatch.py` — 10 tests)
+- Added Claude entrypoint tests (`tests/test_claude.py` — 7 tests)
+- Added OpenCode entrypoint tests (`tests/test_opencode.py` — 8 tests)
+- Added pytest-cov coverage reporting
+
+### Architecture
+
+- Defined canonical config resolution seam (`resolve_agent_config` in `core/config.py`)
+- Consolidated tool lifecycle ownership in `tools/registry.py`
+- Thinned CLI tool layer (`cli/run/tools.py` delegates to registry)
+- Clarified launcher module ownership (launcher.py = agent orchestration, sandbox/launcher.py = container lifecycle)
+- Added explicit agent registry helpers (`get_agent_names`, `get_agent_aliases`)
+- Added shared CLI validation (`validate_agent_args`)
+
+### Diagnostics
+
+- Expanded `cf doctor` with agent binary checks (Claude, MiMoCode, OpenCode)
+
+### Housekeeping
+
+- Updated `ARCHITECTURE.md` with full module inventory (mimo, opencode, agent, tools, doctor, etc.)
+- Updated dependency graph and request flows
+- Bumped version to 0.1.9
+
 ## [Unreleased]
 
 ### Breaking Changes

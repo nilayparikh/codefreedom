@@ -8,113 +8,60 @@ Usage:
 
 Tools use Docker as the source of truth — no /proc tracking.
 Profiles are loaded from ~/.codefreedom/profiles/.
+
+Lifecycle orchestration is owned by tools/registry.py.
+This module handles CLI parsing, user output, and delegates to the registry.
 """
 
 from __future__ import annotations
 
 import argparse
-from typing import Callable
 
 from codefreedom.log import eprint
-from codefreedom.cli.docker_utils import container_is_running
-from codefreedom.tools.chrome import (
-    _load_profile as chrome_load_profile,
-    start as chrome_start,
-    stop as chrome_stop,
-)
-from codefreedom.tools.web import (
-    _load_profile as web_load_profile,
-    start as web_start,
-    stop as web_stop,
-)
-from codefreedom.tools.github import (
-    _load_profile as github_load_profile,
-    start as github_start,
-    stop as github_stop,
-)
-from codefreedom.tools.web_bridge import (
-    _load_profile as web_bridge_load_profile,
-    start as web_bridge_start,
-    stop as web_bridge_stop,
+from codefreedom.tools.registry import (
+    get_all_tool_status,
+    start_all_tools,
+    stop_all_tools,
 )
 
-_TOOLS: list[tuple[str, str, Callable, Callable, Callable]] = [
-    ("chrome", "Chrome browser", chrome_load_profile, chrome_start, chrome_stop),
-    ("web", "Web search", web_load_profile, web_start, web_stop),
-    ("github", "GitHub MCP", github_load_profile, github_start, github_stop),
-    (
-        "web-bridge",
-        "Web bridge",
-        web_bridge_load_profile,
-        web_bridge_start,
-        web_bridge_stop,
-    ),
-]
+_TOOL_NAMES: set[str] = {"chrome", "web", "github", "web-bridge"}
 
 
-def _load_all_settings() -> list[tuple[str, str, dict, Callable, Callable]]:
-    """Load settings for all tools. Returns (name, label, settings, start_fn, stop_fn) tuples."""
-    results: list[tuple[str, str, dict, Callable, Callable]] = []
-    for name, label, load_fn, start_fn, stop_fn in _TOOLS:
-        try:
-            settings = load_fn()
-            results.append((name, label, settings, start_fn, stop_fn))
-        except Exception as exc:
-            eprint(f"[TOOLS] Failed to load profile for '{label}': {exc}")
-    return results
+def start_all(selected: set[str] | None = None) -> int:
+    """Start tools (no-op if already running). Returns exit code."""
+    eprint("[TOOLS] Starting tools...")
+    rc = start_all_tools(selected)
+    if rc == 0:
+        eprint("[TOOLS] All tools started.")
+    return rc
 
 
-def _for_each_tool(action: str) -> int:
-    """Run an action across all tools. Returns exit code (0 if all ok)."""
-    failures = 0
-    verb = action.capitalize().rstrip("e") + "ing"
-    for _name, label, settings, start_fn, stop_fn in _load_all_settings():
-        eprint(f"[TOOLS] {verb} {label}...")
-        if action == "start":
-            rc = start_fn(settings)
-        elif action == "stop":
-            rc = stop_fn(settings)
-        elif action == "restart":
-            stop_fn(settings)
-            rc = start_fn(settings)
-        else:
-            rc = 0
-        if rc != 0:
-            eprint(f"[TOOLS] {label} failed.")
-            failures += 1
-    if failures:
-        eprint(f"[TOOLS] {failures} tool(s) failed to {action}.")
-        return 1
-    eprint(f"[TOOLS] All tools {action}ed.")
-    return 0
+def stop_all(selected: set[str] | None = None) -> int:
+    """Stop tools. Returns exit code."""
+    eprint("[TOOLS] Stopping tools...")
+    rc = stop_all_tools(selected)
+    if rc == 0:
+        eprint("[TOOLS] All tools stopped.")
+    return rc
 
 
-def start_all() -> int:
-    """Start all tools (no-op if already running). Returns exit code."""
-    return _for_each_tool("start")
+def restart_all(selected: set[str] | None = None) -> int:
+    """Restart tools. Returns exit code."""
+    stop_all(selected)
+    return start_all(selected)
 
 
-def stop_all() -> int:
-    """Stop all tools. Returns exit code."""
-    return _for_each_tool("stop")
-
-
-def restart_all() -> int:
-    """Restart all tools. Returns exit code."""
-    return _for_each_tool("restart")
-
-
-def status_all() -> int:
-    """Show status of all tools. Returns exit code (1 if any are down)."""
+def status_all(selected: set[str] | None = None) -> int:
+    """Show status of tools. Returns exit code (1 if any are down)."""
     all_running = True
-    for name, label, settings, _start_fn, _stop_fn in _load_all_settings():
-        container_name = settings.get("container_name", f"codefreedom-{name}")
-        if container_is_running(container_name):
-            port = settings.get("port", "?")
-            eprint(f"[TOOLS] {label:15} RUNNING  ({container_name}, port {port})")
+    for name, label, running in get_all_tool_status():
+        if selected and name not in selected:
+            continue
+        if running:
+            eprint(f"[TOOLS] {label:15} RUNNING")
         else:
             all_running = False
-            eprint(f"[TOOLS] {label:15} STOPPED  ({container_name})")
+            eprint(f"[TOOLS] {label:15} STOPPED")
     if all_running:
         eprint("[TOOLS] All tools are running.")
         return 0
@@ -122,32 +69,28 @@ def status_all() -> int:
     return 1
 
 
-def ensure_tools() -> int:
-    """Ensure all tools are running (start if missing). Used by cf px / cf cc."""
-    failures = 0
-    for name, label, settings, start_fn, _stop_fn in _load_all_settings():
-        container_name = settings.get("container_name", f"codefreedom-{name}")
-        if not container_is_running(container_name):
-            eprint(f"[TOOLS] Auto-starting {label} ({container_name})...")
-            if start_fn(settings) != 0:
-                eprint(f"[TOOLS] {label} failed — continuing.")
-                failures += 1
-    if failures:
-        return 1
-    return 0
+def ensure_tools(selected: set[str] | None = None) -> int:
+    """Ensure tools are running (start if missing). Used by cf px / cf cc."""
+    eprint("[TOOLS] Ensuring tools are running...")
+    return start_all_tools(selected)
 
 
 def run(args: argparse.Namespace) -> int:
     """Execute the tools subcommand. Returns exit code."""
     action = args.action or "status"
+
+    selected: set[str] | None = None
+    if any(getattr(args, name, False) for name in _TOOL_NAMES):
+        selected = {name for name in _TOOL_NAMES if getattr(args, name, False)}
+
     if action == "start":
-        return start_all()
+        return start_all(selected)
     elif action == "stop":
-        return stop_all()
+        return stop_all(selected)
     elif action == "restart":
-        return restart_all()
+        return restart_all(selected)
     elif action == "status":
-        return status_all()
+        return status_all(selected)
     else:
         eprint(f"[ERROR] Unknown action: {action}")
         eprint("   Valid actions: start, stop, restart, status")

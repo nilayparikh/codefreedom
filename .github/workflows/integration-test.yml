@@ -102,8 +102,8 @@ jobs:
           # CLI entry points
           codefreedom --help
           cf --help
-          codefreedom run agent claude --help
-          cf run agent claude --help
+          codefreedom run agent claude-code --help
+          cf run agent claude-code --help
           codefreedom run proxy --help
           cf run proxy --help
 
@@ -144,11 +144,11 @@ jobs:
           "
 
           # Profile listing
-          codefreedom run agent claude --list-profiles
+          codefreedom run agent claude-code --list-profiles
 
           # Proxy validate
           codefreedom run proxy validate 2>&1 || true
 
           # CLI dry-run
           export LITELLM_MASTER_KEY="sk-test-dummy-key-for-ci"
-          codefreedom run agent claude --help 2>&1 || true
+          codefreedom run agent claude-code --help 2>&1 || true

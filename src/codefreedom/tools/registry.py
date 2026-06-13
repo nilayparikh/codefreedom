@@ -161,3 +161,60 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
         servers[tool.mcp_server_name] = {"type": "http", "url": url}
 
     return {"mcpServers": servers}
+
+
+# ── Bulk lifecycle operations ────────────────────────────────────────────────
+
+
+def get_all_tool_status() -> list[tuple[str, str, bool]]:
+    """Return (name, label, is_running) for all known tools."""
+    from codefreedom.cli.docker_utils import container_is_running
+
+    statuses: list[tuple[str, str, bool]] = []
+    for name in _KNOWN_TOOLS:
+        label = name.replace("-", " ").title()
+        try:
+            _load_settings, _, _ = _KNOWN_TOOLS[name]
+            settings = _load_settings()
+            container = settings.get("container_name", f"codefreedom-{name}")
+            running = container_is_running(container)
+        except Exception:
+            running = False
+        statuses.append((name, label, running))
+    return statuses
+
+
+def start_all_tools(selected: set[str] | None = None) -> int:
+    """Start all or selected tools. Returns exit code."""
+    failures = 0
+    for name in _KNOWN_TOOLS:
+        if selected and name not in selected:
+            continue
+        _load_settings, _start, _ = _KNOWN_TOOLS[name]
+        try:
+            settings = _load_settings()
+            result = _start(settings)
+            if result != 0:
+                failures += 1
+        except Exception as exc:
+            eprint(f"[TOOLS] Failed to start '{name}': {exc}")
+            failures += 1
+    return 1 if failures else 0
+
+
+def stop_all_tools(selected: set[str] | None = None) -> int:
+    """Stop all or selected tools. Returns exit code."""
+    failures = 0
+    for name in _KNOWN_TOOLS:
+        if selected and name not in selected:
+            continue
+        _load_settings, _, _stop = _KNOWN_TOOLS[name]
+        try:
+            settings = _load_settings()
+            result = _stop(settings)
+            if result != 0:
+                failures += 1
+        except Exception as exc:
+            eprint(f"[TOOLS] Failed to stop '{name}': {exc}")
+            failures += 1
+    return 1 if failures else 0

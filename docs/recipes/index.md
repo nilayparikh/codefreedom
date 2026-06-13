@@ -1,75 +1,76 @@
 ---
 title: Recipes
-description: Configuration examples and provider setup guides for CodeFreedom.
+description: Pre-built configurations for common workflows.
 ---
 
 # Recipes
 
-Step-by-step configuration guides for every supported provider. Each recipe covers API keys, model aliases, proxy routing, and profile setup.
+Pre-built configurations for common workflows.
 
-## Provider Reference
+## Available Recipes
 
-Detailed YAML configuration reference for each provider — env vars, model tables, and setup steps.
+| Recipe | Description | Command |
+|--------|-------------|---------|
+| `_default` | Base recipe with all providers | `cf setup init` |
+| `costeffective-coding` | Cloud-only models, no local | `cf setup init --plan costeffective-coding` |
+| `costeffective-coding-with-local` | Cloud + local models | `cf setup init --plan costeffective-coding-with-local` |
 
-<div class="grid cards" markdown>
+## List Recipes
 
-- :material-flask:{ .lg .middle } **DeepSeek**
+```bash
+cf setup init --list
+# or
+cf s i -l
+```
 
-  V4-Flash and V4-Pro via DeepSeek API. Enable reasoning, configure profiles.
+## Install a Recipe
 
-  [:octicons-arrow-right-24: DeepSeek](providers/deepseek/index.md)
+```bash
+# Install default
+cf setup init
+# or
+cf s i
 
-- :material-microsoft-azure:{ .lg .middle } **Azure Foundry**
+# Install specific recipe
+cf setup init --plan costeffective-coding
+# or
+cf s i -p costeffective-coding
 
-  GPT-5.4 family via Microsoft Foundry. Deploy, configure, and route.
+# Preview before installing
+cf setup init --plan costeffective-coding --preview
+# or
+cf s i -p costeffective-coding --preview
+```
 
-  [:octicons-arrow-right-24: Azure Foundry](providers/azure-foundry/index.md)
+## How Recipes Work
 
-- :material-nvidia:{ .lg .middle } **NVIDIA**
+Recipes are YAML manifests that define:
 
-  DeepSeek, GLM, Kimi, Step via NVIDIA AI Endpoints. Zero-cost players.
+- **Profiles** — model configurations
+- **Proxy config** — LiteLLM settings
+- **Docker Compose** — container definitions
+- **Environment** — variables and secrets
 
-  [:octicons-arrow-right-24: NVIDIA](providers/nvidia/index.md)
+They use intelligent structural merging via DeepDiff, so running a recipe again (or a different recipe on top) merges changes without overwriting your existing settings.
 
-- :material-cloud-braces:{ .lg .middle } **OpenCode Zen**
+## Custom Recipe Store
 
-  Free-tier models — Mimo, Nemotron, DeepSeek, MiniMax-M3. Test without spending.
+```bash
+# Use a custom GitHub URL
+cf setup init --store https://github.com/user/recipes
+# or
+cf s i -s https://github.com/user/recipes
 
-  [:octicons-arrow-right-24: OpenCode Zen](providers/opencode-zen/index.md)
+# Use a local folder
+cf setup init --store /path/to/recipes
+# or
+cf s i -s /path/to/recipes
+```
 
-- :material-swap-horizontal-bold:{ .lg .middle } **OpenRouter**
+## Staging Branch
 
-  Aggregated models via OpenRouter. One API key, many providers.
-
-  [:octicons-arrow-right-24: OpenRouter](providers/openrouter/index.md)
-
-- :material-api:{ .lg .middle } **OpenAI Compatible**
-
-  Any OpenAI-compatible `/v1/chat/completions` endpoint. Bring your own backend.
-
-  [:octicons-arrow-right-24: OpenAI Compatible](providers/openai-compatible/index.md)
-
-- :material-chat:{ .lg .middle } **Anthropic Compatible**
-
-  Any Anthropic-compatible `/v1/messages` endpoint. Claude API and beyond.
-
-  [:octicons-arrow-right-24: Anthropic Compatible](providers/anthropic-compatible/index.md)
-
-- :material-server:{ .lg .middle } **Local**
-
-  Self-hosted inference servers on two ports. Run models on your own hardware.
-
-  [:octicons-arrow-right-24: Local](providers/local/index.md)
-
-</div>
-
-## What's in a Recipe
-
-Each provider page covers:
-
-- **Provider YAML** — the `model_list` entries for LiteLLM proxy config
-- **Environment variables** — API keys, base URLs, and optional overrides
-- **Profile setup** — how to add the provider to your `profiles.json`
-- **Quick start** — minimal steps from API key to working session
-
-For the full YAML reference, see the [Provider Configuration Reference](providers/index.md).
+```bash
+cf setup init --staging
+# or
+cf s i --staging
+```
