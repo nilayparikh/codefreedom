@@ -11,7 +11,7 @@ HTTP MCP endpoint on port 8082.  Coding agents connect via
 http://127.0.0.1:8082/mcp just like the chrome and web tools.
 
 Settings are loaded from ~/.codefreedom/profiles/github.yaml.
-Use `cf init` to initialize.
+Use `cf s i` to initialize.
 """
 
 from __future__ import annotations

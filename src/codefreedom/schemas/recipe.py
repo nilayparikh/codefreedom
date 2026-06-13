@@ -33,6 +33,8 @@ class ConfigEntry(BaseModel, extra="forbid"):
 
     var: str
     default: Optional[str] = None
+    prompt: Optional[str] = None
+    hint: Optional[str] = None
 
 
 class DirEntry(BaseModel, extra="forbid"):
@@ -52,8 +54,10 @@ class RecipeConfig(BaseModel, extra="forbid"):
     files: List[FileEntry]
     dirs: Optional[List[str]] = None
     required_secrets: Optional[List[SecretEntry]] = None
+    config_vars: Optional[List[ConfigEntry]] = None
     optional_config: Optional[List[ConfigEntry]] = None
     tools_optional: Optional[List[str]] = None
+    advice: Optional[str] = None
 
     @field_validator("tools_optional")
     @classmethod

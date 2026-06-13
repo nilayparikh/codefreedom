@@ -57,7 +57,7 @@ def recipe_manifest() -> Dict[str, Any]:
         "required_secrets": [
             {"var": "TEST_API_KEY", "prompt": "Test API key"},
         ],
-        "optional_config": [
+        "config_vars": [
             {"var": "TEST_OPTION", "default": "default-value"},
         ],
     }
@@ -541,15 +541,16 @@ class TestSummary:
         _print_summary(manifest_fixture, Path("/tmp"))
         captured = capsys.readouterr()
         assert "TEST_OPTION" in captured.out
-        assert "default-value" in captured.out
+        assert "Configuration" in captured.out
 
-    def test_prints_next_steps(self, capsys, manifest_fixture):
-        """Next steps section is printed."""
+    def test_prints_next_steps(self, capsys, manifest_fixture, monkeypatch):
+        """Next steps section is printed when all secrets are configured."""
+        monkeypatch.setenv("CF_CLI_TEST_API_KEY", "sk-test")
         _print_summary(manifest_fixture, Path("/tmp"))
         captured = capsys.readouterr()
-        assert "NEXT STEPS" in captured.out
-        assert "cf run proxy start" in captured.out
-        assert "cf run agent claude-code" in captured.out
+        assert "All secrets configured" in captured.out
+        assert "Ready to start" in captured.out
+        assert "cf px start" in captured.out
 
     def test_no_required_secrets(self, capsys):
         """Summary works without required_secrets."""

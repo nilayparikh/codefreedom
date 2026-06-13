@@ -11,7 +11,7 @@ The container runs an MCP-only server with two tools:
     web_fetch(url)    — fetch a page (bypasses anti-bot)
 
 Settings are loaded from ~/.codefreedom/profiles/web.yaml.
-Use `cf init` to initialize.
+Use `cf s i` to initialize.
 
 Search engines are configured in the profile's 'search_engines' field
 (each entry: {url, parser}) and passed to the container as the SEARCH_ENGINES

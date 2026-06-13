@@ -7,7 +7,7 @@ Part of the unified tool group.  All tools are managed together:
     cf tools status    Show status of all tools
 
 Settings are loaded from ~/.codefreedom/profiles/chrome.yaml.
-Use `cf init` to initialize.
+Use `cf s i` to initialize.
 """
 
 from __future__ import annotations

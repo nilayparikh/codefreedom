@@ -83,7 +83,7 @@ echo "[entrypoint] Pushing Prisma schema..."
 cd /tmp && prisma db push --schema="$SCHEMA" --accept-data-loss --skip-generate
 
 # ── Query engine binary ─────────────────────────────────────────────────────
-QE=$(find /home/codefreedom/.cache/prisma-python/binaries -name 'prisma-query-engine-*' -type f 2>/dev/null | head -1)
+QE=$(find /root/.cache/prisma-python/binaries -name 'prisma-query-engine-*' -type f 2>/dev/null | head -1)
 [ -n "$QE" ] && [ -x "$QE" ] && export PRISMA_QUERY_ENGINE_BINARY="$QE"
 
 # ── Warm up the Prisma engine (pre-starts the binary subprocess) ─────────────

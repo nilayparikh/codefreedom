@@ -44,7 +44,7 @@ You do NOT need the proxy for:
 ### How do I switch providers or models?
 
 1. Edit your profile: `~/.codefreedom/profiles/claude-code.yaml`
-2. Or use a recipe: `cf init --list` then `cf init --plan <recipe-name>`
+2. Or use a recipe: `cf s i -l` then `cf s i -pa <recipe-name>`
 
 ## Configuration
 

@@ -23,9 +23,7 @@ Designed to catch issues like the PostgreSQL ``initdb`` permission error:
 from __future__ import annotations
 
 import os
-import sys
 import shutil
-import stat
 import subprocess
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
@@ -109,12 +107,14 @@ def _run_checks(verbose: bool = False) -> Tuple[int, int, int]:
 
     Returns (pass_count, fail_count, warn_count).
     """
+    from codefreedom.log import bold, cyan
+
     passed = 0
     failed = 0
     warned = 0
 
     for section_name, checks in _SECTIONS:
-        print(f"\n  [{section_name}]")
+        print(f"\n  {cyan(bold(f'[{section_name}]'))}")
         for check_fn in checks:
             try:
                 result = check_fn()
@@ -138,12 +138,14 @@ def _run_checks(verbose: bool = False) -> Tuple[int, int, int]:
 
 def _status_icon(status: str) -> str:
     """Return a colored status icon."""
+    from codefreedom.log import bold, green, red, yellow
+
     if status == CheckResult.PASS:
-        return "[OK]"
+        return green("[OK]")
     elif status == CheckResult.FAIL:
-        return "[FAIL]"
+        return red(bold("[FAIL]"))
     elif status == CheckResult.WARN:
-        return "[WARN]"
+        return yellow("[WARN]")
     else:
         return "[SKIP]"
 
@@ -161,7 +163,7 @@ def _check_cf_dir_exists() -> CheckResult:
     cf_dir = get_codefreedom_dir()
     if cf_dir.exists():
         return _ok(f"{cf_dir} exists")
-    return _fail(f"{cf_dir} does not exist -- run 'cf init'")
+    return _fail(f"{cf_dir} does not exist -- run 'cf s i'")
 
 
 @_section("CodeFreedom Home")
@@ -177,7 +179,7 @@ def _check_recipe_instruction() -> CheckResult:
                 return _ok(f"Recipe installed: {recipe_name}")
         return _ok("RECIPE.md found")
     return _skip(
-        "No RECIPE.md — run 'cf init' to install a recipe and download one"
+        "No RECIPE.md — run 'cf s i' to install a recipe and download one"
     )
 
 
@@ -203,7 +205,7 @@ def _check_cf_dir_structure() -> CheckResult:
     if missing:
         return _warn(
             f"Missing subdirectories: {', '.join(missing)}",
-            "Run 'cf init' to create them",
+            "Run 'cf s i' to create them",
         )
     return _ok("All key subdirectories present")
 
@@ -302,7 +304,7 @@ def _check_env_files() -> CheckResult:
     if missing:
         return _warn(
             f"Missing env files: {', '.join(missing)}",
-            "Run 'cf init' to create defaults",
+            "Run 'cf s i' to create defaults",
         )
     return _ok("All essential env files present")
 
@@ -320,7 +322,7 @@ def _check_profile_files() -> CheckResult:
     if missing:
         return _warn(
             f"Missing profile files: {', '.join(missing)}",
-            "Run 'cf init' to create defaults",
+            "Run 'cf s i' to create defaults",
         )
     return _ok("All essential profile files present")
 
@@ -335,7 +337,7 @@ def _check_proxy_config_files() -> CheckResult:
     if missing:
         return _fail(
             f"Missing proxy files: {', '.join(missing)}",
-            "Run 'cf init' to create them",
+            "Run 'cf s i' to create them",
         )
     return _ok("All essential proxy config files present")
 
@@ -363,67 +365,12 @@ def _check_claude_code_profile() -> CheckResult:
 
 @_section("PostgreSQL / Proxy Data")
 def _check_pg_data_dir() -> CheckResult:
-    """Check the PostgreSQL data directory that gets mounted into LiteLLM.
+    """Check the PostgreSQL data volume strategy.
 
-    The LiteLLM container runs as the ``codefreedom`` user (uid 1000).
-    If the host-mounted directory is owned by root or has restricted
-    permissions, ``initdb`` will fail with the classic:
-
-        initdb: error: could not change permissions of directory ...
+    PG data uses a Docker named volume (codefreedom_pg_data) instead of
+    a host bind-mount, avoiding permission issues on Windows/macOS/Linux.
     """
-    cf_dir = get_codefreedom_dir()
-    pg_data = cf_dir / "pg" / "data"
-
-    if not pg_data.exists():
-        # Directory will be auto-created by Docker; nothing to check yet.
-        # But check its parent is writable.
-        parent = pg_data.parent
-        if not parent.exists():
-            parent.mkdir(parents=True, exist_ok=True)
-        if os.access(parent, os.W_OK):
-            return _ok(f"{pg_data} will be created on first proxy start")
-        return _fail(
-            f"{pg_data.parent} is not writable",
-            "Fix: chmod your home directory or set POSTGRES_HOST_DATA_DIR",
-        )
-    else:
-        # Directory exists — check ownership and permissions
-        st = os.stat(pg_data)
-        uid = st.st_uid
-        mode = st.st_mode
-
-        # The container runs as the 'codefreedom' user which typically
-        # has uid 1000 inside the container. If the host uid maps to
-        # something else, check if the directory is world-writable or
-        # if the uid matches the host user running CodeFreedom.
-        if sys.platform != "win32":
-            host_uid = os.getuid()
-        else:
-            host_uid = None
-
-        issues = []
-        if host_uid is not None:
-            if uid != host_uid and uid != 1000:
-                issues.append(
-                    f"owned by uid {uid} (container expects uid 1000 or your uid {host_uid})"
-                )
-            if not (mode & stat.S_IWOTH or mode & stat.S_IWUSR or uid == host_uid):
-                issues.append("not writable by the container's user")
-        else:
-            if not (mode & stat.S_IWOTH or mode & stat.S_IWUSR):
-                issues.append("not writable")
-
-        if issues:
-            fix = (
-                f"Fix: sudo chown -R {host_uid} {pg_data}  OR  sudo chmod -R 777 {pg_data}"
-                if host_uid is not None
-                else "Fix: adjust directory permissions"
-            )
-            return _fail(
-                f"{pg_data}: {'; '.join(issues)}",
-                fix,
-            )
-        return _ok(f"{pg_data} is ready (uid {uid}, mode {oct(mode & 0o777)})")
+    return _ok("PG data uses Docker named volume 'codefreedom_pg_data' (no host dir needed)")
 
 
 @_section("PostgreSQL / Proxy Data")
@@ -439,53 +386,17 @@ def _check_pg_backup_dir() -> CheckResult:
 
 @_section("PostgreSQL / Proxy Data")
 def _check_compose_pg_volume() -> CheckResult:
-    """Parse the compose file and check POSTGRES_HOST_DATA_DIR consistency."""
-    cf_dir = get_codefreedom_dir()
-    compose_file = cf_dir / "proxy" / "docker-compose.yaml"
-
-    if not compose_file.exists():
-        return _skip("(compose file not found)")
-
-    try:
-        import yaml
-
-        with open(compose_file, encoding="utf-8") as f:
-            compose = yaml.safe_load(f)
-    except Exception:
-        return _skip("(could not parse compose file)")
-
-    if not isinstance(compose, dict):
-        return _skip("(compose file is not a mapping)")
-
-    services = compose.get("services", {})
-    litellm = services.get("litellm", {})
-    volumes = litellm.get("volumes", [])
-
-    pg_mount = None
-    for vol in volumes:
-        if "postgresql/data" in str(vol):
-            pg_mount = vol
-            break
-
-    if pg_mount is None:
-        return _warn("No PostgreSQL data volume mount found in compose file")
-
-    # Parse the host part of the volume spec
-    env_override = os.environ.get("POSTGRES_HOST_DATA_DIR", "")
-
-    if env_override:
-        resolved = Path(env_override)
-        if resolved.exists():
-            if os.access(resolved, os.W_OK):
-                return _ok(f"POSTGRES_HOST_DATA_DIR={env_override} is writable")
-            return _fail(f"POSTGRES_HOST_DATA_DIR={env_override} is not writable")
-        else:
-            parent = resolved.parent
-            if parent.exists() and os.access(parent, os.W_OK):
-                return _ok(f"POSTGRES_HOST_DATA_DIR={env_override} (will be created)")
-            return _fail(f"POSTGRES_HOST_DATA_DIR parent {parent} is not writable")
-
-    return _ok("POSTGRES_HOST_DATA_DIR not overridden (compose default will be used)")
+    """Check that the PG data named volume exists."""
+    result = subprocess.run(
+        ["docker", "volume", "inspect", "codefreedom_pg_data"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    if result.returncode == 0:
+        return _ok("Named volume 'codefreedom_pg_data' exists")
+    return _ok("Named volume 'codefreedom_pg_data' will be created on first proxy start")
 
 
 # ── Section: Docker Images ─────────────────────────────────────────────────
@@ -556,7 +467,7 @@ def _check_tool_profile(name: str, label: str) -> CheckResult:
     if not profile_file.exists():
         return _warn(
             f"{label} profile not found",
-            f"Run 'cf tools {name} init' or 'cf init' to create it",
+            f"Run 'cf tools {name} init' or 'cf s i' to create it",
         )
 
     try:
@@ -880,13 +791,15 @@ def run(verbose: bool = False) -> int:
 
     passed, failed, warned = _run_checks(verbose=verbose)
 
+    from codefreedom.log import bold, green, red, yellow
+
     print()
     if failed == 0 and warned == 0:
-        print(f"  [OK] All {passed} checks passed. Your setup looks good!")
+        print(f"  {green(f'[OK] All {passed} checks passed. Your setup looks good!')}")
     elif failed == 0:
-        print(f"  [OK] {passed} passed, {warned} warnings — review items above.")
+        print(f"  {yellow(f'[OK] {passed} passed, {warned} warnings')} — review items above.")
     else:
-        print(f"  [FAIL] {failed} failure(s), {warned} warning(s), {passed} passed.")
+        print(f"  {red(bold(f'[FAIL] {failed} failure(s), {warned} warning(s), {passed} passed.'))}")
 
     print()
     return 0 if failed == 0 else (2 if warned > 0 else 1)

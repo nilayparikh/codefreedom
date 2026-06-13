@@ -23,8 +23,45 @@ from __future__ import annotations
 import argparse
 import sys
 
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.cli.formatter import CodeFreedomHelpFormatter
+
+
+def _print_version() -> None:
+    """Print version, Python, Docker, and dependency info."""
+    import importlib.metadata
+    import platform
+
+    try:
+        ver = importlib.metadata.version("codefreedom")
+    except importlib.metadata.PackageNotFoundError:
+        ver = "dev"
+
+    print(f"codefreedom {ver}")
+    print(f"  python     {platform.python_version()}")
+    print(f"  platform   {platform.platform()}")
+
+    deps = [
+        "PyYAML", "deepdiff", "pydantic", "GitPython",
+        "python-dotenv", "httpx", "docker",
+    ]
+    for dep in deps:
+        try:
+            dver = importlib.metadata.version(dep)
+            print(f"  {dep:<16} {dver}")
+        except importlib.metadata.PackageNotFoundError:
+            print(f"  {dep:<16} (not installed)")
+
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["docker", "version", "--format", "{{.Server.Version}}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        docker_server = result.stdout.strip() if result.returncode == 0 else "not running"
+    except Exception:
+        docker_server = "not found"
+    print(f"  docker server   {docker_server}")
 
 
 def _add_subparser(
@@ -46,7 +83,20 @@ def _add_subparser(
     return parser
 
 
+def _expand_pa_flag() -> None:
+    """Expand ``-pa <name>`` to ``--plan-and-apply <name>`` for argparse."""
+    argv = sys.argv
+    for i, arg in enumerate(argv):
+        if arg == "-pa" and i + 1 < len(argv):
+            sys.argv = argv[:i] + ["--plan-and-apply", argv[i + 1]] + argv[i + 2:]
+            return
+        if arg.startswith("-pa=") and len(arg) > 4:
+            sys.argv = argv[:i] + ["--plan-and-apply", arg[4:]] + argv[i + 1:]
+            return
+
+
 def main() -> None:
+    _expand_pa_flag()
     parser = argparse.ArgumentParser(
         prog="codefreedom",
         description=(
@@ -56,13 +106,15 @@ def main() -> None:
         formatter_class=CodeFreedomHelpFormatter,
         epilog=(
             "examples:\n"
-            "  cf run agent claude-code      Launch Claude Code agent\n"
-            "  cf r ag cc                   Short form of above\n"
+            "  cf r ag cc                   Launch Claude Code agent\n"
             "  cf r ag mc                   Launch MiMo Code agent\n"
-            "  cf r proxy start             Start the LLM proxy\n"
-            "  cf setup init                Initialize configuration\n"
-            "  cf manage doctor             Validate environment"
+            "  cf r px start                Start the LLM proxy\n"
+            "  cf s i                       Initialize configuration\n"
+            "  cf m dr                      Validate environment"
         ),
+    )
+    parser.add_argument(
+        "-v", "--version", action="store_true", help="Show version and system info"
     )
     subparsers = parser.add_subparsers(dest="command", title="commands")
 
@@ -184,9 +236,13 @@ def main() -> None:
 
     args, unknown = parser.parse_known_args()
 
+    if getattr(args, "version", False):
+        _print_version()
+        sys.exit(0)
+
     def _dispatch(module: str, fn: str, *fn_args, **fn_kwargs) -> None:
         if unknown:
-            eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+            eprint(f"{tag('ERROR')} Unrecognized arguments: {' '.join(unknown)}")
             sys.exit(2)
         import importlib
         mod = importlib.import_module(module)
@@ -248,6 +304,7 @@ def _build_init_args(p: argparse.ArgumentParser) -> None:
     group = p.add_mutually_exclusive_group()
     group.add_argument("-p", "--plan", type=str, metavar="NAME", help="Preview a recipe: generate .patch files without applying")
     group.add_argument("-a", "--apply", type=str, metavar="PLAN_ID", help="Apply a previously generated plan by ID")
+    group.add_argument("--plan-and-apply", type=str, metavar="NAME", help="Plan and apply a recipe in one step (use -pa <name> for short)")
     group.add_argument("-l", "--list", action="store_true", help="List all available recipes from the repository")
     p.add_argument("-s", "--store", type=str, metavar="URL_OR_PATH", default=None, help="Custom recipe store: GitHub URL or local folder path")
     p.add_argument("--staging", action="store_true", help="Use recipes from the 'staging' branch instead of 'main'")
@@ -298,7 +355,7 @@ def _dispatch_agent(args, unknown) -> None:
     if agent_name and agent_name != "list":
         args.agent_args = unknown
     elif unknown:
-        eprint(f"[ERROR] Unrecognized arguments: {' '.join(unknown)}")
+        eprint(f"{tag('ERROR')} Unrecognized arguments: {' '.join(unknown)}")
         sys.exit(2)
     sys.exit(handle_args(args))
 
@@ -318,6 +375,9 @@ def _dispatch_init(args) -> None:
     if getattr(args, "apply", None):
         from codefreedom.cli.setup.recipe import apply_plan
         sys.exit(apply_plan(args.apply))
+    if getattr(args, "plan_and_apply", None):
+        from codefreedom.cli.setup.recipe import plan_and_apply_recipe
+        sys.exit(plan_and_apply_recipe(args.plan_and_apply, store=store, staging=staging))
     if getattr(args, "plan", None):
         from codefreedom.cli.setup.recipe import plan_recipe
         sys.exit(plan_recipe(args.plan, store=store, staging=staging))

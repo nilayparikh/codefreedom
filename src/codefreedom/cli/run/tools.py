@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import argparse
 
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import (
     get_all_tool_status,
     start_all_tools,
@@ -29,19 +29,19 @@ _TOOL_NAMES: set[str] = {"chrome", "web", "github", "web-bridge"}
 
 def start_all(selected: set[str] | None = None) -> int:
     """Start tools (no-op if already running). Returns exit code."""
-    eprint("[TOOLS] Starting tools...")
+    eprint(f"{tag('TOOLS')} Starting tools...")
     rc = start_all_tools(selected)
     if rc == 0:
-        eprint("[TOOLS] All tools started.")
+        eprint(f"{tag('TOOLS')} All tools started.")
     return rc
 
 
 def stop_all(selected: set[str] | None = None) -> int:
     """Stop tools. Returns exit code."""
-    eprint("[TOOLS] Stopping tools...")
+    eprint(f"{tag('TOOLS')} Stopping tools...")
     rc = stop_all_tools(selected)
     if rc == 0:
-        eprint("[TOOLS] All tools stopped.")
+        eprint(f"{tag('TOOLS')} All tools stopped.")
     return rc
 
 
@@ -58,20 +58,20 @@ def status_all(selected: set[str] | None = None) -> int:
         if selected and name not in selected:
             continue
         if running:
-            eprint(f"[TOOLS] {label:15} RUNNING")
+            eprint(f"{tag('TOOLS')} {label:15} RUNNING")
         else:
             all_running = False
-            eprint(f"[TOOLS] {label:15} STOPPED")
+            eprint(f"{tag('TOOLS')} {label:15} STOPPED")
     if all_running:
-        eprint("[TOOLS] All tools are running.")
+        eprint(f"{tag('TOOLS')} All tools are running.")
         return 0
-    eprint("[TOOLS] Some tools are not running. Use 'cf tools start'.")
+    eprint(f"{tag('TOOLS')} Some tools are not running. Use 'cf tools start'.")
     return 1
 
 
 def ensure_tools(selected: set[str] | None = None) -> int:
     """Ensure tools are running (start if missing). Used by cf px / cf cc."""
-    eprint("[TOOLS] Ensuring tools are running...")
+    eprint(f"{tag('TOOLS')} Ensuring tools are running...")
     return start_all_tools(selected)
 
 
@@ -92,6 +92,6 @@ def run(args: argparse.Namespace) -> int:
     elif action == "status":
         return status_all(selected)
     else:
-        eprint(f"[ERROR] Unknown action: {action}")
+        eprint(f"{tag('ERROR')} Unknown action: {action}")
         eprint("   Valid actions: start, stop, restart, status")
         return 1

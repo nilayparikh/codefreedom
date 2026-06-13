@@ -12,7 +12,7 @@ from codefreedom.admin import backup as cf_backup
 from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.core.interpolate import interpolate_all_strings
-from codefreedom.log import eprint
+from codefreedom.log import eprint, green, red, tag, yellow
 from codefreedom.schemas.recipe import RecipeConfig
 from pydantic import ValidationError
 
@@ -30,17 +30,17 @@ def apply_plan(plan_id: str) -> int:
     plan_path = plans_dir / "plan.yaml"
 
     if not plan_path.exists():
-        eprint(f"[RECIPE] Plan '{plan_id}' not found at {plans_dir}")
+        eprint(f"{tag('RECIPE')} Plan '{plan_id}' not found at {plans_dir}")
         return 1
 
     try:
         plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
-        eprint(f"[RECIPE] Invalid plan.yaml: {e}")
+        eprint(f"{tag('RECIPE')} Invalid plan.yaml: {e}")
         return 1
 
     if not isinstance(plan, dict):
-        print("[RECIPE] Invalid plan format")
+        print(f"{tag('RECIPE')} Invalid plan format")
         return 1
 
     # ── 0. Auto-backup before applying ──────────────────────────────────
@@ -50,13 +50,13 @@ def apply_plan(plan_id: str) -> int:
             profile=f"pre-apply-{plan_id}",
             redact_secrets=False,
         )
-        eprint(f"[RECIPE] Backup: {backup_path}")
+        eprint(f"{tag('RECIPE')} Backup: {backup_path}")
     except (FileNotFoundError, OSError, RuntimeError) as e:
-        eprint(f"[RECIPE] Warning: Backup failed: {e}")
-        print("[RECIPE] Continuing without backup...")
+        eprint(f"{tag('RECIPE')} Warning: Backup failed: {e}")
+        print(f"{tag('RECIPE')} Continuing without backup...")
 
     tool_home = Path.home() / ".codefreedom"
-    eprint(f"[RECIPE] Applying plan {plan_id}...")
+    eprint(f"{tag('RECIPE')} Applying plan {plan_id}...")
     count = 0
 
     for pf in plan.get("files", []):
@@ -73,33 +73,33 @@ def apply_plan(plan_id: str) -> int:
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         if action == "same":
-            print(f"  [SAME]  {target}")
+            print(f"  {tag('SAME')}  {target}")
             continue
 
         if action == "delete":
             if dst.exists():
                 dst.unlink()
-                print(f"  [DELETE] {target}")
+                print(f"  {tag('DELETE')} {target}")
                 count += 1
             else:
-                print(f"  [SAME]  {target} (already gone)")
+                print(f"  {tag('SAME')}  {target} (already gone)")
             continue
 
         if not content_name:
             # Fallback: extract from patch file (legacy plans)
             patch_name = pf.get("patch")
             if not patch_name:
-                print(f"  [SKIP]  {target} (no content or patch file)")
+                print(f"  {tag('SKIP')}  {target} (no content or patch file)")
                 continue
             patch_file = plans_dir / patch_name
             if not patch_file.exists():
-                print(f"  [SKIP]  {target} (patch file missing)")
+                print(f"  {tag('SKIP')}  {target} (patch file missing)")
                 continue
             content = _extract_content_from_diff(patch_file.read_text(encoding="utf-8"))
         else:
             content_file = plans_dir / content_name
             if not content_file.exists():
-                print(f"  [SKIP]  {target} (content file missing)")
+                print(f"  {tag('SKIP')}  {target} (content file missing)")
                 continue
             content = content_file.read_text(encoding="utf-8")
 
@@ -115,10 +115,10 @@ def apply_plan(plan_id: str) -> int:
     for rel_path in plan.get("dirs") or []:
         target = cf_dir / rel_path
         if target.is_dir():
-            print(f"  [SAME]  {rel_path}/ (already exists)")
+            print(f"  {tag('SAME')}  {rel_path}/ (already exists)")
             continue
         target.mkdir(parents=True, exist_ok=True)
-        print(f"  [MKDIR] {rel_path}/")
+        print(f"  {tag('MKDIR')} {rel_path}/")
         dir_count += 1
 
     if dir_count:
@@ -126,9 +126,9 @@ def apply_plan(plan_id: str) -> int:
         _print_ownership_advice()
 
     if count:
-        print(f"\n[RECIPE] Plan applied — {count} file(s) updated.")
+        print(f"\n{tag('RECIPE')} Plan applied — {count} file(s) updated.")
     else:
-        print("\n[RECIPE] No files were changed.")
+        print(f"\n{tag('RECIPE')} No files were changed.")
     return 0
 
 
@@ -156,7 +156,7 @@ def _install_recipe_files(
     try:
         RecipeConfig.model_validate(manifest, strict=False)
     except ValidationError as exc:
-        eprint(f"[RECIPE] Warning: Recipe validation issue: {exc}")
+        eprint(f"{tag('RECIPE')} Warning: Recipe validation issue: {exc}")
 
     tool_home = Path.home() / ".codefreedom"
     file_entries = manifest.get("files", [])
@@ -184,7 +184,7 @@ def _install_recipe_files(
             new_count = _merge_file(dst, content, merge_mode, target_path)
         else:
             dst.write_text(content, encoding="utf-8")
-            print(f"  [CREATE] {target_path}")
+            print(f"  {tag('CREATE')} {target_path}")
             new_count = 1
 
         count += new_count
@@ -233,7 +233,7 @@ def _remove_orphans(
             rel = child.relative_to(cf_dir).as_posix()
             if rel not in managed_targets:
                 child.unlink()
-                print(f"  [DELETE] {rel}")
+                print(f"  {tag('DELETE')} {rel}")
                 deleted += 1
 
     if deleted:
@@ -243,14 +243,14 @@ def _remove_orphans(
 
 
 def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
-    """Print a post-install summary telling the user what to do next."""
+    """Print a post-install summary — validate secrets, show advice, next steps."""
     from codefreedom.recipe.plan import _find_env_secrets_targets
 
     name = manifest.get("name", "unknown")
     description = manifest.get("description", "")
-
     required = manifest.get("required_secrets", [])
-    optional = manifest.get("optional_config", [])
+    config_vars = manifest.get("config_vars", [])
+    advice = manifest.get("advice", "")
 
     print()
     print(f"  Recipe: {name}")
@@ -258,69 +258,110 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
         print(f"  {description}")
     print("  " + "-" * 55)
 
-    # ── Generate a persistent RECIPE.md instruction file ────────────────
     _generate_recipe_instruction(manifest, cf_dir)
 
+    # ── Collect env files for secret resolution ────────────────────────
+    secrets_targets = _find_env_secrets_targets(manifest, cf_dir)
+    env_files: list[Path] = []
+    for target in secrets_targets:
+        env_files.append(cf_dir / target)
+
+    # ── Validate required secrets ─────────────────────────────────────
+    missing_count = 0
     if required:
-        print("  REQUIRED — set these before starting:")
-        for i, secret in enumerate(required, 1):
+        print()
+        print("  Secrets:")
+        for secret in required:
             var = secret.get("var", "?")
             prompt = secret.get("prompt", "")
-            hint = secret.get("hint", "")
-            line = f"    {i}. {var}"
-            if prompt:
-                line += f"  —  {prompt}"
-            print(line)
-            if hint:
-                print(f"       {hint}")
 
-    if optional:
+            value, source = _resolve_secret(var, env_files)
+            if value is not None:
+                label = f"  {green('[SET]')}   {var}"
+                if source:
+                    label += f"  ({source})"
+                print(label)
+            else:
+                missing_count += 1
+                label = f"  {yellow('[MISSING]')} {var}"
+                if prompt:
+                    label += f"  —  {prompt}"
+                print(label)
+                hint = secret.get("hint", "")
+                if hint:
+                    print(f"           {hint}")
+
+    # ── Validate config vars ──────────────────────────────────────────
+    if config_vars:
         print()
-        print("  OPTIONAL — already has defaults, override if needed:")
-        for i, cfg in enumerate(optional, 1):
+        print("  Configuration (set in ~/.codefreedom/.env.user):")
+        for cfg in config_vars:
             var = cfg.get("var", "?")
-            default = cfg.get("default", "")
-            line = f"    {i}. {var}"
-            if default:
-                line += f"  (default: {default})"
-            print(line)
+            prompt = cfg.get("prompt", "")
 
-    # Inherited from profile
-    tools = manifest.get("tools_optional", [])
-    if tools:
+            value, source = _resolve_secret(var, env_files)
+            if value is not None:
+                label = f"  {green('[SET]')}   {var}"
+                if source:
+                    label += f"  ({source})"
+                print(label)
+            else:
+                label = f"  {yellow('[MISSING]')} {var}"
+                if prompt:
+                    label += f"  —  {prompt}"
+                print(label)
+                hint = cfg.get("hint", "")
+                if hint:
+                    print(f"           {hint}")
+
+    # ── Show advice from recipe YAML ──────────────────────────────────
+    if advice:
         print()
-        print("  TOOLS available:")
-        for t in tools:
-            print(f"    - {t}  (start with: cf tools {t} start)")
+        for line in advice.strip().splitlines():
+            print(f"  {line}")
 
-    # Collect which .env.secrets files need editing
-    env_secrets_files = _find_env_secrets_targets(manifest, cf_dir)
-
-    print()
-    print("  NEXT STEPS:")
-    for env_file in env_secrets_files:
-        print(f"    1. Edit {env_file} and add your API keys")
-    if env_secrets_files:
-        print("    2. Start the proxy:  cf run proxy start")
-        print("    3. Launch the agent: cf run agent claude-code")
+    # ── Dynamic next steps ────────────────────────────────────────────
+    if missing_count:
+        print()
+        print(f"  {red(f'{missing_count} secret(s) missing — set them before starting the proxy.')}")
     else:
-        print("    1. Start the proxy:  cf run proxy start")
-        print("    2. Launch the agent: cf run agent claude-code")
-    print("    4. Customize:         cf run proxy start --port 4000")
+        print()
+        print(f"  {green('All secrets configured.')} Ready to start:")
+        print("    cf px start")
 
-    # ── Sandbox permissions ────────────────────────────────────────────
-    cf_dir_str = str(cf_dir)
-    print()
-    print("  PERMISSIONS — Docker sandbox:")
-    print("    Sandbox containers run with minimal permissions (no root).")
-    print("    Grant ownership of the CodeFreedom data directory so the")
-    print("    container can read and write config:")
-    print()
-    print(f"      sudo chown -R $(id -u):$(id -g) {cf_dir_str}")
-    print()
-    print("    5. Run the command above if you plan to use --sandbox mode")
     print("  " + "-" * 55)
     print()
+
+
+def _resolve_secret(
+    name: str, env_files: list[Path]
+) -> tuple[str | None, str | None]:
+    """Resolve a secret across CF_CLI_* env, os.environ, and .env files.
+
+    Same priority chain as the doctor's ``_resolve_env_var_value``:
+      1. ``CF_CLI_<NAME>`` in os.environ (highest priority)
+      2. ``NAME`` directly in os.environ
+      3. ``NAME=`` in the provided env_files (ignoring CHANGE_ME)
+    """
+    import os
+
+    cf_cli = f"CF_CLI_{name}"
+    if cf_cli in os.environ and os.environ[cf_cli]:
+        return os.environ[cf_cli], "CF_CLI_* override"
+
+    if name in os.environ and os.environ[name]:
+        return os.environ[name], "machine env"
+
+    for env_file in env_files:
+        if env_file.exists():
+            content = env_file.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                if line.strip().startswith(f"{name}="):
+                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    if val and val != "CHANGE_ME":
+                        return val, env_file.name
+
+    return None, None
 
 
 def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None:
@@ -362,10 +403,25 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
 
     lines.append("## Quick Start")
     lines.append("")
-    lines.append("1. Edit the `.secrets` files and add your API keys")
-    lines.append("1. Start the proxy: `cf run proxy start`")
-    lines.append("2. Launch the agent: `cf run agent claude-code`")
-    lines.append("3. Run diagnostics: `cf doctor`")
+    required = manifest.get("required_secrets", [])
+    config_vars = manifest.get("config_vars", [])
+    step = 1
+    if required:
+        lines.append(f"{step}. Set required secrets in your `.secrets` files:")
+        for s in required:
+            lines.append(f"   - `{s.get('var', '?')}`")
+        lines.append("")
+        step += 1
+    if config_vars:
+        lines.append(f"{step}. Set configuration in `~/.codefreedom/.env.user`:")
+        for c in config_vars:
+            lines.append(f"   - `{c.get('var', '?')}`")
+        lines.append("")
+        step += 1
+    lines.append(f"{step}. Run `cf px start` to start the proxy")
+    lines.append(f"{step + 1}. Run `cf cc` to launch the agent")
+    lines.append("")
+    lines.append("See `COMMANDS.md` for the full command reference.")
     lines.append("")
 
     content = "\n".join(lines)
@@ -373,6 +429,6 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
 
     try:
         instruction_path.write_text(content, encoding="utf-8")
-        print(f"  [INFO]  Instructions written to {instruction_path.name}")
+        print(f"  {tag('INFO')}  Instructions written to {instruction_path}")
     except OSError as e:
-        eprint(f"[RECIPE] Warning: Could not write instructions: {e}")
+        eprint(f"{tag('RECIPE')} Warning: Could not write instructions: {e}")

@@ -17,7 +17,7 @@ import httpx
 import yaml
 
 from codefreedom.env_loader import load_env_chain
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
 # ║ Section 2: Proxy VS Code config (`vscode proxy config`)                  ║
@@ -382,10 +382,10 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     # Load the full env chain so LITELLM_MASTER_KEY is resolved from ANY
     # supported location: .env.proxy, .env.proxy.secrets, .env.secrets,
     # .env.user, CF_CLI_LITELLM_MASTER_KEY, etc.
-    eprint(f"[vscode] Loading env chain (proxy component) from {workspace_dir}...")
+    eprint(f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}...")
     base_env = load_env_chain(workspace_dir, component="proxy")
 
-    eprint(f"[vscode] Probing proxy at {_proxy_health_url(host, port)} ...")
+    eprint(f"{tag('VSCODE')} Probing proxy at {_proxy_health_url(host, port)} ...")
     if not _check_proxy_live(host, port):
         eprint(
             f"[ERROR] Proxy is not responding at http://{host}:{port}."
@@ -403,7 +403,7 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
         )
         return 1
 
-    eprint(f"[vscode] Fetching models from {_proxy_model_info_url(host, port)} ...")
+    eprint(f"{tag('VSCODE')} Fetching models from {_proxy_model_info_url(host, port)} ...")
     try:
         models = _fetch_model_info(host, port, master_key)
     except httpx.HTTPStatusError as exc:
@@ -413,13 +413,13 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
                 " Check LITELLM_MASTER_KEY."
             )
         else:
-            eprint(f"[ERROR] /v1/model/info returned HTTP {exc.response.status_code}.")
+            eprint(f"{tag('ERROR')} /v1/model/info returned HTTP {exc.response.status_code}.")
         return 1
     except httpx.HTTPError as exc:
-        eprint(f"[ERROR] Could not reach the proxy: {exc}")
+        eprint(f"{tag('ERROR')} Could not reach the proxy: {exc}")
         return 1
     except (ValueError, json.JSONDecodeError) as exc:
-        eprint(f"[ERROR] Invalid response from /v1/model/info: {exc}")
+        eprint(f"{tag('ERROR')} Invalid response from /v1/model/info: {exc}")
         return 1
 
     base_url = f"http://{host}:{port}/v1"
@@ -445,7 +445,7 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     if out_path:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(rendered + "\n", encoding="utf-8")
-        eprint(f"[vscode] Wrote: {out_path}")
+        eprint(f"{tag('VSCODE')} Wrote: {out_path}")
     else:
         print(rendered)
 
