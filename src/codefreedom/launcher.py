@@ -1,4 +1,15 @@
-"""Sandbox launcher -- runs code agents in ephemeral Docker containers with GPU passthrough.
+"""Claude Code launcher — agent-specific orchestration.
+
+This module owns:
+- Container naming (_generate_container_name)
+- MCP config generation (_write_mcp_json)
+- Claude binary lookup (find_claude_binary)
+- Sandbox directory setup (ensure_codefreedom_dir)
+- Local execution (run_local)
+- Docker execution setup and delegation (run_docker)
+
+Container lifecycle (create, exec, stop, cleanup) is delegated to
+sandbox/launcher.py — the canonical owner of container operations.
 
 Pre-configured images (docker.io/nilayparikh/codefreedom — also available on ghcr.io/nilayparikh/codefreedom as a mirror):
 - CUDA (NVIDIA): cuda-latest, cuda-v0.1, cuda-v0.1.0
