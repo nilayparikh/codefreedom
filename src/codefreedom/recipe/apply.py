@@ -12,7 +12,7 @@ from codefreedom.admin import backup as cf_backup
 from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.core.interpolate import interpolate_all_strings
-from codefreedom.log import eprint, green, red, tag, yellow
+from codefreedom.log import dim, eprint, green, red, tag, yellow
 from codefreedom.schemas.recipe import RecipeConfig
 from pydantic import ValidationError
 
@@ -104,7 +104,7 @@ def apply_plan(plan_id: str) -> int:
             content = content_file.read_text(encoding="utf-8")
 
         if dst.suffix == ".ps1":
-            dst.write_text(content, encoding="utf-8-sig")
+            dst.write_text(content, encoding="utf-8")
         else:
             dst.write_text(content, encoding="utf-8")
         if dst.suffix == ".sh":
@@ -190,6 +190,9 @@ def _install_recipe_files(
             new_count = _merge_file(dst, content, merge_mode, target_path)
         else:
             dst.write_text(content, encoding="utf-8")
+            if dst.suffix == ".sh":
+                import stat
+                dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             print(f"  {tag('CREATE')} {target_path}")
             new_count = 1
 
@@ -297,6 +300,15 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
                 if hint:
                     print(f"           {hint}")
 
+        if missing_count:
+            print()
+            first_var = required[0].get("var", "?")
+            tip1 = "Tip: as machine env var use CF_CLI_<NAME> (e.g. CF_CLI_" + first_var + "),"
+            print(f"  {dim(tip1)}")
+            print(f"  {dim('     or use the bare name in a .env.*.secrets file.')}")
+            tip3 = "     Machine env vars take priority over secrets files."
+            print(f"  {dim(tip3)}")
+
     # ── Validate config vars ──────────────────────────────────────────
     if config_vars:
         print()
@@ -312,6 +324,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
                     label += f"  ({source})"
                 print(label)
             else:
+                missing_count += 1
                 label = f"  {yellow('[MISSING]')} {var}"
                 if prompt:
                     label += f"  —  {prompt}"

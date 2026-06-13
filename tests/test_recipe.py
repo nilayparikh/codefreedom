@@ -546,6 +546,7 @@ class TestSummary:
     def test_prints_next_steps(self, capsys, manifest_fixture, monkeypatch):
         """Next steps section is printed when all secrets are configured."""
         monkeypatch.setenv("CF_CLI_TEST_API_KEY", "sk-test")
+        monkeypatch.setenv("CF_CLI_TEST_OPTION", "some-value")
         _print_summary(manifest_fixture, Path("/tmp"))
         captured = capsys.readouterr()
         assert "All secrets configured" in captured.out
