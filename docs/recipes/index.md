@@ -31,15 +31,14 @@ cf setup init
 # or
 cf s i
 
-# Install specific recipe
-cf setup init --plan costeffective-coding
+# Plan + apply in one step (prompts for confirmation)
+cf setup init --plan-and-apply costeffective-coding
 # or
-cf s i -p costeffective-coding
+cf s i -pa costeffective-coding
 
-# Preview before installing
-cf setup init --plan costeffective-coding --preview
-# or
-cf s i -p costeffective-coding --preview
+# Two-step: preview first, then apply separately
+cf setup init --plan costeffective-coding
+cf s i -p costeffective-coding
 ```
 
 ## How Recipes Work

@@ -13,7 +13,7 @@ from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
 from codefreedom.env_loader import load_env_chain
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.core.profiles import ProfileError, load_profile_env, load_profiles
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -242,7 +242,7 @@ def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(rendered + "\n", encoding="utf-8")
-        eprint(f"[vscode] Wrote: {out_path}")
+        eprint(f"{tag('VSCODE')} Wrote: {out_path}")
     else:
         print(rendered)
 

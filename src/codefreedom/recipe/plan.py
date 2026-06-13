@@ -10,7 +10,7 @@ import yaml
 
 from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.recipe.store import (
     _GITHUB_API_BASE,
     _fetch_available_recipes,
@@ -41,15 +41,15 @@ def list_recipes(store: Optional[str] = None, staging: bool = False) -> int:
 
     if not recipes:
         source = store_path or _GITHUB_API_BASE
-        eprint("[RECIPE] No recipes found.")
+        eprint(f"{tag('RECIPE')} No recipes found.")
         eprint(f"   {source}")
         return 1
 
-    eprint(f"[RECIPE] Available recipes ({len(recipes)}):")
+    eprint(f"{tag('RECIPE')} Available recipes ({len(recipes)}):")
     for name in recipes:
         eprint(f"   {name}")
     eprint("")
-    eprint("   Use:  cf init --plan <name>")
+    eprint("   Use:  cf s i -p <name>")
     source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
     eprint(f"   Store: {source}")
     return 0
@@ -58,7 +58,7 @@ def list_recipes(store: Optional[str] = None, staging: bool = False) -> int:
 def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -> int:
     """Fetch and apply a recipe to ``~/.codefreedom/``.
 
-    This is the main entry point for ``cf init --plan <name>``.
+    This is the main entry point for ``cf s i -p <name>``.
 
     Steps:
       1. Resolve custom store (if ``--store`` provided), then try
@@ -89,11 +89,11 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         # Silently skip _default when not found in the store
         if name == "_default":
             source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
-            eprint("[RECIPE] No '_default' recipe in store — skipping.")
+            eprint(f"{tag('RECIPE')} No '_default' recipe in store — skipping.")
             eprint(f"   Store: {source}")
             return 0
-        eprint(f"[RECIPE] Recipe '{name}' not found.")
-        eprint("   Run 'cf init --list' to see available recipes.")
+        eprint(f"{tag('RECIPE')} Recipe '{name}' not found.")
+        eprint("   Run 'cf s i -l' to see available recipes.")
         source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
         eprint(f"   Store: {source}")
         return 1
@@ -110,7 +110,7 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     # ── 1c. If recipe extends a base, resolve and install it first ──────
     extends = manifest.get("extends")
     if extends:
-        eprint(f"[RECIPE] Installing base recipe '{extends}' first...")
+        eprint(f"{tag('RECIPE')} Installing base recipe '{extends}' first...")
         base_manifest, base_files = _store_resolve_recipe(
             extends, store_path=store_path
         )
@@ -155,8 +155,8 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     store_path = _resolve_store(store, branch=branch)
     manifest, files = _store_resolve_recipe(name, store_path=store_path)
     if manifest is None:
-        print(f"[plan] Recipe '{name}' not found.")
-        print("       Run 'cf init --list' to see available recipes.")
+        print(f"{tag('PLAN')} Recipe '{name}' not found.")
+        print("       Run 'cf s i -l' to see available recipes.")
         return 1
 
     # ── 2. Resolve extends chain ───────────────────────────────────────
@@ -330,21 +330,21 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
 
     # ── 5. Print summary ──────────────────────────────────────────────
     delete_count = summary.get("delete", 0)
-    print(f"[plan] Recipe: {name}" + (f" (extends {extends})" if extends else ""))
-    print(f"[plan] Plan ID: {plan_id}")
-    print(f"[plan] Files:   {plans_dir}/")
-    print("[plan]")
-    print(f"[plan]   {summary['create']} new files")
-    print(f"[plan]   {summary['replace']} files to replace")
-    print(f"[plan]   {summary['same']} unchanged (skipped)")
+    print(f"{tag('PLAN')} Recipe: {name}" + (f" (extends {extends})" if extends else ""))
+    print(f"{tag('PLAN')} Plan ID: {plan_id}")
+    print(f"{tag('PLAN')} Files:   {plans_dir}/")
+    print(f"{tag('PLAN')}")
+    print(f"{tag('PLAN')}   {summary['create']} new files")
+    print(f"{tag('PLAN')}   {summary['replace']} files to replace")
+    print(f"{tag('PLAN')}   {summary['same']} unchanged (skipped)")
     if delete_count:
-        print(f"[plan]   {delete_count} files to delete")
+        print(f"{tag('PLAN')}   {delete_count} files to delete")
     dir_count = len(plan_dirs)
     if dir_count:
-        print(f"[plan]   {dir_count} directories to create")
-    print("[plan]")
-    print(f"[plan]   {'':>8} {'SOURCE':12} DESTINATION")
-    print(f"[plan]   {'-'*8} {'-'*12} {'-'*75}")
+        print(f"{tag('PLAN')}   {dir_count} directories to create")
+    print(f"{tag('PLAN')}")
+    print(f"{tag('PLAN')}   {'':>8} {'SOURCE':12} DESTINATION")
+    print(f"{tag('PLAN')}   {'-'*8} {'-'*12} {'-'*75}")
     for pf in patch_files:
         action = pf["action"].upper().ljust(8)
         src_label = pf["source"][:12].ljust(12)
@@ -353,14 +353,40 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
             dest = tool_home / target
         else:
             dest = cf_dir / target
-        print(f"[plan]   {action} {src_label} {dest}")
+        print(f"{tag('PLAN')}   {action} {src_label} {dest}")
     for d in plan_dirs:
         dest = cf_dir / d
-        print(f"[plan]   {'MKDIR'.ljust(8)} {'recipe'.ljust(12)} {dest}/")
-    print("[plan]")
-    print(f"[plan] To apply:  cf setup init --apply {plan_id}")
-    print(f"[plan] To review: cat {plans_dir}/<patch-file>.diff")
+        print(f"{tag('PLAN')}   {'MKDIR'.ljust(8)} {'recipe'.ljust(12)} {dest}/")
+    print(f"{tag('PLAN')}")
+    print(f"{tag('PLAN')} To apply:  cf s i -a {plan_id}")
+    print(f"{tag('PLAN')} Quick:     cf s i -pa {name}")
+    print(f"{tag('PLAN')} To review: cat {plans_dir}/<patch-file>.diff")
     return 0
+
+
+def plan_and_apply_recipe(
+    name: str, store: Optional[str] = None, staging: bool = False
+) -> int:
+    """Plan a recipe, show the preview, then apply after user confirmation.
+
+    This is the ``cf setup init --plan-and-apply <name>`` (or ``-pa <name>``)
+    workflow — a single command that replaces the two-step plan + apply.
+    """
+    rc = plan_recipe(name, store=store, staging=staging)
+    if rc != 0:
+        return rc
+
+    try:
+        answer = input(f"\n{tag('RECIPE')} Apply this plan? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        eprint(f"\n{tag('RECIPE')} Cancelled.")
+        return 1
+
+    if answer not in ("y", "yes"):
+        eprint(f"{tag('RECIPE')} Aborted.")
+        return 1
+
+    return init_recipe(name, store=store, staging=staging)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -394,7 +420,7 @@ def _ensure_user_env(cf_dir: Path) -> None:
         "# .env.user — User overrides (highest config priority)\n"
         "# ═══════════════════════════════════════════════════════════════════════════════\n"
         "#\n"
-        "# This file is created once by `cf init` and is NEVER touched by\n"
+        "# This file is created once by `cf s i` and is NEVER touched by\n"
         "# recipes again. It has the highest precedence of any config file — values\n"
         "# here override .env.proxy, .env.claude, .env, .env.secrets, and all recipe\n"
         "# defaults. Only the host OS environment (exported vars) can override it.\n"

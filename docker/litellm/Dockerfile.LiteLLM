@@ -7,7 +7,7 @@
 #                  ├─ run `prisma db push` to create the schema
 #                  └─ exec litellm on :4000
 #   Working dir: /app
-#   Run as:      non-root `codefreedom` user (uid 1000)
+#   Run as:      root (no uid mapping needed across platforms)
 #   Healthcheck: TCP port check (avoids triggering LiteLLM middleware re-init)
 #
 # ── Source control ──────────────────────────────────────────────────────
@@ -365,20 +365,19 @@ COPY --from=litellm-builder /install         /usr/local
 # Pull in the baked reasoning-efforts mapping plugin.  The entrypoint
 # symlinks this into the host-mounted config directory at container
 # start so LiteLLM's callback loader can find it (no cp to host).
-COPY --from=litellm-builder --chown=1000:1000 \
+COPY --from=litellm-builder \
     /app/litellm-plugins/ /app/litellm-plugins/
 
 # Copy the prebuilt Prisma caches.  The litellm-builder stage ran
 # `prisma generate` as root, so the caches landed in /root/.cache.
-# The runtime user is codefreedom (HOME at /home/codefreedom), so
-# litellm looks for the caches there.
+# The runtime runs as root too, so the caches stay at /root/.cache.
 #
 # We copy the WHOLE /root/.cache tree: `prisma` holds the query engine
 # binary and `prisma-python` holds the Python client's orchestration
 # layer.  Without prisma-python the proxy fails with "NotConnectedError:
 # Not connected to the query engine" on startup.
-COPY --from=litellm-builder --chown=1000:1000 \
-    /root/.cache/ /home/codefreedom/.cache/
+COPY --from=litellm-builder \
+    /root/.cache/ /root/.cache/
 
 # Make sure both PG and the python wheels are on the path the entrypoint
 # expects.  /usr/local/bin and /usr/local/lib are already on PATH / the
@@ -397,20 +396,12 @@ ENV PATH="/usr/local/pgsql/bin:/usr/local/bin:${PATH}" \
 COPY --chown=root:root entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 0755 /usr/local/bin/entrypoint.sh
 
-# A non-root user for defense in depth.  PG and LiteLLM both run as this
-# user.  /var/lib/postgresql and /var/run/postgresql are created here
-# (root) so the entrypoint can chown them for the `codefreedom` user
-# after the bind mount / volume is attached.
-RUN groupadd -g 1000 codefreedom \
-    && useradd --create-home --shell /bin/false -u 1000 -g 1000 codefreedom \
-    && mkdir -p /app /var/lib/postgresql /var/lib/postgresql/backup /var/run/postgresql \
-    && chown -R codefreedom:codefreedom /app /var/lib/postgresql /var/run/postgresql \
-    && chown -R codefreedom:codefreedom /home/codefreedom \
-    && chmod 755 /root \
-    && chown -R codefreedom:codefreedom /usr/local/lib/python3.13/site-packages/litellm
+# PG and LiteLLM run as root inside the container (simplest path across
+# Windows / macOS / Linux — no uid/gid mapping, no volume permission
+# issues).  PG listens on localhost:5432 only, never exposed externally.
+RUN mkdir -p /app /var/lib/postgresql/data /var/lib/postgresql/backup /var/run/postgresql
 
 WORKDIR /app
-USER codefreedom
 
 # Data + backup volumes.  The /var/run/postgresql dir is intentionally
 # NOT declared as a VOLUME — the PG socket is pure in-process IPC with

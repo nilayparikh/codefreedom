@@ -232,6 +232,19 @@
       ],
       "default": null,
       "title": "Tools Optional"
+    },
+    "advice": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Message printed to the user after recipe is applied. Use for post-install guidance such as assisted setup scripts or environment-specific notes.",
+      "title": "Advice"
     }
   },
   "required": [

@@ -25,7 +25,7 @@ Additional recipes are available from the recipe store at [github.com/nilayparik
 ### List Available Recipes
 
 ```bash
-cf init --list
+cf s i -l
 ```
 
 Shows both bundled and available store recipes.
@@ -33,21 +33,30 @@ Shows both bundled and available store recipes.
 ### Preview a Recipe
 
 ```bash
-cf init --plan <recipe-name>
+cf s i -p <recipe-name>
 ```
 
 Shows what the recipe would change without applying it.
 
+### Plan + Apply (Recommended)
+
+```bash
+cf s i -pa <recipe-name>
+```
+
+Previews the recipe, prompts for confirmation, then applies and validates
+required secrets. This is the recommended one-step workflow.
+
 ### Apply a Recipe
 
 ```bash
-cf init
+cf s i
 ```
 
-Applies the default base recipe. Or specify one:
+Applies the default base recipe. Or apply a specific recipe:
 
 ```bash
-cf init --plan deepseek
+cf s i -pa deepseek
 ```
 
 ## Recipe Structure

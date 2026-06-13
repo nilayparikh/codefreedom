@@ -29,7 +29,7 @@ from codefreedom.admin import (
     prune_backups as engine_prune,
     restore as engine_restore,
 )
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 # ── Arg parser ────────────────────────────────────────────────────────────────
 
@@ -211,13 +211,13 @@ def _print_backup_result(path: Path, manifest) -> None:
     total_files = sum(len(e) for e in manifest.contents.values())
     total_size = sum(c.total_size for c in manifest.categories.values())
 
-    print(f"[backup] Created: {path}")
-    print(f"[backup] Total files: {total_files} ({_fmt_size(total_size)})")
-    print(f"[backup] Created at: {manifest.created_at}")
+    print(f"{tag('BACKUP')} Created: {path}")
+    print(f"{tag('BACKUP')} Total files: {total_files} ({_fmt_size(total_size)})")
+    print(f"{tag('BACKUP')} Created at: {manifest.created_at}")
     if manifest.secrets_redacted:
-        print("[backup] Secrets: redacted (keys preserved, values masked)")
+        print(f"{tag('BACKUP')} Secrets: redacted (keys preserved, values masked)")
     else:
-        print("[backup] Secrets: included (full values, archive is encrypted)")
+        print(f"{tag('BACKUP')} Secrets: included (full values, archive is encrypted)")
     print()
     print(f"  {'Category':<14} {'Files':>6} {'Size':>10}")
     print(f"  {'-'*14} {'-'*6} {'-'*10}")
@@ -322,18 +322,18 @@ def _print_inspect(manifest) -> None:
 def _print_prune_result(result) -> None:
     """Print the result of a prune operation."""
     if not result.deleted:
-        print("[prune] Nothing to delete.")
+        print(f"{tag('PRUNE')} Nothing to delete.")
     else:
         print(
             f"[prune] Deleted {len(result.deleted)} backup(s) ({_fmt_size(result.space_reclaimed)})"
         )
         for p in result.deleted:
-            print(f"  [DELETE] {p.name}")
+            print(f"  {tag('DELETE')} {p.name}")
 
     if result.kept:
-        print(f"[prune] Kept {len(result.kept)} backup(s)")
+        print(f"{tag('PRUNE')} Kept {len(result.kept)} backup(s)")
         for p in result.kept:
-            print(f"  [KEEP] {p.name}")
+            print(f"  {tag('KEEP')} {p.name}")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -355,10 +355,10 @@ def run(args: argparse.Namespace) -> int:
         elif action == "prune":
             return _cmd_prune(args)
         else:
-            eprint(f"[admin] Unknown action: {action}")
+            eprint(f"{tag('ADMIN')} Unknown action: {action}")
             return 1
     except (FileNotFoundError, ValueError) as exc:
-        eprint(f"[ERROR] {exc}")
+        eprint(f"{tag('ERROR')} {exc}")
         return 1
 
 
@@ -383,7 +383,7 @@ def _cmd_restore(args: argparse.Namespace) -> int:
     archive_path = Path(args.backup_file)
 
     if not archive_path.exists():
-        eprint(f"[ERROR] Backup file not found: {archive_path}")
+        eprint(f"{tag('ERROR')} Backup file not found: {archive_path}")
         return 1
 
     diffs, manifest = engine_restore(
@@ -393,29 +393,29 @@ def _cmd_restore(args: argparse.Namespace) -> int:
     )
 
     # Print header
-    print(f"[restore] Backup: {archive_path.name}")
-    print(f"[restore] Created: {manifest.created_at} on {manifest.hostname}")
+    print(f"{tag('RESTORE')} Backup: {archive_path.name}")
+    print(f"{tag('RESTORE')} Created: {manifest.created_at} on {manifest.hostname}")
     if manifest.platform != __import__("sys").platform:
         print(
             f"[restore] Warning: backup platform ({manifest.platform}) differs"
             f" from current platform ({__import__('sys').platform})"
         )
     if manifest.secrets_redacted:
-        print("[restore] Note: Secrets were backed up with redacted values.")
+        print(f"{tag('RESTORE')} Note: Secrets were backed up with redacted values.")
     print()
 
     _print_diff_table(diffs)
 
     if args.dry_run:
         print()
-        print("[restore] Dry-run complete. No files were changed.")
+        print(f"{tag('RESTORE')} Dry-run complete. No files were changed.")
         return 0
 
     # Count actionable diffs
     actionable = [d for d in diffs if d.status in ("ADD", "MOD")]
     if not actionable:
         print()
-        print("[restore] Nothing to restore. All files are already current.")
+        print(f"{tag('RESTORE')} Nothing to restore. All files are already current.")
         return 0
 
     if args.force:
@@ -428,7 +428,7 @@ def _cmd_restore(args: argparse.Namespace) -> int:
             do_restore = False
 
     if not do_restore:
-        print("[restore] Cancelled.")
+        print(f"{tag('RESTORE')} Cancelled.")
         return 0
 
     # Perform actual restore
@@ -439,7 +439,7 @@ def _cmd_restore(args: argparse.Namespace) -> int:
     )
     add_count = sum(1 for d in diffs if d.status == "ADD")
     mod_count = sum(1 for d in diffs if d.status == "MOD")
-    print(f"[restore] Done. {add_count} added, {mod_count} modified.")
+    print(f"{tag('RESTORE')} Done. {add_count} added, {mod_count} modified.")
     return 0
 
 
@@ -474,7 +474,7 @@ def _cmd_prune(args: argparse.Namespace) -> int:
         try:
             older_than = _parse_duration(older_than_str)
         except ValueError as exc:
-            eprint(f"[ERROR] {exc}")
+            eprint(f"{tag('ERROR')} {exc}")
             return 1
 
     result = engine_prune(keep=keep, older_than=older_than)

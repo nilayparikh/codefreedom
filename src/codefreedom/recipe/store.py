@@ -16,7 +16,7 @@ from codefreedom.core.http_client import get_text
 import yaml
 
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Constants
@@ -104,7 +104,7 @@ def _resolve_store(
     # ── GitHub URL ──────────────────────────────────────────────────────
     repo_name = _parse_github_url(store)
     if repo_name is None:
-        eprint(f"[RECIPE] Warning: Could not parse GitHub URL: {store}")
+        eprint(f"{tag('RECIPE')} Warning: Could not parse GitHub URL: {store}")
         return None
 
     cf_dir = get_codefreedom_dir()
@@ -113,7 +113,7 @@ def _resolve_store(
     if _ensure_store(store, store_dir):
         return store_dir
 
-    eprint(f"[RECIPE] Warning: Failed to clone/pull store from {store}")
+    eprint(f"{tag('RECIPE')} Warning: Failed to clone/pull store from {store}")
     return None
 
 
@@ -173,14 +173,14 @@ def _clone_or_pull_store(url: str, dest: Path, branch: str = "main") -> bool:
     try:
         if dest.exists() and (dest / ".git").is_dir():
             # Already cloned — update with fast-forward pull on the branch
-            print(f"  [STORE] Updating existing store at {dest} ({branch})")
+            print(f"  {tag('STORE')} Updating existing store at {dest} ({branch})")
             repo = Repo(dest)
             origin = repo.remotes.origin
             origin.pull(branch, ff_only=True)
             return True
 
         # ── Fresh clone with sparse checkout ──────────────────────────────
-        print(f"  [STORE] Cloning {url} -> {dest} (branch: {branch})")
+        print(f"  {tag('STORE')} Cloning {url} -> {dest} (branch: {branch})")
         dest.mkdir(parents=True, exist_ok=True)
         repo = Repo.init(dest)
 
@@ -200,10 +200,10 @@ def _clone_or_pull_store(url: str, dest: Path, branch: str = "main") -> bool:
         return True
 
     except GitCommandError as e:
-        eprint(f"[RECIPE] Warning: Git operation failed: {e}")
+        eprint(f"{tag('RECIPE')} Warning: Git operation failed: {e}")
         return False
     except Exception as e:
-        eprint(f"[RECIPE] Warning: Git operation failed: {e}")
+        eprint(f"{tag('RECIPE')} Warning: Git operation failed: {e}")
         return False
 
 
@@ -311,9 +311,9 @@ def _fetch_recipe_files(
         try:
             content = _fetch_text(url)
             files[target] = content
-            print(f"  [FETCH] {src_path}")
+            print(f"  {tag('FETCH')} {src_path}")
         except RecipeError as e:
-            eprint(f"[RECIPE] Warning: Could not fetch {src_path}: {e}")
+            eprint(f"{tag('RECIPE')} Warning: Could not fetch {src_path}: {e}")
     return files
 
 
@@ -336,7 +336,7 @@ def _fetch_available_recipes() -> List[str]:
                     pass
         return sorted(candidates)
     except (RecipeError, json.JSONDecodeError) as e:
-        eprint(f"[RECIPE] Warning: Could not list recipes: {e}")
+        eprint(f"{tag('RECIPE')} Warning: Could not list recipes: {e}")
         return []
 
 
@@ -380,7 +380,7 @@ def _resolve_recipe(
                 files = _read_local_files(recipe_dir, manifest)
                 return manifest, files
             except RecipeError as e:
-                eprint(f"[RECIPE] Warning: Store recipe '{name}' has errors: {e}")
+                eprint(f"{tag('RECIPE')} Warning: Store recipe '{name}' has errors: {e}")
                 return None, {}
 
     # 1. Try local submodule (dev installs with git clone) as fallback
@@ -393,7 +393,7 @@ def _resolve_recipe(
                 files = _read_local_files(local_path, manifest)
                 return manifest, files
             except RecipeError as e:
-                eprint(f"[RECIPE] Warning: Local recipe '{name}' has errors: {e}")
+                eprint(f"{tag('RECIPE')} Warning: Local recipe '{name}' has errors: {e}")
 
     return None, {}
 

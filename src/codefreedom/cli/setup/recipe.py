@@ -13,6 +13,7 @@ from codefreedom.recipe.merge import (  # noqa: F401
 from codefreedom.recipe.plan import (  # noqa: F401
     init_recipe,
     list_recipes,
+    plan_and_apply_recipe,
     plan_recipe,
 )
 from codefreedom.recipe.store import (  # noqa: F401

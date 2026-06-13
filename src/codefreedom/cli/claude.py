@@ -13,7 +13,7 @@ import argparse
 from pathlib import Path
 
 from codefreedom.core.config import resolve_profiles_path
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.env_loader import load_env_chain
 from codefreedom.launcher import run_docker, run_local
 from codefreedom.core.profiles import (
@@ -65,16 +65,17 @@ def init_claude() -> int:
     """Initialize Claude Code configuration via recipes.
 
     Bundled examples have been replaced by the recipe system.
-    Use ``cf init`` or ``cf init --plan <name>`` instead.
+    Use ``cf setup init`` or ``cf s i -p <name>`` instead.
     """
     from codefreedom.cli.docker_utils import print_help_section
 
     print_help_section(
         "claude init",
         [
-            "Use:  cf init                    # install _default base recipe",
-            "      cf init --list              # list available recipes",
-            "      cf init --plan <name>       # preview a recipe without applying",
+            "Use:  cf s i                         # install _default base recipe",
+            "      cf s i -l                      # list available recipes",
+            "      cf s i -p <name>               # preview a recipe without applying",
+            "      cf s i -pa <name>              # plan and apply a recipe",
         ],
         docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
         include_disclaimer=True,
@@ -98,7 +99,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     workspace_dir = Path.cwd()
 
     # ── Load env chain ─────────────────────────────────────────────────────
-    eprint("[ENV] Loading configuration...")
+    eprint(f"{tag('ENV')} Loading configuration...")
     base_env = load_env_chain(workspace_dir, component="claude")
 
     # ── Load profile ───────────────────────────────────────────────────────
@@ -180,7 +181,7 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()
-    eprint("[ENV] Loading configuration...")
+    eprint(f"{tag('ENV')} Loading configuration...")
     base_env = load_env_chain(workspace_dir, component="claude")
 
     # ── GPU type from --cuda / --rocm flags ────────────────────────────────
@@ -244,7 +245,7 @@ def run(args: argparse.Namespace) -> int:
             )
         else:
             if run_as_me:
-                eprint("[WARN] --run-as-me is only valid with --sandbox; ignoring.")
+                eprint(f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring.")
             # Write .mcp.json so the agent discovers MCP tool endpoints
             if acquired_tools:
                 from codefreedom.launcher import _write_mcp_json

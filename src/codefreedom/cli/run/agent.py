@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 
 # ── Agent Registry ──────────────────────────────────────────────────────────
@@ -84,10 +84,10 @@ def _resolve_agent(name: str) -> str | None:
 def list_agents() -> int:
     """List all available agents. Returns exit code."""
     if not _AGENTS:
-        eprint("[AGENT] No agents registered.")
+        eprint(f"{tag('AGENT')} No agents registered.")
         return 0
 
-    eprint("[AGENT] Available agents:\n")
+    eprint(f"{tag('AGENT')} Available agents:\n")
     for name, (_, _, description, aliases) in _AGENTS.items():
         alias_str = f" ({', '.join(aliases)})" if aliases else ""
         eprint(f"  {name:14}{alias_str:10} {description}")
@@ -103,7 +103,7 @@ def run_agent(agent_name: str, args: argparse.Namespace) -> int:
     if canonical is None:
         available = ", ".join(_AGENTS.keys())
         aliases = ", ".join(_AGENT_ALIASES.keys())
-        eprint(f"[AGENT] Unknown agent: {agent_name}")
+        eprint(f"{tag('AGENT')} Unknown agent: {agent_name}")
         eprint(f"   Available: {available}")
         eprint(f"   Aliases:   {aliases}")
         return 1
@@ -115,12 +115,12 @@ def run_agent(agent_name: str, args: argparse.Namespace) -> int:
     try:
         mod = importlib.import_module(module_path)
     except ImportError as exc:
-        eprint(f"[AGENT] Failed to import agent module '{module_path}': {exc}")
+        eprint(f"{tag('AGENT')} Failed to import agent module '{module_path}': {exc}")
         return 1
 
     run_fn = getattr(mod, func_name, None)
     if run_fn is None:
-        eprint(f"[AGENT] Agent module '{module_path}' has no '{func_name}' function")
+        eprint(f"{tag('AGENT')} Agent module '{module_path}' has no '{func_name}' function")
         return 1
 
     return run_fn(args)
@@ -133,8 +133,7 @@ def build_parser(parent: argparse.ArgumentParser) -> None:
     """
     parent.epilog = (
         "examples:\n"
-        "  cf run agent claude-code          Launch Claude Code\n"
-        "  cf r ag cc                       Short form\n"
+        "  cf r ag cc                       Launch Claude Code\n"
         "  cf r ag mc --sandbox             Launch MiMo in sandbox\n"
         "  cf r ag list                     List available agents"
     )

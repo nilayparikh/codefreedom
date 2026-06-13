@@ -395,6 +395,29 @@ def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
             return None
 
         dump_path = pg_backup_dir / dump_filename
+
+        # Backup dir is a Docker named volume, not a bind-mount, so the
+        # dump file must be copied out of the container onto the host.
+        cp_result = subprocess.run(
+            [
+                "docker",
+                "cp",
+                f"{container}:{container_dump_path}",
+                str(dump_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if cp_result.returncode != 0:
+            stderr = cp_result.stderr.strip()
+            eprint(
+                f"[ADMIN] Warning: pg_dump succeeded but docker cp failed"
+                f"{': ' + stderr if stderr else ''}"
+            )
+            return None
+
         if dump_path.exists():
             size = dump_path.stat().st_size
             eprint(
@@ -404,7 +427,7 @@ def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
             return dump_path
 
         eprint(
-            f"[ADMIN] Warning: pg_dump completed but dump file not found at {dump_path}."
+            f"[ADMIN] Warning: docker cp completed but dump file not found at {dump_path}."
         )
         return None
 

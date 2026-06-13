@@ -11,7 +11,7 @@ Camoufox web_search tool.  LiteLLM's websearch_interception routes Claude
 Code's native WebSearch through this bridge.
 
 Settings are loaded from ~/.codefreedom/profiles/web-bridge.yaml.
-Use `cf init` to initialize.
+Use `cf s i` to initialize.
 """
 
 from __future__ import annotations

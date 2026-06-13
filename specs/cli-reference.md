@@ -13,7 +13,7 @@ cf agent list                                 # List agents
 
 # Configuration
 cf config <target> [options]                  # Unified config
-cf init [--plan/--apply/--list]               # Initialize recipes
+cf setup init [-p/-a/-l/--pa]               # Initialize recipes
 
 # Lifecycle
 cf proxy start|stop|restart|status|validate   # Manage proxy (alias: px)
@@ -58,11 +58,12 @@ cf config vscode proxy --host HOST [--port PORT] [--name NAME] [--out PATH]
 ## Init Command
 
 ```bash
-cf init                                    # Install _default base recipe
-cf init --list                             # List recipes
-cf init --plan NAME                        # Preview a recipe
-cf init --apply PLAN_ID                    # Apply a plan
-cf init --store URL                        # Custom recipe store
+cf setup init                              # Install _default base recipe
+cf setup init -l                           # List recipes
+cf setup init -p NAME                      # Preview a recipe
+cf setup init -pa NAME                     # Plan + apply interactively (prompts to confirm)
+cf setup init -a PLAN_ID                   # Apply a plan
+cf setup init --store URL                  # Custom recipe store
 ```
 
 ## Proxy Commands

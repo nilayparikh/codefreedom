@@ -555,7 +555,7 @@ def tool_profile_path(tool_filename: str) -> Path:
 def init_tool_redirect(tool_filename: str) -> int:
     """Redirect tool init to the recipe system.
 
-    Standard init handler for all tools — points users to ``cf init``.
+    Standard init handler for all tools — points users to ``cf setup init``.
     """
     profile_path = tool_home() / "profiles" / tool_filename
     if profile_path.exists():
@@ -566,15 +566,16 @@ def init_tool_redirect(tool_filename: str) -> int:
         return 0
     eprint(
         f"[{tool_label}] No profile found."
-        " Run 'cf init' to install the default recipe."
+        " Run 'cf s i' to install the default recipe."
     )
     label = tool_filename.replace(".yaml", "")
     print_help_section(
         f"{label} init",
         [
-            "Use:  cf init                    # install _default base recipe",
-            "      cf init --list              # list available recipes",
-            "      cf init --plan <name>       # preview a recipe without applying",
+            "Use:  cf s i                         # install _default base recipe",
+            "      cf s i -l                      # list available recipes",
+            "      cf s i -p <name>               # preview a recipe without applying",
+            "      cf s i -pa <name>              # plan and apply a recipe",
         ],
         docs_url="https://nilayparikh.github.io/codefreedom/recipes/",
         include_disclaimer=True,
@@ -792,7 +793,7 @@ def start_tool_init_gate(profile_filename: str, label: str) -> bool:
         return True
 
     eprint(f"[{label}] Tool profile not found.")
-    eprint("      Run:  cf init")
+    eprint("      Run:  cf s i")
     return False
 
 

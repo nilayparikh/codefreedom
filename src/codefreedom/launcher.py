@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import load_tool_mcp_endpoints
 from codefreedom.sandbox.signals import forward_signal
 from codefreedom.sandbox.terminal import terminal_size
@@ -62,7 +62,7 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
     mcp_config = load_tool_mcp_endpoints(acquired_tools)
     auto_servers = mcp_config.get("mcpServers", {})
     if not auto_servers:
-        eprint("[MCP] No MCP endpoints to register.")
+        eprint(f"{tag('MCP')} No MCP endpoints to register.")
         return
 
     mcp_path = workspace_dir / ".mcp.json"
@@ -71,7 +71,7 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
         try:
             existing = json.loads(mcp_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
-            eprint(f"[MCP] Could not parse existing {mcp_path} — backing up and replacing.")
+            eprint(f"{tag('MCP')} Could not parse existing {mcp_path} — backing up and replacing.")
             backup = mcp_path.with_suffix(".mcp.json.bak")
             try:
                 mcp_path.rename(backup)
@@ -81,11 +81,11 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
     existing.setdefault("mcpServers", {})
     existing["mcpServers"].update(auto_servers)
     mcp_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
-    eprint(f"[MCP] Wrote {len(auto_servers)} MCP server(s) to {mcp_path}: " + ", ".join(auto_servers.keys()))
+    eprint(f"{tag('MCP')} Wrote {len(auto_servers)} MCP server(s) to {mcp_path}: " + ", ".join(auto_servers.keys()))
 
     other = [s for s in existing["mcpServers"] if s not in auto_servers]
     if other:
-        eprint(f"[MCP] Preserved {len(other)} existing MCP server(s): {', '.join(other)}")
+        eprint(f"{tag('MCP')} Preserved {len(other)} existing MCP server(s): {', '.join(other)}")
 
 
 def find_claude_binary() -> str | None:
@@ -135,17 +135,17 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
     claude_dir = profile_dir / ".claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(claude_dir, 0o777)
-    eprint(f"[SANDBOX] Isolated .claude dir: {claude_dir}.")
+    eprint(f"{tag('SANDBOX')} Isolated .claude dir: {claude_dir}.")
 
     # ── Fresh .claude.json (never copy from host) ──────────────────────
     sandbox_json = profile_dir / ".claude.json"
     if not sandbox_json.exists():
         sandbox_json.write_text("{}")
         os.chmod(sandbox_json, 0o666)
-        eprint(f"[SANDBOX] Created fresh .claude.json: {sandbox_json}.")
+        eprint(f"{tag('SANDBOX')} Created fresh .claude.json: {sandbox_json}.")
     else:
         os.chmod(sandbox_json, 0o666)
-        eprint(f"[SANDBOX] Using existing .claude.json: {sandbox_json}.")
+        eprint(f"{tag('SANDBOX')} Using existing .claude.json: {sandbox_json}.")
 
     # ── Shared tools cache (used by Chrome DevTools MCP, etc.) ─────
     tools_cache = CODEFREEDOM_DIR / "sandbox" / "tools" / ".cache"
@@ -172,7 +172,7 @@ def run_local(
         )
         return 1
 
-    eprint("[LOCAL] Running Claude Code natively...")
+    eprint(f"{tag('LOCAL')} Running Claude Code natively...")
 
     env = {**os.environ}
     env.update(profile_env)
@@ -191,7 +191,7 @@ def run_local(
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
-        eprint(f"[ERROR] Claude binary not found at {claude_bin}.")
+        eprint(f"{tag('ERROR')} Claude binary not found at {claude_bin}.")
         return 1
     except KeyboardInterrupt:
         return 130
@@ -219,15 +219,15 @@ def run_docker(
     # ── Resolve image ──────────────────────────────────────────────────────────
     if gpu_type:
         image = sandbox_images.get(gpu_type) or f"{REGISTRY}/{IMAGE_NAME}:{gpu_type}-latest"
-        eprint(f"[GPU] Selected '{gpu_type}' sandbox image: {image}.")
+        eprint(f"{tag('GPU')} Selected '{gpu_type}' sandbox image: {image}.")
     else:
         image = sandbox_images.get("default") or TARGET_IMAGE
 
     if container_name is None:
         container_name = _generate_container_name()
 
-    eprint(f"[IMAGE] Using sandbox image: {image}.")
-    eprint(f"[CONTAINER] Name: {container_name}.")
+    eprint(f"{tag('IMAGE')} Using sandbox image: {image}.")
+    eprint(f"{tag('CONTAINER')} Name: {container_name}.")
 
     # ── Build env flags ───────────────────────────────────────────────────────
     env_flags: List[str] = []
@@ -248,12 +248,12 @@ def run_docker(
     if run_as_me:
         container_home = f"/home/{HOME_DIR.name}"
         container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
-        eprint(f"[SANDBOX] --run-as-me: uid={host_uid}({HOME_DIR.name}) gid={host_gid}")
+        eprint(f"{tag('SANDBOX')} --run-as-me: uid={host_uid}({HOME_DIR.name}) gid={host_gid}")
     else:
         container_home = "/home/codefreedom"
         container_user_flag = []
-        eprint("[SANDBOX] Running as default container user 'codefreedom' (uid 1000).")
-        eprint("[SANDBOX] If you see permission errors on /workspace, grant access with:")
+        eprint(f"{tag('SANDBOX')} Running as default container user 'codefreedom' (uid 1000).")
+        eprint(f"{tag('SANDBOX')} If you see permission errors on /workspace, grant access with:")
         eprint(f"           sudo chown -R 1000:1000 {workspace_dir}")
         eprint("           Or re-run with --run-as-me to match your host user identity.")
 

@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.env_loader import get_env, load_dotenv
 
 # ── Path resolution ──────────────────────────────────────────────────────────
@@ -110,9 +110,9 @@ def _build_proxy_env() -> Dict[str, str]:
       8. os.environ (machine env — always wins)
       9. CF_CLI_* overrides (absolute highest)
 
-    Also injects ``POSTGRES_HOST_DATA_DIR`` and ``POSTGRES_HOST_BACKUP_DIR``
-    from ``CODEFREEDOM_HOME`` so the embedded PostgreSQL always lands inside
-    the correct CodeFreedom directory, even when customised.
+    Also injects ``POSTGRES_HOST_DATA_DIR`` from ``CODEFREEDOM_HOME``
+    so the embedded PostgreSQL always lands inside the correct CodeFreedom
+    directory, even when customised.
     """
     cf_dir = get_codefreedom_dir()
     merged = get_env(
@@ -121,7 +121,6 @@ def _build_proxy_env() -> Dict[str, str]:
         verbose=False,
         extra_injections={
             "POSTGRES_HOST_DATA_DIR": str(cf_dir / "pg" / "data"),
-            "POSTGRES_HOST_BACKUP_DIR": str(cf_dir / "pg" / "backup"),
         },
     )
     return merged
@@ -228,9 +227,9 @@ def _ensure_web_bridge_image() -> int:
         check=False,
     )
     if result.returncode != 0:
-        eprint(f"[PROXY] Failed to build {image}. Check docker output above.")
+        eprint(f"{tag('PROXY')} Failed to build {image}. Check docker output above.")
         return 1
-    eprint(f"[PROXY] Built {image}.")
+    eprint(f"{tag('PROXY')} Built {image}.")
     return 0
 
 
@@ -250,7 +249,7 @@ def _ensure_codefreedom_network() -> None:
     if inspect.returncode == 0:
         return  # network already exists
 
-    eprint("[PROXY] Creating shared 'codefreedom' Docker network...")
+    eprint(f"{tag('PROXY')} Creating shared 'codefreedom' Docker network...")
     create = subprocess.run(
         ["docker", "network", "create", "codefreedom"],
         capture_output=True,
@@ -259,20 +258,24 @@ def _ensure_codefreedom_network() -> None:
         check=False,
     )
     if create.returncode == 0:
-        eprint("[PROXY] Network 'codefreedom' created.")
+        eprint(f"{tag('PROXY')} Network 'codefreedom' created.")
     else:
-        eprint(f"[PROXY] Warning: could not create network: {create.stderr.strip()}")
+        eprint(
+            f"{tag('PROXY')} Warning: could not create network: {create.stderr.strip()}"
+        )
 
 
 def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     """Start LiteLLM via docker compose."""
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
-        eprint("   Run: cf init")
+        eprint(
+            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+        )
+        eprint("   Run: cf s i")
         return 1
 
-    eprint(f"[PROXY] Starting LiteLLM via Docker Compose ({compose_file})...")
+    eprint(f"{tag('PROXY')} Starting LiteLLM via Docker Compose ({compose_file})...")
 
     # Ensure tools are running (needed for WebSearch, browser automation, etc.)
     # Non-fatal — proxy starts regardless.
@@ -281,7 +284,7 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
 
         ensure_tools()
     except Exception as exc:
-        eprint(f"[PROXY] Warning: could not verify tools: {exc}")
+        eprint(f"{tag('PROXY')} Warning: could not verify tools: {exc}")
 
     # Build merged environment: proxy files override system env, then CLI
     # flags override everything for this run only, then CF_CLI_* overrides
@@ -324,9 +327,12 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     )
     if result.returncode == 0:
         port = merged_env.get("LITELLM_PORT", "4000")
-        eprint(f"[PROXY] Proxy started at http://localhost:{port}" f" ({litellm_name})")
+        eprint(
+            f"{tag('PROXY')} Proxy started at http://localhost:{port}"
+            f" ({litellm_name})"
+        )
     else:
-        eprint("[PROXY] Failed to start. Check docker logs.")
+        eprint(f"{tag('PROXY')} Failed to start. Check docker logs.")
     return result.returncode
 
 
@@ -353,11 +359,13 @@ def _stop() -> int:
     """Stop the LiteLLM proxy."""
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
-        eprint("   Run: cf init")
+        eprint(
+            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+        )
+        eprint("   Run: cf s i")
         return 1
 
-    eprint("[PROXY] Stopping LiteLLM proxy...")
+    eprint(f"{tag('PROXY')} Stopping LiteLLM proxy...")
     compose_env = _build_compose_env()
     result = subprocess.run(
         ["docker", "compose", "-f", str(compose_file), "--profile", "litellm", "down"],
@@ -367,7 +375,7 @@ def _stop() -> int:
         check=False,
     )
     if result.returncode == 0:
-        eprint("[PROXY] Proxy stopped.")
+        eprint(f"{tag('PROXY')} Proxy stopped.")
     return result.returncode
 
 
@@ -383,11 +391,13 @@ def _restart() -> int:
     """
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
-        eprint("   Run: cf init")
+        eprint(
+            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+        )
+        eprint("   Run: cf s i")
         return 1
 
-    eprint(f"[PROXY] Restarting LiteLLM via Docker Compose ({compose_file})...")
+    eprint(f"{tag('PROXY')} Restarting LiteLLM via Docker Compose ({compose_file})...")
     compose_env = _build_compose_env()
     result = subprocess.run(
         [
@@ -408,9 +418,9 @@ def _restart() -> int:
         # Read port from env (resolved at build time, not /proc)
         merged_env = _build_proxy_env()
         port = merged_env.get("LITELLM_PORT", "4000")
-        eprint(f"[PROXY] Proxy restarted at http://localhost:{port}")
+        eprint(f"{tag('PROXY')} Proxy restarted at http://localhost:{port}")
     else:
-        eprint("[PROXY] Failed to restart. Check docker logs.")
+        eprint(f"{tag('PROXY')} Failed to restart. Check docker logs.")
     return result.returncode
 
 
@@ -421,8 +431,10 @@ def _status() -> int:
     """Show LiteLLM proxy status."""
     compose_file = _find_compose_file()
     if not compose_file:
-        eprint("[ERROR] Could not find ~/.codefreedom/proxy/docker-compose.yaml")
-        eprint("   Run: cf init")
+        eprint(
+            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+        )
+        eprint("   Run: cf s i")
         return 1
 
     compose_env = _build_compose_env()
@@ -480,7 +492,7 @@ def _warn_database_url(
             " nilayparikh/codefreedom:litellm image auto-sets it."
         )
     else:
-        eprint("[PROXY] Warning: database_url not set (stateless mode).")
+        eprint(f"{tag('PROXY')} Warning: database_url not set (stateless mode).")
         eprint("   LiteLLM runs without Prisma persistence unless DATABASE_URL is set.")
         eprint(
             "   The codefreedom litellm image (default) ships"
@@ -496,13 +508,13 @@ def _validate() -> int:
     """Validate the LiteLLM configuration."""
     config_file = _find_config_file()
     if not config_file:
-        eprint("[ERROR] Could not find ~/.codefreedom/proxy/config/config.yaml")
-        eprint("   Run: cf init")
+        eprint(f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/config/config.yaml")
+        eprint("   Run: cf s i")
         return 1
 
     errors: List[str] = []
 
-    eprint(f"[PROXY] Validating {config_file}...")
+    eprint(f"{tag('PROXY')} Validating {config_file}...")
     eprint()
 
     # Load proxy env files so we can check api_key references against them
@@ -511,7 +523,7 @@ def _validate() -> int:
     try:
         import yaml
     except ImportError:
-        eprint("[WARN] PyYAML not installed. Using basic validation only.")
+        eprint(f"{tag('WARN')} PyYAML not installed. Using basic validation only.")
         eprint("   Install: pip install pyyaml")
         _validate_basic(config_file, errors)
         _print_validation_result(errors)
@@ -521,30 +533,30 @@ def _validate() -> int:
         with open(config_file, encoding="utf-8") as f:
             config = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        eprint(f"  [FAIL]  YAML parse error: {e}")
+        eprint(f"  {tag('FAIL')}  YAML parse error: {e}")
         return 1
     except FileNotFoundError:
-        eprint(f"  [FAIL]  File not found: {config_file}")
+        eprint(f"  {tag('FAIL')}  File not found: {config_file}")
         return 1
 
     if not isinstance(config, dict):
-        eprint("  [FAIL]  Config must be a YAML dictionary.")
+        eprint(f"  {tag('FAIL')}  Config must be a YAML dictionary.")
         return 1
 
     includes = config.get("include", [])
     if not includes:
-        eprint("  [WARN]  No provider includes found in config.yaml")
+        eprint(f"  {tag('WARN')}  No provider includes found in config.yaml")
     else:
         config_dir = config_file.parent
         for inc in includes:
             provider_file = config_dir / inc
             if provider_file.exists():
-                eprint(f"  [OK]  {inc}")
+                eprint(f"  {tag('OK')}  {inc}")
                 try:
                     with open(provider_file, encoding="utf-8") as f:
                         provider_config = yaml.safe_load(f)
                     if provider_config is None:
-                        eprint("    [SKIP]  (empty/commented out)")
+                        eprint(f"    {tag('SKIP')}  (empty/commented out)")
                         continue
                     models = provider_config.get("model_list", [])
                     for m in models:
@@ -558,14 +570,16 @@ def _validate() -> int:
                                     f"    [WARN]  {name}: env var {env_var} is not set"
                                 )
                             else:
-                                eprint(f"    [OK]  {name} (auth: {env_var} [OK])")
+                                eprint(
+                                    f"    {tag('OK')}  {name} (auth: {env_var} {tag('OK')})"
+                                )
                         else:
-                            eprint(f"    [OK]  {name}")
+                            eprint(f"    {tag('OK')}  {name}")
                 except yaml.YAMLError as e:
-                    eprint(f"    [FAIL]  {inc}: YAML error -- {e}")
+                    eprint(f"    {tag('FAIL')}  {inc}: YAML error -- {e}")
                     errors.append(f"YAML error in {inc}: {e}")
             else:
-                eprint(f"  [FAIL]  {inc} -- file not found")
+                eprint(f"  {tag('FAIL')}  {inc} -- file not found")
                 errors.append(f"Missing provider file: {inc}")
 
     general = config.get("general_settings", {})
@@ -576,11 +590,11 @@ def _validate() -> int:
     router = config.get("router_settings", {})
     aliases = router.get("model_group_alias", {})
     if aliases:
-        eprint(f"  [OK]  Model aliases: {len(aliases)} defined")
+        eprint(f"  {tag('OK')}  Model aliases: {len(aliases)} defined")
         for alias, model in aliases.items():
             eprint(f"       {alias} -> {model}")
     else:
-        eprint("  [WARN]  No model_group_alias defined")
+        eprint(f"  {tag('WARN')}  No model_group_alias defined")
 
     eprint()
     _print_validation_result(errors)
@@ -599,9 +613,9 @@ def _validate_basic(config_file: Path, errors: List[str]) -> None:
     ]
     for marker, label in checks:
         if marker in content:
-            eprint(f"  [OK]  {label} found")
+            eprint(f"  {tag('OK')}  {label} found")
         else:
-            eprint(f"  [FAIL]  {label} missing")
+            eprint(f"  {tag('FAIL')}  {label} missing")
             errors.append(f"Missing: {label}")
 
     config_dir = config_file.parent
@@ -611,9 +625,9 @@ def _validate_basic(config_file: Path, errors: List[str]) -> None:
             provider_file = line[2:].strip()
             full = config_dir / provider_file
             if full.exists():
-                eprint(f"  [OK]  {provider_file}")
+                eprint(f"  {tag('OK')}  {provider_file}")
             else:
-                eprint(f"  [FAIL]  {provider_file} -- not found")
+                eprint(f"  {tag('FAIL')}  {provider_file} -- not found")
                 errors.append(f"Missing: {provider_file}")
 
 
@@ -631,11 +645,11 @@ def _env_is_set(var_name: str, env: Optional[Dict[str, str]] = None) -> bool:
 def _print_validation_result(errors: List[str]) -> None:
     """Print validation summary."""
     if errors:
-        eprint(f"  [FAIL]  {len(errors)} issue(s) found.")
+        eprint(f"  {tag('FAIL')}  {len(errors)} issue(s) found.")
         for e in errors:
             eprint(f"       - {e}")
     else:
-        eprint("  [OK]  Configuration looks good!")
+        eprint(f"  {tag('OK')}  Configuration looks good!")
 
 
 # VS Code config generation moved to codefreedom.cli.vscode.
