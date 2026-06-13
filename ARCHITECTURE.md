@@ -37,12 +37,23 @@ Details on env chain layers and profile inheritance: see `CLAUDE.md` > Key Patte
 | ----------------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
 | `main`            | `src/codefreedom/cli/main.py`            | Top-level parser, dispatches to subcommands                                     |
 | `claude`          | `src/codefreedom/cli/claude.py`          | `codefreedom claude` — init, profiles, sandbox/native launch                    |
-| `proxy`           | `src/codefreedom/cli/proxy.py`           | `codefreedom proxy` — init, start/stop/status/validate                          |
+| `mimo`            | `src/codefreedom/cli/mimo.py`            | `codefreedom mimo` — MiMoCode agent, 0-click proxy config, sandbox/native       |
+| `opencode`        | `src/codefreedom/cli/opencode.py`        | `codefreedom opencode` — OpenCode agent, 0-click proxy config, sandbox/native   |
+| `agent`           | `src/codefreedom/cli/run/agent.py`       | Agent dispatch registry, alias resolution, shared CLI validation                |
+| `proxy`           | `src/codefreedom/cli/run/proxy.py`       | `codefreedom proxy` — init, start/stop/status/validate                          |
+| `tools`           | `src/codefreedom/cli/run/tools.py`       | `codefreedom tools` — CLI layer for tool management (delegates to registry)     |
 | `chrome`          | `src/codefreedom/cli/chrome.py`          | `codefreedom tools chrome` — browser container lifecycle                        |
 | `web`             | `src/codefreedom/cli/web.py`             | `codefreedom tools web` — Camoufox MCP container lifecycle                      |
 | `docker_utils`    | `src/codefreedom/cli/docker_utils.py`    | Shared Docker helpers — `start_tool_container` seam, tool notices, tool metadata |
-| `recipe`          | `src/codefreedom/recipe/`               | Recipe system (subpackage: store.py, merge.py, plan.py, apply.py)                |
-| `admin`           | `src/codefreedom/cli/admin.py`           | `codefreedom admin` CLI entry point                                              |
+| `common`          | `src/codefreedom/cli/common.py`          | Shared CLI utilities                                                            |
+| `formatter`       | `src/codefreedom/cli/formatter.py`       | Help text formatting                                                            |
+| `doctor`          | `src/codefreedom/cli/manage/doctor.py`   | `cf doctor` — comprehensive diagnostic checks                                   |
+| `update`          | `src/codefreedom/cli/manage/update.py`   | Update management                                                               |
+| `admin`           | `src/codefreedom/cli/manage/admin.py`    | `codefreedom admin` CLI entry point                                             |
+| `recipe`          | `src/codefreedom/cli/setup/recipe.py`    | Recipe setup commands                                                           |
+| `config_setup`    | `src/codefreedom/cli/setup/config.py`    | Config setup commands                                                           |
+| `deinit`          | `src/codefreedom/cli/setup/deinit.py`    | Deinitialization                                                                |
+| `recipe_system`   | `src/codefreedom/recipe/`               | Recipe system (subpackage: store.py, merge.py, plan.py, apply.py)                |
 | `vscode`          | `src/codefreedom/cli/vscode.py`          | `codefreedom vscode` — VS Code config generation (claude, proxy)                 |
 
 ### Infrastructure (runtime assets)
@@ -85,9 +96,15 @@ cli/docker_utils.py                                               (log only)
 cli/main.py                                                       -> log
 cli/launcher.py                                                    -> config, log
 cli/claude.py                                                      -> config, log, launcher, profiles, tool_registry
+cli/mimo.py                                                        -> config, log, profiles, tool_registry, sandbox
+cli/opencode.py                                                    -> config, log, profiles, tool_registry, sandbox
+cli/run/agent.py                                                   -> log (dynamic import of agent modules)
+cli/run/tools.py                                                   -> log, tools/registry (delegates lifecycle)
 cli/proxy.py                                                       -> config, log
 cli/chrome.py, cli/web.py                                          -> docker_utils, config, log
 cli/vscode.py                                                      -> config, log, profiles
+cli/manage/doctor.py                                               -> config, log, docker_utils
+tools/registry.py                                                  -> log, tools/*, docker_utils
 ```
 
 ## Request Flow
@@ -133,6 +150,30 @@ main.py (parse)
     -> config.py (get_codefreedom_dir for data_dir)
 ```
 
+### `codefreedom mimo --sandbox`
+
+```
+main.py (parse)
+  -> agent.py (resolve 'mimo' -> 'mimo-code', dispatch to mimo.py)
+    -> mimo.py (load profile, detect proxy, generate mimocode.json)
+      -> profiles.py (load_profiles, load_profile_env)
+      -> tool_registry.py (acquire_tools)
+      -> sandbox/launcher.py (run_sandbox: create container, exec mimo CLI)
+      -> tool_registry.py (release_tools)
+```
+
+### `codefreedom opencode --sandbox`
+
+```
+main.py (parse)
+  -> agent.py (resolve 'opencode' -> 'open-code', dispatch to opencode.py)
+    -> opencode.py (load profile, detect proxy, generate opencode.json)
+      -> profiles.py (load_profiles, load_profile_env)
+      -> tool_registry.py (acquire_tools)
+      -> sandbox/launcher.py (run_sandbox: create container, exec opencode CLI)
+      -> tool_registry.py (release_tools)
+```
+
 ## Rules
 
 - **One responsibility per block.** If a file does two things, split it.
@@ -140,38 +181,25 @@ main.py (parse)
 - **Layer discipline.** CLI calls core. Core calls nothing in the package. Infra is data, not code.
 - **Keep this file accurate.** When code changes, update the inventory and graph in the same PR.
 
-## Tool Registry (`/proc`) Design
+## Tool Registry Design
 
 Tools declared in profiles (`"tools": ["chrome", "web"]`) are auto-managed.
-The tool registry in `~/.codefreedom/proc/` tracks which sessions use which tools.
+The tool registry (`tools/registry.py`) is the **canonical owner** of tool lifecycle.
 
-### Directory Layout
+### Ownership
 
-```
-~/.codefreedom/proc/
-  sessions/
-    <session-id>.json    — session_id, profile, tools, pid, started_at
-  tools/
-    <tool>.json          — tool, container_name, ref_count, sessions dict
-```
+- **`tools/registry.py`** — owns acquire/release, session tracking, MCP endpoint resolution, bulk lifecycle operations (start_all, stop_all, status)
+- **`cli/run/tools.py`** — CLI layer only: parsing, user output, delegates to registry
+- **`cli/docker_utils.py`** — Docker primitives (container_is_running, ensure_image)
 
 ### Lifecycle
 
 1. **`codefreedom claude` starts** — `acquire_tools()`:
-   - `cleanup_stale_sessions()` first: reaps dead-PID sessions, adjusts ref_counts
-     (never stops containers — they are adopted by the next session)
    - For each tool: call `tool.start()` (no-op if container already running)
-   - Create/increment tool lock with session ID in sessions dict
-   - Write session file
+   - Returns list of successfully acquired tools
 2. **Claude session runs** — tools stay running independently
-3. **Claude exits** (normal or Ctrl+C) — `release_tools()` in finally block:
-   - Decrement ref_count, remove session from sessions dict
-   - If ref_count == 0: call `tool.stop()`, delete lock
-   - Delete session file
-4. **Crash (SIGKILL)** — finally doesn't run, but `cleanup_stale_sessions()`
-   on next invocation cleans `/proc` state. The running container is adopted.
-5. **Reboot** — tool containers restart (persistent `--restart unless-stopped`).
-   Stale `/proc` entries cleaned; containers adopted by next session.
+3. **Claude exits** — `release_tools()` in finally block (no-op, tools persist)
+4. **`cf tools stop`** — explicit stop via `stop_all_tools()`
 
 ### First-one-starts, last-one-stops
 
