@@ -6,6 +6,9 @@ import json
 import os
 import re
 import shutil
+import stat
+import time
+import errno
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -117,6 +120,39 @@ def _resolve_store(
     return None
 
 
+def _rmtree_retry(path: Path, retries: int = 3, delay: float = 0.5) -> None:
+    """Remove a directory tree with retries for Windows file-locking.
+
+    On Windows, ``.git`` pack files are frequently locked by antivirus
+    scanners or the Windows Search Indexer.  This helper retries the
+    removal after clearing read-only flags and sleeping briefly.
+    """
+    for attempt in range(retries):
+        try:
+            shutil.rmtree(
+                path,
+                onerror=_handle_remove_readonly,
+            )
+            return
+        except PermissionError:
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                raise
+
+
+def _handle_remove_readonly(
+    func: Any, path: str, exc: Any  # noqa: ARG001
+) -> None:
+    """Error handler for ``shutil.rmtree`` — clear read-only and retry."""
+    excvalue = exc[1]
+    if func in (os.unlink, os.rmdir) and excvalue.errno == errno.EACCES:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    else:
+        raise
+
+
 def _ensure_store(url: str, dest: Path, branch: str = "main") -> bool:
     """Clone a Git store fresh and remove metadata.
 
@@ -125,7 +161,7 @@ def _ensure_store(url: str, dest: Path, branch: str = "main") -> bool:
     ``.git/`` directory is removed so only recipe folder contents remain.
     """
     if dest.exists():
-        shutil.rmtree(dest)
+        _rmtree_retry(dest)
     dest.mkdir(parents=True, exist_ok=True)
     if _clone_or_pull_store(url, dest, branch=branch):
         _remove_git_metadata(dest)
@@ -216,7 +252,7 @@ def _remove_git_metadata(path: Path) -> None:
     """
     git_dir = path / ".git"
     if git_dir.is_dir():
-        shutil.rmtree(git_dir, ignore_errors=True)
+        _rmtree_retry(git_dir)
 
     for name in (".gitattributes", ".gitignore", ".gitmodules"):
         f = path / name

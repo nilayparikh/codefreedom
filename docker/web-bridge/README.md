@@ -28,10 +28,21 @@ Claude Code  ->  LiteLLM Proxy (:4000)  ->  web-bridge (:8500)  ->  Camoufox MCP
 
 ## Build
 
+Single-arch (local, host platform only):
+
 ```bash
 docker build \
   -t docker.io/nilayparikh/codefreedom:web-bridge \
   -f docker/web-bridge/Dockerfile.Bridge docker/web-bridge/
+```
+
+Multi-arch (amd64 + arm64, push to registries):
+
+```bash
+./docker/web-bridge/build.sh              # push to docker.io
+./docker/web-bridge/build.sh --ghcr       # push to docker.io + ghcr.io
+./docker/web-bridge/build.sh --load       # single-arch, load into local docker
+./docker/web-bridge/build.sh --dry-run    # show commands without executing
 ```
 
 ## Deployment
