@@ -717,8 +717,8 @@ class TestSubprocessDispatch:
         assert "--out" in result.stdout
 
     def test_agent_claude_help_succeeds(self):
-        """cf run agent claude --help"""
-        result = self._run("run", "agent", "claude", "--help")
+        """cf run agent claude-code --help"""
+        result = self._run("run", "agent", "claude-code", "--help")
         assert result.returncode == 0, result.stderr
         assert "--sandbox" in result.stdout
         assert "--profile" in result.stdout
