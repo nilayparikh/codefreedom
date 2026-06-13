@@ -113,7 +113,7 @@ def resolve_agent_config(
 
     # Load env chain
     component = agent.split("-")[0]  # "claude", "mimo", "opencode"
-    env = load_env_chain(component, workspace_dir or Path.cwd())
+    env = load_env_chain(workspace_dir or Path.cwd(), component=component)
 
     # Resolve profile
     profile_env = load_profile_env(
