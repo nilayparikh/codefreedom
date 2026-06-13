@@ -77,14 +77,14 @@ Creates `~/.codefreedom/` with default profiles, proxy configs, and provider tem
 codefreedom run agent claude
 
 # Launch in a sandboxed container
-codefreedom run agent claude --sandbox
+codefreedom run agent claude-code --sandbox
 
 # Use GPU images
-codefreedom run agent claude --sandbox --cuda   # NVIDIA
-codefreedom run agent claude --sandbox --rocm   # AMD
+codefreedom run agent claude-code --sandbox --cuda   # NVIDIA
+codefreedom run agent claude-code --sandbox --rocm   # AMD
 ```
 
-Short aliases: `cf run agent claude` is equivalent to `codefreedom run agent claude`.
+Short aliases: `cf run agent claude-code` is equivalent to `codefreedom run agent claude-code`.
 
 See the [Getting Started guide](https://nilayparikh.github.io/codefreedom/) for proxy setup, custom profiles, browser tools, and more.
 
@@ -93,7 +93,7 @@ See the [Getting Started guide](https://nilayparikh.github.io/codefreedom/) for 
 | Feature             | Details                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------- |
 | LLM proxy           | Self-hosted `codefreedom:litellm-latest` image (embedded PostgreSQL, multi-provider routing) |
-| Code agent launcher | `codefreedom run agent claude` CLI -- local + sandbox modes                                 |
+| Code agent launcher | `codefreedom run agent claude-code` CLI -- local + sandbox modes                                 |
 | Sandboxing          | Pre-configured containers (CUDA, ROCm, Ubuntu)                                              |
 | Profile management  | Model switching, env inheritance, isolation                                                 |
 | Browser tools       | Chrome (CDP) + Camoufox (MCP) for web automation                                            |
