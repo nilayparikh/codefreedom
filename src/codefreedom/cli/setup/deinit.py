@@ -149,7 +149,7 @@ def _remove_codefreedom_dir(cf_dir: Path) -> None:
     preserved = None
     if user_env.exists():
         try:
-            preserved = user_env.read_text()
+            preserved = user_env.read_text(encoding="utf-8")
         except OSError:
             pass
 
@@ -165,7 +165,7 @@ def _remove_codefreedom_dir(cf_dir: Path) -> None:
     if preserved is not None:
         try:
             cf_dir.mkdir(parents=True, exist_ok=True)
-            user_env.write_text(preserved)
+            user_env.write_text(preserved, encoding="utf-8")
             eprint(f"{tag('DEINIT')} Preserved '{user_env}' (user overrides).")
         except OSError as exc:
             eprint(f"   {tag('WARN')} Could not restore .env.user: {exc}")

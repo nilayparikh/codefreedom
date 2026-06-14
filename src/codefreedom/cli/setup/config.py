@@ -36,20 +36,6 @@ _CONFIG_TARGETS: dict[str, tuple[str, str, str]] = {
 }
 
 
-def list_targets() -> int:
-    """List all available config targets. Returns exit code."""
-    if not _CONFIG_TARGETS:
-        eprint("[CONFIG] No config targets registered.")
-        return 0
-
-    eprint("[CONFIG] Available config targets:\n")
-    for name, (_, _, description) in _CONFIG_TARGETS.items():
-        eprint(f"  {name:12} {description}")
-    eprint()
-    eprint("Usage: cf setup config <target> [options]")
-    return 0
-
-
 def run_config(target: str, args: argparse.Namespace) -> int:
     """Run the config handler for the specified target. Returns exit code."""
     if target not in _CONFIG_TARGETS:
@@ -84,13 +70,6 @@ def build_parser(parent: argparse.ArgumentParser) -> None:
     Called from main.py to register the 'config' subcommand.
     """
     subparsers = parent.add_subparsers(dest="config_target", title="targets")
-
-    # 'list' sub-action
-    subparsers.add_parser(
-        "list",
-        help="List available config targets",
-        description="List all registered configuration targets.",
-    )
 
     # ── claude config target ─────────────────────────────────────────────
     claude_parser = subparsers.add_parser(
@@ -250,8 +229,9 @@ def handle_args(args: argparse.Namespace) -> int:
     """
     target = getattr(args, "config_target", None)
 
-    if target is None or target == "list":
-        return list_targets()
+    if target is None:
+        eprint("[CONFIG] No target specified. Run 'cf setup config -h' for available targets.")
+        return 1
 
     # Special handling for vscode (has sub-targets)
     if target == "vscode":

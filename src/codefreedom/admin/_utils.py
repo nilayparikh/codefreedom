@@ -212,7 +212,7 @@ def _redact_value(value: str) -> str:
     stripped = value.strip().strip("\"'")
     if len(stripped) < 4:
         return "****"
-    return stripped[:2] + "***" + stripped[-1:]
+    return stripped[:1] + "***" + stripped[-1:]
 
 
 def _redact_secrets_content(content: bytes) -> bytes:

@@ -147,7 +147,7 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
     # ── Fresh .claude.json (never copy from host) ──────────────────────
     sandbox_json = profile_dir / ".claude.json"
     if not sandbox_json.exists():
-        sandbox_json.write_text("{}")
+        sandbox_json.write_text("{}", encoding="utf-8")
         os.chmod(sandbox_json, 0o666)
         eprint(f"{tag('SANDBOX')} Created fresh .claude.json: {sandbox_json}.")
     else:

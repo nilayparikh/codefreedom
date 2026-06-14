@@ -120,8 +120,8 @@ def load_profile_env(
         if any(
             s in key.upper() for s in ("TOKEN", "KEY", "SECRET", "AUTH", "PASSWORD")
         ):
-            if len(val) > 4:
-                display = val[:1] + "*" * min(len(val) - 3, 64) + val[-2:]
+            if len(val) > 2:
+                display = val[:1] + "*" * min(len(val) - 2, 64) + val[-1:]
             elif val:
                 display = "****"
         eprint(f"     {key}={display}")

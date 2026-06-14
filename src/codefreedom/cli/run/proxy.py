@@ -622,7 +622,7 @@ def _validate() -> int:
 
 def _validate_basic(config_file: Path, errors: List[str]) -> None:
     """Basic validation without PyYAML."""
-    content = config_file.read_text()
+    content = config_file.read_text(encoding="utf-8")
     checks = [
         ("include:", "provider includes"),
         ("general_settings:", "general_settings section"),
