@@ -9,7 +9,7 @@ Usage:
     codefreedom run agent open-code [options] [-- <agent-args>]
 
 Proxy auto-config:
-    - Detects the proxy at LITELLM_BASE_URL (default: http://localhost:4000)
+    - Detects the proxy at PROXY_BASE_URL (default: http://localhost:4000)
     - Fetches model list from ``/v1/models``
     - Generates ``~/.codefreedom/opencode/config/opencode.json`` with all models
     - Sets ``OPENCODE_CONFIG`` env var to point at the generated config
@@ -59,7 +59,7 @@ def register_args(parser: argparse.ArgumentParser) -> None:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:opencode"
+DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:open-code-latest"
 PROXY_MODELS_CACHE_FILE = "proxy-models.json"
 OPENCODE_CONFIG_NAME = "opencode.json"
 _CONTAINER_PREFIX = "codefreedom-opencode-"
@@ -78,12 +78,16 @@ def _detect_proxy_url(base_env: Dict[str, str]) -> str:
     """Detect the proxy URL from environment or use default.
 
     Checks (in order):
-    1. LITELLM_BASE_URL in the merged env
-    2. LITELLM_BASE_URL in os.environ
-    3. Default http://localhost:4000
+    1. PROXY_BASE_URL in the merged env
+    2. PROXY_BASE_URL in os.environ
+    3. LITELLM_BASE_URL (legacy) in the merged env
+    4. LITELLM_BASE_URL (legacy) in os.environ
+    5. Default http://localhost:4000
     """
     return (
-        base_env.get("LITELLM_BASE_URL")
+        base_env.get("PROXY_BASE_URL")
+        or os.environ.get("PROXY_BASE_URL")
+        or base_env.get("LITELLM_BASE_URL")
         or os.environ.get("LITELLM_BASE_URL")
         or "http://localhost:4000"
     )
