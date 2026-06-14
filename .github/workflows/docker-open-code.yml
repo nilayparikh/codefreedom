@@ -11,7 +11,7 @@ name: Docker OpenCode
 
 on:
   push:
-    branches: [main]
+    branches: [main, prerelease]
     paths: ["docker/open-code/Dockerfile.Ubuntu"]
   workflow_dispatch:
 

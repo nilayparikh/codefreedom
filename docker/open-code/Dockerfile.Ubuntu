@@ -15,7 +15,7 @@
 #     -f docker/open-code/Dockerfile.Ubuntu docker/open-code/
 # ────────────────────────────────────────────────────────────────────────────────
 
-ARG IMAGE_VERSION=0.1.1
+ARG IMAGE_VERSION=0.1.0
 
 # 1. Ubuntu 24.04 (multi-arch: arm64 + amd64)
 FROM ubuntu:24.04
