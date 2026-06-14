@@ -12,8 +12,7 @@ All CodeFreedom CLI modules must follow these conventions for user-facing output
 Machine-readable output includes:
 
 - `cf run tools chrome url` — CDP debug URL
-- `cf vscode claude config` — VS Code settings fragment
-- `cf vscode proxy config` — VS Code proxy config fragment
+- `cf setup config vscode` — VS Code proxy config fragment
 - `cf r ag cc config` — resolved env vars
 
 Everything else (progress messages, warnings, errors, section headers) goes to stderr via `eprint()`.

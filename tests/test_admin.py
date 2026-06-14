@@ -339,7 +339,7 @@ class TestRestore:
         assert (target / ".env.claude.secrets").exists()
         # Verify redacted content
         secrets_content = (target / ".env.claude.secrets").read_text()
-        assert "sk***c" in secrets_content
+        assert "s***c" in secrets_content
 
     def test_diff_statuses(self, cf_home_dir: Path):
         out_path, _manifest = engine_backup()

@@ -1,4 +1,4 @@
-"""Tests for the `codefreedom setup config vscode proxy config` command."""
+"""Tests for the `codefreedom setup config vscode` command."""
 
 from __future__ import annotations
 

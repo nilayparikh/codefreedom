@@ -45,8 +45,7 @@ cf run agent list
 
 ```bash
 # VS Code config
-cf setup config vscode claude [--host HOST] [--port PORT] [--out PATH]
-cf setup config vscode proxy --host HOST [--port PORT] [--name NAME] [--out PATH]
+cf setup config vscode --host HOST [--port PORT] [--name NAME] [--out PATH]
 ```
 
 ## Init Command
