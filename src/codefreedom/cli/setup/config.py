@@ -1,15 +1,7 @@
-"""Unified config command — generate configurations for all targets.
+"""Config command — generate VS Code settings fragments.
 
 Usage:
-    codefreedom setup config <target> [options]
-
-Targets:
-    claude      Generate shell exports for Claude Code
-    mimo        Generate mimocode.json for MiMoCode
-    vscode      Generate VS Code settings fragments
-
-This is the single entry point for all configuration generation,
-consolidating scattered config sub-actions from claude, mimo, and vscode.
+    codefreedom setup config vscode [options]
 """
 
 from __future__ import annotations
@@ -19,117 +11,12 @@ import argparse
 from codefreedom.log import eprint
 
 
-# ── Config Target Registry ──────────────────────────────────────────────────
-
-# Each entry: (module_path, handler_name, description)
-_CONFIG_TARGETS: dict[str, tuple[str, str, str]] = {
-    "claude": (
-        "codefreedom.cli.claude",
-        "cmd_config",
-        "Generate shell exports for Claude Code (--bash/--ps)",
-    ),
-    "mimo": (
-        "codefreedom.cli.mimo",
-        "cmd_config",
-        "Generate mimocode.json for MiMoCode",
-    ),
-}
-
-
-def run_config(target: str, args: argparse.Namespace) -> int:
-    """Run the config handler for the specified target. Returns exit code."""
-    if target not in _CONFIG_TARGETS:
-        eprint(f"[CONFIG] Unknown config target: {target}")
-        eprint(f"   Available targets: {', '.join(_CONFIG_TARGETS.keys())}")
-        return 1
-
-    module_path, handler_name, _ = _CONFIG_TARGETS[target]
-
-    import importlib
-
-    try:
-        mod = importlib.import_module(module_path)
-    except ImportError as exc:
-        eprint(f"[CONFIG] Failed to import config module '{module_path}': {exc}")
-        return 1
-
-    handler = getattr(mod, handler_name, None)
-    if handler is None:
-        eprint(
-            f"[CONFIG] Config module '{module_path}' "
-            f"has no '{handler_name}' function"
-        )
-        return 1
-
-    return handler(args)
-
-
 def build_parser(parent: argparse.ArgumentParser) -> None:
     """Build the config subcommand parser.
 
     Called from main.py to register the 'config' subcommand.
     """
     subparsers = parent.add_subparsers(dest="config_target", title="targets")
-
-    # ── claude config target ─────────────────────────────────────────────
-    claude_parser = subparsers.add_parser(
-        "claude",
-        help="Generate shell exports for Claude Code",
-        description=(
-            "Generate environment variable exports for standalone Claude Code use. "
-            "Outputs bash export statements or PowerShell $env: assignments."
-        ),
-    )
-    claude_parser.add_argument(
-        "--profile",
-        type=str,
-        default="default",
-        metavar="NAME",
-        help="Profile to resolve (default: 'default')",
-    )
-    claude_parser.add_argument(
-        "--out",
-        type=str,
-        default=None,
-        metavar="FILE",
-        help="Write to FILE instead of stdout (recommended to avoid leaking secrets)",
-    )
-    claude_format = claude_parser.add_mutually_exclusive_group()
-    claude_format.add_argument(
-        "--bash",
-        action="store_true",
-        help="Output in bash export format (default)",
-    )
-    claude_format.add_argument(
-        "--ps",
-        action="store_true",
-        dest="powershell",
-        help="Output in PowerShell $env: format",
-    )
-
-    # ── mimo config target ───────────────────────────────────────────────
-    mimo_parser = subparsers.add_parser(
-        "mimo",
-        help="Generate mimocode.json for MiMoCode",
-        description=(
-            "Generate a complete mimocode.json config pointing at the running "
-            "CodeFreedom proxy. Fetches the live model list and outputs the config."
-        ),
-    )
-    mimo_parser.add_argument(
-        "--profile",
-        type=str,
-        default="default",
-        metavar="NAME",
-        help="Profile to resolve (default: 'default')",
-    )
-    mimo_parser.add_argument(
-        "--out",
-        type=str,
-        default=None,
-        metavar="FILE",
-        help="Write to FILE instead of stdout",
-    )
 
     # ── vscode config target ─────────────────────────────────────────────
     # VS Code has two sub-targets: claude and proxy
@@ -233,26 +120,22 @@ def handle_args(args: argparse.Namespace) -> int:
         eprint("[CONFIG] No target specified. Run 'cf setup config -h' for available targets.")
         return 1
 
-    # Special handling for vscode (has sub-targets)
-    if target == "vscode":
-        vscode_action = getattr(args, "vscode_action", None)
-        if vscode_action is None:
-            eprint("[CONFIG] vscode requires a sub-target: 'claude' or 'proxy'")
-            eprint("   Usage: cf setup config vscode claude [options]")
-            eprint("          cf setup config vscode proxy [options]")
-            return 1
+    # VS Code has sub-targets: claude and proxy
+    vscode_action = getattr(args, "vscode_action", None)
+    if vscode_action is None:
+        eprint("[CONFIG] vscode requires a sub-target: 'claude' or 'proxy'")
+        eprint("   Usage: cf setup config vscode claude [options]")
+        eprint("          cf setup config vscode proxy [options]")
+        return 1
 
-        # Route to the correct vscode handler
-        if vscode_action == "claude":
-            from codefreedom.cli.vscode import cmd_vscode_claude_config
+    if vscode_action == "claude":
+        from codefreedom.cli.vscode import cmd_vscode_claude_config
 
-            return cmd_vscode_claude_config(args)
-        elif vscode_action == "proxy":
-            from codefreedom.cli.vscode import cmd_vscode_proxy_config
+        return cmd_vscode_claude_config(args)
+    elif vscode_action == "proxy":
+        from codefreedom.cli.vscode import cmd_vscode_proxy_config
 
-            return cmd_vscode_proxy_config(args)
-        else:
-            eprint(f"[CONFIG] Unknown vscode target: {vscode_action}")
-            return 1
-
-    return run_config(target, args)
+        return cmd_vscode_proxy_config(args)
+    else:
+        eprint(f"[CONFIG] Unknown vscode target: {vscode_action}")
+        return 1

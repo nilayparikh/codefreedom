@@ -44,12 +44,6 @@ cf run agent list
 ## Configuration Commands
 
 ```bash
-# Claude config (shell exports)
-cf setup config claude [--profile NAME] [--out FILE] [--bash|--ps]
-
-# MiMo config (mimocode.json)
-cf setup config mimo [--profile NAME] [--out FILE]
-
 # VS Code config
 cf setup config vscode claude [--host HOST] [--port PORT] [--out PATH]
 cf setup config vscode proxy --host HOST [--port PORT] [--name NAME] [--out PATH]
