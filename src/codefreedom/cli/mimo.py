@@ -351,15 +351,17 @@ def run_docker(
     env_flags.extend(["-e", f"COLUMNS={cols}", "-e", f"LINES={lines}"])
 
     # ── Container identity ────────────────────────────────────────────────────
-    host_uid = os.getuid()
-    host_gid = os.getgid()
-    if run_as_me:
+    if run_as_me and hasattr(os, "getuid"):
+        host_uid = os.getuid()
+        host_gid = os.getgid()
         container_home = f"/home/{Path.home().name}"
         container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
         eprint(
             f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}"
         )
     else:
+        if run_as_me:
+            eprint("[SANDBOX] --run-as-me not supported on Windows; running as default user.")
         container_home = "/home/codefreedom"
         container_user_flag = []
         eprint("[SANDBOX] Running as default container user 'codefreedom' (uid 1000).")

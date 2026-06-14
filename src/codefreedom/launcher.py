@@ -252,15 +252,19 @@ def run_docker(
     sandbox_claude_dir, sandbox_claude_json = ensure_codefreedom_dir(profile_name)
 
     # ── Container identity ────────────────────────────────────────────────────
-    host_uid = os.getuid()
-    host_gid = os.getgid()
-    if run_as_me:
+    if run_as_me and hasattr(os, "getuid"):
+        host_uid = os.getuid()
+        host_gid = os.getgid()
         container_home = f"/home/{HOME_DIR.name}"
         container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
         eprint(
             f"{tag('SANDBOX')} --run-as-me: uid={host_uid}({HOME_DIR.name}) gid={host_gid}"
         )
     else:
+        if run_as_me:
+            eprint(
+                f"{tag('SANDBOX')} --run-as-me not supported on Windows; running as default user."
+            )
         container_home = "/home/codefreedom"
         container_user_flag = []
         eprint(
