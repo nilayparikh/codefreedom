@@ -575,9 +575,8 @@ class TestPostgresDump:
         """PG data directory is also categorized as 'database'."""
         assert _categorize("pg/data/somefile") == "database"
 
-    def test_managed_paths_includes_pg(self, cf_home_dir: Path):
-        """PG backup dir within managed scope should be collected."""
-        # Create a test pg dump file
+    def test_managed_paths_excludes_pg(self, cf_home_dir: Path):
+        """PG backup dir is NOT in managed scope (use pg_dump separately)."""
         pg_backup = cf_home_dir / "pg" / "backup"
         pg_backup.mkdir(parents=True, exist_ok=True)
         (pg_backup / "codefreedom-pgdump-20260609-120000.dump").write_text(
@@ -590,8 +589,7 @@ class TestPostgresDump:
             for e in entries:
                 all_paths.add(e.path)
 
-        assert "pg/backup/codefreedom-pgdump-20260609-120000.dump" in all_paths
-        assert "database" in manifest.categories
+        assert "pg/backup/codefreedom-pgdump-20260609-120000.dump" not in all_paths
 
     def test_backup_with_pg_dump_success(self, cf_home_dir: Path, monkeypatch):
         """Simulate a successful pg_dump and verify the dump is included."""
@@ -634,8 +632,7 @@ class TestPostgresDump:
                 all_paths.add(e.path)
 
         pg_dump_files = [p for p in all_paths if _PG_DUMP_PREFIX in p]
-        assert len(pg_dump_files) == 1, f"Expected 1 pg dump file, got {pg_dump_files}"
-        assert "database" in manifest.categories
+        assert len(pg_dump_files) == 0, "pg/backup not in managed scope"
 
     @pytest.mark.usefixtures("cf_home_dir")
     def test_backup_with_skip_pg_dump(self, monkeypatch):

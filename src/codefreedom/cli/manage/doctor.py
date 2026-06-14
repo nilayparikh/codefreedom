@@ -48,6 +48,7 @@ class CheckResult:
     PASS = "PASS"
     FAIL = "FAIL"
     WARN = "WARN"
+    INFO = "INFO"
     SKIP = "SKIP"
 
     def __init__(self, status: str, message: str, detail: str = "") -> None:
@@ -69,6 +70,10 @@ def _fail(msg: str, detail: str = "") -> CheckResult:
 
 def _warn(msg: str, detail: str = "") -> CheckResult:
     return CheckResult(CheckResult.WARN, msg, detail)
+
+
+def _info(msg: str, detail: str = "") -> CheckResult:
+    return CheckResult(CheckResult.INFO, msg, detail)
 
 
 def _skip(msg: str, detail: str = "") -> CheckResult:
@@ -140,7 +145,7 @@ def _run_checks(verbose: bool = False) -> Tuple[int, int, int]:
 
 def _status_icon(status: str) -> str:
     """Return a colored status icon."""
-    from codefreedom.log import bold, green, red, yellow
+    from codefreedom.log import bold, cyan, green, red, yellow
 
     if status == CheckResult.PASS:
         return green("[OK]")
@@ -148,6 +153,8 @@ def _status_icon(status: str) -> str:
         return red(bold("[FAIL]"))
     elif status == CheckResult.WARN:
         return yellow("[WARN]")
+    elif status == CheckResult.INFO:
+        return cyan("[INFO]")
     else:
         return "[SKIP]"
 
@@ -350,7 +357,7 @@ def _get_web_bridge_settings() -> dict:
         "web_bridge",
         "web-bridge.yaml",
         {
-            "image": "docker.io/nilayparikh/codefreedom:web-bridge",
+            "image": "docker.io/nilayparikh/codefreedom:web-bridge-latest",
             "container_name": "codefreedom-web-bridge",
             "port": 8500,
             "data_dir": "",
@@ -521,7 +528,7 @@ def _check_image_available(image: str, label: str) -> CheckResult:
         )
         if result.returncode == 0:
             return _ok(f"{label} image '{image}' is cached locally")
-        return _warn(
+        return _info(
             f"{label} image '{image}' not found locally",
             "Will be pulled on first 'cf run proxy start'",
         )
@@ -722,7 +729,7 @@ def _check_claude_env_var(name: str, label: str) -> CheckResult:
 @_section("Sandbox")
 def _check_sandbox_dir() -> CheckResult:
     cf_dir = get_codefreedom_dir()
-    sandbox_default = cf_dir / "sandbox" / "default"
+    sandbox_default = cf_dir / "claude-code" / "sandbox" / "default"
     if not sandbox_default.exists():
         return _ok(f"{sandbox_default} will be created on first sandbox run")
     return _ok(f"{sandbox_default} exists")

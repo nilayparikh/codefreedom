@@ -171,20 +171,15 @@ _MANAGED_PATHS: List[str] = [
     "profiles",
     "proxy",
     "scripts",
-    "pg/backup",
-    ".env.claude",
-    ".env.claude.secrets",
-    ".env.mimo.secrets",
-    ".env.opencode.secrets",
-    ".env.proxy",
-    ".env.proxy.secrets",
-    ".env.user",
+    ".env.",
 ]
 
 
 def _is_managed(rel_path: str) -> bool:
     for prefix in _MANAGED_PATHS:
         if rel_path == prefix or rel_path.startswith(prefix + "/"):
+            return True
+        if prefix.endswith(".") and rel_path.startswith(prefix):
             return True
     return False
 
@@ -307,6 +302,14 @@ def _categorize(rel_path: str) -> str:
         return "proxy"
     if rel_path.startswith("scripts/"):
         return "scripts"
+    if rel_path.startswith("claude-code/"):
+        return "claude-code"
+    if rel_path.startswith("mimo-code/"):
+        return "mimo-code"
+    if rel_path.startswith("open-code/"):
+        return "open-code"
+    if rel_path.startswith("tools/"):
+        return "tools"
     if rel_path.startswith("sandbox/"):
         return "sandbox"
     if rel_path.startswith("proc/"):

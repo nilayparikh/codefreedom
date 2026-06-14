@@ -11,7 +11,7 @@ Usage:
 Proxy auto-config:
     - Detects the proxy at PROXY_BASE_URL (default: http://localhost:4000)
     - Fetches model list from ``/v1/models``
-    - Generates ``~/.codefreedom/opencode/config/opencode.json`` with all models
+    - Generates ``~/.codefreedom/open-code/config/opencode.json`` with all models
     - Sets ``OPENCODE_CONFIG`` env var to point at the generated config
     - OpenCode loads all proxy models as ``codefreedom/<model-id>``
 """
@@ -235,7 +235,7 @@ def _ensure_opencode_sandbox_dir(profile_name: str) -> Tuple[Path, Path]:
     Returns (opencode_data_dir, config_path) — the OPENCODE_HOME data directory
     and the path to the generated ``opencode.json`` config file.
     """
-    profile_dir = CODEFREEDOM_DIR / "opencode" / "sandbox" / profile_name
+    profile_dir = CODEFREEDOM_DIR / "open-code" / "sandbox" / profile_name
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     # Isolated OPENCODE_HOME structure: data/config/cache/state subdirs
@@ -273,7 +273,7 @@ def run_local(
     # 0-click proxy config: generate opencode.json and inject OPENCODE_CONFIG
     proxy_url = _detect_proxy_url(profile_env)
     config = _generate_opencode_config(proxy_url, profile_env)
-    config_dir = CODEFREEDOM_DIR / "opencode" / "config"
+    config_dir = CODEFREEDOM_DIR / "open-code" / "config"
     config_path = _write_opencode_config(config, config_dir)
     env["OPENCODE_CONFIG"] = str(config_path)
 

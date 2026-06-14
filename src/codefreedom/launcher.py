@@ -121,7 +121,7 @@ def stop() -> int:
 
 
 def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
-    """Create ~/.codefreedom/sandbox/{profile}/.claude and a fresh .claude.json.
+    """Create ~/.codefreedom/claude-code/sandbox/{profile}/.claude and a fresh .claude.json.
 
     Does NOT seed from the host's ~/.claude.json -- the sandbox starts clean so
     Claude Code inside the container populates it naturally with only the paths
@@ -135,7 +135,7 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
     Returns (claude_dir, claude_json_path) -- the .claude directory and the
     .claude.json file path inside the profile's sandbox directory.
     """
-    profile_dir = CODEFREEDOM_DIR / "sandbox" / profile_name
+    profile_dir = CODEFREEDOM_DIR / "claude-code" / "sandbox" / profile_name
     profile_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(profile_dir, 0o777)
 
@@ -155,7 +155,7 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
         eprint(f"{tag('SANDBOX')} Using existing .claude.json: {sandbox_json}.")
 
     # ── Shared tools cache (used by Chrome DevTools MCP, etc.) ─────
-    tools_cache = CODEFREEDOM_DIR / "sandbox" / "tools" / ".cache"
+    tools_cache = CODEFREEDOM_DIR / "tools" / ".cache"
     tools_cache.mkdir(parents=True, exist_ok=True)
     os.chmod(tools_cache, 0o777)
 
@@ -303,7 +303,7 @@ def run_docker(
         "-v",
         f"{workspace_dir / '.claude'}:/workspace/.claude",
         "-v",
-        f"{CODEFREEDOM_DIR / 'sandbox' / 'tools' / '.cache'}:{container_home}/.cache",
+        f"{CODEFREEDOM_DIR / 'tools' / '.cache'}:{container_home}/.cache",
     ]
 
     # ── MCP JSON for tools ────────────────────────────────────────────────────

@@ -543,8 +543,8 @@ def tool_home() -> Path:
 
 
 def tool_data_dir(tool_name: str) -> str:
-    """Return the default data dir under ~/.codefreedom/sandbox/tools/<name>."""
-    return str(tool_home() / "sandbox" / "tools" / tool_name)
+    """Return the default data dir under ~/.codefreedom/tools/<name>."""
+    return str(tool_home() / "tools" / tool_name)
 
 
 def tool_profile_path(tool_filename: str) -> Path:
