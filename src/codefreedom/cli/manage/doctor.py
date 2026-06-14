@@ -35,7 +35,6 @@ from codefreedom.cli.docker_utils import (
     tool_home,
 )
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.env_loader import load_dotenv
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Check result types
