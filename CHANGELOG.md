@@ -6,8 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
-- Fixed `cf m up` crash on Windows (`uv` installs) caused by redundant local `import httpx` inside function bodies re-initializing the module, breaking `httpx.get()` timeout handling and `httpx.HTTPError` reference (`update.py`, `mimo.py`, `opencode.py`)
-- Added `get_response()` helper to `core/http_client.py` for callers that need full `httpx.Response` access (e.g., reading response headers)
+- Rewrote `core/http_client.py` to use stdlib `urllib.request` instead of `httpx`, eliminating dependency on a working `httpx` install (crashed on Windows `uv` installs where `httpx.get()` rejected `timeout` and `httpx.HTTPError` was missing)
+- Exports `HTTPError` and `HTTPStatusError` exception types from `http_client` so callers never need to import `httpx`
+- Updated all callers (`update.py`, `mimo.py`, `opencode.py`, `store.py`, `proxy_models.py`) to use the new exception hierarchy
 
 ## [0.1.9]
 
