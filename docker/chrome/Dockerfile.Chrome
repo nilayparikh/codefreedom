@@ -30,14 +30,14 @@
 # automation target: simple, fast, and quiet.
 #
 # @platform  Ubuntu
-# @version   v0.4.0
+# @version   v1.0.0
 # @arch      linux/amd64 (Google Chrome), linux/arm64 (Chromium snapshots)
 #
 # Base: ubuntu:24.04 LTS (multi-arch)
 #
 # Build:
-#   docker build --build-arg IMAGE_VERSION=0.4.0 \
-#     -t codefreedom:chrome-v0.4.0 \
+#   docker build --build-arg IMAGE_VERSION=1.0.0 \
+#     -t codefreedom:chrome-v1.0.0 \
 #     -f docker/chrome/Dockerfile.Chrome docker/chrome/
 #
 # Run:
@@ -52,7 +52,7 @@
 # MCP connect:  http://127.0.0.1:9223/mcp
 # ────────────────────────────────────────────────────────────────────────────────
 
-ARG IMAGE_VERSION=0.4.0
+ARG IMAGE_VERSION=1.0.0
 
 # 1. Ubuntu 24.04 LTS (multi-arch: arm64 + amd64)
 FROM ubuntu:24.04
