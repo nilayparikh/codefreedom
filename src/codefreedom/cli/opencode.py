@@ -163,6 +163,7 @@ def _generate_opencode_config(
     1. Fetches the live model list from the proxy
     2. Falls back to an empty model list if proxy is unreachable
     3. Creates a ``codefreedom`` provider entry with all models
+    4. Skips alias models unless OPENCODE_SHOW_ALIAS_MODELS is set
 
     Returns the config dict ready to be serialised to JSON.
     """
@@ -176,6 +177,29 @@ def _generate_opencode_config(
             f"[OPENCODE] Proxy responded with {len(proxy_models)} model(s), "
             f"mapped {len(provider_models)} provider model(s)."
         )
+
+        # Filter alias models unless profile explicitly enables them
+        show_aliases = profile_env.get("OPENCODE_SHOW_ALIAS_MODELS", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if not show_aliases:
+            from codefreedom.agents.vscode.proxy_models import _load_alias_models
+
+            alias_models = _load_alias_models()
+            if alias_models:
+                before = len(provider_models)
+                provider_models = {
+                    k: v for k, v in provider_models.items() if k not in alias_models
+                }
+                skipped = before - len(provider_models)
+                if skipped:
+                    eprint(
+                        f"[OPENCODE] Skipped {skipped} alias model(s)"
+                        f" ({', '.join(sorted(alias_models))});"
+                        " set OPENCODE_SHOW_ALIAS_MODELS=1 to include them."
+                    )
     else:
         provider_models = {}
         eprint(

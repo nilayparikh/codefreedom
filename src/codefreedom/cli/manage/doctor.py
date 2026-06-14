@@ -366,13 +366,6 @@ def _get_web_bridge_settings() -> dict:
     )
 
 
-ESSENTIAL_ENV_FILES = [
-    ".env.claude",
-    ".env.claude.secrets",
-    ".env.proxy",
-    ".env.proxy.secrets",
-]
-
 ESSENTIAL_PROFILE_FILES = [
     "chrome.yaml",
     "web.yaml",
@@ -384,21 +377,6 @@ ESSENTIAL_PROXY_FILES = [
     ("proxy/docker-compose.yaml", "Docker Compose file"),
     ("proxy/config/config.yaml", "LiteLLM config"),
 ]
-
-
-@_section("Config Files")
-def _check_env_files() -> CheckResult:
-    cf_dir = get_codefreedom_dir()
-    discovered = sorted(p.name for p in cf_dir.glob(".env.*") if p.is_file())
-    missing = [f for f in ESSENTIAL_ENV_FILES if f not in discovered]
-    if missing:
-        return _warn(
-            f"Missing env files: {', '.join(missing)}",
-            "Run 'cf s i' to create defaults",
-        )
-    return _ok(
-        f"All essential env files present ({len(discovered)} file(s) found)"
-    )
 
 
 @_section("Config Files")
@@ -593,7 +571,8 @@ def _resolve_env_var_value(
     Checks (in priority order):
     1. ``CF_CLI_<NAME>`` in ``os.environ`` (highest priority machine override)
     2. ``NAME`` directly in ``os.environ``
-    3. ``NAME=`` in the provided *env_files*
+    3. ``NAME=`` in ``~/.codefreedom/.env.user``
+    4. ``NAME=`` in the provided *env_files*
 
     Returns ``(value, source_description)`` or ``(None, None)`` if not found
     in any source.
@@ -607,14 +586,27 @@ def _resolve_env_var_value(
     if name in os.environ and os.environ[name]:
         return os.environ[name], f"{name} (machine env)"
 
-    # 3. Env files
+    # 3. .env.user (user-managed overrides)
+    cf_dir = get_codefreedom_dir()
+    user_env = cf_dir / ".env.user"
+    if user_env.exists():
+        content = user_env.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
+                val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+                if val and val != "CHANGE_ME":
+                    return val, f"{name} (in .env.user)"
+
+    # 4. Env files
     if env_files:
         for env_file in env_files:
             if env_file.exists():
                 content = env_file.read_text(encoding="utf-8")
                 for line in content.splitlines():
-                    if line.strip().startswith(f"{name}="):
-                        val = line.split("=", 1)[1].strip()
+                    stripped = line.strip()
+                    if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
+                        val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
                         if val and val != "CHANGE_ME":
                             return val, f"{name} (in {env_file.name})"
 
@@ -635,7 +627,7 @@ def _check_env_var(name: str, label: str, source_hint: str) -> CheckResult:
     ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
     """
     cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.proxy", cf_dir / ".env.proxy.secrets"]
+    env_files = [cf_dir / ".env.proxy.secrets"]
     value, source = _resolve_env_var_value(name, env_files=env_files)
     if value is not None:
         return _ok(f"{name} is set ({label})")
@@ -652,7 +644,7 @@ def _check_env_var_optional(name: str, label: str, _source_hint: str) -> CheckRe
     ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
     """
     cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.proxy", cf_dir / ".env.proxy.secrets"]
+    env_files = [cf_dir / ".env.proxy.secrets"]
     value, source = _resolve_env_var_value(name, env_files=env_files)
     if value is not None:
         return _ok(f"{name} is set ({label})")
@@ -709,14 +701,14 @@ def _check_claude_env_var(name: str, label: str) -> CheckResult:
     1. Claude Code profile (``profiles/claude-code.yaml`` → default → env)
     2. ``CF_CLI_<NAME>`` machine override
     3. ``NAME`` directly in ``os.environ``
-    4. ``.env.claude`` / ``.env.claude.secrets`` files
+    4. ``.env.claude.secrets`` file
     """
     profile_env = _load_claude_profile_env()
     if name in profile_env and profile_env[name]:
         return _ok(f"{name} is set ({label}, from Claude Code profile)")
 
     cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.claude", cf_dir / ".env.claude.secrets"]
+    env_files = [cf_dir / ".env.claude.secrets"]
     value, source = _resolve_env_var_value(name, env_files=env_files)
     if value is not None:
         return _ok(f"{name} is set ({label})")
@@ -840,15 +832,8 @@ def _check_web_port() -> CheckResult:
 
 @_section("Port Availability")
 def _check_proxy_port() -> CheckResult:
-    codefreedom_dir = get_codefreedom_dir()
-    env_proxy = codefreedom_dir / ".env.proxy"
-    proxy_env = load_dotenv(env_proxy)
-    port_str = proxy_env.get("LITELLM_PORT", "4000")
-    try:
-        port = int(port_str)
-    except (ValueError, TypeError):
-        port = 4000
-    hint = f"{codefreedom_dir}/.env.proxy (LITELLM_PORT)"
+    port = 4000
+    hint = "Default LiteLLM port (LITELLM_PORT)"
     return _check_port(port, "LiteLLM proxy", hint)
 
 

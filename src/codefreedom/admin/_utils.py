@@ -235,11 +235,11 @@ def _collect_files(
     for root, dirs, files in os.walk(source_dir):
         root_rel = Path(root).relative_to(source_dir)
 
-        dirs[:] = [d for d in dirs if _could_contain_managed(str(root_rel / d))]
+        dirs[:] = [d for d in dirs if _could_contain_managed((root_rel / d).as_posix())]
 
         for filename in sorted(files):
             full_path = Path(root) / filename
-            rel_path = str(root_rel / filename) if str(root_rel) != "." else filename
+            rel_path = (root_rel / filename).as_posix() if str(root_rel) != "." else filename
 
             if not _is_managed(rel_path):
                 continue

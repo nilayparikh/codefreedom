@@ -23,6 +23,7 @@ from codefreedom.admin import (
     _encrypt_data,
     _find_litellm_container,
     _is_encrypted_file,
+    _is_managed,
     _is_secrets_file,
     _manifest_from_dict,
     _manifest_to_dict,
@@ -115,6 +116,31 @@ class TestCategorize:
 
     def test_other(self):
         assert _categorize("some/random/file.txt") == "other"
+
+
+class TestIsManaged:
+    def test_profiles(self):
+        assert _is_managed("profiles")
+        assert _is_managed("profiles/claude-code.yaml")
+        assert _is_managed("profiles/sub/dir/file.txt")
+
+    def test_proxy(self):
+        assert _is_managed("proxy")
+        assert _is_managed("proxy/config/config.yaml")
+
+    def test_scripts(self):
+        assert _is_managed("scripts")
+        assert _is_managed("scripts/setup.sh")
+
+    def test_env_files(self):
+        assert _is_managed(".env.user")
+        assert _is_managed(".env.claude.secrets")
+        assert _is_managed("proxy/.env.proxy.secrets")
+
+    def test_not_managed(self):
+        assert not _is_managed("sandbox/file.txt")
+        assert not _is_managed("proc/data.json")
+        assert not _is_managed("pg/backup.dump")
 
 
 # ── Backup filename ───────────────────────────────────────────────────────────

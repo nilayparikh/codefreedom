@@ -160,7 +160,8 @@ def _install_recipe_files(
 
     # Validate manifest with Pydantic (non-fatal — warn on failure)
     try:
-        RecipeConfig.model_validate(manifest, strict=False)
+        validation_data = {k: v for k, v in manifest.items() if k != "_recipe_dir"}
+        RecipeConfig.model_validate(validation_data, strict=False)
     except ValidationError as exc:
         eprint(f"{tag('RECIPE')} Warning: Recipe validation issue: {exc}")
 
@@ -284,7 +285,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
             var = secret.get("var", "?")
             prompt = secret.get("prompt", "")
 
-            value, source = _resolve_secret(var, env_files)
+            value, source = _resolve_secret(var, env_files, cf_dir)
             if value is not None:
                 label = f"  {green('[SET]')}   {var}"
                 if source:
@@ -317,7 +318,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
             var = cfg.get("var", "?")
             prompt = cfg.get("prompt", "")
 
-            value, source = _resolve_secret(var, env_files)
+            value, source = _resolve_secret(var, env_files, cf_dir)
             if value is not None:
                 label = f"  {green('[SET]')}   {var}"
                 if source:
@@ -354,14 +355,15 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
 
 
 def _resolve_secret(
-    name: str, env_files: list[Path]
+    name: str, env_files: list[Path], cf_dir: Path | None = None
 ) -> tuple[str | None, str | None]:
     """Resolve a secret across CF_CLI_* env, os.environ, and .env files.
 
-    Same priority chain as the doctor's ``_resolve_env_var_value``:
+    Priority chain:
       1. ``CF_CLI_<NAME>`` in os.environ (highest priority)
       2. ``NAME`` directly in os.environ
-      3. ``NAME=`` in the provided env_files (ignoring CHANGE_ME)
+      3. ``NAME=`` in .env.user (user-managed overrides)
+      4. ``NAME=`` in the provided env_files (ignoring CHANGE_ME)
     """
     import os
 
@@ -372,12 +374,24 @@ def _resolve_secret(
     if name in os.environ and os.environ[name]:
         return os.environ[name], "machine env"
 
+    if cf_dir:
+        user_env = cf_dir / ".env.user"
+        if user_env.exists():
+            content = user_env.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
+                    val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+                    if val and val != "CHANGE_ME":
+                        return val, ".env.user"
+
     for env_file in env_files:
         if env_file.exists():
             content = env_file.read_text(encoding="utf-8")
             for line in content.splitlines():
-                if line.strip().startswith(f"{name}="):
-                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                stripped = line.strip()
+                if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
+                    val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
                     if val and val != "CHANGE_ME":
                         return val, env_file.name
 

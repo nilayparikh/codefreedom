@@ -176,50 +176,6 @@ class TestConfigFileChecks:
             full.write_text(content)
         return tmp_path
 
-    def test_env_files_all_present(self, monkeypatch, tmp_path):
-        self._setup_cf_dir(
-            tmp_path,
-            {
-                ".env.claude": "KEY=val\n",
-                ".env.claude.secrets": "SECRET=abc\n",
-                ".env.mimo.secrets": "MIMO_KEY=abc\n",
-                ".env.opencode.secrets": "OPENCODE_KEY=abc\n",
-                ".env.proxy": "PORT=4000\n",
-                ".env.proxy.secrets": "KEY=xyz\n",
-                ".env.user": "CUSTOM=val\n",
-            },
-        )
-        monkeypatch.setattr(
-            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
-        )
-        _clear_checks()
-
-        @_section("Config Files")
-        def _check() -> CheckResult:
-            from codefreedom.cli.manage.doctor import _check_env_files
-
-            return _check_env_files()
-
-        passed, failed, warned = _run_checks()
-        assert passed >= 1
-
-    def test_env_files_missing_warns(self, monkeypatch, tmp_path):
-        """Missing env files should produce a warning, not a failure."""
-        self._setup_cf_dir(tmp_path, {})  # empty cf_dir
-        monkeypatch.setattr(
-            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
-        )
-        _clear_checks()
-
-        @_section("Config Files")
-        def _check() -> CheckResult:
-            from codefreedom.cli.manage.doctor import _check_env_files
-
-            return _check_env_files()
-
-        passed, failed, warned = _run_checks()
-        assert warned >= 1
-
     def test_proxy_config_files_present(self, monkeypatch, tmp_path):
         self._setup_cf_dir(
             tmp_path,
