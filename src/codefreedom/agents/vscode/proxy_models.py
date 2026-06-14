@@ -13,9 +13,9 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import httpx
 import yaml
 
+from codefreedom.core.http_client import HTTPError, HTTPStatusError
 from codefreedom.env_loader import load_env_chain
 from codefreedom.log import eprint, tag
 
@@ -211,8 +211,8 @@ def _fetch_model_info(
 ) -> List[Dict[str, Any]]:
     """Fetch the proxy's /v1/model/info and return its `data` list.
 
-    Raises httpx.HTTPStatusError on non-2xx responses (e.g. 401 for a bad
-    master key) and httpx.HTTPError on network failures.
+    Raises HTTPStatusError on non-2xx responses (e.g. 401 for a bad
+    master key) and HTTPError on network failures.
     """
     from codefreedom.core.http_client import get_json
 
@@ -406,16 +406,16 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     eprint(f"{tag('VSCODE')} Fetching models from {_proxy_model_info_url(host, port)} ...")
     try:
         models = _fetch_model_info(host, port, master_key)
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (401, 403):
+    except HTTPStatusError as exc:
+        if exc.status_code in (401, 403):
             eprint(
-                f"[ERROR] Proxy rejected the master key (HTTP {exc.response.status_code})."
+                f"[ERROR] Proxy rejected the master key (HTTP {exc.status_code})."
                 " Check LITELLM_MASTER_KEY."
             )
         else:
-            eprint(f"{tag('ERROR')} /v1/model/info returned HTTP {exc.response.status_code}.")
+            eprint(f"{tag('ERROR')} /v1/model/info returned HTTP {exc.status_code}.")
         return 1
-    except httpx.HTTPError as exc:
+    except HTTPError as exc:
         eprint(f"{tag('ERROR')} Could not reach the proxy: {exc}")
         return 1
     except (ValueError, json.JSONDecodeError) as exc:

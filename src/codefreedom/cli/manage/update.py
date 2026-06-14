@@ -27,10 +27,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import httpx
 import yaml
 
-from codefreedom.core.http_client import get_json, get_response
+from codefreedom.core.http_client import HTTPError, HTTPStatusError, get_json, get_response
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint
 
@@ -222,9 +221,11 @@ def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
         digest = resp.headers.get("Docker-Content-Digest")
         if digest:
             return digest.strip().removeprefix("sha256:")
-    except httpx.HTTPStatusError as exc:
-        eprint(f"[UPDATE] Warning: Hub manifest check failed ({exc.response.status_code}): {url}.")
-    except httpx.HTTPError as exc:
+    except HTTPStatusError as exc:
+        eprint(
+            f"[UPDATE] Warning: Hub manifest check failed ({exc.status_code}): {url}."
+        )
+    except HTTPError as exc:
         eprint(f"[UPDATE] Warning: Hub unreachable ({exc}): {url}.")
     return None
 
@@ -236,7 +237,7 @@ def _get_docker_hub_token(namespace: str, repo: str) -> str | None:
     try:
         data = get_json(url, timeout=10.0)
         return data.get("token")
-    except (httpx.HTTPError, json.JSONDecodeError) as exc:
+    except (HTTPError, json.JSONDecodeError) as exc:
         eprint(f"[UPDATE] Warning: Docker Hub auth failed: {exc}.")
     return None
 
@@ -519,7 +520,7 @@ def check_pypi() -> dict[str, Any] | None:
     try:
         data = get_json(PYPI_URL, timeout=10.0)
         remote_version = data["info"]["version"]
-    except (httpx.HTTPError, json.JSONDecodeError):
+    except (HTTPError, json.JSONDecodeError):
         return {
             "local_version": local_version,
             "remote_version": "unknown",

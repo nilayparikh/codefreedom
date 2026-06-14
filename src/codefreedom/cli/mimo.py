@@ -28,8 +28,6 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import httpx
-
 from codefreedom.core.config import (
     get_codefreedom_dir,
     resolve_mimo_profiles_path,
@@ -99,20 +97,20 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> List[Dict[str, Any
     Returns a list of model dicts (with at least an ``id`` key).
     Returns an empty list if the proxy is unreachable or returns an error.
     """
-    from codefreedom.core.http_client import get_json
+    from codefreedom.core.http_client import get_json, HTTPError, HTTPStatusError
 
     models_url = f"{proxy_url.rstrip('/')}/v1/models"
     try:
         data = get_json(models_url, timeout=5, bearer=api_key)
         return data.get("data", [])
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (401, 403):
+    except HTTPStatusError as exc:
+        if exc.status_code in (401, 403):
             eprint(
-                f"[MIMO] Proxy returned {exc.response.status_code} — is LITELLM_MASTER_KEY set "
+                f"[MIMO] Proxy returned {exc.status_code} — is LITELLM_MASTER_KEY set "
                 f"in ~/.codefreedom/.env.claude.secrets?"
             )
         return []
-    except (httpx.HTTPError, json.JSONDecodeError):
+    except (HTTPError, json.JSONDecodeError):
         return []
 
 
@@ -188,9 +186,7 @@ def _generate_mimo_config(
             if alias_models:
                 before = len(provider_models)
                 provider_models = {
-                    k: v
-                    for k, v in provider_models.items()
-                    if k not in alias_models
+                    k: v for k, v in provider_models.items() if k not in alias_models
                 }
                 skipped = before - len(provider_models)
                 if skipped:
@@ -360,7 +356,9 @@ def run_docker(
     if run_as_me:
         container_home = f"/home/{Path.home().name}"
         container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
-        eprint(f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}")
+        eprint(
+            f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}"
+        )
     else:
         container_home = "/home/codefreedom"
         container_user_flag = []
@@ -368,19 +366,30 @@ def run_docker(
 
     # ── Docker run base options ───────────────────────────────────────────────
     base_opts = [
-        "--network", "host",
+        "--network",
+        "host",
         *container_user_flag,
         "--ipc=host",
-        "-v", f"{workspace_dir}:/workspace",
-        "-w", "/workspace",
-        "-v", f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
-        "-v", f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
-        "-v", f"{mimo_home_dir}:{container_home}/.local/share/mimocode",
-        "-v", f"{config_path}:{container_home}/.config/mimocode/mimocode.json:ro",
-        "-e", f"HOME={container_home}",
-        "-e", f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
-        "-e", "IS_SANDBOX=1",
-        "-e", "MIMOCODE_DISABLE_AUTOUPDATE=1",
+        "-v",
+        f"{workspace_dir}:/workspace",
+        "-w",
+        "/workspace",
+        "-v",
+        f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
+        "-v",
+        f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
+        "-v",
+        f"{mimo_home_dir}:{container_home}/.local/share/mimocode",
+        "-v",
+        f"{config_path}:{container_home}/.config/mimocode/mimocode.json:ro",
+        "-e",
+        f"HOME={container_home}",
+        "-e",
+        f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+        "-e",
+        "IS_SANDBOX=1",
+        "-e",
+        "MIMOCODE_DISABLE_AUTOUPDATE=1",
     ]
 
     # ── Exec command ──────────────────────────────────────────────────────────
@@ -553,12 +562,9 @@ def _update_mimocode_mcp(tools: List[str]) -> None:
     added = after_keys - before_keys
 
     if added:
-        config_path.write_text(
-            json.dumps(existing, indent=2) + "\n", encoding="utf-8"
-        )
+        config_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
         eprint(
-            f"[MIMO] Registered MCP in {config_path}:"
-            f" {', '.join(sorted(added))}"
+            f"[MIMO] Registered MCP in {config_path}:" f" {', '.join(sorted(added))}"
         )
     else:
         eprint("[MIMO] All MCP servers already registered.")

@@ -12,12 +12,9 @@ import errno
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import httpx
-
-from codefreedom.core.http_client import get_text
-
 import yaml
 
+from codefreedom.core.http_client import HTTPError, HTTPStatusError, get_text
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint, tag
 
@@ -297,9 +294,9 @@ def _fetch_text(url: str, timeout: int = 15) -> str:
     """Fetch text content from a URL with a short timeout."""
     try:
         return get_text(url, timeout=timeout, headers={"User-Agent": "codefreedom/0.1"})
-    except httpx.HTTPStatusError as e:
-        raise RecipeError(f"HTTP {e.response.status_code} fetching {url}") from e
-    except httpx.HTTPError as e:
+    except HTTPStatusError as e:
+        raise RecipeError(f"HTTP {e.status_code} fetching {url}") from e
+    except HTTPError as e:
         raise RecipeError(f"URL error for {url}: {e}") from e
 
 
