@@ -3,19 +3,19 @@
 # Architecture: linux/amd64 only (ROCm has no ARM64 support)
 #
 # @platform  ROCm
-# @version   v0.1.0
+# @version   v0.2.0
 # @arch      linux/amd64
 #
 # Base: rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.10.0
 #   • Ubuntu 24.04, Python 3.12, PyTorch 2.10, ROCm 7.2.4
 #
 # Build:
-#   docker build --build-arg IMAGE_VERSION=0.1.0 \
-#     -t codefreedom:rocm-v0.1.0 \
+#   docker build --build-arg IMAGE_VERSION=0.2.0 \
+#     -t codefreedom:rocm-v0.2.0 \
 #     -f docker/claude-code/Dockerfile.ROCm docker/claude-code/
 # ────────────────────────────────────────────────────────────────────────────────
 
-ARG IMAGE_VERSION=0.1.0
+ARG IMAGE_VERSION=0.2.0
 
 # 1. AMD ROCm PyTorch (Ubuntu 24.04, Python 3.12, PyTorch 2.10, ROCm 7.2.4)
 #    ROCm has no ARM64/aarch64 support — pin a custom ARG (not

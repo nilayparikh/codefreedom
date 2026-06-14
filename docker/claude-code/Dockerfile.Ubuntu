@@ -3,7 +3,7 @@
 # Lightweight common base: Claude Code + dev tools, no AI frameworks.
 #
 # @platform  Ubuntu
-# @version   v0.1.0
+# @version   v0.2.0
 # @arch      linux/arm64, linux/amd64
 #
 # Base: ubuntu:26.04 (multi-arch)
@@ -11,12 +11,12 @@
 #   • For AI inference, use the CUDA or ROCm variants instead
 #
 # Build:
-#   docker build --build-arg IMAGE_VERSION=0.1.0 \
-#     -t codefreedom:ubuntu-v0.1.0 \
+#   docker build --build-arg IMAGE_VERSION=0.2.0 \
+#     -t codefreedom:ubuntu-v0.2.0 \
 #     -f docker/claude-code/Dockerfile.Ubuntu docker/claude-code/
 # ────────────────────────────────────────────────────────────────────────────────
 
-ARG IMAGE_VERSION=0.1.0
+ARG IMAGE_VERSION=0.2.0
 
 # 1. Ubuntu 26.04 (multi-arch: arm64 + amd64)
 FROM ubuntu:26.04

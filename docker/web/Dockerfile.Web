@@ -18,7 +18,7 @@
 #   • Persistent profile stored in /userdata for session continuity
 #
 # @platform  Ubuntu
-# @version   v0.1.0
+# @version   v0.2.0
 # @arch      linux/arm64, linux/amd64
 #
 # Build:
@@ -35,7 +35,7 @@
 #
 # ──────────────────────────────────────────────────────────────────────────
 
-ARG IMAGE_VERSION=0.1.0
+ARG IMAGE_VERSION=0.2.0
 
 FROM python:3.13-slim
 
