@@ -46,3 +46,19 @@ def check_health(url: str, *, timeout: float = 5.0) -> bool:
         return 200 <= resp.status_code < 300
     except httpx.HTTPError:
         return False
+
+
+def get_response(
+    url: str,
+    *,
+    timeout: float = 10.0,
+    headers: dict[str, str] | None = None,
+    bearer: str | None = None,
+) -> httpx.Response:
+    """GET a URL and return the full Response object. Raises on failure."""
+    hdrs = dict(headers) if headers else {}
+    if bearer:
+        hdrs["Authorization"] = f"Bearer {bearer}"
+    resp = httpx.get(url, headers=hdrs, timeout=timeout)
+    resp.raise_for_status()
+    return resp

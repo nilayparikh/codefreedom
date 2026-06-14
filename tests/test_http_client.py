@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from codefreedom.core.http_client import check_health, get_json, get_text
+from codefreedom.core.http_client import check_health, get_json, get_response, get_text
 
 
 class TestGetJson:
@@ -96,3 +96,41 @@ class TestCheckHealth:
     def test_returns_false_on_timeout(self):
         with patch("httpx.get", side_effect=httpx.ReadTimeout("timed out")):
             assert check_health("http://example.com") is False
+
+
+class TestGetResponse:
+    def test_returns_response_object(self):
+        mock_resp = MagicMock(spec=httpx.Response)
+        with patch("httpx.get", return_value=mock_resp):
+            result = get_response("http://example.com/api")
+            assert result is mock_resp
+
+    def test_passes_bearer_token(self):
+        mock_resp = MagicMock(spec=httpx.Response)
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            get_response("http://example.com/api", bearer="sk-test")
+            call_kwargs = mock_get.call_args.kwargs
+            assert call_kwargs["headers"]["Authorization"] == "Bearer sk-test"
+
+    def test_passes_custom_headers(self):
+        mock_resp = MagicMock(spec=httpx.Response)
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            get_response("http://example.com", headers={"Accept": "text/html"})
+            call_kwargs = mock_get.call_args.kwargs
+            assert call_kwargs["headers"]["Accept"] == "text/html"
+
+    def test_respects_timeout(self):
+        mock_resp = MagicMock(spec=httpx.Response)
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            get_response("http://example.com/api", timeout=25.0)
+            assert mock_get.call_args.kwargs["timeout"] == 25.0
+
+    def test_raises_on_http_error(self):
+        mock_resp = MagicMock(spec=httpx.Response)
+        mock_resp.status_code = 404
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "not found", request=MagicMock(), response=mock_resp
+        )
+        with patch("httpx.get", return_value=mock_resp):
+            with pytest.raises(httpx.HTTPStatusError):
+                get_response("http://example.com/api")

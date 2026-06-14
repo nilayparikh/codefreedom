@@ -30,7 +30,7 @@ from typing import Any
 import httpx
 import yaml
 
-from codefreedom.core.http_client import get_json
+from codefreedom.core.http_client import get_json, get_response
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint
 
@@ -205,10 +205,8 @@ def _fetch_docker_hub_manifest(namespace: str, repo: str, tag: str) -> str | Non
 
 def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
     """Make a manifest request and return the raw SHA256 hex digest."""
-    import httpx
-
     try:
-        resp = httpx.get(
+        resp = get_response(
             url,
             headers={
                 "Authorization": f"Bearer {token}",
@@ -221,7 +219,6 @@ def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
             },
             timeout=15.0,
         )
-        resp.raise_for_status()
         digest = resp.headers.get("Docker-Content-Digest")
         if digest:
             return digest.strip().removeprefix("sha256:")
@@ -234,14 +231,10 @@ def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
 
 def _get_docker_hub_token(namespace: str, repo: str) -> str | None:
     """Get a Docker Hub registry auth token."""
-    import httpx
-
     scope = f"repository:{namespace}/{repo}:pull"
     url = f"{DOCKER_HUB_AUTH}?service=registry.docker.io&scope={scope}"
     try:
-        resp = httpx.get(url, timeout=10.0)
-        resp.raise_for_status()
-        data = resp.json()
+        data = get_json(url, timeout=10.0)
         return data.get("token")
     except (httpx.HTTPError, json.JSONDecodeError) as exc:
         eprint(f"[UPDATE] Warning: Docker Hub auth failed: {exc}.")

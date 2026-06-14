@@ -26,6 +26,8 @@ import shutil
 import signal
 import subprocess
 from pathlib import Path
+
+import httpx
 from typing import Any, Dict, List, Optional, Tuple
 
 from codefreedom.core.config import (
@@ -98,8 +100,6 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> List[Dict[str, Any
     Returns an empty list if the proxy is unreachable or returns an error.
     """
     from codefreedom.core.http_client import get_json
-
-    import httpx
 
     models_url = f"{proxy_url.rstrip('/')}/v1/models"
     try:
