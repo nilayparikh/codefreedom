@@ -182,8 +182,11 @@ class TestConfigFileChecks:
             {
                 ".env.claude": "KEY=val\n",
                 ".env.claude.secrets": "SECRET=abc\n",
+                ".env.mimo.secrets": "MIMO_KEY=abc\n",
+                ".env.opencode.secrets": "OPENCODE_KEY=abc\n",
                 ".env.proxy": "PORT=4000\n",
                 ".env.proxy.secrets": "KEY=xyz\n",
+                ".env.user": "CUSTOM=val\n",
             },
         )
         monkeypatch.setattr(

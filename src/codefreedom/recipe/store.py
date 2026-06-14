@@ -86,8 +86,8 @@ def _resolve_store(
 
     # ── Local path ──────────────────────────────────────────────────────
     if store.startswith("~"):
-        home = os.environ.get("HOME") or os.environ.get("USERPROFILE") or str(
-            Path.home()
+        home = (
+            os.environ.get("HOME") or os.environ.get("USERPROFILE") or str(Path.home())
         )
         expanded = home + store[1:]
     else:
@@ -138,9 +138,7 @@ def _rmtree_retry(path: Path, retries: int = 3, delay: float = 0.5) -> None:
                 raise
 
 
-def _handle_remove_readonly(
-    func: Any, path: str, exc: Any  # noqa: ARG001
-) -> None:
+def _handle_remove_readonly(func: Any, path: str, exc: Any) -> None:  # noqa: ARG001
     """Error handler for ``shutil.rmtree`` — clear read-only and retry."""
     excvalue = exc[1]
     if func in (os.unlink, os.rmdir) and excvalue.errno == errno.EACCES:
@@ -414,7 +412,9 @@ def _resolve_recipe(
                 files = _read_local_files(recipe_dir, manifest)
                 return manifest, files
             except RecipeError as e:
-                eprint(f"{tag('RECIPE')} Warning: Store recipe '{name}' has errors: {e}")
+                eprint(
+                    f"{tag('RECIPE')} Warning: Store recipe '{name}' has errors: {e}"
+                )
                 return None, {}
 
     # 1. Try local submodule (dev installs with git clone) as fallback
@@ -428,7 +428,9 @@ def _resolve_recipe(
                 files = _read_local_files(local_path, manifest)
                 return manifest, files
             except RecipeError as e:
-                eprint(f"{tag('RECIPE')} Warning: Local recipe '{name}' has errors: {e}")
+                eprint(
+                    f"{tag('RECIPE')} Warning: Local recipe '{name}' has errors: {e}"
+                )
 
     return None, {}
 

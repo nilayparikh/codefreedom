@@ -29,7 +29,12 @@ from typing import Any
 
 import yaml
 
-from codefreedom.core.http_client import HTTPError, HTTPStatusError, get_json, get_response
+from codefreedom.core.http_client import (
+    HTTPError,
+    HTTPStatusError,
+    get_json,
+    get_response,
+)
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint
 

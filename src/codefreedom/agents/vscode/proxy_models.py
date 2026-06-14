@@ -382,7 +382,9 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     # Load the full env chain so LITELLM_MASTER_KEY is resolved from ANY
     # supported location: .env.proxy, .env.proxy.secrets, .env.secrets,
     # .env.user, CF_CLI_LITELLM_MASTER_KEY, etc.
-    eprint(f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}...")
+    eprint(
+        f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}..."
+    )
     base_env = load_env_chain(workspace_dir, component="proxy")
 
     eprint(f"{tag('VSCODE')} Probing proxy at {_proxy_health_url(host, port)} ...")
@@ -403,7 +405,9 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
         )
         return 1
 
-    eprint(f"{tag('VSCODE')} Fetching models from {_proxy_model_info_url(host, port)} ...")
+    eprint(
+        f"{tag('VSCODE')} Fetching models from {_proxy_model_info_url(host, port)} ..."
+    )
     try:
         models = _fetch_model_info(host, port, master_key)
     except HTTPStatusError as exc:

@@ -327,7 +327,8 @@ class TestCheckProxyLive:
             raise HTTPStatusError("err", status_code=500, url="")
 
         monkeypatch.setattr(
-            "codefreedom.core.http_client._do_get", _raise,
+            "codefreedom.core.http_client._do_get",
+            _raise,
         )
         assert _check_proxy_live("h", 4000) is False
 
@@ -338,7 +339,8 @@ class TestCheckProxyLive:
             raise HTTPError("refused")
 
         monkeypatch.setattr(
-            "codefreedom.core.http_client._do_get", _raise,
+            "codefreedom.core.http_client._do_get",
+            _raise,
         )
         assert _check_proxy_live("h", 4000) is False
 
@@ -349,7 +351,8 @@ class TestCheckProxyLive:
             raise HTTPError("timed out")
 
         monkeypatch.setattr(
-            "codefreedom.core.http_client._do_get", _raise,
+            "codefreedom.core.http_client._do_get",
+            _raise,
         )
         assert _check_proxy_live("h", 4000) is False
 
@@ -360,7 +363,8 @@ class TestCheckProxyLive:
             raise HTTPError("dns")
 
         monkeypatch.setattr(
-            "codefreedom.core.http_client._do_get", _raise,
+            "codefreedom.core.http_client._do_get",
+            _raise,
         )
         assert _check_proxy_live("h", 4000) is False
 
@@ -744,7 +748,9 @@ def _args(
     out: Any = None,
     keep_alias: bool = False,
 ) -> argparse.Namespace:
-    return argparse.Namespace(host=host, port=port, name=name, out=out, keep_alias=keep_alias)
+    return argparse.Namespace(
+        host=host, port=port, name=name, out=out, keep_alias=keep_alias
+    )
 
 
 class TestCmdVscodeGenerate:
@@ -752,7 +758,8 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: False
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: False,
         )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
@@ -762,7 +769,8 @@ class TestCmdVscodeGenerate:
         monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
@@ -774,13 +782,16 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
 
         def boom(h, p, k, *, timeout=10.0):
             raise HTTPStatusError("Unauthorized", status_code=401, url="")
 
-        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info", boom
+        )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -788,13 +799,16 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
 
         def boom(h, p, k, *, timeout=10.0):
             raise HTTPStatusError("Server Error", status_code=500, url="")
 
-        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info", boom
+        )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -802,13 +816,16 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
 
         def boom(h, p, k, *, timeout=10.0):
             raise HTTPError("connection refused")
 
-        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info", boom
+        )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -816,13 +833,16 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
 
         def boom(h, p, k, *, timeout=10.0):
             raise ValueError("bad response")
 
-        monkeypatch.setattr("codefreedom.agents.vscode.proxy_models._fetch_model_info", boom)
+        monkeypatch.setattr(
+            "codefreedom.agents.vscode.proxy_models._fetch_model_info", boom
+        )
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
 
@@ -830,7 +850,8 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
         monkeypatch.setattr(
             "codefreedom.agents.vscode.proxy_models._fetch_model_info",
@@ -878,7 +899,8 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
         monkeypatch.setattr(
             "codefreedom.agents.vscode.proxy_models._fetch_model_info",
@@ -899,7 +921,8 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
         monkeypatch.setattr(
             "codefreedom.agents.vscode.proxy_models._fetch_model_info",
@@ -936,7 +959,8 @@ class TestCmdVscodeGenerate:
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
         monkeypatch.setattr(
             "codefreedom.agents.vscode.proxy_models._fetch_model_info",
@@ -974,11 +998,14 @@ class TestCmdVscodeGenerate:
         assert "Qwen3.7-Max" in ids
         assert "DeepSeek-V4-Flash" in ids
 
-    def test_aliases_included_with_keep_alias(self, monkeypatch, tmp_path: Path, capsys):
+    def test_aliases_included_with_keep_alias(
+        self, monkeypatch, tmp_path: Path, capsys
+    ):
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
         monkeypatch.setattr(
             "codefreedom.agents.vscode.proxy_models._fetch_model_info",
@@ -1013,11 +1040,14 @@ class TestCmdVscodeGenerate:
         assert "opus" in ids
         assert "Qwen3.7-Max" in ids
 
-    def test_no_aliases_config_keeps_all_models(self, monkeypatch, tmp_path: Path, capsys):
+    def test_no_aliases_config_keeps_all_models(
+        self, monkeypatch, tmp_path: Path, capsys
+    ):
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
         monkeypatch.setattr(
-            "codefreedom.agents.vscode.proxy_models._check_proxy_live", lambda h, p: True
+            "codefreedom.agents.vscode.proxy_models._check_proxy_live",
+            lambda h, p: True,
         )
         monkeypatch.setattr(
             "codefreedom.agents.vscode.proxy_models._fetch_model_info",

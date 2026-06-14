@@ -58,10 +58,14 @@ def _populate_cf_home(home: Path) -> None:
         "proxy/config/config.yaml": "general:\n  debug: false\n",
         "proxy/config/providers/deepseek.yaml": "model: deepseek-chat",
         "proxy/docker-compose.yaml": "version: '3'\nservices:\n  litellm:\n",
+        "scripts/setup-secrets.sh": "#!/bin/bash\necho setup\n",
         ".env.claude": "ANTHROPIC_BASE_URL=http://localhost:4000",
         ".env.claude.secrets": "ANTHROPIC_AUTH_TOKEN=sk-secret-abc",
+        ".env.mimo.secrets": "MIMO_API_KEY=sk-mimo-abc",
+        ".env.opencode.secrets": "OPENCODE_API_KEY=sk-opencode-abc",
         ".env.proxy": "LITELLM_MASTER_KEY=sk-test-key",
         ".env.proxy.secrets": "LITELLM_DB_PASSWORD=supersecret",
+        ".env.user": "CUSTOM_VAR=custom_value",
         "proc/sessions/active.json": '{"session_id": "abc123"}',
         "proc/tools/chrome.yaml": "status: running\n",
         "sandbox/default/.claude/settings.json": '{"theme": "dark"}',
@@ -205,6 +209,7 @@ class TestBackup:
         _out_path, manifest = engine_backup()
         assert "profiles" in manifest.categories
         assert "proxy" in manifest.categories
+        assert "scripts" in manifest.categories
         assert "env" in manifest.categories
         # sandbox/ and proc/ are not in managed scope
         assert "sandbox" not in manifest.categories
@@ -220,15 +225,18 @@ class TestBackup:
         # Secrets should be present (redacted)
         assert ".env.claude.secrets" in all_paths
         assert ".env.proxy.secrets" in all_paths
+        assert ".env.mimo.secrets" in all_paths
+        assert ".env.opencode.secrets" in all_paths
         # Non-secrets env files SHOULD be present
         assert ".env.claude" in all_paths
         assert ".env.proxy" in all_paths
+        assert ".env.user" in all_paths
 
     def test_correct_file_count(self):
-        """10 managed files should be backed up (8 regular + 2 redacted secrets)."""
-        _out_path, manifest = engine_backup()
+        """14 managed files should be backed up (10 regular + 4 secrets)."""
+        _out_path, manifest = engine_backup(skip_pg_dump=True)
         total = sum(len(e) for e in manifest.contents.values())
-        assert total == 10
+        assert total == 14
 
     def test_archive_is_valid_tar_gz(self):
         out_path, _manifest = engine_backup()

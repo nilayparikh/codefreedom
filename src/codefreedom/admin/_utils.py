@@ -170,11 +170,15 @@ class FileDiff:
 _MANAGED_PATHS: List[str] = [
     "profiles",
     "proxy",
+    "scripts",
     "pg/backup",
     ".env.claude",
     ".env.claude.secrets",
+    ".env.mimo.secrets",
+    ".env.opencode.secrets",
     ".env.proxy",
     ".env.proxy.secrets",
+    ".env.user",
 ]
 
 
@@ -301,6 +305,8 @@ def _categorize(rel_path: str) -> str:
         return "profiles"
     if rel_path.startswith("proxy/"):
         return "proxy"
+    if rel_path.startswith("scripts/"):
+        return "scripts"
     if rel_path.startswith("sandbox/"):
         return "sandbox"
     if rel_path.startswith("proc/"):

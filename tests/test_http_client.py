@@ -23,78 +23,100 @@ def _make_response(status=200, body=b"{}", headers=None):
 
 class TestGetJson:
     def test_returns_parsed_json(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response(body=b'{"key": "value"}')):
+        with patch(
+            "codefreedom.core.http_client._do_get",
+            return_value=_make_response(body=b'{"key": "value"}'),
+        ):
             result = get_json("http://example.com/api")
             assert result == {"key": "value"}
 
     def test_passes_bearer_token(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response()) as mock_get:
+        with patch(
+            "codefreedom.core.http_client._do_get", return_value=_make_response()
+        ) as mock_get:
             get_json("http://example.com/api", bearer="sk-test")
             call_kwargs = mock_get.call_args.kwargs
             assert call_kwargs["headers"]["Authorization"] == "Bearer sk-test"
 
     def test_passes_custom_headers(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response()) as mock_get:
+        with patch(
+            "codefreedom.core.http_client._do_get", return_value=_make_response()
+        ) as mock_get:
             get_json("http://example.com/api", headers={"X-Custom": "val"})
             call_kwargs = mock_get.call_args.kwargs
             assert call_kwargs["headers"]["X-Custom"] == "val"
 
     def test_raises_on_http_error(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    side_effect=HTTPStatusError("error", status_code=500, url="http://example.com")):
+        with patch(
+            "codefreedom.core.http_client._do_get",
+            side_effect=HTTPStatusError(
+                "error", status_code=500, url="http://example.com"
+            ),
+        ):
             with pytest.raises(HTTPStatusError):
                 get_json("http://example.com/api")
 
     def test_respects_timeout(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response()) as mock_get:
+        with patch(
+            "codefreedom.core.http_client._do_get", return_value=_make_response()
+        ) as mock_get:
             get_json("http://example.com/api", timeout=3.0)
             assert mock_get.call_args.kwargs["timeout"] == 3.0
 
 
 class TestGetText:
     def test_returns_decoded_text(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response(body=b"hello world")):
+        with patch(
+            "codefreedom.core.http_client._do_get",
+            return_value=_make_response(body=b"hello world"),
+        ):
             result = get_text("http://example.com")
             assert result == "hello world"
 
     def test_passes_custom_headers(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response()) as mock_get:
+        with patch(
+            "codefreedom.core.http_client._do_get", return_value=_make_response()
+        ) as mock_get:
             get_text("http://example.com", headers={"User-Agent": "test/1.0"})
             call_kwargs = mock_get.call_args.kwargs
             assert call_kwargs["headers"]["User-Agent"] == "test/1.0"
 
     def test_raises_on_http_error(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    side_effect=HTTPStatusError("error", status_code=500, url="http://example.com")):
+        with patch(
+            "codefreedom.core.http_client._do_get",
+            side_effect=HTTPStatusError(
+                "error", status_code=500, url="http://example.com"
+            ),
+        ):
             with pytest.raises(HTTPStatusError):
                 get_text("http://example.com")
 
 
 class TestCheckHealth:
     def test_returns_true_on_2xx(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response(status=200)):
+        with patch(
+            "codefreedom.core.http_client._do_get",
+            return_value=_make_response(status=200),
+        ):
             assert check_health("http://example.com") is True
 
     def test_returns_false_on_5xx(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    side_effect=HTTPStatusError("err", status_code=500, url="")):
+        with patch(
+            "codefreedom.core.http_client._do_get",
+            side_effect=HTTPStatusError("err", status_code=500, url=""),
+        ):
             assert check_health("http://example.com") is False
 
     def test_returns_false_on_connect_error(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    side_effect=HTTPError("refused")):
+        with patch(
+            "codefreedom.core.http_client._do_get", side_effect=HTTPError("refused")
+        ):
             assert check_health("http://example.com") is False
 
     def test_returns_false_on_timeout(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    side_effect=HTTPError("timed out")):
+        with patch(
+            "codefreedom.core.http_client._do_get", side_effect=HTTPError("timed out")
+        ):
             assert check_health("http://example.com") is False
 
 
@@ -106,28 +128,35 @@ class TestGetResponse:
             assert result is resp
 
     def test_passes_bearer_token(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response()) as mock_get:
+        with patch(
+            "codefreedom.core.http_client._do_get", return_value=_make_response()
+        ) as mock_get:
             get_response("http://example.com/api", bearer="sk-test")
             call_kwargs = mock_get.call_args.kwargs
             assert call_kwargs["headers"]["Authorization"] == "Bearer sk-test"
 
     def test_passes_custom_headers(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response()) as mock_get:
+        with patch(
+            "codefreedom.core.http_client._do_get", return_value=_make_response()
+        ) as mock_get:
             get_response("http://example.com", headers={"Accept": "text/html"})
             call_kwargs = mock_get.call_args.kwargs
             assert call_kwargs["headers"]["Accept"] == "text/html"
 
     def test_respects_timeout(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    return_value=_make_response()) as mock_get:
+        with patch(
+            "codefreedom.core.http_client._do_get", return_value=_make_response()
+        ) as mock_get:
             get_response("http://example.com/api", timeout=25.0)
             assert mock_get.call_args.kwargs["timeout"] == 25.0
 
     def test_raises_on_http_error(self):
-        with patch("codefreedom.core.http_client._do_get",
-                    side_effect=HTTPStatusError("not found", status_code=404, url="http://example.com")):
+        with patch(
+            "codefreedom.core.http_client._do_get",
+            side_effect=HTTPStatusError(
+                "not found", status_code=404, url="http://example.com"
+            ),
+        ):
             with pytest.raises(HTTPStatusError):
                 get_response("http://example.com/api")
 

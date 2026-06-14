@@ -653,10 +653,15 @@ def _validate_basic(config_file: Path, errors: List[str]) -> None:
 def _env_is_set(var_name: str, env: Optional[Dict[str, str]] = None) -> bool:
     """Check if an environment variable is set (including empty strings).
 
-    If *env* is provided, it is checked first, then os.environ.  This lets
-    callers (e.g. _validate) include vars loaded from .env.proxy files.
+    Checks (in priority order):
+    1. *env* dict (from .env files)
+    2. ``CF_CLI_<var_name>`` in ``os.environ`` (machine override)
+    3. ``var_name`` directly in ``os.environ``
     """
     if env is not None and var_name in env:
+        return True
+    cf_cli_key = f"CF_CLI_{var_name}"
+    if cf_cli_key in os.environ:
         return True
     return var_name in os.environ
 

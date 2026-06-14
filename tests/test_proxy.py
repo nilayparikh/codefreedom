@@ -152,6 +152,20 @@ class TestEnvIsSet:
         monkeypatch.setenv("EMPTY_VAR", "")
         assert _env_is_set("EMPTY_VAR") is True
 
+    def test_cf_cli_override(self, monkeypatch):
+        monkeypatch.setenv("CF_CLI_MY_API_KEY", "sk-test")
+        assert _env_is_set("MY_API_KEY") is True
+
+    def test_cf_cli_override_not_in_os_environ(self, monkeypatch):
+        monkeypatch.delenv("MY_API_KEY", raising=False)
+        monkeypatch.setenv("CF_CLI_MY_API_KEY", "sk-test")
+        assert _env_is_set("MY_API_KEY") is True
+
+    def test_env_dict_takes_precedence(self, monkeypatch):
+        monkeypatch.setenv("CF_CLI_MY_KEY", "from-cf-cli")
+        env = {"MY_KEY": "from-file"}
+        assert _env_is_set("MY_KEY", env=env) is True
+
 
 class TestRun:
     """Tests for the run() entry point."""

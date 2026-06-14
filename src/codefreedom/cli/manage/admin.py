@@ -41,6 +41,7 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     # ── backup ──────────────────────────────────────────────────────────
     bak = admin_sub.add_parser(
         "backup",
+        aliases=["bu"],
         help="Create a backup archive of managed config files",
         description=(
             "Archive managed CodeFreedom config files (profiles, proxy, pg, .env). "
@@ -81,6 +82,7 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     # ── restore ─────────────────────────────────────────────────────────
     rst = admin_sub.add_parser(
         "restore",
+        aliases=["res"],
         help="Restore configuration from a backup archive",
         description=(
             "Restore files from a backup archive. Shows a diff preview before "
@@ -123,6 +125,7 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     # ── inspect ─────────────────────────────────────────────────────────
     ins = admin_sub.add_parser(
         "inspect",
+        aliases=["ins"],
         help="Show manifest of a backup archive",
         description=(
             "Display the full manifest of a backup archive without extracting. "
@@ -145,6 +148,7 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     # ── prune ───────────────────────────────────────────────────────────
     prn = admin_sub.add_parser(
         "prune",
+        aliases=["pr"],
         help="Remove old backups (never deletes the last backup)",
         description=(
             "Remove old backups by count (--keep N) or age (--older-than DURATION). "
@@ -344,15 +348,15 @@ def run(args: argparse.Namespace) -> int:
     action = args.action
 
     try:
-        if action == "backup":
+        if action in ("backup", "bu"):
             return _cmd_backup(args)
-        elif action == "restore":
+        elif action in ("restore", "res"):
             return _cmd_restore(args)
         elif action in ("list-backups", "ls"):
             return _cmd_list_backups()
-        elif action == "inspect":
+        elif action in ("inspect", "ins"):
             return _cmd_inspect(args)
-        elif action == "prune":
+        elif action in ("prune", "pr"):
             return _cmd_prune(args)
         else:
             eprint(f"{tag('ADMIN')} Unknown action: {action}")
