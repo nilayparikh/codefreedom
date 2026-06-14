@@ -24,7 +24,6 @@ import argparse
 import shutil
 import subprocess
 import os
-import sys
 from pathlib import Path
 
 from codefreedom.core.config import get_codefreedom_dir
@@ -135,10 +134,12 @@ def _stop_tools() -> int:
 
 
 def _remove_codefreedom_dir(cf_dir: Path) -> None:
-    """Remove the CodeFreedom home directory and all its contents.
+    """Remove all contents of the CodeFreedom home directory.
 
     Preserves ``.env.user`` — it's a user-managed override file that should
     survive a full teardown. Prints a message telling the user where it is.
+    Removes contents rather than the directory itself to avoid Windows
+    ``WinError 32`` (directory held open by another process).
     """
     if not cf_dir.exists():
         eprint(f"{tag('DEINIT')} Directory '{cf_dir}' does not exist — nothing to remove.")
@@ -153,22 +154,36 @@ def _remove_codefreedom_dir(cf_dir: Path) -> None:
         except OSError:
             pass
 
-    eprint(f"{tag('DEINIT')} Removing '{cf_dir}' (preserving .env.user)...")
-    try:
-        shutil.rmtree(cf_dir)
-        eprint(f"{tag('DEINIT')} Directory removed.")
-    except OSError as exc:
-        eprint(f"{tag('DEINIT')} Failed to remove directory: {exc}")
-        sys.exit(1)
+    eprint(f"{tag('DEINIT')} Removing contents of '{cf_dir}' (preserving .env.user)...")
 
-    # Restore .env.user
-    if preserved is not None:
+    errors: list[str] = []
+    for item in sorted(cf_dir.iterdir(), key=lambda p: p.name):
+        if item.name == ".env.user":
+            continue
         try:
-            cf_dir.mkdir(parents=True, exist_ok=True)
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+        except OSError as exc:
+            errors.append(f"  {tag('WARN')} Could not remove {item}: {exc}")
+
+    if errors:
+        for line in errors:
+            eprint(line)
+        eprint(f"{tag('DEINIT')} Some items could not be removed (files may be in use).")
+    else:
+        eprint(f"{tag('DEINIT')} Contents removed.")
+
+    # Restore .env.user if it was deleted (shouldn't be, but defensive)
+    if preserved is not None and not user_env.exists():
+        try:
             user_env.write_text(preserved, encoding="utf-8")
-            eprint(f"{tag('DEINIT')} Preserved '{user_env}' (user overrides).")
+            eprint(f"{tag('DEINIT')} Restored '{user_env}' (user overrides).")
         except OSError as exc:
             eprint(f"   {tag('WARN')} Could not restore .env.user: {exc}")
+    elif preserved is not None:
+        eprint(f"{tag('DEINIT')} Preserved '{user_env}' (user overrides).")
 
 
 def run(args: argparse.Namespace) -> int:
