@@ -13,9 +13,9 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import httpx
 import yaml
 
+from codefreedom.core.http_client import HTTPError, HTTPStatusError
 from codefreedom.env_loader import load_env_chain
 from codefreedom.log import eprint, tag
 
@@ -211,8 +211,8 @@ def _fetch_model_info(
 ) -> List[Dict[str, Any]]:
     """Fetch the proxy's /v1/model/info and return its `data` list.
 
-    Raises httpx.HTTPStatusError on non-2xx responses (e.g. 401 for a bad
-    master key) and httpx.HTTPError on network failures.
+    Raises HTTPStatusError on non-2xx responses (e.g. 401 for a bad
+    master key) and HTTPError on network failures.
     """
     from codefreedom.core.http_client import get_json
 
@@ -368,7 +368,7 @@ def _build_vscode_entry(
 def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     """Generate a chatLanguageModels.json entry from the running proxy.
 
-    Entry point for ``codefreedom config vscode proxy config``.  Probes the proxy
+    Entry point for ``codefreedom setup config vscode proxy config``.  Probes the proxy
     at /health/liveliness, fetches /v1/model/info with LITELLM_MASTER_KEY,
     and emits a JSON object that can be dropped into VS Code's user-level
     ``chatLanguageModels.json`` file (a list of provider entries).
@@ -382,7 +382,9 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     # Load the full env chain so LITELLM_MASTER_KEY is resolved from ANY
     # supported location: .env.proxy, .env.proxy.secrets, .env.secrets,
     # .env.user, CF_CLI_LITELLM_MASTER_KEY, etc.
-    eprint(f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}...")
+    eprint(
+        f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}..."
+    )
     base_env = load_env_chain(workspace_dir, component="proxy")
 
     eprint(f"{tag('VSCODE')} Probing proxy at {_proxy_health_url(host, port)} ...")
@@ -403,19 +405,21 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
         )
         return 1
 
-    eprint(f"{tag('VSCODE')} Fetching models from {_proxy_model_info_url(host, port)} ...")
+    eprint(
+        f"{tag('VSCODE')} Fetching models from {_proxy_model_info_url(host, port)} ..."
+    )
     try:
         models = _fetch_model_info(host, port, master_key)
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (401, 403):
+    except HTTPStatusError as exc:
+        if exc.status_code in (401, 403):
             eprint(
-                f"[ERROR] Proxy rejected the master key (HTTP {exc.response.status_code})."
+                f"[ERROR] Proxy rejected the master key (HTTP {exc.status_code})."
                 " Check LITELLM_MASTER_KEY."
             )
         else:
-            eprint(f"{tag('ERROR')} /v1/model/info returned HTTP {exc.response.status_code}.")
+            eprint(f"{tag('ERROR')} /v1/model/info returned HTTP {exc.status_code}.")
         return 1
-    except httpx.HTTPError as exc:
+    except HTTPError as exc:
         eprint(f"{tag('ERROR')} Could not reach the proxy: {exc}")
         return 1
     except (ValueError, json.JSONDecodeError) as exc:

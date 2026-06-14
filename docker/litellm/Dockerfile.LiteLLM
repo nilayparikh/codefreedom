@@ -30,15 +30,15 @@
 #     --build-arg PG_VERSION=18.4 \
 #     --build-arg PG_SOURCE_URL=https://github.com/postgres/postgres.git \
 #     --build-arg PG_TAG=REL_18_4 \
-#     --build-arg IMAGE_VERSION=0.1.0 \
-#     -t docker.io/nilayparikh/codefreedom:litellm-v0.1.0 \
+#     --build-arg IMAGE_VERSION=1.0.0 \
+#     -t docker.io/nilayparikh/codefreedom:litellm-v1.0.0 \
 #     -f docker/litellm/Dockerfile.LiteLLM docker/litellm/
 #
 # @platform  linux/amd64, linux/arm64
-# @version   v0.1.0
+# @version   v1.0.0
 # ─────────────────────────────────────────────────────────────────────────────
 
-ARG IMAGE_VERSION=0.2.0
+ARG IMAGE_VERSION=1.0.0
 ARG LITELLM_FORK_URL=https://github.com/nilayparikh/litellm.git
 ARG LITELLM_TAG=v1.87.1
 ARG PG_VERSION=18.4

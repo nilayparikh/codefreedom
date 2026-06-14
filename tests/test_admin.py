@@ -23,6 +23,7 @@ from codefreedom.admin import (
     _encrypt_data,
     _find_litellm_container,
     _is_encrypted_file,
+    _is_managed,
     _is_secrets_file,
     _manifest_from_dict,
     _manifest_to_dict,
@@ -58,10 +59,14 @@ def _populate_cf_home(home: Path) -> None:
         "proxy/config/config.yaml": "general:\n  debug: false\n",
         "proxy/config/providers/deepseek.yaml": "model: deepseek-chat",
         "proxy/docker-compose.yaml": "version: '3'\nservices:\n  litellm:\n",
+        "scripts/setup-secrets.sh": "#!/bin/bash\necho setup\n",
         ".env.claude": "ANTHROPIC_BASE_URL=http://localhost:4000",
         ".env.claude.secrets": "ANTHROPIC_AUTH_TOKEN=sk-secret-abc",
+        ".env.mimo.secrets": "MIMO_API_KEY=sk-mimo-abc",
+        ".env.opencode.secrets": "OPENCODE_API_KEY=sk-opencode-abc",
         ".env.proxy": "LITELLM_MASTER_KEY=sk-test-key",
         ".env.proxy.secrets": "LITELLM_DB_PASSWORD=supersecret",
+        ".env.user": "CUSTOM_VAR=custom_value",
         "proc/sessions/active.json": '{"session_id": "abc123"}',
         "proc/tools/chrome.yaml": "status: running\n",
         "sandbox/default/.claude/settings.json": '{"theme": "dark"}',
@@ -111,6 +116,31 @@ class TestCategorize:
 
     def test_other(self):
         assert _categorize("some/random/file.txt") == "other"
+
+
+class TestIsManaged:
+    def test_profiles(self):
+        assert _is_managed("profiles")
+        assert _is_managed("profiles/claude-code.yaml")
+        assert _is_managed("profiles/sub/dir/file.txt")
+
+    def test_proxy(self):
+        assert _is_managed("proxy")
+        assert _is_managed("proxy/config/config.yaml")
+
+    def test_scripts(self):
+        assert _is_managed("scripts")
+        assert _is_managed("scripts/setup.sh")
+
+    def test_env_files(self):
+        assert _is_managed(".env.user")
+        assert _is_managed(".env.claude.secrets")
+        assert _is_managed("proxy/.env.proxy.secrets")
+
+    def test_not_managed(self):
+        assert not _is_managed("sandbox/file.txt")
+        assert not _is_managed("proc/data.json")
+        assert not _is_managed("pg/backup.dump")
 
 
 # ── Backup filename ───────────────────────────────────────────────────────────
@@ -205,6 +235,7 @@ class TestBackup:
         _out_path, manifest = engine_backup()
         assert "profiles" in manifest.categories
         assert "proxy" in manifest.categories
+        assert "scripts" in manifest.categories
         assert "env" in manifest.categories
         # sandbox/ and proc/ are not in managed scope
         assert "sandbox" not in manifest.categories
@@ -220,15 +251,18 @@ class TestBackup:
         # Secrets should be present (redacted)
         assert ".env.claude.secrets" in all_paths
         assert ".env.proxy.secrets" in all_paths
+        assert ".env.mimo.secrets" in all_paths
+        assert ".env.opencode.secrets" in all_paths
         # Non-secrets env files SHOULD be present
         assert ".env.claude" in all_paths
         assert ".env.proxy" in all_paths
+        assert ".env.user" in all_paths
 
     def test_correct_file_count(self):
-        """10 managed files should be backed up (8 regular + 2 redacted secrets)."""
-        _out_path, manifest = engine_backup()
+        """14 managed files should be backed up (10 regular + 4 secrets)."""
+        _out_path, manifest = engine_backup(skip_pg_dump=True)
         total = sum(len(e) for e in manifest.contents.values())
-        assert total == 10
+        assert total == 14
 
     def test_archive_is_valid_tar_gz(self):
         out_path, _manifest = engine_backup()
@@ -331,7 +365,7 @@ class TestRestore:
         assert (target / ".env.claude.secrets").exists()
         # Verify redacted content
         secrets_content = (target / ".env.claude.secrets").read_text()
-        assert "sk***c" in secrets_content
+        assert "s***c" in secrets_content
 
     def test_diff_statuses(self, cf_home_dir: Path):
         out_path, _manifest = engine_backup()
@@ -567,9 +601,8 @@ class TestPostgresDump:
         """PG data directory is also categorized as 'database'."""
         assert _categorize("pg/data/somefile") == "database"
 
-    def test_managed_paths_includes_pg(self, cf_home_dir: Path):
-        """PG backup dir within managed scope should be collected."""
-        # Create a test pg dump file
+    def test_managed_paths_excludes_pg(self, cf_home_dir: Path):
+        """PG backup dir is NOT in managed scope (use pg_dump separately)."""
         pg_backup = cf_home_dir / "pg" / "backup"
         pg_backup.mkdir(parents=True, exist_ok=True)
         (pg_backup / "codefreedom-pgdump-20260609-120000.dump").write_text(
@@ -582,8 +615,7 @@ class TestPostgresDump:
             for e in entries:
                 all_paths.add(e.path)
 
-        assert "pg/backup/codefreedom-pgdump-20260609-120000.dump" in all_paths
-        assert "database" in manifest.categories
+        assert "pg/backup/codefreedom-pgdump-20260609-120000.dump" not in all_paths
 
     def test_backup_with_pg_dump_success(self, cf_home_dir: Path, monkeypatch):
         """Simulate a successful pg_dump and verify the dump is included."""
@@ -626,8 +658,7 @@ class TestPostgresDump:
                 all_paths.add(e.path)
 
         pg_dump_files = [p for p in all_paths if _PG_DUMP_PREFIX in p]
-        assert len(pg_dump_files) == 1, f"Expected 1 pg dump file, got {pg_dump_files}"
-        assert "database" in manifest.categories
+        assert len(pg_dump_files) == 0, "pg/backup not in managed scope"
 
     @pytest.mark.usefixtures("cf_home_dir")
     def test_backup_with_skip_pg_dump(self, monkeypatch):

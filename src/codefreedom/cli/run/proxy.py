@@ -11,7 +11,7 @@ The proxy is always run via `docker compose` against
 `~/.codefreedom/proxy/docker-compose.yaml`. The LiteLLM process runs inside
 the `codefreedom:litellm-latest` image (see docker/litellm/Dockerfile.LiteLLM)
 which bakes in the WebSearch count display patch.  The web-bridge is now a
-standalone tool (``cf tools web-bridge``) — start it separately before the
+standalone tool (``cf run tools web-bridge``) — start it separately before the
 proxy if you need WebSearch support.
 
 VS Code integration: see `codefreedom setup config vscode proxy`.
@@ -66,7 +66,7 @@ def run(args: argparse.Namespace) -> int:
         return _status()
     elif action == "validate":
         return _validate()
-    # `vscode` moved to `codefreedom config vscode proxy config`
+    # `vscode` moved to `codefreedom setup config vscode proxy config`
     # subcommand -- see codefreedom.cli.vscode.
     else:
         eprint(
@@ -164,13 +164,13 @@ def _web_bridge_image() -> str:
     """Return the fully-qualified image tag used for the web-bridge sidecar.
 
     Reads ``WEB_BRIDGE_IMAGE`` from the merged env (proxy env files override
-    system env). Falls back to the published ``docker.io/nilayparikh/codefreedom:web-bridge``
+    system env). Falls back to the published ``docker.io/nilayparikh/codefreedom:web-bridge-latest``
     reference so the local build is directly pushable to Docker Hub without
     a retag step. Override the env var to use a different registry/tag.
     """
     merged = _build_proxy_env()
     return merged.get(
-        "WEB_BRIDGE_IMAGE", "docker.io/nilayparikh/codefreedom:web-bridge"
+        "WEB_BRIDGE_IMAGE", "docker.io/nilayparikh/codefreedom:web-bridge-latest"
     )
 
 
@@ -179,6 +179,10 @@ def _ensure_web_bridge_image() -> int:
 
     Returns 0 on success, 1 on hard failure (Docker error, source tree
     missing, build failure).  A pre-built image is a no-op.
+
+    Follows the same pull-first pattern as other tools (chrome, web,
+    github): check local cache, try ``docker pull`` for the correct
+    multi-arch image, and only fall back to a local build if both fail.
     """
     image = _web_bridge_image()
 
@@ -191,7 +195,22 @@ def _ensure_web_bridge_image() -> int:
     if check.returncode == 0:
         return 0
 
-    # Try to auto-build from the source tree.
+    # Pull the multi-arch image from the registry.  The published image
+    # contains both linux/arm64 and linux/amd64; Docker selects the
+    # correct manifest for the host architecture.
+    eprint(f"[PROXY] Web-bridge image '{image}' not found locally, pulling...")
+    pull = subprocess.run(
+        ["docker", "pull", image],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if pull.returncode == 0:
+        eprint("[PROXY] Web-bridge image pulled.")
+        return 0
+
+    # Pull failed — fall back to a local build from the source tree.
     build_ctx = _web_bridge_build_context()
     if build_ctx is None:
         eprint(
@@ -603,7 +622,7 @@ def _validate() -> int:
 
 def _validate_basic(config_file: Path, errors: List[str]) -> None:
     """Basic validation without PyYAML."""
-    content = config_file.read_text()
+    content = config_file.read_text(encoding="utf-8")
     checks = [
         ("include:", "provider includes"),
         ("general_settings:", "general_settings section"),
@@ -634,10 +653,15 @@ def _validate_basic(config_file: Path, errors: List[str]) -> None:
 def _env_is_set(var_name: str, env: Optional[Dict[str, str]] = None) -> bool:
     """Check if an environment variable is set (including empty strings).
 
-    If *env* is provided, it is checked first, then os.environ.  This lets
-    callers (e.g. _validate) include vars loaded from .env.proxy files.
+    Checks (in priority order):
+    1. *env* dict (from .env files)
+    2. ``CF_CLI_<var_name>`` in ``os.environ`` (machine override)
+    3. ``var_name`` directly in ``os.environ``
     """
     if env is not None and var_name in env:
+        return True
+    cf_cli_key = f"CF_CLI_{var_name}"
+    if cf_cli_key in os.environ:
         return True
     return var_name in os.environ
 

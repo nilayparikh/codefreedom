@@ -1,8 +1,8 @@
 """Update checker — checks CodeFreedom Docker images and PyPI package for updates.
 
 Usage:
-    codefreedom update [service...]
-    cf update
+    codefreedom manage update [service...]
+    cf manage update
     cf upd
 
 Discovers CodeFreedom images from the local Docker cache and profiles,
@@ -27,10 +27,14 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import httpx
 import yaml
 
-from codefreedom.core.http_client import get_json
+from codefreedom.core.http_client import (
+    HTTPError,
+    HTTPStatusError,
+    get_json,
+    get_response,
+)
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint
 
@@ -205,10 +209,8 @@ def _fetch_docker_hub_manifest(namespace: str, repo: str, tag: str) -> str | Non
 
 def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
     """Make a manifest request and return the raw SHA256 hex digest."""
-    import httpx
-
     try:
-        resp = httpx.get(
+        resp = get_response(
             url,
             headers={
                 "Authorization": f"Bearer {token}",
@@ -221,29 +223,26 @@ def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
             },
             timeout=15.0,
         )
-        resp.raise_for_status()
         digest = resp.headers.get("Docker-Content-Digest")
         if digest:
             return digest.strip().removeprefix("sha256:")
-    except httpx.HTTPStatusError as exc:
-        eprint(f"[UPDATE] Warning: Hub manifest check failed ({exc.response.status_code}): {url}.")
-    except httpx.HTTPError as exc:
+    except HTTPStatusError as exc:
+        eprint(
+            f"[UPDATE] Warning: Hub manifest check failed ({exc.status_code}): {url}."
+        )
+    except HTTPError as exc:
         eprint(f"[UPDATE] Warning: Hub unreachable ({exc}): {url}.")
     return None
 
 
 def _get_docker_hub_token(namespace: str, repo: str) -> str | None:
     """Get a Docker Hub registry auth token."""
-    import httpx
-
     scope = f"repository:{namespace}/{repo}:pull"
     url = f"{DOCKER_HUB_AUTH}?service=registry.docker.io&scope={scope}"
     try:
-        resp = httpx.get(url, timeout=10.0)
-        resp.raise_for_status()
-        data = resp.json()
+        data = get_json(url, timeout=10.0)
         return data.get("token")
-    except (httpx.HTTPError, json.JSONDecodeError) as exc:
+    except (HTTPError, json.JSONDecodeError) as exc:
         eprint(f"[UPDATE] Warning: Docker Hub auth failed: {exc}.")
     return None
 
@@ -510,6 +509,15 @@ def check_image(image_ref: dict[str, str]) -> dict[str, Any]:
 # ─── PyPI check ──────────────────────────────────────────────────────────────
 
 
+def _parse_version(version_str: str) -> tuple[int, ...]:
+    """Parse version string into comparable tuple, handling pre-release tags."""
+    rc_match = re.search(r"(rc|alpha|beta|a|b)(\d+)$", version_str)
+    pre_release = 0 if rc_match else 1
+    base = re.split(r"[^0-9]+", re.split(r"(rc|alpha|beta|a|b)", version_str)[0])
+    parts = tuple(int(p) for p in base if p)
+    return parts + (pre_release,)
+
+
 def check_pypi() -> dict[str, Any] | None:
     """Check the installed codefreedom package version against PyPI."""
     try:
@@ -526,7 +534,7 @@ def check_pypi() -> dict[str, Any] | None:
     try:
         data = get_json(PYPI_URL, timeout=10.0)
         remote_version = data["info"]["version"]
-    except (httpx.HTTPError, json.JSONDecodeError):
+    except (HTTPError, json.JSONDecodeError):
         return {
             "local_version": local_version,
             "remote_version": "unknown",
@@ -541,12 +549,30 @@ def check_pypi() -> dict[str, Any] | None:
             "status": "ok",
             "message": "up to date",
         }
-    else:
+
+    local_parsed = _parse_version(local_version)
+    remote_parsed = _parse_version(remote_version)
+
+    if remote_parsed > local_parsed:
+        is_prerelease = re.search(r"(rc|alpha|beta|a|b)\d+", remote_version)
+        if is_prerelease:
+            uv_cmd = f"uv tool upgrade {PYPI_PACKAGE}=={remote_version} --prerelease=allow"
+        else:
+            uv_cmd = f"uv tool upgrade {PYPI_PACKAGE}=={remote_version}"
+        pip_cmd = f"pip install --upgrade {PYPI_PACKAGE}=={remote_version}"
         return {
             "local_version": local_version,
             "remote_version": remote_version,
             "status": "new",
-            "message": f"pip install --upgrade {PYPI_PACKAGE}",
+            "uv_cmd": uv_cmd,
+            "pip_cmd": pip_cmd,
+        }
+    else:
+        return {
+            "local_version": local_version,
+            "remote_version": remote_version,
+            "status": "ok",
+            "message": "up to date",
         }
 
 
@@ -601,7 +627,7 @@ def _display_results(
         elif pypi_result["status"] == "new":
             print(f" [upd]  codefreedom {pypi_result['local_version']}")
             print(
-                f"        {pypi_result['message']}  ({pypi_result['remote_version']} available)"
+                f"        {pypi_result['uv_cmd']}  ({pypi_result['remote_version']} available)"
             )
             print()
         else:
@@ -640,7 +666,8 @@ def _display_results(
     if any(r["status"] == "pinned" for r in image_results):
         tips.append("Pinned tags: switch to -latest for auto-updates")
     if pypi_result and pypi_result.get("status") == "new":
-        tips.append(f"PyPI: {pypi_result['message']}")
+        tips.append(f"PyPI: {pypi_result['uv_cmd']}")
+        tips.append(f"     pip: {pypi_result['pip_cmd']}")
 
     if tips:
         print()

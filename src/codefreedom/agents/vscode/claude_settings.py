@@ -1,7 +1,7 @@
 """Section 1 — Claude Code VS Code settings generator (``vscode claude config``).
 
 Generates a settings.json fragment for the Claude Code VS Code extension.
-Mirrors local (no-sandbox) mode of ``codefreedom claude``.
+Mirrors local (no-sandbox) mode of ``codefreedom run agent claude-code``.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from codefreedom.core.profiles import ProfileError, load_profile_env, load_profi
 #
 # Generates a settings.json fragment for the Claude Code VS Code extension
 # (https://marketplace.visualstudio.com/items?itemName=Anthropic.claude-code).
-# Mirrors the local (no-sandbox) mode of `codefreedom claude`: loads the
+# Mirrors the local (no-sandbox) mode of `codefreedom run agent claude-code`: loads the
 # named profile with local-mode overrides applied, then renders a fragment
 # with `claudeCode.environmentVariables` plus other sensible `claudeCode.*`
 # settings.
@@ -180,8 +180,8 @@ def _resolve_profiles_path() -> Path:
 def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
     """Generate a VS Code settings.json fragment for the Claude Code extension.
 
-    Entry point for ``codefreedom config vscode claude config``.  Mirrors the local
-    (no-sandbox) mode of `codefreedom claude`: loads the named profile with
+    Entry point for ``codefreedom setup config vscode claude config``.  Mirrors the local
+    (no-sandbox) mode of `codefreedom run agent claude-code`: loads the named profile with
     local-mode overrides applied, then renders a fragment with
     ``claudeCode.environmentVariables`` plus other sensible
     ``claudeCode.*`` settings.  Output is a JSON fragment ready to be merged

@@ -13,7 +13,7 @@ def _settings(**overrides) -> dict:
         "image": "codefreedom:web",
         "container_name": "codefreedom-web",
         "port": 8420,
-        "data_dir": "~/.codefreedom/sandbox/tools/web",
+        "data_dir": "~/.codefreedom/tools/web",
         "env": {},
         "search_engines": {},
         "parser_registry": {},

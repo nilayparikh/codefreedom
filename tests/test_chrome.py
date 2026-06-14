@@ -13,7 +13,7 @@ def _settings(**overrides) -> dict:
         "image": "codefreedom:chrome",
         "container_name": "codefreedom-chrome",
         "port": 9222,
-        "data_dir": "~/.codefreedom/sandbox/tools/chrome",
+        "data_dir": "~/.codefreedom/tools/chrome",
         "env": {},
     }
     base.update(overrides)

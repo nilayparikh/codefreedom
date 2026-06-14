@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0rc6] — unreleased
+
+### Bug Fixes
+
+- Rewrote `core/http_client.py` to use stdlib `urllib.request` instead of `httpx`, eliminating dependency on a working `httpx` install (crashed on Windows `uv` installs where `httpx.get()` rejected `timeout` and `httpx.HTTPError` was missing)
+- Exports `HTTPError` and `HTTPStatusError` exception types from `http_client` so callers never need to import `httpx`
+- Updated all callers (`update.py`, `mimo.py`, `opencode.py`, `store.py`, `proxy_models.py`) to use the new exception hierarchy
+
 ## [0.1.9]
 
 ### Documentation & Discoverability

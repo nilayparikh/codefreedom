@@ -2,7 +2,7 @@
 # Builds and publishes the CUDA-based Claude Code image.
 # Triggered by changes to docker/claude-code/Dockerfile.CUDA.
 #
-# Tags: cuda-v{semver}, cuda-v{major.minor}, cuda-latest
+# Tags: claude-code-cuda-v{semver}, claude-code-cuda-v{major.minor}, claude-code-cuda-latest
 # Platforms: linux/arm64, linux/amd64
 # Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
 # ────────────────────────────────────────────────────────────────────────────────
@@ -11,7 +11,7 @@ name: Docker CUDA
 
 on:
   push:
-    branches: [main]
+    branches: [main, prerelease]
     paths: ["docker/claude-code/Dockerfile.CUDA"]
   workflow_dispatch:
 
@@ -69,9 +69,9 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=cuda-v${{ steps.version.outputs.version }}
-            type=raw,value=cuda-v${{ steps.version.outputs.major_minor }}
-            type=raw,value=cuda-latest
+            type=raw,value=claude-code-cuda-v${{ steps.version.outputs.version }}
+            type=raw,value=claude-code-cuda-v${{ steps.version.outputs.major_minor }}
+            type=raw,value=claude-code-cuda-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Claude Code (CUDA)
             org.opencontainers.image.description=NVIDIA CUDA — all NVIDIA GPUs (DGX GB200, H100, A100, L40S, RTX)

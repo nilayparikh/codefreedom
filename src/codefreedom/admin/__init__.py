@@ -19,6 +19,7 @@ from codefreedom.admin._utils import (  # noqa: F401
     _encrypt_data,
     _find_litellm_container,
     _is_encrypted_file,
+    _is_managed,
     _is_secrets_file,
     _manifest_from_dict,
     _manifest_to_dict,

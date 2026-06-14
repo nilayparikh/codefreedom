@@ -1,4 +1,9 @@
-"""Tests for the `codefreedom vscode claude config` subcommand."""
+"""Tests for Claude Code VS Code settings helpers.
+
+These test internal helpers from codefreedom.agents.vscode.claude_settings.
+The CLI subcommand ``cf setup config vscode claude`` has been removed;
+only the proxy config (``cf setup config vscode``) remains exposed.
+"""
 
 from __future__ import annotations
 
@@ -705,13 +710,12 @@ class TestSubprocessDispatch:
             check=False,
         )
 
-    def test_vscode_claude_config_help_succeeds(self):
-        """cf setup config vscode claude --help"""
-        result = self._run("setup", "config", "vscode", "claude", "--help")
+    def test_vscode_config_help_succeeds(self):
+        """cf setup config vscode --help"""
+        result = self._run("setup", "config", "vscode", "--help")
         assert result.returncode == 0, result.stderr
         low = result.stdout.lower()
-        assert "settings" in low or "fragment" in low or "claudecode" in low
-        assert "--profile" in result.stdout
+        assert "chatlanguagemodels" in low or "proxy" in low or "copilot" in low
         assert "--host" in result.stdout
         assert "--port" in result.stdout
         assert "--out" in result.stdout
@@ -732,13 +736,12 @@ class TestSubprocessDispatch:
         assert "claude" in output.lower()
         assert "mimo" in output.lower()
 
-    def test_vscode_claude_config_with_host_flag_parses(self):
-        """cf setup config vscode claude --host ... --help"""
+    def test_vscode_config_with_host_flag_parses(self):
+        """cf setup config vscode --host ... --help"""
         result = self._run(
             "setup",
             "config",
             "vscode",
-            "claude",
             "--host",
             "192.168.1.10",
             "--port",

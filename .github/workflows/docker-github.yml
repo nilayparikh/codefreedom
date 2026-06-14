@@ -11,7 +11,7 @@ name: Docker GitHub
 
 on:
   push:
-    branches: [main]
+    branches: [main, prerelease]
     paths: ["docker/github/Dockerfile.Github"]
   workflow_dispatch:
 

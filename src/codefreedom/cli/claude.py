@@ -4,7 +4,7 @@ Usage:
     codefreedom run agent claude-code [--profile NAME] [--sandbox] [--list-profiles] [agent-args...]
     codefreedom run agent claude-code [options] [-- <agent-args>]
 
-VS Code integration: see `codefreedom config vscode`.
+VS Code integration: see `codefreedom setup config vscode`.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_env_only
 
     profile_env, exit_code = load_profile_env_only(
-        profile_name, profiles_path, base_env, error_prefix="codefreedom claude init"
+        profile_name, profiles_path, base_env, error_prefix="codefreedom run agent claude-code init"
     )
     if exit_code != 0:
         return 1
@@ -224,7 +224,7 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Tools: ensure profile-declared tools are running ─────────────────
     # Tools are shared and persistent.  Start them if not already running.
-    # They stay running until explicitly stopped via `cf tools stop`.
+    # They stay running until explicitly stopped via `cf run tools stop`.
     session_id = generate_session_id(mode)
 
     from codefreedom.cli.common import acquire_and_run

@@ -30,9 +30,9 @@ All layers support `${VAR}` and `${VAR:-default}` interpolation. **Empty-string 
 
 Tools (chrome, web, github, web-bridge) are **shared** — once started they keep running until explicitly stopped. Container names are **static** (from profile). All sessions share the same tool container.
 
-1. First `cf agent claude` or `cf tools start` creates the container.
+1. First `cf run agent claude-code` or `cf run tools start` creates the container.
 2. Subsequent invocations detect it's already running and are no-ops.
-3. `cf tools stop` is the only way to stop it.
+3. `cf run tools stop` is the only way to stop it.
 
 | Tool | Env var | Default |
 |------|---------|---------|

@@ -46,8 +46,8 @@ body:
       label: Affected Subcommand
       description: Which part of CodeFreedom has the bug?
       options:
-        - codefreedom claude
-        - codefreedom proxy
+        - codefreedom run agent claude-code
+        - codefreedom run proxy
         - codefreedom --init
         - Other / Not sure
     validations:

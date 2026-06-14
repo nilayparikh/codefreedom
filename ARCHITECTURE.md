@@ -36,25 +36,25 @@ Details on env chain layers and profile inheritance: see `CLAUDE.md` > Key Patte
 | Block             | File                                     | Responsibility                                                                  |
 | ----------------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
 | `main`            | `src/codefreedom/cli/main.py`            | Top-level parser, dispatches to subcommands                                     |
-| `claude`          | `src/codefreedom/cli/claude.py`          | `codefreedom claude` — init, profiles, sandbox/native launch                    |
-| `mimo`            | `src/codefreedom/cli/mimo.py`            | `codefreedom mimo` — MiMoCode agent, 0-click proxy config, sandbox/native       |
-| `opencode`        | `src/codefreedom/cli/opencode.py`        | `codefreedom opencode` — OpenCode agent, 0-click proxy config, sandbox/native   |
+| `claude`          | `src/codefreedom/cli/claude.py`          | `codefreedom run agent claude-code` — init, profiles, sandbox/native launch                    |
+| `mimo`            | `src/codefreedom/cli/mimo.py`            | `codefreedom run agent mimo-code` — MiMoCode agent, 0-click proxy config, sandbox/native       |
+| `opencode`        | `src/codefreedom/cli/opencode.py`        | `codefreedom run agent open-code` — OpenCode agent, 0-click proxy config, sandbox/native   |
 | `agent`           | `src/codefreedom/cli/run/agent.py`       | Agent dispatch registry, alias resolution, shared CLI validation                |
-| `proxy`           | `src/codefreedom/cli/run/proxy.py`       | `codefreedom proxy` — init, start/stop/status/validate                          |
-| `tools`           | `src/codefreedom/cli/run/tools.py`       | `codefreedom tools` — CLI layer for tool management (delegates to registry)     |
-| `chrome`          | `src/codefreedom/cli/chrome.py`          | `codefreedom tools chrome` — browser container lifecycle                        |
-| `web`             | `src/codefreedom/cli/web.py`             | `codefreedom tools web` — Camoufox MCP container lifecycle                      |
+| `proxy`           | `src/codefreedom/cli/run/proxy.py`       | `codefreedom run proxy` — init, start/stop/status/validate                          |
+| `tools`           | `src/codefreedom/cli/run/tools.py`       | `codefreedom run tools` — CLI layer for tool management (delegates to registry)     |
+| `chrome`          | `src/codefreedom/cli/chrome.py`          | `codefreedom run tools chrome` — browser container lifecycle                        |
+| `web`             | `src/codefreedom/cli/web.py`             | `codefreedom run tools web` — Camoufox MCP container lifecycle                      |
 | `docker_utils`    | `src/codefreedom/cli/docker_utils.py`    | Shared Docker helpers — `start_tool_container` seam, tool notices, tool metadata |
 | `common`          | `src/codefreedom/cli/common.py`          | Shared CLI utilities                                                            |
 | `formatter`       | `src/codefreedom/cli/formatter.py`       | Help text formatting                                                            |
-| `doctor`          | `src/codefreedom/cli/manage/doctor.py`   | `cf doctor` — comprehensive diagnostic checks                                   |
+| `doctor`          | `src/codefreedom/cli/manage/doctor.py`   | `cf manage doctor` — comprehensive diagnostic checks                                   |
 | `update`          | `src/codefreedom/cli/manage/update.py`   | Update management                                                               |
-| `admin`           | `src/codefreedom/cli/manage/admin.py`    | `codefreedom admin` CLI entry point                                             |
+| `admin`           | `src/codefreedom/cli/manage/admin.py`    | `codefreedom manage admin` CLI entry point                                             |
 | `recipe`          | `src/codefreedom/cli/setup/recipe.py`    | Recipe setup commands                                                           |
 | `config_setup`    | `src/codefreedom/cli/setup/config.py`    | Config setup commands                                                           |
 | `deinit`          | `src/codefreedom/cli/setup/deinit.py`    | Deinitialization                                                                |
 | `recipe_system`   | `src/codefreedom/recipe/`               | Recipe system (subpackage: store.py, merge.py, plan.py, apply.py)                |
-| `vscode`          | `src/codefreedom/cli/vscode.py`          | `codefreedom vscode` — VS Code config generation (claude, proxy)                 |
+| `vscode`          | `src/codefreedom/cli/vscode.py`          | `codefreedom setup config vscode` — VS Code config generation (claude, proxy)                 |
 
 ### Infrastructure (runtime assets)
 
@@ -109,7 +109,7 @@ tools/registry.py                                                  -> log, tools
 
 ## Request Flow
 
-### `codefreedom claude --sandbox`
+### `codefreedom run agent claude-code --sandbox`
 
 ```
 main.py (parse)
@@ -121,7 +121,7 @@ main.py (parse)
     -> tool_registry.py (release_tools: decrement ref_count, stop if last session)
 ```
 
-### `codefreedom proxy start`
+### `codefreedom run proxy start`
 
 ```
 main.py (parse)
@@ -141,7 +141,7 @@ MCP `web_search` tool. LiteLLM's `websearch_interception` callback routes
 Claude Code's native `WebSearch` to the bridge — transparently replacing it
 with a local stealth browser call.
 
-### `codefreedom tools chrome start`
+### `codefreedom run tools chrome start`
 
 ```
 main.py (parse)
@@ -150,7 +150,7 @@ main.py (parse)
     -> config.py (get_codefreedom_dir for data_dir)
 ```
 
-### `codefreedom mimo --sandbox`
+### `codefreedom run agent mimo-code --sandbox`
 
 ```
 main.py (parse)
@@ -162,7 +162,7 @@ main.py (parse)
       -> tool_registry.py (release_tools)
 ```
 
-### `codefreedom opencode --sandbox`
+### `codefreedom run agent open-code --sandbox`
 
 ```
 main.py (parse)
@@ -194,12 +194,12 @@ The tool registry (`tools/registry.py`) is the **canonical owner** of tool lifec
 
 ### Lifecycle
 
-1. **`codefreedom claude` starts** — `acquire_tools()`:
+1. **`codefreedom run agent claude-code` starts** — `acquire_tools()`:
    - For each tool: call `tool.start()` (no-op if container already running)
    - Returns list of successfully acquired tools
 2. **Claude session runs** — tools stay running independently
 3. **Claude exits** — `release_tools()` in finally block (no-op, tools persist)
-4. **`cf tools stop`** — explicit stop via `stop_all_tools()`
+4. **`cf run tools stop`** — explicit stop via `stop_all_tools()`
 
 ### First-one-starts, last-one-stops
 

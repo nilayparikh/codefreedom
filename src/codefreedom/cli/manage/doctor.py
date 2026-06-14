@@ -1,7 +1,7 @@
 """Doctor subcommand -- comprehensive CodeFreedom diagnostic check.
 
 Usage:
-    codefreedom doctor [--verbose]
+    codefreedom manage doctor [--verbose]
 
 Checks the full CodeFreedom environment for issues that could prevent
 normal operation, including:
@@ -31,9 +31,10 @@ from typing import Callable, List, Optional, Tuple
 from codefreedom.cli.docker_utils import (
     get_codefreedom_container_ports,
     is_port_available,
+    load_tool_profile,
+    tool_home,
 )
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.env_loader import load_dotenv
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Check result types
@@ -46,6 +47,7 @@ class CheckResult:
     PASS = "PASS"
     FAIL = "FAIL"
     WARN = "WARN"
+    INFO = "INFO"
     SKIP = "SKIP"
 
     def __init__(self, status: str, message: str, detail: str = "") -> None:
@@ -67,6 +69,10 @@ def _fail(msg: str, detail: str = "") -> CheckResult:
 
 def _warn(msg: str, detail: str = "") -> CheckResult:
     return CheckResult(CheckResult.WARN, msg, detail)
+
+
+def _info(msg: str, detail: str = "") -> CheckResult:
+    return CheckResult(CheckResult.INFO, msg, detail)
 
 
 def _skip(msg: str, detail: str = "") -> CheckResult:
@@ -138,7 +144,7 @@ def _run_checks(verbose: bool = False) -> Tuple[int, int, int]:
 
 def _status_icon(status: str) -> str:
     """Return a colored status icon."""
-    from codefreedom.log import bold, green, red, yellow
+    from codefreedom.log import bold, cyan, green, red, yellow
 
     if status == CheckResult.PASS:
         return green("[OK]")
@@ -146,6 +152,8 @@ def _status_icon(status: str) -> str:
         return red(bold("[FAIL]"))
     elif status == CheckResult.WARN:
         return yellow("[WARN]")
+    elif status == CheckResult.INFO:
+        return cyan("[INFO]")
     else:
         return "[SKIP]"
 
@@ -275,17 +283,93 @@ def _resolve_tool_home() -> Path:
     return Path.home() / ".codefreedom"
 
 
-ESSENTIAL_ENV_FILES = [
-    (".env.claude", "Claude Code config"),
-    (".env.claude.secrets", "Claude Code secrets"),
-    (".env.proxy", "Proxy config"),
-    (".env.proxy.secrets", "Proxy secrets"),
-]
+def _load_tool_settings(
+    tool_key: str,
+    profile_filename: str,
+    defaults: dict,
+    extra_keys: list[str] | None = None,
+) -> dict:
+    """Load tool settings from profile, falling back to defaults.
+
+    Uses the same ``load_tool_profile()`` that tool modules use, so
+    doctor checks always reflect the actual configured values.
+    """
+    try:
+        return load_tool_profile(
+            tool_key,
+            defaults,
+            profile_filename,
+            extra_keys=extra_keys,
+        )
+    except Exception:
+        return defaults
+
+
+def _get_chrome_settings() -> dict:
+    return _load_tool_settings(
+        "chrome",
+        "chrome.yaml",
+        {
+            "image": "docker.io/nilayparikh/codefreedom:chrome-latest",
+            "container_name": "codefreedom-chrome",
+            "port": 9222,
+            "mcp_port": 9223,
+            "mcp_path": "/mcp",
+            "cdp_proxy_port": 9220,
+            "data_dir": "",
+            "env": {},
+        },
+        extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port"],
+    )
+
+
+def _get_web_settings() -> dict:
+    return _load_tool_settings(
+        "web",
+        "web.yaml",
+        {
+            "image": "docker.io/nilayparikh/codefreedom:web-latest",
+            "container_name": "codefreedom-web",
+            "port": 8420,
+            "data_dir": "",
+            "env": {},
+        },
+    )
+
+
+def _get_github_settings() -> dict:
+    return _load_tool_settings(
+        "github",
+        "github.yaml",
+        {
+            "image": "docker.io/nilayparikh/codefreedom:github-latest",
+            "container_name": "codefreedom-tools-github",
+            "port": 8129,
+            "data_dir": "",
+            "env": {},
+        },
+    )
+
+
+def _get_web_bridge_settings() -> dict:
+    return _load_tool_settings(
+        "web_bridge",
+        "web-bridge.yaml",
+        {
+            "image": "docker.io/nilayparikh/codefreedom:web-bridge-latest",
+            "container_name": "codefreedom-web-bridge",
+            "port": 8500,
+            "data_dir": "",
+            "env": {},
+        },
+    )
+
 
 ESSENTIAL_PROFILE_FILES = [
-    ("profiles/chrome.yaml", "Chrome tool profile"),
-    ("profiles/web.yaml", "Web search tool profile"),
-    ("profiles/github.yaml", "GitHub MCP tool profile"),
+    "chrome.yaml",
+    "web.yaml",
+    "github.yaml",
+    "web-bridge.yaml",
 ]
 
 ESSENTIAL_PROXY_FILES = [
@@ -295,36 +379,21 @@ ESSENTIAL_PROXY_FILES = [
 
 
 @_section("Config Files")
-def _check_env_files() -> CheckResult:
-    cf_dir = get_codefreedom_dir()
-    missing = []
-    for rel_path, label in ESSENTIAL_ENV_FILES:
-        if not (cf_dir / rel_path).exists():
-            missing.append(f"{label} ({rel_path})")
-    if missing:
-        return _warn(
-            f"Missing env files: {', '.join(missing)}",
-            "Run 'cf s i' to create defaults",
-        )
-    return _ok("All essential env files present")
-
-
-@_section("Config Files")
 def _check_profile_files() -> CheckResult:
-    # Tool profiles always live in ~/.codefreedom/profiles/ (shared across
-    # all projects).  Other profiles (claude-code, etc.) live under
-    # CODEFREEDOM_HOME / get_codefreedom_dir().
     tool_home = _resolve_tool_home()
-    missing = []
-    for rel_path, label in ESSENTIAL_PROFILE_FILES:
-        if not (tool_home / rel_path).exists():
-            missing.append(f"{label} ({rel_path})")
+    profiles_dir = tool_home / "profiles"
+    discovered = sorted(
+        p.name for p in profiles_dir.glob("*.yaml") if p.is_file()
+    ) if profiles_dir.is_dir() else []
+    missing = [f for f in ESSENTIAL_PROFILE_FILES if f not in discovered]
     if missing:
         return _warn(
             f"Missing profile files: {', '.join(missing)}",
             "Run 'cf s i' to create defaults",
         )
-    return _ok("All essential profile files present")
+    return _ok(
+        f"All essential profile files present ({len(discovered)} profile(s) found)"
+    )
 
 
 @_section("Config Files")
@@ -402,23 +471,27 @@ def _check_compose_pg_volume() -> CheckResult:
 # ── Section: Docker Images ─────────────────────────────────────────────────
 
 
-ESSENTIAL_IMAGES: List[Tuple[str, str, str]] = [
-    ("proxy", "LiteLLM proxy", "docker.io/nilayparikh/codefreedom:litellm-latest"),
-]
+def _get_litellm_image() -> str:
+    """Return the LiteLLM image from env or compose default."""
+    return os.environ.get(
+        "LITELLM_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
+    )
+
+
+def _get_litellm_container_name() -> str:
+    """Return the LiteLLM container name from env or compose default."""
+    return os.environ.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
 
 
 @_section("Docker Images")
 def _check_litellm_image() -> CheckResult:
-    return _check_image_available(
-        "docker.io/nilayparikh/codefreedom:litellm-latest", "LiteLLM proxy"
-    )
+    return _check_image_available(_get_litellm_image(), "LiteLLM proxy")
 
 
 @_section("Docker Images")
 def _check_web_bridge_image() -> CheckResult:
-    return _check_image_available(
-        "docker.io/nilayparikh/codefreedom:web-bridge", "Web search bridge"
-    )
+    settings = _get_web_bridge_settings()
+    return _check_image_available(settings["image"], "Web search bridge")
 
 
 def _check_image_available(image: str, label: str) -> CheckResult:
@@ -432,9 +505,9 @@ def _check_image_available(image: str, label: str) -> CheckResult:
         )
         if result.returncode == 0:
             return _ok(f"{label} image '{image}' is cached locally")
-        return _warn(
+        return _info(
             f"{label} image '{image}' not found locally",
-            "Will be pulled on first 'cf proxy start'",
+            "Will be pulled on first 'cf run proxy start'",
         )
     except FileNotFoundError:
         return _skip("(Docker CLI not available)")
@@ -467,7 +540,7 @@ def _check_tool_profile(name: str, label: str) -> CheckResult:
     if not profile_file.exists():
         return _warn(
             f"{label} profile not found",
-            f"Run 'cf tools {name} init' or 'cf s i' to create it",
+            f"Run 'cf run tools {name} init' or 'cf s i' to create it",
         )
 
     try:
@@ -497,7 +570,8 @@ def _resolve_env_var_value(
     Checks (in priority order):
     1. ``CF_CLI_<NAME>`` in ``os.environ`` (highest priority machine override)
     2. ``NAME`` directly in ``os.environ``
-    3. ``NAME=`` in the provided *env_files*
+    3. ``NAME=`` in ``~/.codefreedom/.env.user``
+    4. ``NAME=`` in the provided *env_files*
 
     Returns ``(value, source_description)`` or ``(None, None)`` if not found
     in any source.
@@ -505,20 +579,33 @@ def _resolve_env_var_value(
     # 1. CF_CLI_* override (highest priority — beats everything)
     cf_cli_name = f"CF_CLI_{name}"
     if cf_cli_name in os.environ and os.environ[cf_cli_name]:
-        return os.environ[cf_cli_name], f"CF_CLI_{cf_cli_name} (machine env override)"
+        return os.environ[cf_cli_name], f"{cf_cli_name} (machine env override)"
 
     # 2. Direct env var
     if name in os.environ and os.environ[name]:
         return os.environ[name], f"{name} (machine env)"
 
-    # 3. Env files
+    # 3. .env.user (user-managed overrides)
+    cf_dir = get_codefreedom_dir()
+    user_env = cf_dir / ".env.user"
+    if user_env.exists():
+        content = user_env.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
+                val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+                if val and val != "CHANGE_ME":
+                    return val, f"{name} (in .env.user)"
+
+    # 4. Env files
     if env_files:
         for env_file in env_files:
             if env_file.exists():
                 content = env_file.read_text(encoding="utf-8")
                 for line in content.splitlines():
-                    if line.strip().startswith(f"{name}="):
-                        val = line.split("=", 1)[1].strip()
+                    stripped = line.strip()
+                    if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
+                        val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
                         if val and val != "CHANGE_ME":
                             return val, f"{name} (in {env_file.name})"
 
@@ -539,7 +626,7 @@ def _check_env_var(name: str, label: str, source_hint: str) -> CheckResult:
     ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
     """
     cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.proxy", cf_dir / ".env.proxy.secrets"]
+    env_files = [cf_dir / ".env.proxy.secrets"]
     value, source = _resolve_env_var_value(name, env_files=env_files)
     if value is not None:
         return _ok(f"{name} is set ({label})")
@@ -556,7 +643,7 @@ def _check_env_var_optional(name: str, label: str, _source_hint: str) -> CheckRe
     ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
     """
     cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.proxy", cf_dir / ".env.proxy.secrets"]
+    env_files = [cf_dir / ".env.proxy.secrets"]
     value, source = _resolve_env_var_value(name, env_files=env_files)
     if value is not None:
         return _ok(f"{name} is set ({label})")
@@ -566,22 +653,65 @@ def _check_env_var_optional(name: str, label: str, _source_hint: str) -> CheckRe
 # ── Section: Env Vars (Claude) ────────────────────────────────────────────
 
 
+def _load_claude_profile_env() -> dict[str, str]:
+    """Load env vars from the Claude Code profile's default profile.
+
+    Returns the ``env`` dict from the ``default`` profile in
+    ``profiles/claude-code.yaml``, or an empty dict if not found.
+    """
+    import yaml
+
+    cf_dir = get_codefreedom_dir()
+    for name in ("claude-code.yaml", "claude-code-profiles.yaml"):
+        path = cf_dir / "profiles" / name
+        if path.exists():
+            try:
+                with open(path, encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                if isinstance(data, dict):
+                    profiles = data.get("profiles", {})
+                    default = profiles.get("default", {})
+                    env = default.get("env", {})
+                    if isinstance(env, dict):
+                        return {k: str(v) for k, v in env.items()}
+            except Exception:
+                pass
+    return {}
+
+
 @_section("Environment Variables (Claude)")
 def _check_anthropic_base_url() -> CheckResult:
-    return _check_env_var_optional(
-        "ANTHROPIC_BASE_URL",
-        "Anthropic API base URL (optional if using proxy)",
-        ".env.claude or .env.claude.secrets",
+    return _check_claude_env_var(
+        "ANTHROPIC_BASE_URL", "Anthropic API base URL"
     )
 
 
 @_section("Environment Variables (Claude)")
 def _check_anthropic_auth_token() -> CheckResult:
-    return _check_env_var_optional(
-        "ANTHROPIC_AUTH_TOKEN",
-        "Anthropic auth token (optional if using proxy)",
-        ".env.claude.secrets",
+    return _check_claude_env_var(
+        "ANTHROPIC_AUTH_TOKEN", "Anthropic auth token"
     )
+
+
+def _check_claude_env_var(name: str, label: str) -> CheckResult:
+    """Check a Claude env var across profiles, env, CF_CLI_*, and files.
+
+    Resolution order:
+    1. Claude Code profile (``profiles/claude-code.yaml`` → default → env)
+    2. ``CF_CLI_<NAME>`` machine override
+    3. ``NAME`` directly in ``os.environ``
+    4. ``.env.claude.secrets`` file
+    """
+    profile_env = _load_claude_profile_env()
+    if name in profile_env and profile_env[name]:
+        return _ok(f"{name} is set ({label}, from Claude Code profile)")
+
+    cf_dir = get_codefreedom_dir()
+    env_files = [cf_dir / ".env.claude.secrets"]
+    value, source = _resolve_env_var_value(name, env_files=env_files)
+    if value is not None:
+        return _ok(f"{name} is set ({label})")
+    return _skip(f"{name} is not set (optional — {label})")
 
 
 # ── Section: Sandbox ────────────────────────────────────────────────────────
@@ -590,7 +720,7 @@ def _check_anthropic_auth_token() -> CheckResult:
 @_section("Sandbox")
 def _check_sandbox_dir() -> CheckResult:
     cf_dir = get_codefreedom_dir()
-    sandbox_default = cf_dir / "sandbox" / "default"
+    sandbox_default = cf_dir / "claude-code" / "sandbox" / "default"
     if not sandbox_default.exists():
         return _ok(f"{sandbox_default} will be created on first sandbox run")
     return _ok(f"{sandbox_default} exists")
@@ -622,9 +752,14 @@ def _check_sandbox_profiles() -> CheckResult:
 
 @_section("Proxy Status")
 def _check_proxy_running() -> CheckResult:
+    container = _get_litellm_container_name()
     try:
         result = subprocess.run(
-            ["docker", "ps", "--filter", "name=litellm", "--format", "{{.Status}}"],
+            [
+                "docker", "ps",
+                "--filter", f"name={container}",
+                "--format", "{{.Status}}",
+            ],
             capture_output=True,
             text=True,
             timeout=10,
@@ -634,7 +769,8 @@ def _check_proxy_running() -> CheckResult:
         if status:
             return _ok(f"LiteLLM container is running ({status})")
         return _warn(
-            "LiteLLM container is not running", "Start it with: cf proxy start"
+            "LiteLLM container is not running",
+            "Start it with: cf run proxy start",
         )
     except FileNotFoundError:
         return _skip("(Docker CLI not available)")
@@ -642,9 +778,15 @@ def _check_proxy_running() -> CheckResult:
 
 @_section("Proxy Status")
 def _check_web_bridge_running() -> CheckResult:
+    settings = _get_web_bridge_settings()
+    container = settings["container_name"]
     try:
         result = subprocess.run(
-            ["docker", "ps", "--filter", "name=web-bridge", "--format", "{{.Status}}"],
+            [
+                "docker", "ps",
+                "--filter", f"name={container}",
+                "--format", "{{.Status}}",
+            ],
             capture_output=True,
             text=True,
             timeout=10,
@@ -654,7 +796,7 @@ def _check_web_bridge_running() -> CheckResult:
         if status:
             return _ok(f"Web-bridge container is running ({status})")
         return _warn(
-            "Web-bridge container is not running", "Start it with: cf proxy start"
+            "Web-bridge container is not running", "Start it with: cf run proxy start"
         )
     except FileNotFoundError:
         return _skip("(Docker CLI not available)")
@@ -665,39 +807,33 @@ def _check_web_bridge_running() -> CheckResult:
 
 @_section("Port Availability")
 def _check_chrome_cdp_port() -> CheckResult:
-    return _check_port(
-        9222, "Chrome CDP", "~/.codefreedom/profiles/chrome.yaml (chrome.port)"
-    )
+    settings = _get_chrome_settings()
+    port = settings["port"]
+    hint = f"{tool_home()}/profiles/chrome.yaml (chrome.port)"
+    return _check_port(port, "Chrome CDP", hint)
 
 
 @_section("Port Availability")
 def _check_chrome_mcp_port() -> CheckResult:
-    return _check_port(
-        9223, "Chrome MCP", "~/.codefreedom/profiles/chrome.yaml (chrome.mcp_port)"
-    )
+    settings = _get_chrome_settings()
+    port = settings.get("mcp_port", 9223)
+    hint = f"{tool_home()}/profiles/chrome.yaml (chrome.mcp_port)"
+    return _check_port(port, "Chrome MCP", hint)
 
 
 @_section("Port Availability")
 def _check_web_port() -> CheckResult:
-    return _check_port(
-        8420, "Web search (Camoufox)", "~/.codefreedom/profiles/web.yaml (web.port)"
-    )
+    settings = _get_web_settings()
+    port = settings["port"]
+    hint = f"{tool_home()}/profiles/web.yaml (web.port)"
+    return _check_port(port, "Web search (Camoufox)", hint)
 
 
 @_section("Port Availability")
 def _check_proxy_port() -> CheckResult:
-    # Read LITELLM_PORT from the .env.proxy file, fall back to 4000
-    codefreedom_dir = get_codefreedom_dir()
-    env_proxy = codefreedom_dir / ".env.proxy"
-    proxy_env = load_dotenv(env_proxy)
-    port_str = proxy_env.get("LITELLM_PORT", "4000")
-    try:
-        port = int(port_str)
-    except (ValueError, TypeError):
-        port = 4000
-    return _check_port(
-        port, "LiteLLM proxy", "~/.codefreedom/.env.proxy (LITELLM_PORT)"
-    )
+    port = 4000
+    hint = "Default LiteLLM port (LITELLM_PORT)"
+    return _check_port(port, "LiteLLM proxy", hint)
 
 
 def _check_port(port: int, label: str, config_hint: str) -> CheckResult:
@@ -725,17 +861,22 @@ def _check_port(port: int, label: str, config_hint: str) -> CheckResult:
     )
 
 
-# Map of well-known tool ports to friendly labels for doctor output.
-_CF_TOOL_PORT_LABELS: dict[int, str] = {
-    9222: "Chrome browser",
-    9223: "Chrome MCP",
-    8420: "Web search (Camoufox)",
-}
-
-
 def _cf_tool_label_for_port(port: int) -> str | None:
-    """Return a friendly label for a well-known CodeFreedom tool port."""
-    return _CF_TOOL_PORT_LABELS.get(port)
+    """Return a friendly label for a well-known CodeFreedom tool port.
+
+    Builds the mapping dynamically from tool profiles so custom port
+    configurations are recognised.
+    """
+    chrome = _get_chrome_settings()
+    web = _get_web_settings()
+    bridge = _get_web_bridge_settings()
+    labels: dict[int, str] = {
+        chrome["port"]: "Chrome browser",
+        chrome.get("mcp_port", 9223): "Chrome MCP",
+        web["port"]: "Web search (Camoufox)",
+        bridge["port"]: "Web search bridge",
+    }
+    return labels.get(port)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

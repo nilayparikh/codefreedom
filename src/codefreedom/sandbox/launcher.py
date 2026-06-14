@@ -31,7 +31,7 @@ def run_sandbox(
     """Run an agent inside an ephemeral Docker container.
 
     Args:
-        image: Docker image reference (e.g. ``docker.io/nilayparikh/codefreedom:latest``)
+        image: Docker image reference (e.g. ``docker.io/nilayparikh/codefreedom:claude-code-latest``)
         container_name: Unique name for the ephemeral container
         base_opts: List of docker run arguments (volumes, user, network, etc.)
         env_flags: List of -e KEY=VALUE pairs for the docker run and exec commands
@@ -90,9 +90,10 @@ def run_sandbox(
     eprint("[EXEC] Attaching agent session...")
 
     exec_cmd = list(exec_image_cmd)
-    if exec_extra_env:
-        exec_cmd = exec_cmd + exec_extra_env
-    exec_cmd = exec_cmd + env_flags
+    for flag_set in (exec_extra_env, env_flags):
+        if flag_set:
+            idx = exec_cmd.index(container_name)
+            exec_cmd = exec_cmd[:idx] + flag_set + exec_cmd[idx:]
 
     exit_code = 1
     proc: subprocess.Popen | None = None  # type: ignore[type-arg]

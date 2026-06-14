@@ -5,13 +5,13 @@ Auto-detects the running CodeFreedom LiteLLM proxy, generates a complete
 (``opencode``) with zero manual configuration.
 
 Usage:
-    codefreedom agent opencode [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
-    codefreedom agent opencode [options] [-- <agent-args>]
+    codefreedom run agent open-code [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
+    codefreedom run agent open-code [options] [-- <agent-args>]
 
 Proxy auto-config:
-    - Detects the proxy at LITELLM_BASE_URL (default: http://localhost:4000)
+    - Detects the proxy at PROXY_BASE_URL (default: http://localhost:4000)
     - Fetches model list from ``/v1/models``
-    - Generates ``~/.codefreedom/opencode/config/opencode.json`` with all models
+    - Generates ``~/.codefreedom/open-code/config/opencode.json`` with all models
     - Sets ``OPENCODE_CONFIG`` env var to point at the generated config
     - OpenCode loads all proxy models as ``codefreedom/<model-id>``
 """
@@ -26,6 +26,7 @@ import shutil
 import signal
 import subprocess
 from pathlib import Path
+
 from typing import Any, Dict, List, Optional, Tuple
 
 from codefreedom.core.config import (
@@ -58,7 +59,7 @@ def register_args(parser: argparse.ArgumentParser) -> None:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:opencode"
+DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:open-code-latest"
 PROXY_MODELS_CACHE_FILE = "proxy-models.json"
 OPENCODE_CONFIG_NAME = "opencode.json"
 _CONTAINER_PREFIX = "codefreedom-opencode-"
@@ -77,12 +78,16 @@ def _detect_proxy_url(base_env: Dict[str, str]) -> str:
     """Detect the proxy URL from environment or use default.
 
     Checks (in order):
-    1. LITELLM_BASE_URL in the merged env
-    2. LITELLM_BASE_URL in os.environ
-    3. Default http://localhost:4000
+    1. PROXY_BASE_URL in the merged env
+    2. PROXY_BASE_URL in os.environ
+    3. LITELLM_BASE_URL (legacy) in the merged env
+    4. LITELLM_BASE_URL (legacy) in os.environ
+    5. Default http://localhost:4000
     """
     return (
-        base_env.get("LITELLM_BASE_URL")
+        base_env.get("PROXY_BASE_URL")
+        or os.environ.get("PROXY_BASE_URL")
+        or base_env.get("LITELLM_BASE_URL")
         or os.environ.get("LITELLM_BASE_URL")
         or "http://localhost:4000"
     )
@@ -97,22 +102,20 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> List[Dict[str, Any
     Returns a list of model dicts (with at least an ``id`` key).
     Returns an empty list if the proxy is unreachable or returns an error.
     """
-    from codefreedom.core.http_client import get_json
-
-    import httpx
+    from codefreedom.core.http_client import get_json, HTTPError, HTTPStatusError
 
     models_url = f"{proxy_url.rstrip('/')}/v1/models"
     try:
         data = get_json(models_url, timeout=5, bearer=api_key)
         return data.get("data", [])
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (401, 403):
+    except HTTPStatusError as exc:
+        if exc.status_code in (401, 403):
             eprint(
-                f"[OPENCODE] Proxy returned {exc.response.status_code} — is LITELLM_MASTER_KEY set "
+                f"[OPENCODE] Proxy returned {exc.status_code} — is LITELLM_MASTER_KEY set "
                 f"in ~/.codefreedom/.env.opencode.secrets?"
             )
         return []
-    except (httpx.HTTPError, json.JSONDecodeError):
+    except (HTTPError, json.JSONDecodeError):
         return []
 
 
@@ -160,6 +163,7 @@ def _generate_opencode_config(
     1. Fetches the live model list from the proxy
     2. Falls back to an empty model list if proxy is unreachable
     3. Creates a ``codefreedom`` provider entry with all models
+    4. Skips alias models unless OPENCODE_SHOW_ALIAS_MODELS is set
 
     Returns the config dict ready to be serialised to JSON.
     """
@@ -173,11 +177,34 @@ def _generate_opencode_config(
             f"[OPENCODE] Proxy responded with {len(proxy_models)} model(s), "
             f"mapped {len(provider_models)} provider model(s)."
         )
+
+        # Filter alias models unless profile explicitly enables them
+        show_aliases = profile_env.get("OPENCODE_SHOW_ALIAS_MODELS", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if not show_aliases:
+            from codefreedom.agents.vscode.proxy_models import _load_alias_models
+
+            alias_models = _load_alias_models()
+            if alias_models:
+                before = len(provider_models)
+                provider_models = {
+                    k: v for k, v in provider_models.items() if k not in alias_models
+                }
+                skipped = before - len(provider_models)
+                if skipped:
+                    eprint(
+                        f"[OPENCODE] Skipped {skipped} alias model(s)"
+                        f" ({', '.join(sorted(alias_models))});"
+                        " set OPENCODE_SHOW_ALIAS_MODELS=1 to include them."
+                    )
     else:
         provider_models = {}
         eprint(
             f"[OPENCODE] Proxy not reachable at {proxy_url}.\n"
-            f"       Start the proxy (``cf proxy start``) and restart OpenCode\n"
+            f"       Start the proxy (``cf run proxy start``) and restart OpenCode\n"
             f"       to load the full proxy model list."
         )
 
@@ -232,7 +259,7 @@ def _ensure_opencode_sandbox_dir(profile_name: str) -> Tuple[Path, Path]:
     Returns (opencode_data_dir, config_path) — the OPENCODE_HOME data directory
     and the path to the generated ``opencode.json`` config file.
     """
-    profile_dir = CODEFREEDOM_DIR / "opencode" / "sandbox" / profile_name
+    profile_dir = CODEFREEDOM_DIR / "open-code" / "sandbox" / profile_name
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     # Isolated OPENCODE_HOME structure: data/config/cache/state subdirs
@@ -270,7 +297,7 @@ def run_local(
     # 0-click proxy config: generate opencode.json and inject OPENCODE_CONFIG
     proxy_url = _detect_proxy_url(profile_env)
     config = _generate_opencode_config(proxy_url, profile_env)
-    config_dir = CODEFREEDOM_DIR / "opencode" / "config"
+    config_dir = CODEFREEDOM_DIR / "open-code" / "config"
     config_path = _write_opencode_config(config, config_dir)
     env["OPENCODE_CONFIG"] = str(config_path)
 
@@ -329,32 +356,47 @@ def run_docker(
     env_flags.extend(["-e", f"COLUMNS={cols}", "-e", f"LINES={lines}"])
 
     # ── Container identity ────────────────────────────────────────────────────
-    host_uid = os.getuid()
-    host_gid = os.getgid()
-    if run_as_me:
+    if run_as_me and hasattr(os, "getuid"):
+        host_uid = os.getuid()
+        host_gid = os.getgid()
         container_home = f"/home/{Path.home().name}"
         container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
-        eprint(f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}")
+        eprint(
+            f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}"
+        )
     else:
+        if run_as_me:
+            eprint("[SANDBOX] --run-as-me not supported on Windows; running as default user.")
         container_home = "/home/codefreedom"
         container_user_flag = []
         eprint("[SANDBOX] Running as default container user 'codefreedom' (uid 1000).")
 
     # ── Docker run base options ───────────────────────────────────────────────
     base_opts = [
-        "--network", "host",
+        "--network",
+        "host",
         *container_user_flag,
         "--ipc=host",
-        "-v", f"{workspace_dir}:/workspace",
-        "-w", "/workspace",
-        "-v", f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
-        "-v", f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
-        "-v", f"{opencode_home_dir}:{container_home}/.local/share/opencode",
-        "-v", f"{config_path}:{container_home}/.config/opencode/opencode.json:ro",
-        "-e", f"HOME={container_home}",
-        "-e", f"OPENCODE_CONFIG={container_home}/.config/opencode/opencode.json",
-        "-e", "IS_SANDBOX=1",
-        "-e", "OPENCODE_DISABLE_AUTOUPDATE=1",
+        "-v",
+        f"{workspace_dir}:/workspace",
+        "-w",
+        "/workspace",
+        "-v",
+        f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
+        "-v",
+        f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
+        "-v",
+        f"{opencode_home_dir}:{container_home}/.local/share/opencode",
+        "-v",
+        f"{config_path}:{container_home}/.config/opencode/opencode.json:ro",
+        "-e",
+        f"HOME={container_home}",
+        "-e",
+        f"OPENCODE_CONFIG={container_home}/.config/opencode/opencode.json",
+        "-e",
+        "IS_SANDBOX=1",
+        "-e",
+        "OPENCODE_DISABLE_AUTOUPDATE=1",
     ]
 
     # ── Exec command ──────────────────────────────────────────────────────────
@@ -398,11 +440,11 @@ def init_opencode() -> int:
             "  curl -fsSL https://opencode.ai/install | bash",
             "",
             "To start the proxy (for model routing):",
-            "  cf proxy start",
+            "  cf run proxy start",
             "",
             "To launch OpenCode:",
-            "  cf agent opencode              # native mode",
-            "  cf agent opencode --sandbox    # isolated Docker sandbox",
+            "  cf run agent open-code              # native mode",
+            "  cf run agent open-code --sandbox    # isolated Docker sandbox",
         ],
         docs_url="https://opencode.ai/docs/",
         include_disclaimer=False,
@@ -429,7 +471,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_env_only
 
     profile_env, exit_code = load_profile_env_only(
-        profile_name, profiles_path, base_env, error_prefix="cf proxy start"
+        profile_name, profiles_path, base_env, error_prefix="cf run proxy start"
     )
     if exit_code != 0 and profile_name != "default":
         return 1
@@ -460,14 +502,14 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def status() -> int:
-    """Show all codefreedom opencode sandbox containers. Returns exit code."""
+    """Show all codefreedom run agent open-code sandbox containers. Returns exit code."""
     from codefreedom.sandbox.launcher import sandbox_status
 
     return sandbox_status(_CONTAINER_PREFIX)
 
 
 def stop() -> int:
-    """Stop and remove all codefreedom opencode sandbox containers. Returns exit code."""
+    """Stop and remove all codefreedom run agent open-code sandbox containers. Returns exit code."""
     from codefreedom.sandbox.launcher import sandbox_stop
 
     return sandbox_stop(_CONTAINER_PREFIX)
@@ -524,9 +566,7 @@ def _update_opencode_mcp(tools: List[str]) -> None:
     added = after_keys - before_keys
 
     if added:
-        config_path.write_text(
-            json.dumps(existing, indent=2) + "\n", encoding="utf-8"
-        )
+        config_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
         eprint(
             f"[OPENCODE] Registered MCP in {config_path}:"
             f" {', '.join(sorted(added))}"

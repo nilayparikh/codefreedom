@@ -121,7 +121,7 @@ def stop() -> int:
 
 
 def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
-    """Create ~/.codefreedom/sandbox/{profile}/.claude and a fresh .claude.json.
+    """Create ~/.codefreedom/claude-code/sandbox/{profile}/.claude and a fresh .claude.json.
 
     Does NOT seed from the host's ~/.claude.json -- the sandbox starts clean so
     Claude Code inside the container populates it naturally with only the paths
@@ -135,7 +135,7 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
     Returns (claude_dir, claude_json_path) -- the .claude directory and the
     .claude.json file path inside the profile's sandbox directory.
     """
-    profile_dir = CODEFREEDOM_DIR / "sandbox" / profile_name
+    profile_dir = CODEFREEDOM_DIR / "claude-code" / "sandbox" / profile_name
     profile_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(profile_dir, 0o777)
 
@@ -147,7 +147,7 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
     # ── Fresh .claude.json (never copy from host) ──────────────────────
     sandbox_json = profile_dir / ".claude.json"
     if not sandbox_json.exists():
-        sandbox_json.write_text("{}")
+        sandbox_json.write_text("{}", encoding="utf-8")
         os.chmod(sandbox_json, 0o666)
         eprint(f"{tag('SANDBOX')} Created fresh .claude.json: {sandbox_json}.")
     else:
@@ -155,7 +155,7 @@ def ensure_codefreedom_dir(profile_name: str) -> tuple[Path, Path]:
         eprint(f"{tag('SANDBOX')} Using existing .claude.json: {sandbox_json}.")
 
     # ── Shared tools cache (used by Chrome DevTools MCP, etc.) ─────
-    tools_cache = CODEFREEDOM_DIR / "sandbox" / "tools" / ".cache"
+    tools_cache = CODEFREEDOM_DIR / "tools" / ".cache"
     tools_cache.mkdir(parents=True, exist_ok=True)
     os.chmod(tools_cache, 0o777)
 
@@ -252,15 +252,19 @@ def run_docker(
     sandbox_claude_dir, sandbox_claude_json = ensure_codefreedom_dir(profile_name)
 
     # ── Container identity ────────────────────────────────────────────────────
-    host_uid = os.getuid()
-    host_gid = os.getgid()
-    if run_as_me:
+    if run_as_me and hasattr(os, "getuid"):
+        host_uid = os.getuid()
+        host_gid = os.getgid()
         container_home = f"/home/{HOME_DIR.name}"
         container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
         eprint(
             f"{tag('SANDBOX')} --run-as-me: uid={host_uid}({HOME_DIR.name}) gid={host_gid}"
         )
     else:
+        if run_as_me:
+            eprint(
+                f"{tag('SANDBOX')} --run-as-me not supported on Windows; running as default user."
+            )
         container_home = "/home/codefreedom"
         container_user_flag = []
         eprint(
@@ -299,7 +303,7 @@ def run_docker(
         "-v",
         f"{workspace_dir / '.claude'}:/workspace/.claude",
         "-v",
-        f"{CODEFREEDOM_DIR / 'sandbox' / 'tools' / '.cache'}:{container_home}/.cache",
+        f"{CODEFREEDOM_DIR / 'tools' / '.cache'}:{container_home}/.cache",
     ]
 
     # ── MCP JSON for tools ────────────────────────────────────────────────────

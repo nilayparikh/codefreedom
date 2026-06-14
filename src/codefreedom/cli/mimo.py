@@ -5,11 +5,11 @@ Auto-detects the running CodeFreedom LiteLLM proxy, generates a complete
 (``mimo``) with zero manual configuration.
 
 Usage:
-    codefreedom agent mimo [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
-    codefreedom agent mimo [options] [-- <agent-args>]
+    codefreedom run agent mimo-code [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
+    codefreedom run agent mimo-code [options] [-- <agent-args>]
 
 Proxy auto-config:
-    - Detects the proxy at LITELLM_BASE_URL (default: http://localhost:4000)
+    - Detects the proxy at PROXY_BASE_URL (default: http://localhost:4000)
     - Fetches model list from ``/v1/models``
     - Generates ``~/.codefreedom/mimo-code/mimocode.json`` with all models
     - Sets ``MIMOCODE_CONFIG`` env var to point at the generated config
@@ -58,7 +58,7 @@ def register_args(parser: argparse.ArgumentParser) -> None:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_MIMO_IMAGE = "docker.io/nilayparikh/codefreedom:mimo-code"
+DEFAULT_MIMO_IMAGE = "docker.io/nilayparikh/codefreedom:mimo-code-latest"
 PROXY_MODELS_CACHE_FILE = "proxy-models.json"
 MIMOCODE_CONFIG_NAME = "mimocode.json"
 _CONTAINER_PREFIX = "codefreedom-mimo-"
@@ -77,12 +77,16 @@ def _detect_proxy_url(base_env: Dict[str, str]) -> str:
     """Detect the proxy URL from environment or use default.
 
     Checks (in order):
-    1. LITELLM_BASE_URL in the merged env
-    2. LITELLM_BASE_URL in os.environ
-    3. Default http://localhost:4000
+    1. PROXY_BASE_URL in the merged env
+    2. PROXY_BASE_URL in os.environ
+    3. LITELLM_BASE_URL (legacy) in the merged env
+    4. LITELLM_BASE_URL (legacy) in os.environ
+    5. Default http://localhost:4000
     """
     return (
-        base_env.get("LITELLM_BASE_URL")
+        base_env.get("PROXY_BASE_URL")
+        or os.environ.get("PROXY_BASE_URL")
+        or base_env.get("LITELLM_BASE_URL")
         or os.environ.get("LITELLM_BASE_URL")
         or "http://localhost:4000"
     )
@@ -97,22 +101,20 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> List[Dict[str, Any
     Returns a list of model dicts (with at least an ``id`` key).
     Returns an empty list if the proxy is unreachable or returns an error.
     """
-    from codefreedom.core.http_client import get_json
-
-    import httpx
+    from codefreedom.core.http_client import get_json, HTTPError, HTTPStatusError
 
     models_url = f"{proxy_url.rstrip('/')}/v1/models"
     try:
         data = get_json(models_url, timeout=5, bearer=api_key)
         return data.get("data", [])
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (401, 403):
+    except HTTPStatusError as exc:
+        if exc.status_code in (401, 403):
             eprint(
-                f"[MIMO] Proxy returned {exc.response.status_code} — is LITELLM_MASTER_KEY set "
+                f"[MIMO] Proxy returned {exc.status_code} — is LITELLM_MASTER_KEY set "
                 f"in ~/.codefreedom/.env.claude.secrets?"
             )
         return []
-    except (httpx.HTTPError, json.JSONDecodeError):
+    except (HTTPError, json.JSONDecodeError):
         return []
 
 
@@ -188,9 +190,7 @@ def _generate_mimo_config(
             if alias_models:
                 before = len(provider_models)
                 provider_models = {
-                    k: v
-                    for k, v in provider_models.items()
-                    if k not in alias_models
+                    k: v for k, v in provider_models.items() if k not in alias_models
                 }
                 skipped = before - len(provider_models)
                 if skipped:
@@ -203,7 +203,7 @@ def _generate_mimo_config(
         provider_models = {}
         eprint(
             f"[MIMO] Proxy not reachable at {proxy_url}.\n"
-            f"       Start the proxy (``cf proxy start``) and restart MiMoCode\n"
+            f"       Start the proxy (``cf run proxy start``) and restart MiMoCode\n"
             f"       to load the full proxy model list."
         )
 
@@ -355,32 +355,47 @@ def run_docker(
     env_flags.extend(["-e", f"COLUMNS={cols}", "-e", f"LINES={lines}"])
 
     # ── Container identity ────────────────────────────────────────────────────
-    host_uid = os.getuid()
-    host_gid = os.getgid()
-    if run_as_me:
+    if run_as_me and hasattr(os, "getuid"):
+        host_uid = os.getuid()
+        host_gid = os.getgid()
         container_home = f"/home/{Path.home().name}"
         container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
-        eprint(f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}")
+        eprint(
+            f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}"
+        )
     else:
+        if run_as_me:
+            eprint("[SANDBOX] --run-as-me not supported on Windows; running as default user.")
         container_home = "/home/codefreedom"
         container_user_flag = []
         eprint("[SANDBOX] Running as default container user 'codefreedom' (uid 1000).")
 
     # ── Docker run base options ───────────────────────────────────────────────
     base_opts = [
-        "--network", "host",
+        "--network",
+        "host",
         *container_user_flag,
         "--ipc=host",
-        "-v", f"{workspace_dir}:/workspace",
-        "-w", "/workspace",
-        "-v", f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
-        "-v", f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
-        "-v", f"{mimo_home_dir}:{container_home}/.local/share/mimocode",
-        "-v", f"{config_path}:{container_home}/.config/mimocode/mimocode.json:ro",
-        "-e", f"HOME={container_home}",
-        "-e", f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
-        "-e", "IS_SANDBOX=1",
-        "-e", "MIMOCODE_DISABLE_AUTOUPDATE=1",
+        "-v",
+        f"{workspace_dir}:/workspace",
+        "-w",
+        "/workspace",
+        "-v",
+        f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
+        "-v",
+        f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
+        "-v",
+        f"{mimo_home_dir}:{container_home}/.local/share/mimocode",
+        "-v",
+        f"{config_path}:{container_home}/.config/mimocode/mimocode.json:ro",
+        "-e",
+        f"HOME={container_home}",
+        "-e",
+        f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+        "-e",
+        "IS_SANDBOX=1",
+        "-e",
+        "MIMOCODE_DISABLE_AUTOUPDATE=1",
     ]
 
     # ── Exec command ──────────────────────────────────────────────────────────
@@ -424,11 +439,11 @@ def init_mimo() -> int:
             "  npm install -g @mimo-ai/cli",
             "",
             "To start the proxy (for model routing):",
-            "  cf proxy start",
+            "  cf run proxy start",
             "",
             "To launch MiMoCode:",
-            "  cf agent mimo              # native mode",
-            "  cf agent mimo --sandbox    # isolated Docker sandbox",
+            "  cf run agent mimo-code              # native mode",
+            "  cf run agent mimo-code --sandbox    # isolated Docker sandbox",
         ],
         docs_url="https://github.com/XiaomiMiMo/MiMo-Code",
         include_disclaimer=False,
@@ -455,7 +470,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_env_only
 
     profile_env, exit_code = load_profile_env_only(
-        profile_name, profiles_path, base_env, error_prefix="cf proxy start"
+        profile_name, profiles_path, base_env, error_prefix="cf run proxy start"
     )
     if exit_code != 0 and profile_name != "default":
         return 1
@@ -486,14 +501,14 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def status() -> int:
-    """Show all codefreedom mimo sandbox containers. Returns exit code."""
+    """Show all codefreedom run agent mimo-code sandbox containers. Returns exit code."""
     from codefreedom.sandbox.launcher import sandbox_status
 
     return sandbox_status(_CONTAINER_PREFIX)
 
 
 def stop() -> int:
-    """Stop and remove all codefreedom mimo sandbox containers. Returns exit code."""
+    """Stop and remove all codefreedom run agent mimo-code sandbox containers. Returns exit code."""
     from codefreedom.sandbox.launcher import sandbox_stop
 
     return sandbox_stop(_CONTAINER_PREFIX)
@@ -553,12 +568,9 @@ def _update_mimocode_mcp(tools: List[str]) -> None:
     added = after_keys - before_keys
 
     if added:
-        config_path.write_text(
-            json.dumps(existing, indent=2) + "\n", encoding="utf-8"
-        )
+        config_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
         eprint(
-            f"[MIMO] Registered MCP in {config_path}:"
-            f" {', '.join(sorted(added))}"
+            f"[MIMO] Registered MCP in {config_path}:" f" {', '.join(sorted(added))}"
         )
     else:
         eprint("[MIMO] All MCP servers already registered.")

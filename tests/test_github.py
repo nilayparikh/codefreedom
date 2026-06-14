@@ -10,7 +10,7 @@ def _settings(**overrides) -> dict:
         "image": "codefreedom:github",
         "container_name": "codefreedom-tools-github",
         "port": 0,
-        "data_dir": "~/.codefreedom/sandbox/tools/github",
+        "data_dir": "~/.codefreedom/tools/github",
         "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_test123"},
     }
     base.update(overrides)

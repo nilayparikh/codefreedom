@@ -1,10 +1,10 @@
 """Web search bridge tool — SearXNG-shaped HTTP bridge in front of Camoufox MCP.
 
 Part of the unified tool group.  All tools are managed together:
-    cf tools start     Start all tools (no-op if already running)
-    cf tools stop      Stop all tools
-    cf tools restart   Restart all tools
-    cf tools status    Show status of all tools
+    cf run tools start     Start all tools (no-op if already running)
+    cf run tools stop      Stop all tools
+    cf run tools restart   Restart all tools
+    cf run tools status    Show status of all tools
 
 Translates SearXNG-style /search requests into MCP calls against the
 Camoufox web_search tool.  LiteLLM's websearch_interception routes Claude
@@ -39,7 +39,7 @@ from codefreedom.tools.schemas.web_bridge import WebBridgeConfig
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
-_DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:web-bridge"
+_DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:web-bridge-latest"
 _DEFAULT_CONTAINER_NAME = "codefreedom-web-bridge"
 _DEFAULT_PORT = 8500
 

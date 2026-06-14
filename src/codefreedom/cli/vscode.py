@@ -63,7 +63,7 @@ __all__ = [
 
 
 def build_parser(parser: argparse.ArgumentParser) -> None:
-    """Build the ``vscode`` subcommand parser for ``codefreedom config``."""
+    """Build the ``vscode`` subcommand parser for ``codefreedom setup config``."""
     sub = parser.add_subparsers(dest="vscode_action", title="vscode targets")
     sub.required = True
 

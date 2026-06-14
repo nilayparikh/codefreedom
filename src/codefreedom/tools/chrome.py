@@ -1,10 +1,10 @@
 """Chrome browser tool — run headless Chrome in Docker for browser automation.
 
 Part of the unified tool group.  All tools are managed together:
-    cf tools start     Start all tools (no-op if already running)
-    cf tools stop      Stop all tools
-    cf tools restart   Restart all tools
-    cf tools status    Show status of all tools
+    cf run tools start     Start all tools (no-op if already running)
+    cf run tools stop      Stop all tools
+    cf run tools restart   Restart all tools
+    cf run tools status    Show status of all tools
 
 Settings are loaded from ~/.codefreedom/profiles/chrome.yaml.
 Use `cf s i` to initialize.
@@ -175,7 +175,7 @@ def url(settings: dict) -> int:
 
     if not container_is_running(container_name):
         eprint("[CHROME] Chrome container is not running.")
-        eprint("   Use: cf tools start.")
+        eprint("   Use: cf run tools start.")
         return 1
 
     print(f"http://127.0.0.1:{port}")

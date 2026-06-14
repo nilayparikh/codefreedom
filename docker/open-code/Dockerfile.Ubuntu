@@ -1,18 +1,18 @@
-# ── MiMoCode Docker Image — Ubuntu ────────────────────────────────────────────
+# ── OpenCode Docker Image — Ubuntu ────────────────────────────────────────────
 # Platform: All architectures — ARM64, AMD64, Intel
-# Lightweight sandbox base: MiMoCode + dev tools.
+# Lightweight sandbox base: OpenCode + dev tools.
 #
 # @platform  Ubuntu
 # @version   v1.0.0
 # @arch      linux/arm64, linux/amd64
 #
 # Base: ubuntu:24.04 (multi-arch)
-#   • Minimal Ubuntu 24.04 + Node.js + MiMoCode (mimo) + dev tools
+#   • Minimal Ubuntu 24.04 + Node.js + OpenCode (opencode) + dev tools
 #
 # Build:
 #   docker build --build-arg IMAGE_VERSION=1.0.0 \
-#     -t codefreedom:mimo-code-v1.0.0 \
-#     -f docker/mimo-code/Dockerfile.Ubuntu docker/mimo-code/
+#     -t codefreedom:open-code-v1.0.0 \
+#     -f docker/open-code/Dockerfile.Ubuntu docker/open-code/
 # ────────────────────────────────────────────────────────────────────────────────
 
 ARG IMAGE_VERSION=1.0.0
@@ -22,8 +22,8 @@ FROM ubuntu:24.04
 
 ARG IMAGE_VERSION
 
-LABEL org.opencontainers.image.title="CodeFreedom - MiMoCode (Ubuntu)" \
-      org.opencontainers.image.description="MiMoCode dev container — Ubuntu base with mimocode binary and dev tools." \
+LABEL org.opencontainers.image.title="CodeFreedom - OpenCode (Ubuntu)" \
+      org.opencontainers.image.description="OpenCode dev container — Ubuntu base with opencode binary and dev tools." \
       org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
@@ -63,7 +63,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s $(which fdfind) /usr/local/bin/fd
 
-# 3. Node.js LTS (v20) — required for npm install of @mimo-ai/cli shim
+# 3. Node.js LTS (v20) — required for npm install of opencode shim
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -79,16 +79,14 @@ RUN mkdir -p /usr/share/keyrings \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# 5. MiMoCode (mimo) — install via npm and pre-download native binary
-#    @mimo-ai/cli is a lightweight node shim that downloads the real binary
-#    on first invocation. The shim caches the native binary at
-#    {shim_dir}/.mimocode/ (next to the shim script itself), making it
-#    user-agnostic. We invoke it here so the binary is pre-cached at
-#    build time — truly 0-click at runtime regardless of container user.
-RUN npm install -g @mimo-ai/cli \
-    && npm config set cache /tmp/.npm --global \
-    && npm cache clean --force \
-    && mimo --version 2>/dev/null || true \
+# 5. OpenCode (opencode) — install via official install script
+#    The install script downloads the latest opencode binary and places it
+#    in $HOME/.opencode/bin/opencode (which is /root/.opencode/bin/opencode
+#    during build). We copy it to /usr/local/bin so all users can access
+#    it at runtime.
+RUN curl -fsSL https://opencode.ai/install | bash \
+    && cp /root/.opencode/bin/opencode /usr/local/bin/opencode \
+    && chmod 755 /usr/local/bin/opencode \
     && rm -rf /tmp/*
 
 # 6. Non-root user — codefreedom (uid 1000) owns /workspace inside the container.
@@ -115,9 +113,7 @@ RUN set -eux; \
 
 # 7. Environment
 ENV IS_SANDBOX="1" \
-    MIMOCODE_DISABLE_AUTOUPDATE="1" \
-    MIMOCODE_DISABLE_MODELS_FETCH="1" \
-    MIMOCODE_DISABLE_GIT="0" \
+    OPENCODE_DISABLE_AUTOUPDATE="1" \
     HOME="/home/${USERNAME}"
 
 WORKDIR /workspace

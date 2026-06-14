@@ -1,11 +1,11 @@
 # Troubleshooting
 
-Start here when something isn't working. Run `cf doctor` first — it catches most common issues.
+Start here when something isn't working. Run `cf manage doctor` first — it catches most common issues.
 
 ## Quick Diagnosis
 
 ```bash
-cf doctor
+cf manage doctor
 ```
 
 This checks Docker, config files, profiles, ports, and tool status.
@@ -59,7 +59,7 @@ cat ~/.codefreedom/.env.secrets
 
 ### Proxy startup failures
 
-**Symptom:** `cf proxy start` fails or proxy exits immediately
+**Symptom:** `cf run proxy start` fails or proxy exits immediately
 
 **Check:**
 
@@ -71,7 +71,7 @@ docker logs codefreedom-litellm
 ls ~/.codefreedom/proxy/docker-compose.yaml
 ```
 
-**Fix:** Run `cf doctor` for specific diagnostics. Common causes:
+**Fix:** Run `cf manage doctor` for specific diagnostics. Common causes:
 
 - PostgreSQL data directory permission issues
 - Port 4000 already in use
@@ -105,9 +105,9 @@ docker pull docker.io/nilayparikh/codefreedom:latest
 docker system prune
 ```
 
-## When to Run `cf doctor`
+## When to Run `cf manage doctor`
 
-Run `cf doctor` when:
+Run `cf manage doctor` when:
 
 - First setting up CodeFreedom
 - After changing `.env` files

@@ -60,7 +60,7 @@ Before submitting a Pull Request:
 1. **Run unit tests:** `python -m pytest tests/ -v --tb=short`
 2. **Smoke test the CLI:** `codefreedom --help` and `cf --help`
 3. **Test `--init`:** `codefreedom --init --force` and verify `~/.codefreedom/` structure
-4. **Test profile listing:** `codefreedom claude --list-profiles`
+4. **Test profile listing:** `codefreedom run agent claude-code --list-profiles`
 
 ## Documentation Updates
 

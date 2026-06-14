@@ -12,7 +12,7 @@ from codefreedom.admin import backup as cf_backup
 from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.core.interpolate import interpolate_all_strings
-from codefreedom.log import eprint, green, red, tag, yellow
+from codefreedom.log import dim, eprint, green, red, tag, yellow
 from codefreedom.schemas.recipe import RecipeConfig
 from pydantic import ValidationError
 
@@ -103,7 +103,13 @@ def apply_plan(plan_id: str) -> int:
                 continue
             content = content_file.read_text(encoding="utf-8")
 
-        dst.write_text(content, encoding="utf-8")
+        if dst.suffix == ".ps1":
+            dst.write_text(content, encoding="utf-8")
+        else:
+            dst.write_text(content, encoding="utf-8")
+        if dst.suffix == ".sh":
+            import stat
+            dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         label = "CREATE" if action == "create" else "REPLACE"
         print(f"  [{label}] {target}")
         count += 1
@@ -154,7 +160,8 @@ def _install_recipe_files(
 
     # Validate manifest with Pydantic (non-fatal — warn on failure)
     try:
-        RecipeConfig.model_validate(manifest, strict=False)
+        validation_data = {k: v for k, v in manifest.items() if k != "_recipe_dir"}
+        RecipeConfig.model_validate(validation_data, strict=False)
     except ValidationError as exc:
         eprint(f"{tag('RECIPE')} Warning: Recipe validation issue: {exc}")
 
@@ -184,6 +191,9 @@ def _install_recipe_files(
             new_count = _merge_file(dst, content, merge_mode, target_path)
         else:
             dst.write_text(content, encoding="utf-8")
+            if dst.suffix == ".sh":
+                import stat
+                dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             print(f"  {tag('CREATE')} {target_path}")
             new_count = 1
 
@@ -275,7 +285,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
             var = secret.get("var", "?")
             prompt = secret.get("prompt", "")
 
-            value, source = _resolve_secret(var, env_files)
+            value, source = _resolve_secret(var, env_files, cf_dir)
             if value is not None:
                 label = f"  {green('[SET]')}   {var}"
                 if source:
@@ -291,6 +301,15 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
                 if hint:
                     print(f"           {hint}")
 
+        if missing_count:
+            print()
+            first_var = required[0].get("var", "?")
+            tip1 = "Tip: as machine env var use CF_CLI_<NAME> (e.g. CF_CLI_" + first_var + "),"
+            print(f"  {dim(tip1)}")
+            print(f"  {dim('     or use the bare name in a .env.*.secrets file.')}")
+            tip3 = "     Machine env vars take priority over secrets files."
+            print(f"  {dim(tip3)}")
+
     # ── Validate config vars ──────────────────────────────────────────
     if config_vars:
         print()
@@ -299,13 +318,14 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
             var = cfg.get("var", "?")
             prompt = cfg.get("prompt", "")
 
-            value, source = _resolve_secret(var, env_files)
+            value, source = _resolve_secret(var, env_files, cf_dir)
             if value is not None:
                 label = f"  {green('[SET]')}   {var}"
                 if source:
                     label += f"  ({source})"
                 print(label)
             else:
+                missing_count += 1
                 label = f"  {yellow('[MISSING]')} {var}"
                 if prompt:
                     label += f"  —  {prompt}"
@@ -316,6 +336,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
 
     # ── Show advice from recipe YAML ──────────────────────────────────
     if advice:
+        advice = advice.replace("{cf_dir}", str(cf_dir))
         print()
         for line in advice.strip().splitlines():
             print(f"  {line}")
@@ -327,21 +348,22 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     else:
         print()
         print(f"  {green('All secrets configured.')} Ready to start:")
-        print("    cf px start")
+        print("    cf r px start")
 
     print("  " + "-" * 55)
     print()
 
 
 def _resolve_secret(
-    name: str, env_files: list[Path]
+    name: str, env_files: list[Path], cf_dir: Path | None = None
 ) -> tuple[str | None, str | None]:
     """Resolve a secret across CF_CLI_* env, os.environ, and .env files.
 
-    Same priority chain as the doctor's ``_resolve_env_var_value``:
+    Priority chain:
       1. ``CF_CLI_<NAME>`` in os.environ (highest priority)
       2. ``NAME`` directly in os.environ
-      3. ``NAME=`` in the provided env_files (ignoring CHANGE_ME)
+      3. ``NAME=`` in .env.user (user-managed overrides)
+      4. ``NAME=`` in the provided env_files (ignoring CHANGE_ME)
     """
     import os
 
@@ -352,12 +374,24 @@ def _resolve_secret(
     if name in os.environ and os.environ[name]:
         return os.environ[name], "machine env"
 
+    if cf_dir:
+        user_env = cf_dir / ".env.user"
+        if user_env.exists():
+            content = user_env.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
+                    val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+                    if val and val != "CHANGE_ME":
+                        return val, ".env.user"
+
     for env_file in env_files:
         if env_file.exists():
             content = env_file.read_text(encoding="utf-8")
             for line in content.splitlines():
-                if line.strip().startswith(f"{name}="):
-                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                stripped = line.strip()
+                if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
+                    val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
                     if val and val != "CHANGE_ME":
                         return val, env_file.name
 
@@ -368,7 +402,7 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
     """Generate a persistent ``~/.codefreedom/RECIPE.md`` instruction file.
 
     This file records what recipe was installed, what files were created,
-    and what tools are available. The doctor command (``cf doctor``) uses
+    and what tools are available. The doctor command (``cf manage doctor``) uses
     it as a reference for validation. Secret-related information is shown
     only on stdout — never written to disk.
     """
@@ -398,7 +432,7 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
         lines.append("## Available Tools")
         lines.append("")
         for t in tools:
-            lines.append(f"- `{t}` — start with: `cf tools {t} start`")
+            lines.append(f"- `{t}` — start with: `cf run tools {t} start`")
         lines.append("")
 
     lines.append("## Quick Start")
@@ -418,8 +452,8 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
             lines.append(f"   - `{c.get('var', '?')}`")
         lines.append("")
         step += 1
-    lines.append(f"{step}. Run `cf px start` to start the proxy")
-    lines.append(f"{step + 1}. Run `cf cc` to launch the agent")
+    lines.append(f"{step}. Run `cf r px start` to start the proxy")
+    lines.append(f"{step + 1}. Run `cf r ag cc` to launch the agent")
     lines.append("")
     lines.append("See `COMMANDS.md` for the full command reference.")
     lines.append("")

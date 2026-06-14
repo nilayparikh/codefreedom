@@ -6,13 +6,13 @@ MiMoCode is Xiaomi's coding agent, supported as a first-class citizen in CodeFre
 
 ```bash
 # Launch MiMoCode natively
-cf mimo
+cf r ag mc
 
 # Launch in sandbox
-cf mimo --sandbox
+cf r ag mc --sandbox
 
 # Short alias
-cf mc
+cf r ag mc
 ```
 
 ## Proxy Integration
@@ -30,7 +30,7 @@ No manual configuration needed — just start the proxy and launch.
 ## Sandbox Mode
 
 ```bash
-cf mimo --sandbox
+cf r ag mc --sandbox
 ```
 
 Runs MiMoCode inside an ephemeral Docker container with:
@@ -46,10 +46,10 @@ Profiles are loaded from `~/.codefreedom/profiles/mimo-code.yaml`.
 
 ```bash
 # List available profiles
-cf mimo --list-profiles
+cf r ag mc --list-profiles
 
 # Use a specific profile
-cf mimo --profile production
+cf r ag mc --profile production
 ```
 
 ## Shared Infrastructure

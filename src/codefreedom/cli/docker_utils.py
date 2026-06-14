@@ -15,11 +15,11 @@ from pathlib import Path
 from typing import Any, Dict
 
 import yaml
-
 from pydantic import BaseModel
 
-from codefreedom.log import eprint
 from codefreedom.core.interpolate import interpolate_all_strings
+from codefreedom.env_loader import apply_cf_cli_overrides
+from codefreedom.log import eprint
 
 # ── Tool metadata ────────────────────────────────────────────────────────────
 
@@ -424,7 +424,7 @@ def get_codefreedom_container_ports() -> set[int]:
     Queries Docker for all running containers whose names match known
     CodeFreedom patterns (proxy, chrome, web, github, sandbox) and
     extracts their host port mappings.  This covers containers started
-    via ``cf proxy start``, ``cf tools <name> start``, and session-
+    via ``cf run proxy start``, ``cf run tools <name> start``, and session-
     managed tools from ``acquire_tools``.
 
     For ``--network host`` containers (chrome), the exposed container
@@ -543,8 +543,8 @@ def tool_home() -> Path:
 
 
 def tool_data_dir(tool_name: str) -> str:
-    """Return the default data dir under ~/.codefreedom/sandbox/tools/<name>."""
-    return str(tool_home() / "sandbox" / "tools" / tool_name)
+    """Return the default data dir under ~/.codefreedom/tools/<name>."""
+    return str(tool_home() / "tools" / tool_name)
 
 
 def tool_profile_path(tool_filename: str) -> Path:
@@ -628,8 +628,10 @@ def load_tool_profile(
         eprint(f"[{tag}] Warning: invalid profile format in {profile_path}")
         return defaults
 
-    # Interpolate ${VAR} references in env values
-    interpolate_all_strings(raw)
+    # Interpolate ${VAR} references in env values.
+    # Include CF_CLI_* overrides so machine-level env vars like
+    # CF_CLI_GITHUB_PERSONAL_ACCESS_TOKEN resolve correctly.
+    interpolate_all_strings(raw, context=apply_cf_cli_overrides(dict(os.environ)))
 
     # Validate with Pydantic (non-fatal — warn on failure)
     if schema_class is not None:
@@ -741,7 +743,7 @@ def restart_tool_container(settings: dict, label: str) -> int:
 
     if not container_exists(container_name):
         eprint(f"[{label}] Container '{container_name}' does not exist.")
-        eprint("   Use: cf tools start")
+        eprint("   Use: cf run tools start")
         return 1
 
     eprint(f"[{label}] Restarting container '{container_name}'...")
@@ -779,7 +781,7 @@ def status_tool_container(settings: dict, label: str, extra_info: str = "") -> i
         return 1
 
     eprint(f"[{label}] No {label} container found.")
-    eprint("   Use: cf tools start")
+    eprint("   Use: cf run tools start")
     return 1
 
 

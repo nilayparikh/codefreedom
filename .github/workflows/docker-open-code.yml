@@ -1,25 +1,18 @@
-# ── CodeFreedom: Docker LiteLLM (self-contained proxy image) ────────────────
-# Builds and publishes the self-hosted LiteLLM proxy image that replaces
-# ghcr.io/berriai/litellm in the compose stack. The image bakes in the
-# WebSearch count display patch (see docker/litellm/patch_websearch_count.py).
+# ── CodeFreedom: Docker OpenCode (Ubuntu) ──────────────────────────────────────
+# Builds and publishes the OpenCode sandbox image.
+# Triggered by changes to docker/open-code/Dockerfile.Ubuntu.
 #
-# Triggered by changes to docker/litellm/Dockerfile.LiteLLM or its
-# requirements.txt. Manually dispatchable for rebuilds on dependency bumps.
-#
-# Tags: litellm-v{semver}, litellm-v{major.minor}, litellm-latest
+# Tags: open-code-v{semver}, open-code-v{major.minor}, open-code-latest
 # Platforms: linux/arm64, linux/amd64
 # Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
-# ────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
 
-name: Docker LiteLLM
+name: Docker OpenCode
 
 on:
   push:
     branches: [main, prerelease]
-    paths:
-      - "docker/litellm/Dockerfile.LiteLLM"
-      - "docker/litellm/requirements.txt"
-      - "docker/litellm/patch_websearch_count.py"
+    paths: ["docker/open-code/Dockerfile.Ubuntu"]
   workflow_dispatch:
 
 env:
@@ -44,14 +37,14 @@ jobs:
           platforms: arm64,amd64
       - uses: docker/setup-buildx-action@v4
 
-      - name: Extract image version
+      - name: Extract version
         id: version
         run: |
-          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/litellm/Dockerfile.LiteLLM | head -1 | sed 's/.*=\(.*\)/\1/')
+          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/open-code/Dockerfile.Ubuntu | head -1 | sed 's/.*=\(.*\)/\1/')
           MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
-          echo "LiteLLM image version: v${VERSION}"
+          echo "📦 Version: v${VERSION}"
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
@@ -70,27 +63,27 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@v5
         with:
           images: |
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=litellm-v${{ steps.version.outputs.version }}
-            type=raw,value=litellm-v${{ steps.version.outputs.major_minor }}
-            type=raw,value=litellm-latest
+            type=raw,value=open-code-v${{ steps.version.outputs.version }}
+            type=raw,value=open-code-v${{ steps.version.outputs.major_minor }}
+            type=raw,value=open-code-latest
           labels: |
-            org.opencontainers.image.title=CodeFreedom - LiteLLM Proxy
-            org.opencontainers.image.description=Self-hosted LiteLLM proxy with the WebSearch count display patch baked in. Replaces ghcr.io/berriai/litellm in the codefreedom run proxy stack.
+            org.opencontainers.image.title=CodeFreedom - OpenCode (Ubuntu)
+            org.opencontainers.image.description=OpenCode sandbox container — Ubuntu base with opencode binary and dev tools
             org.opencontainers.image.version=v${{ steps.version.outputs.version }}
-            com.codefreedom.platform=LiteLLM
+            com.codefreedom.platform=Ubuntu
 
       - name: Build and push
         id: build
         uses: docker/build-push-action@v7
         with:
-          context: docker/litellm/
-          file: docker/litellm/Dockerfile.LiteLLM
+          context: docker/open-code/
+          file: docker/open-code/Dockerfile.Ubuntu
           platforms: linux/arm64,linux/amd64
           build-args: |
             IMAGE_VERSION=${{ steps.version.outputs.version }}
@@ -98,8 +91,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha,scope=LiteLLM
-          cache-to: type=gha,mode=max,scope=LiteLLM
+          cache-from: type=gha,scope=OpenCode
+          cache-to: type=gha,mode=max,scope=OpenCode
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'

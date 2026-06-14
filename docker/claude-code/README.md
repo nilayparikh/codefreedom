@@ -48,13 +48,13 @@ docker build --build-arg IMAGE_VERSION=0.1.0 \
 
 ```bash
 # CPU-only sandbox
-codefreedom claude --sandbox
+codefreedom run agent claude-code --sandbox
 
 # NVIDIA GPU sandbox
-codefreedom claude --sandbox --cuda
+codefreedom run agent claude-code --sandbox --cuda
 
 # AMD GPU sandbox
-codefreedom claude --sandbox --rocm
+codefreedom run agent claude-code --sandbox --rocm
 ```
 
 ## Container Design

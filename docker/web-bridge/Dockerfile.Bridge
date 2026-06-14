@@ -9,12 +9,16 @@
 # Cooldown: ${WEB_BRIDGE_COOLDOWN_SECONDS} (default 2.0)
 # Failure:  HTTP 502 + {"error": "..."} when MCP is unreachable
 #
-# Build:
+# Build (single-arch, local):
 #   docker build -t docker.io/nilayparikh/codefreedom:web-bridge \
 #     -f docker/web-bridge/Dockerfile.Bridge docker/web-bridge/
 #
+# Build (multi-arch, push):
+#   ./docker/web-bridge/build.sh
+#   ./docker/web-bridge/build.sh --ghcr   # also push to ghcr.io
+#
 # @platform  linux/amd64, linux/arm64
-# @version   v0.1.0
+# @version   v1.0.0
 #
 # Vulnerability strategy:
 #   * Multi-stage build — final image has no pip, no compilers, no apt cache.
@@ -25,7 +29,7 @@
 #     rebuild cannot accidentally pull a vulnerable wheel.
 # ──────────────────────────────────────────────────────────────────────────
 
-ARG IMAGE_VERSION=0.1.1
+ARG IMAGE_VERSION=1.0.0
 
 # ── Stage 1: builder ─ install pinned wheels into an isolated prefix ──────
 FROM python:3.13-slim AS builder

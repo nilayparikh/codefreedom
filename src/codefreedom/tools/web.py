@@ -1,10 +1,10 @@
 """Web search tool — headless browser in Docker for web search/scraping.
 
 Part of the unified tool group.  All tools are managed together:
-    cf tools start     Start all tools (no-op if already running)
-    cf tools stop      Stop all tools
-    cf tools restart   Restart all tools
-    cf tools status    Show status of all tools
+    cf run tools start     Start all tools (no-op if already running)
+    cf run tools stop      Stop all tools
+    cf run tools restart   Restart all tools
+    cf run tools status    Show status of all tools
 
 The container runs an MCP-only server with two tools:
     web_search(query) — search configured engines
