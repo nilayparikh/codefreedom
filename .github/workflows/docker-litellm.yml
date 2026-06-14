@@ -15,7 +15,7 @@ name: Docker LiteLLM
 
 on:
   push:
-    branches: [main]
+    branches: [main, prerelease]
     paths:
       - "docker/litellm/Dockerfile.LiteLLM"
       - "docker/litellm/requirements.txt"

@@ -11,7 +11,7 @@ name: Docker Web Bridge
 
 on:
   push:
-    branches: [main]
+    branches: [main, prerelease]
     paths: ["docker/web-bridge/Dockerfile.Bridge"]
   workflow_dispatch:
 

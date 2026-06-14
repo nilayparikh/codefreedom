@@ -11,7 +11,7 @@ name: Docker MiMoCode
 
 on:
   push:
-    branches: [main]
+    branches: [main, prerelease]
     paths: ["docker/mimo-code/Dockerfile.Ubuntu"]
   workflow_dispatch:
 

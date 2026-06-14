@@ -39,7 +39,7 @@ from codefreedom.tools.schemas.web_bridge import WebBridgeConfig
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
-_DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:web-bridge"
+_DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:web-bridge-latest"
 _DEFAULT_CONTAINER_NAME = "codefreedom-web-bridge"
 _DEFAULT_PORT = 8500
 

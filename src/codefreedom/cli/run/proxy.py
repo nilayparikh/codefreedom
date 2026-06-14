@@ -164,13 +164,13 @@ def _web_bridge_image() -> str:
     """Return the fully-qualified image tag used for the web-bridge sidecar.
 
     Reads ``WEB_BRIDGE_IMAGE`` from the merged env (proxy env files override
-    system env). Falls back to the published ``docker.io/nilayparikh/codefreedom:web-bridge``
+    system env). Falls back to the published ``docker.io/nilayparikh/codefreedom:web-bridge-latest``
     reference so the local build is directly pushable to Docker Hub without
     a retag step. Override the env var to use a different registry/tag.
     """
     merged = _build_proxy_env()
     return merged.get(
-        "WEB_BRIDGE_IMAGE", "docker.io/nilayparikh/codefreedom:web-bridge"
+        "WEB_BRIDGE_IMAGE", "docker.io/nilayparikh/codefreedom:web-bridge-latest"
     )
 
 

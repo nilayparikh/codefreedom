@@ -2,7 +2,7 @@
 # Builds and publishes the Ubuntu-based Claude Code image.
 # Triggered by changes to docker/claude-code/Dockerfile.Ubuntu.
 #
-# Tags: ubuntu-v{semver}, ubuntu-v{major.minor}, ubuntu-latest
+# Tags: claude-code-v{semver}, claude-code-v{major.minor}, claude-code-latest
 # Platforms: linux/arm64, linux/amd64
 # Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
 # ────────────────────────────────────────────────────────────────────────────────
@@ -11,7 +11,7 @@ name: Docker Ubuntu
 
 on:
   push:
-    branches: [main]
+    branches: [main, prerelease]
     paths: ["docker/claude-code/Dockerfile.Ubuntu"]
   workflow_dispatch:
 
@@ -69,9 +69,9 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=ubuntu-v${{ steps.version.outputs.version }}
-            type=raw,value=ubuntu-v${{ steps.version.outputs.major_minor }}
-            type=raw,value=ubuntu-latest
+            type=raw,value=claude-code-v${{ steps.version.outputs.version }}
+            type=raw,value=claude-code-v${{ steps.version.outputs.major_minor }}
+            type=raw,value=claude-code-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Claude Code (Ubuntu)
             org.opencontainers.image.description=Claude Code dev container — common Ubuntu base, no PyTorch. Use CUDA/ROCm variants for AI.

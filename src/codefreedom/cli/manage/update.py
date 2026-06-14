@@ -509,6 +509,15 @@ def check_image(image_ref: dict[str, str]) -> dict[str, Any]:
 # ─── PyPI check ──────────────────────────────────────────────────────────────
 
 
+def _parse_version(version_str: str) -> tuple[int, ...]:
+    """Parse version string into comparable tuple, handling pre-release tags."""
+    rc_match = re.search(r"(rc|alpha|beta|a|b)(\d+)$", version_str)
+    pre_release = 0 if rc_match else 1
+    base = re.split(r"[^0-9]+", re.split(r"(rc|alpha|beta|a|b)", version_str)[0])
+    parts = tuple(int(p) for p in base if p)
+    return parts + (pre_release,)
+
+
 def check_pypi() -> dict[str, Any] | None:
     """Check the installed codefreedom package version against PyPI."""
     try:
@@ -540,12 +549,30 @@ def check_pypi() -> dict[str, Any] | None:
             "status": "ok",
             "message": "up to date",
         }
-    else:
+
+    local_parsed = _parse_version(local_version)
+    remote_parsed = _parse_version(remote_version)
+
+    if remote_parsed > local_parsed:
+        is_prerelease = re.search(r"(rc|alpha|beta|a|b)\d+", remote_version)
+        if is_prerelease:
+            uv_cmd = f"uv tool upgrade {PYPI_PACKAGE}=={remote_version} --prerelease=allow"
+        else:
+            uv_cmd = f"uv tool upgrade {PYPI_PACKAGE}=={remote_version}"
+        pip_cmd = f"pip install --upgrade {PYPI_PACKAGE}=={remote_version}"
         return {
             "local_version": local_version,
             "remote_version": remote_version,
             "status": "new",
-            "message": f"pip install --upgrade {PYPI_PACKAGE}",
+            "uv_cmd": uv_cmd,
+            "pip_cmd": pip_cmd,
+        }
+    else:
+        return {
+            "local_version": local_version,
+            "remote_version": remote_version,
+            "status": "ok",
+            "message": "up to date",
         }
 
 
@@ -600,7 +627,7 @@ def _display_results(
         elif pypi_result["status"] == "new":
             print(f" [upd]  codefreedom {pypi_result['local_version']}")
             print(
-                f"        {pypi_result['message']}  ({pypi_result['remote_version']} available)"
+                f"        {pypi_result['uv_cmd']}  ({pypi_result['remote_version']} available)"
             )
             print()
         else:
@@ -639,7 +666,8 @@ def _display_results(
     if any(r["status"] == "pinned" for r in image_results):
         tips.append("Pinned tags: switch to -latest for auto-updates")
     if pypi_result and pypi_result.get("status") == "new":
-        tips.append(f"PyPI: {pypi_result['message']}")
+        tips.append(f"PyPI: {pypi_result['uv_cmd']}")
+        tips.append(f"     pip: {pypi_result['pip_cmd']}")
 
     if tips:
         print()

@@ -80,9 +80,13 @@ RUN mkdir -p /usr/share/keyrings \
     && rm -rf /var/lib/apt/lists/*
 
 # 5. OpenCode (opencode) — install via official install script
-#    The install script downloads the latest opencode binary for the current
-#    architecture and places it in /usr/local/bin/opencode.
+#    The install script downloads the latest opencode binary and places it
+#    in $HOME/.opencode/bin/opencode (which is /root/.opencode/bin/opencode
+#    during build). We copy it to /usr/local/bin so all users can access
+#    it at runtime.
 RUN curl -fsSL https://opencode.ai/install | bash \
+    && cp /root/.opencode/bin/opencode /usr/local/bin/opencode \
+    && chmod 755 /usr/local/bin/opencode \
     && rm -rf /tmp/*
 
 # 6. Non-root user — codefreedom (uid 1000) owns /workspace inside the container.

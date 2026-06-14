@@ -2,7 +2,7 @@
 # Builds and publishes the ROCm-based Claude Code image.
 # Triggered by changes to docker/claude-code/Dockerfile.ROCm.
 #
-# Tags: rocm-v{semver}, rocm-v{major.minor}, rocm-latest
+# Tags: claude-code-rocm-v{semver}, claude-code-rocm-v{major.minor}, claude-code-rocm-latest
 # Platforms: linux/amd64
 # Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
 # ────────────────────────────────────────────────────────────────────────────────
@@ -11,7 +11,7 @@ name: Docker ROCm
 
 on:
   push:
-    branches: [main]
+    branches: [main, prerelease]
     paths: ["docker/claude-code/Dockerfile.ROCm"]
   workflow_dispatch:
 
@@ -69,9 +69,9 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=rocm-v${{ steps.version.outputs.version }}
-            type=raw,value=rocm-v${{ steps.version.outputs.major_minor }}
-            type=raw,value=rocm-latest
+            type=raw,value=claude-code-rocm-v${{ steps.version.outputs.version }}
+            type=raw,value=claude-code-rocm-v${{ steps.version.outputs.major_minor }}
+            type=raw,value=claude-code-rocm-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - Claude Code (ROCm)
             org.opencontainers.image.description=AMD ROCm — Instinct MI300X, MI250X, Radeon PRO

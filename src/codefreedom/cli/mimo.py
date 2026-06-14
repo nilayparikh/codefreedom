@@ -58,7 +58,7 @@ def register_args(parser: argparse.ArgumentParser) -> None:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_MIMO_IMAGE = "docker.io/nilayparikh/codefreedom:mimo-code"
+DEFAULT_MIMO_IMAGE = "docker.io/nilayparikh/codefreedom:mimo-code-latest"
 PROXY_MODELS_CACHE_FILE = "proxy-models.json"
 MIMOCODE_CONFIG_NAME = "mimocode.json"
 _CONTAINER_PREFIX = "codefreedom-mimo-"

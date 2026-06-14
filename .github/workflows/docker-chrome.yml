@@ -11,7 +11,7 @@ name: Docker Chrome
 
 on:
   push:
-    branches: [main]
+    branches: [main, prerelease]
     paths: ["docker/chrome/Dockerfile.Chrome"]
   workflow_dispatch:
 

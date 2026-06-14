@@ -498,7 +498,7 @@ class TestEnsureWebBridgeImage:
         build_calls = [c for c in calls if "build" in c]
         assert len(build_calls) == 1
         # Tag should be the full registry reference (pushable without retag).
-        assert "docker.io/nilayparikh/codefreedom:web-bridge" in build_calls[0]
+        assert "docker.io/nilayparikh/codefreedom:web-bridge-latest" in build_calls[0]
 
     def test_build_failure_returns_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When the build subprocess returns non-zero, helper returns 1."""
