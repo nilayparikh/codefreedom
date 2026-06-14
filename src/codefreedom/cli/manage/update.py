@@ -1,8 +1,8 @@
 """Update checker — checks CodeFreedom Docker images and PyPI package for updates.
 
 Usage:
-    codefreedom update [service...]
-    cf update
+    codefreedom manage update [service...]
+    cf manage update
     cf upd
 
 Discovers CodeFreedom images from the local Docker cache and profiles,

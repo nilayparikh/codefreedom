@@ -100,7 +100,7 @@ When adding a new component tag:
 
 ## CLI Conventions
 
-- Short aliases: `cf s i` = `cf setup init`, `cf px` = `cf run proxy`, `cf cc` = `cf run agent claude-code`
+- Short aliases: `cf s i` = `cf setup init`, `cf r px` = `cf run proxy`, `cf r ag cc` = `cf run agent claude-code`
 - Recommended flow: `cf s i -pa <recipe>` (plan-and-apply with confirmation)
 - Secrets are checked after apply using the full env chain (`.env.*.secrets` + `os.environ` + `CF_CLI_*` overrides)
 - `.env.user` is auto-created on first apply if missing

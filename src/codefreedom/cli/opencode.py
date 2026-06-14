@@ -5,8 +5,8 @@ Auto-detects the running CodeFreedom LiteLLM proxy, generates a complete
 (``opencode``) with zero manual configuration.
 
 Usage:
-    codefreedom agent opencode [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
-    codefreedom agent opencode [options] [-- <agent-args>]
+    codefreedom run agent open-code [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
+    codefreedom run agent open-code [options] [-- <agent-args>]
 
 Proxy auto-config:
     - Detects the proxy at LITELLM_BASE_URL (default: http://localhost:4000)
@@ -177,7 +177,7 @@ def _generate_opencode_config(
         provider_models = {}
         eprint(
             f"[OPENCODE] Proxy not reachable at {proxy_url}.\n"
-            f"       Start the proxy (``cf proxy start``) and restart OpenCode\n"
+            f"       Start the proxy (``cf run proxy start``) and restart OpenCode\n"
             f"       to load the full proxy model list."
         )
 
@@ -398,11 +398,11 @@ def init_opencode() -> int:
             "  curl -fsSL https://opencode.ai/install | bash",
             "",
             "To start the proxy (for model routing):",
-            "  cf proxy start",
+            "  cf run proxy start",
             "",
             "To launch OpenCode:",
-            "  cf agent opencode              # native mode",
-            "  cf agent opencode --sandbox    # isolated Docker sandbox",
+            "  cf run agent open-code              # native mode",
+            "  cf run agent open-code --sandbox    # isolated Docker sandbox",
         ],
         docs_url="https://opencode.ai/docs/",
         include_disclaimer=False,
@@ -429,7 +429,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_env_only
 
     profile_env, exit_code = load_profile_env_only(
-        profile_name, profiles_path, base_env, error_prefix="cf proxy start"
+        profile_name, profiles_path, base_env, error_prefix="cf run proxy start"
     )
     if exit_code != 0 and profile_name != "default":
         return 1
@@ -460,14 +460,14 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def status() -> int:
-    """Show all codefreedom opencode sandbox containers. Returns exit code."""
+    """Show all codefreedom run agent open-code sandbox containers. Returns exit code."""
     from codefreedom.sandbox.launcher import sandbox_status
 
     return sandbox_status(_CONTAINER_PREFIX)
 
 
 def stop() -> int:
-    """Stop and remove all codefreedom opencode sandbox containers. Returns exit code."""
+    """Stop and remove all codefreedom run agent open-code sandbox containers. Returns exit code."""
     from codefreedom.sandbox.launcher import sandbox_stop
 
     return sandbox_stop(_CONTAINER_PREFIX)

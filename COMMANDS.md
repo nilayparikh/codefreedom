@@ -11,8 +11,8 @@ cf -v                            Show version and system info
 cf s i                          Initialize (install _default recipe)
 cf s i -pa <recipe>             Plan + apply a recipe (interactive)
 cf s i -l                       List available recipes
-cf px start                     Start the LLM proxy
-cf cc                           Launch Claude Code agent
+cf r px start                     Start the LLM proxy
+cf r ag cc                           Launch Claude Code agent
 cf m dr                         Run diagnostics
 ```
 

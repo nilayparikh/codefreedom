@@ -81,7 +81,7 @@ jobs:
             type=raw,value=litellm-latest
           labels: |
             org.opencontainers.image.title=CodeFreedom - LiteLLM Proxy
-            org.opencontainers.image.description=Self-hosted LiteLLM proxy with the WebSearch count display patch baked in. Replaces ghcr.io/berriai/litellm in the codefreedom proxy stack.
+            org.opencontainers.image.description=Self-hosted LiteLLM proxy with the WebSearch count display patch baked in. Replaces ghcr.io/berriai/litellm in the codefreedom run proxy stack.
             org.opencontainers.image.version=v${{ steps.version.outputs.version }}
             com.codefreedom.platform=LiteLLM
 

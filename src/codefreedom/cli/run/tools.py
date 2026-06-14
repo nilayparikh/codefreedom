@@ -1,10 +1,10 @@
 """Unified tools command — manage all auxiliary tools as a group.
 
 Usage:
-    codefreedom tools start    Start all tools (no-op if already running)
-    codefreedom tools stop     Stop all tools
-    codefreedom tools restart  Restart all tools
-    codefreedom tools status   Show status of all tools
+    codefreedom run tools start    Start all tools (no-op if already running)
+    codefreedom run tools stop     Stop all tools
+    codefreedom run tools restart  Restart all tools
+    codefreedom run tools status   Show status of all tools
 
 Tools use Docker as the source of truth — no /proc tracking.
 Profiles are loaded from ~/.codefreedom/profiles/.
@@ -65,12 +65,12 @@ def status_all(selected: set[str] | None = None) -> int:
     if all_running:
         eprint(f"{tag('TOOLS')} All tools are running.")
         return 0
-    eprint(f"{tag('TOOLS')} Some tools are not running. Use 'cf tools start'.")
+    eprint(f"{tag('TOOLS')} Some tools are not running. Use 'cf run tools start'.")
     return 1
 
 
 def ensure_tools(selected: set[str] | None = None) -> int:
-    """Ensure tools are running (start if missing). Used by cf px / cf cc."""
+    """Ensure tools are running (start if missing). Used by cf r px / cf r ag cc."""
     eprint(f"{tag('TOOLS')} Ensuring tools are running...")
     return start_all_tools(selected)
 

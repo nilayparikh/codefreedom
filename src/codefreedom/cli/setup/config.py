@@ -1,7 +1,7 @@
 """Unified config command — generate configurations for all targets.
 
 Usage:
-    codefreedom config <target> [options]
+    codefreedom setup config <target> [options]
 
 Targets:
     claude      Generate shell exports for Claude Code
@@ -46,7 +46,7 @@ def list_targets() -> int:
     for name, (_, _, description) in _CONFIG_TARGETS.items():
         eprint(f"  {name:12} {description}")
     eprint()
-    eprint("Usage: cf config <target> [options]")
+    eprint("Usage: cf setup config <target> [options]")
     return 0
 
 
@@ -258,8 +258,8 @@ def handle_args(args: argparse.Namespace) -> int:
         vscode_action = getattr(args, "vscode_action", None)
         if vscode_action is None:
             eprint("[CONFIG] vscode requires a sub-target: 'claude' or 'proxy'")
-            eprint("   Usage: cf config vscode claude [options]")
-            eprint("          cf config vscode proxy [options]")
+            eprint("   Usage: cf setup config vscode claude [options]")
+            eprint("          cf setup config vscode proxy [options]")
             return 1
 
         # Route to the correct vscode handler

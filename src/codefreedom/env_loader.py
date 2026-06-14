@@ -7,8 +7,8 @@ then system env. This ensures secrets always override config, and user
 overrides always win short of the host OS environment.
 
   Tier 1: Component-specific (loaded only for the matching subcommand)
-    ~/.codefreedom/.env.claude              — codefreedom claude
-    ~/.codefreedom/.env.proxy               — codefreedom proxy
+    ~/.codefreedom/.env.claude              — codefreedom run agent claude-code
+    ~/.codefreedom/.env.proxy               — codefreedom run proxy
 
   Tier 2: Shared config (loaded for ALL components — claude, proxy, tools)
     ~/.codefreedom/.env
@@ -17,8 +17,8 @@ overrides always win short of the host OS environment.
     {workspace_dir}/.env
 
   Tier 4: Component-specific secrets
-    ~/.codefreedom/.env.claude.secrets      — codefreedom claude
-    ~/.codefreedom/.env.proxy.secrets       — codefreedom proxy
+    ~/.codefreedom/.env.claude.secrets      — codefreedom run agent claude-code
+    ~/.codefreedom/.env.proxy.secrets       — codefreedom run proxy
 
   Tier 5: Shared secrets
     ~/.codefreedom/.env.secrets
@@ -37,7 +37,7 @@ overrides always win short of the host OS environment.
 
 Full resolution order (later sources override earlier):
 
-  codefreedom claude:
+  codefreedom run agent claude-code:
     1. ~/.codefreedom/.env.claude           (component config, skip if missing)
     2. ~/.codefreedom/.env                  (shared config, skip if missing)
     3. {workspace_dir}/.env                 (workspace config, skip if missing)
@@ -47,7 +47,7 @@ Full resolution order (later sources override earlier):
     7. {codefreedom_dir}/.env.user          (user overrides, skip if missing)
     8. os.environ / exported vars           (always wins)
 
-  codefreedom proxy:
+  codefreedom run proxy:
     1. ~/.codefreedom/.env.proxy            (component config, skip if missing)
     2. ~/.codefreedom/.env                  (shared config, skip if missing)
     3. {workspace_dir}/.env                 (workspace config, skip if missing)
@@ -57,7 +57,7 @@ Full resolution order (later sources override earlier):
     7. {codefreedom_dir}/.env.user          (user overrides, skip if missing)
     8. os.environ / exported vars           (always wins)
 
-  codefreedom tools (chrome, web, etc.):
+  codefreedom run tools (chrome, web, etc.):
     1. ~/.codefreedom/.env                  (shared config, skip if missing)
     2. {workspace_dir}/.env                 (workspace config, skip if missing)
     3. ~/.codefreedom/.env.secrets          (shared secrets, skip if missing)

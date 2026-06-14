@@ -76,9 +76,9 @@ LiteLLM 1.87.x auto-routes GPT-5.x chat completions through the Azure Responses 
 Deployed via `docker compose` (see `~/.codefreedom/proxy/docker-compose.yaml`). Managed through the CLI:
 
 ```bash
-codefreedom proxy start    # start the proxy
-codefreedom proxy stop     # stop the proxy
-codefreedom proxy status   # check status
+codefreedom run proxy start    # start the proxy
+codefreedom run proxy stop     # stop the proxy
+codefreedom run proxy status   # check status
 ```
 
 ## Environment Variables (Entrypoint)

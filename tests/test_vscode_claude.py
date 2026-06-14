@@ -1,4 +1,4 @@
-"""Tests for the `codefreedom vscode claude config` subcommand."""
+"""Tests for the `codefreedom setup config vscode claude config` subcommand."""
 
 from __future__ import annotations
 

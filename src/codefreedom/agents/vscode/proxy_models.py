@@ -368,7 +368,7 @@ def _build_vscode_entry(
 def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     """Generate a chatLanguageModels.json entry from the running proxy.
 
-    Entry point for ``codefreedom config vscode proxy config``.  Probes the proxy
+    Entry point for ``codefreedom setup config vscode proxy config``.  Probes the proxy
     at /health/liveliness, fetches /v1/model/info with LITELLM_MASTER_KEY,
     and emits a JSON object that can be dropped into VS Code's user-level
     ``chatLanguageModels.json`` file (a list of provider entries).

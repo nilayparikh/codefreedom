@@ -11,5 +11,5 @@
 - [ ] `python -m pytest tests/ -v --tb=short` passes
 - [ ] `codefreedom --help` and `cf --help` work
 - [ ] `codefreedom --init` completes without error (clean environment)
-- [ ] `codefreedom claude --list-profiles` works
+- [ ] `codefreedom run agent claude-code --list-profiles` works
 - [ ] No new lint warnings

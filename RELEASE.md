@@ -10,7 +10,7 @@ This release introduces three major new capabilities: the `admin` subcommand for
 
 ## New Features
 
-### `codefreedom admin` Subcommand
+### `codefreedom manage admin` Subcommand
 
 A new top-level subcommand for managing CodeFreedom configuration backups:
 
@@ -22,7 +22,7 @@ A new top-level subcommand for managing CodeFreedom configuration backups:
 
 Full implementation in `src/codefreedom/admin.py` and `src/codefreedom/cli/admin.py` with comprehensive test coverage in `tests/test_admin.py`.
 
-### `codefreedom tools chrome` Command
+### `codefreedom run tools chrome` Command
 
 Manage a Chromium browser container for headless/headed browser automation:
 
@@ -33,7 +33,7 @@ Manage a Chromium browser container for headless/headed browser automation:
 - **`status`** — Show container status
 - **`url`** — Print CDP debug URL for agent connection
 
-### `codefreedom tools web` Command (formerly Camoufox)
+### `codefreedom run tools web` Command (formerly Camoufox)
 
 Manage a Camoufox MCP server container for stealth web search and scraping:
 
@@ -115,9 +115,9 @@ Complete rename of the "Camoufox" component to "Web" across the entire codebase:
 
 ## Upgrade Notes
 
-- **Breaking:** `camoufox` optional dependency renamed to `web` in usage (install still uses package name). Users should run `codefreedom tools web init` instead of any prior Camoufox-specific commands.
-- **New:** Run `codefreedom admin backup` after upgrading to create your first config backup.
-- **New:** Browser tool users should run `codefreedom tools chrome init` and/or `codefreedom tools web init` before starting containers.
+- **Breaking:** `camoufox` optional dependency renamed to `web` in usage (install still uses package name). Users should run `codefreedom run tools web init` instead of any prior Camoufox-specific commands.
+- **New:** Run `codefreedom manage admin backup` after upgrading to create your first config backup.
+- **New:** Browser tool users should run `codefreedom run tools chrome init` and/or `codefreedom run tools web init` before starting containers.
 
 ---
 

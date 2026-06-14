@@ -36,7 +36,7 @@ sequenceDiagram
 
 ## Prerequisites
 
-- Proxy must be running (`cf proxy start`)
+- Proxy must be running (`cf run proxy start`)
 - The `web-bridge` and Camoufox containers must be active (auto-started with proxy)
 
 ## Limitations
@@ -49,7 +49,7 @@ sequenceDiagram
 
 If WebSearch isn't working:
 
-1. Run `cf doctor` to check proxy and tool status
+1. Run `cf manage doctor` to check proxy and tool status
 2. Verify the web-bridge container is running: `docker ps | grep web-bridge`
 3. Check proxy logs: `docker logs codefreedom-litellm`
 

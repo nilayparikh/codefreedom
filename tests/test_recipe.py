@@ -551,7 +551,7 @@ class TestSummary:
         captured = capsys.readouterr()
         assert "All secrets configured" in captured.out
         assert "Ready to start" in captured.out
-        assert "cf px start" in captured.out
+        assert "cf r px start" in captured.out
 
     def test_no_required_secrets(self, capsys):
         """Summary works without required_secrets."""

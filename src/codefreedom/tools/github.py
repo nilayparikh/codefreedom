@@ -1,10 +1,10 @@
 """GitHub MCP Server tool — stdio↔HTTP bridge over ghcr.io/github/github-mcp-server.
 
 Part of the unified tool group.  All tools are managed together:
-    cf tools start     Start all tools (no-op if already running)
-    cf tools stop      Stop all tools
-    cf tools restart   Restart all tools
-    cf tools status    Show status of all tools
+    cf run tools start     Start all tools (no-op if already running)
+    cf run tools stop      Stop all tools
+    cf run tools restart   Restart all tools
+    cf run tools status    Show status of all tools
 
 The container runs a Python bridge that wraps github-mcp-server stdio with an
 HTTP MCP endpoint on port 8082.  Coding agents connect via

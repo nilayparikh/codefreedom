@@ -1,9 +1,9 @@
 """Deinit subcommand -- fully tear down CodeFreedom configuration and containers.
 
 Usage:
-    codefreedom deinit              Interactive teardown (prompts for confirmation)
-    codefreedom deinit --force      Skip confirmation prompt
-    codefreedom deinit --help       Show this help
+    codefreedom setup deinit              Interactive teardown (prompts for confirmation)
+    codefreedom setup deinit --force      Skip confirmation prompt
+    codefreedom setup deinit --help       Show this help
 
 Teardown steps:
   1. Stop the proxy (docker compose down)

@@ -347,7 +347,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     else:
         print()
         print(f"  {green('All secrets configured.')} Ready to start:")
-        print("    cf px start")
+        print("    cf r px start")
 
     print("  " + "-" * 55)
     print()
@@ -388,7 +388,7 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
     """Generate a persistent ``~/.codefreedom/RECIPE.md`` instruction file.
 
     This file records what recipe was installed, what files were created,
-    and what tools are available. The doctor command (``cf doctor``) uses
+    and what tools are available. The doctor command (``cf manage doctor``) uses
     it as a reference for validation. Secret-related information is shown
     only on stdout — never written to disk.
     """
@@ -418,7 +418,7 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
         lines.append("## Available Tools")
         lines.append("")
         for t in tools:
-            lines.append(f"- `{t}` — start with: `cf tools {t} start`")
+            lines.append(f"- `{t}` — start with: `cf run tools {t} start`")
         lines.append("")
 
     lines.append("## Quick Start")
@@ -438,8 +438,8 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
             lines.append(f"   - `{c.get('var', '?')}`")
         lines.append("")
         step += 1
-    lines.append(f"{step}. Run `cf px start` to start the proxy")
-    lines.append(f"{step + 1}. Run `cf cc` to launch the agent")
+    lines.append(f"{step}. Run `cf r px start` to start the proxy")
+    lines.append(f"{step + 1}. Run `cf r ag cc` to launch the agent")
     lines.append("")
     lines.append("See `COMMANDS.md` for the full command reference.")
     lines.append("")

@@ -1,15 +1,15 @@
 """Admin subcommand -- backup, restore, list, inspect, and prune CodeFreedom config.
 
 Usage:
-    codefreedom admin backup                        Default backup location
-    codefreedom admin backup --out PATH             Explicit output path
-    codefreedom admin restore --in PATH             Interactive restore with diff preview
-    codefreedom admin restore --in PATH --dry-run   Diff preview only
-    codefreedom admin restore --in PATH --force     Skip confirmation
-    codefreedom admin list-backups                  List all backups
-    codefreedom admin inspect PATH                  Inspect a backup archive
-    codefreedom admin prune --keep N                Keep N most recent
-    codefreedom admin prune --older-than 30d        Delete older than duration
+    codefreedom manage admin backup                        Default backup location
+    codefreedom manage admin backup --out PATH             Explicit output path
+    codefreedom manage admin restore --in PATH             Interactive restore with diff preview
+    codefreedom manage admin restore --in PATH --dry-run   Diff preview only
+    codefreedom manage admin restore --in PATH --force     Skip confirmation
+    codefreedom manage admin list-backups                  List all backups
+    codefreedom manage admin inspect PATH                  Inspect a backup archive
+    codefreedom manage admin prune --keep N                Keep N most recent
+    codefreedom manage admin prune --older-than 30d        Delete older than duration
 """
 
 from __future__ import annotations

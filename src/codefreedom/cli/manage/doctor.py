@@ -1,7 +1,7 @@
 """Doctor subcommand -- comprehensive CodeFreedom diagnostic check.
 
 Usage:
-    codefreedom doctor [--verbose]
+    codefreedom manage doctor [--verbose]
 
 Checks the full CodeFreedom environment for issues that could prevent
 normal operation, including:
@@ -434,7 +434,7 @@ def _check_image_available(image: str, label: str) -> CheckResult:
             return _ok(f"{label} image '{image}' is cached locally")
         return _warn(
             f"{label} image '{image}' not found locally",
-            "Will be pulled on first 'cf proxy start'",
+            "Will be pulled on first 'cf run proxy start'",
         )
     except FileNotFoundError:
         return _skip("(Docker CLI not available)")
@@ -467,7 +467,7 @@ def _check_tool_profile(name: str, label: str) -> CheckResult:
     if not profile_file.exists():
         return _warn(
             f"{label} profile not found",
-            f"Run 'cf tools {name} init' or 'cf s i' to create it",
+            f"Run 'cf run tools {name} init' or 'cf s i' to create it",
         )
 
     try:
@@ -634,7 +634,7 @@ def _check_proxy_running() -> CheckResult:
         if status:
             return _ok(f"LiteLLM container is running ({status})")
         return _warn(
-            "LiteLLM container is not running", "Start it with: cf proxy start"
+            "LiteLLM container is not running", "Start it with: cf run proxy start"
         )
     except FileNotFoundError:
         return _skip("(Docker CLI not available)")
@@ -654,7 +654,7 @@ def _check_web_bridge_running() -> CheckResult:
         if status:
             return _ok(f"Web-bridge container is running ({status})")
         return _warn(
-            "Web-bridge container is not running", "Start it with: cf proxy start"
+            "Web-bridge container is not running", "Start it with: cf run proxy start"
         )
     except FileNotFoundError:
         return _skip("(Docker CLI not available)")

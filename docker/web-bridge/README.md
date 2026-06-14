@@ -50,7 +50,7 @@ Multi-arch (amd64 + arm64, push to registries):
 The bridge runs as a sibling service in the proxy's `docker-compose.yaml` -- no separate start command needed:
 
 ```bash
-codefreedom proxy start --docker    # starts proxy + bridge
+codefreedom run proxy start --docker    # starts proxy + bridge
 docker ps --filter name=codefreedom-web-bridge   # confirm it is up
 ```
 

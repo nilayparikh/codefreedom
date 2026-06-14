@@ -42,10 +42,10 @@ docker run -d --name codefreedom-camoufox \
 ## Usage with CodeFreedom
 
 ```bash
-codefreedom tools web init      # accept terms, generate profile
-codefreedom tools web start     # start container
-codefreedom tools web status    # check container status
-codefreedom tools web stop      # stop container
+codefreedom run tools web init      # accept terms, generate profile
+codefreedom run tools web start     # start container
+codefreedom run tools web status    # check container status
+codefreedom run tools web stop      # stop container
 ```
 
 ## MCP Server

@@ -147,7 +147,7 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
         except FileNotFoundError:
             eprint(
                 f"[MCP] Tool '{tool_name}' profile not found —"
-                " run 'codefreedom tools {tool_name} init' first."
+                " run 'codefreedom run tools {tool_name} init' first."
             )
             continue
         except json.JSONDecodeError as exc:

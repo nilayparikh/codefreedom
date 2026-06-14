@@ -8,9 +8,9 @@ CodeFreedom is a unified CLI for code agents. It provides LLM proxy routing, Doc
 
 ### Which agents are supported?
 
-- **Claude Code** (`cf claude` / `cf cc`) — Anthropic's coding agent
-- **MiMoCode** (`cf mimo` / `cf mc`) — Xiaomi's coding agent
-- **OpenCode** (`cf opencode` / `cf oc`) — Terminal-native AI coding agent
+- **Claude Code** (`cf r ag cc` / `cf r ag cc`) — Anthropic's coding agent
+- **MiMoCode** (`cf r ag mc` / `cf r ag mc`) — Xiaomi's coding agent
+- **OpenCode** (`cf r ag oc` / `cf r ag oc`) — Terminal-native AI coding agent
 
 ### Local vs sandbox mode — what's the difference?
 
@@ -20,10 +20,10 @@ CodeFreedom is a unified CLI for code agents. It provides LLM proxy routing, Doc
 
 ```bash
 # Local
-cf claude
+cf r ag cc
 
 # Sandbox
-cf claude --sandbox
+cf r ag cc --sandbox
 ```
 
 ## Proxy
@@ -71,8 +71,8 @@ profiles:
 Yes. Use profiles to switch between keys:
 
 ```bash
-cf claude --profile dev        # uses dev profile's keys
-cf claude --profile production # uses production profile's keys
+cf r ag cc --profile dev        # uses dev profile's keys
+cf r ag cc --profile production # uses production profile's keys
 ```
 
 ## Tools

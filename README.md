@@ -74,7 +74,7 @@ Creates `~/.codefreedom/` with default profiles, proxy configs, and provider tem
 
 ```bash
 # Launch Claude Code through the proxy
-codefreedom run agent claude
+codefreedom run agent claude-code
 
 # Launch in a sandboxed container
 codefreedom run agent claude-code --sandbox

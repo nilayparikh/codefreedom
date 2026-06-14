@@ -11,7 +11,7 @@ The proxy is always run via `docker compose` against
 `~/.codefreedom/proxy/docker-compose.yaml`. The LiteLLM process runs inside
 the `codefreedom:litellm-latest` image (see docker/litellm/Dockerfile.LiteLLM)
 which bakes in the WebSearch count display patch.  The web-bridge is now a
-standalone tool (``cf tools web-bridge``) — start it separately before the
+standalone tool (``cf run tools web-bridge``) — start it separately before the
 proxy if you need WebSearch support.
 
 VS Code integration: see `codefreedom setup config vscode proxy`.
@@ -66,7 +66,7 @@ def run(args: argparse.Namespace) -> int:
         return _status()
     elif action == "validate":
         return _validate()
-    # `vscode` moved to `codefreedom config vscode proxy config`
+    # `vscode` moved to `codefreedom setup config vscode proxy config`
     # subcommand -- see codefreedom.cli.vscode.
     else:
         eprint(

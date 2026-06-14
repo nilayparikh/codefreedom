@@ -36,8 +36,8 @@ body:
       label: Scope
       description: Which part of CodeFreedom does this affect?
       options:
-        - codefreedom claude (Claude Code launcher)
-        - codefreedom proxy (LiteLLM proxy)
+        - codefreedom run agent claude-code (Claude Code launcher)
+        - codefreedom run proxy (LiteLLM proxy)
         - codefreedom --init (initialization)
         - Documentation
         - CI/CD / Build

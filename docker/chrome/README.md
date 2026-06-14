@@ -43,11 +43,11 @@ docker run -d --name codefreedom-chrome \
 ## Usage with CodeFreedom
 
 ```bash
-codefreedom tools chrome init     # accept terms, generate profile
-codefreedom tools chrome start    # start container
-codefreedom tools chrome url      # print CDP debug URL
-codefreedom tools chrome status   # check container status
-codefreedom tools chrome stop     # stop container
+codefreedom run tools chrome init     # accept terms, generate profile
+codefreedom run tools chrome start    # start container
+codefreedom run tools chrome url      # print CDP debug URL
+codefreedom run tools chrome status   # check container status
+codefreedom run tools chrome stop     # stop container
 ```
 
 ## Connecting from an Agent
