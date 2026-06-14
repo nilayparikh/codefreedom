@@ -185,6 +185,13 @@ def _remove_codefreedom_dir(cf_dir: Path) -> None:
     elif preserved is not None:
         eprint(f"{tag('DEINIT')} Preserved '{user_env}' (user overrides).")
 
+    # If no .env.user was preserved, remove the now-empty directory itself
+    if preserved is None:
+        try:
+            cf_dir.rmdir()
+        except OSError:
+            pass
+
 
 def run(args: argparse.Namespace) -> int:
     """Execute the deinit subcommand. Returns exit code."""

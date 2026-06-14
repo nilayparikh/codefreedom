@@ -110,7 +110,7 @@ jobs:
 
       - name: Sign GHCR image
         if: github.event_name != 'pull_request'
-        uses: ./.github/actions/cosign-verify
+        uses: ./.github/actions/cosign-sign
         with:
           image: ${{ env.GHCR_REPO }}@${{ steps.build.outputs.digest }}
 
