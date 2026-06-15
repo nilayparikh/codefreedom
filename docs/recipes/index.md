@@ -1,73 +1,46 @@
 ---
 title: Recipes
-description: Pre-built configurations for common workflows.
+description: Pre-configured setups for different use cases.
 ---
 
-Pre-built configurations for common workflows.
+Recipes are pre-configured setups that define which providers, secrets, and tools are included.
 
 ## Available Recipes
 
-| Recipe | Description | Command |
-| --- | --- | --- |
-| `_default` | Base recipe with all providers | `cf setup init` |
-| `costeffective-coding` | Cloud-only models, no local | `cf setup init --plan costeffective-coding` |
-| `costeffective-coding-with-local` | Cloud + local models | `cf setup init --plan costeffective-coding-with-local` |
+| Recipe | Description |
+| --- | --- |
+| `costeffective-coding` | Full setup with cloud providers (Azure, OpenRouter, OpenCode Zen) |
+| `costeffective-coding-with-local` | Same as above + local model backends via LiteLLM |
 
-## List Recipes
+## Apply a Recipe
 
 ```bash
-cf setup init --list
-# or
-cf s i -l
+cf setup init --plan-and-apply <recipe-name>
 ```
 
-## Install a Recipe
+Or with short alias:
 
 ```bash
-# Install default
-cf setup init
-# or
-cf s i
-
-# Plan + apply in one step (prompts for confirmation)
-cf setup init --plan-and-apply costeffective-coding
-# or
-cf s i -pa costeffective-coding
-
-# Two-step: preview first, then apply separately
-cf setup init --plan costeffective-coding
-cf s i -p costeffective-coding
+cf s i -pa <recipe-name>
 ```
 
-## How Recipes Work
-
-Recipes are YAML manifests that define:
-
-- **Profiles** — model configurations
-- **Proxy config** — LiteLLM settings
-- **Docker Compose** — container definitions
-- **Environment** — variables and secrets
-
-They use intelligent structural merging via DeepDiff, so running a recipe again (or a different recipe on top) merges changes without overwriting your existing settings.
-
-## Custom Recipe Store
+Example:
 
 ```bash
-# Use a custom GitHub URL
-cf setup init --store https://github.com/user/recipes
-# or
-cf s i -s https://github.com/user/recipes
-
-# Use a local folder
-cf setup init --store /path/to/recipes
-# or
-cf s i -s /path/to/recipes
+cf s i -pa costeffective-coding-with-local
 ```
 
-## Staging Branch
+## What Happens
+
+1. CodeFreedom clones the recipe from the remote store
+2. Generates a plan showing which files will be created/updated
+3. Applies the plan after confirmation
+4. Reports which secrets are set and which are missing
+
+## After Applying
+
+Run the setup script to configure your API keys:
 
 ```bash
-cf setup init --staging
-# or
-cf s i --staging
+bash ~/.codefreedom/scripts/<recipe-name>/setup-secrets.sh
 ```

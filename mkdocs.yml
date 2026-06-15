@@ -69,11 +69,6 @@ markdown_extensions:
       - md_in_html
       - pymdownx.details
       - pymdownx.superfences:
-              # Route ```mermaid``` blocks to the mermaid2 plugin via its
-              # Material-theme formatter. Without this, pymdownx.highlight strips the
-              # language class from the <code> element and the mermaid2 plugin's
-              # `on_post_page` cannot locate the diagrams — they render as plain code.
-              # See: https://github.com/fralau/mkdocs-mermaid2-plugin
               custom_fences:
                     - name: mermaid
                       class: mermaid
@@ -102,52 +97,11 @@ markdown_extensions:
 
 nav:
       - Home: index.md
-      - Get Started:
-              - Overview: getting-started/index.md
-              - Install: getting-started/install.md
-              - First run: getting-started/first-run.md
-              - Free models: getting-started/free-models.md
-      - Features:
-              - Claude Code: features/claude-code.md
-              - MiMoCode: features/mimo-code.md
-              - Proxy: features/proxy.md
-              - Tools:
-                      - Overview: features/tools.md
-                      - Chrome: features/chrome.md
-                      - Web: features/web.md
-                      - GitHub: features/github.md
-              - VS Code: features/vscode.md
-              - Backup: features/backup.md
-      - Guides:
-              - Recipes: guides/recipes-guide.md
-              - Troubleshooting: guides/troubleshooting.md
-              - FAQ: guides/faq.md
-      - Recipes:
-              - Overview: recipes/index.md
-              - Provider Reference:
-                      - Overview: recipes/providers/index.md
-                      - DeepSeek: recipes/providers/deepseek/index.md
-                      - Azure Foundry: recipes/providers/azure-foundry/index.md
-                      - NVIDIA: recipes/providers/nvidia/index.md
-                      - OpenCode Zen: recipes/providers/opencode-zen/index.md
-                      - OpenRouter: recipes/providers/openrouter/index.md
-                      - OpenAI Compatible: recipes/providers/openai-compatible/index.md
-                      - Anthropic Compatible: recipes/providers/anthropic-compatible/index.md
-                      - Local: recipes/providers/local/index.md
-      - License:
-              - License: license.md
-              - Terms & Conditions: terms.md
-              - Privacy Policy: privacy.md
+      - Get Started: getting-started/index.md
+      - Recipes: recipes/index.md
 
 extra:
       generator: false
-      legal:
-            - label: T&C
-              link: terms/
-            - label: Privacy Policy
-              link: privacy/
-            - label: License
-              link: license/
       social:
             - icon: fontawesome/brands/youtube
               link: https://www.youtube.com/@localm_tuts
