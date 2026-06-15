@@ -46,7 +46,7 @@ Change the model? Edit one line in your profile. Done.
 
 ```bash
 uv tool install codefreedom                              # Install
-cf s i -pa costeffective-coding-with-local                # Set up recipe
+cf s i -pa costeffective-coding                          # Set up recipe
 cf r px start                                            # Start the proxy
 cf r ag cc                                               # Launch Claude Code
 ```

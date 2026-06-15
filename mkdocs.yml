@@ -98,7 +98,20 @@ markdown_extensions:
 nav:
       - Home: index.md
       - Get Started: getting-started/index.md
-      - Recipes: recipes/index.md
+      - Recipes:
+              - Overview: recipes/index.md
+              - costeffective-coding: recipes/costeffective-coding.md
+              - costeffective-coding-with-local: recipes/costeffective-coding-with-local.md
+      - Tools:
+              - Overview: tools/index.md
+              - Chrome: tools/chrome.md
+              - Web: tools/web.md
+              - GitHub: tools/github.md
+              - Web Bridge: tools/web-bridge.md
+      - Legal:
+              - License: license.md
+              - Terms: terms.md
+              - Privacy: privacy.md
 
 extra:
       generator: false

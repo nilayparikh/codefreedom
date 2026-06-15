@@ -15,24 +15,34 @@ Install uv if you don't have it:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-## Install
+## Install CodeFreedom
 
 ```bash
 uv tool install codefreedom
 ```
 
+## Install Code Agents
+
+CodeFreedom does **not** install, modify, or patch code agents. It only calls them with the correct configuration and environment variables. Each agent must be installed through its official installation method:
+
+- **Claude Code** — install via `npm install -g @anthropic/claude-code` or follow [Anthropic's docs](https://docs.anthropic.com/en/docs/agents/claude-code/overview)
+- **MiMo Code** — install via `npm install -g @mimo/mimo-code` or follow the official MiMo Code documentation
+- **OpenCode** — install via the official OpenCode distribution
+
+CodeFreedom sets `ANTHROPIC_BASE_URL`, `CLAUDE_MODEL`, and other environment variables so agents route through your local proxy. No agent code is touched.
+
 ## Set Up
 
-Run the interactive setup wizard. It will ask which recipe to use and walk you through secrets:
+Apply a recipe to generate your `~/.codefreedom` configuration:
 
 ```bash
-cf setup init --plan-and-apply costeffective-coding-with-local
+cf setup init --plan-and-apply costeffective-coding
 ```
 
-Or use the short alias:
+Or with short alias:
 
 ```bash
-cf s i -pa costeffective-coding-with-local
+cf s i -pa costeffective-coding
 ```
 
 ## Set Up Secrets
@@ -40,22 +50,20 @@ cf s i -pa costeffective-coding-with-local
 After setup, run the assisted script to configure your API keys:
 
 ```bash
-bash ~/.codefreedom/scripts/costeffective-coding-with-local/setup-secrets.sh
+bash ~/.codefreedom/scripts/costeffective-coding/setup-secrets.sh
 ```
 
 This adds `CF_CLI_*` environment variables to your shell profile:
 
 ```text
-# >>> codefreedom:costeffective-coding-with-local secrets >>>
+# >>> codefreedom:costeffective-coding secrets >>>
 export CF_CLI_LITELLM_MASTER_KEY="sk-..."
 export CF_CLI_MICROSOFT_FOUNDRY_API_BASE="https://...services.ai.azure.com/openai/v1"
 export CF_CLI_MICROSOFT_FOUNDRY_API_KEY="..."
 export CF_CLI_OPENCODE_ZEN_API_KEY="..."
 export CF_CLI_OPENROUTER_API_KEY="..."
 export CF_CLI_GITHUB_PERSONAL_ACCESS_TOKEN="github_pat_..."
-export CF_CLI_LOCAL_M_API_KEY="..."
-export CF_CLI_LOCAL_S_API_KEY="..."
-# <<< codefreedom:costeffective-coding-with-local secrets <<<
+# <<< codefreedom:costeffective-coding secrets <<<
 ```
 
 ## Start the Proxy
