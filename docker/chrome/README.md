@@ -25,8 +25,8 @@ For **stealth / anti-bot / headed** browsing, use the [web tool](../web/README.m
 ## Build
 
 ```bash
-docker build --build-arg IMAGE_VERSION=0.2.0 \
-  -t codefreedom:chrome-v0.2.0 \
+docker build --build-arg IMAGE_VERSION=1.0.0 \
+  -t codefreedom:chrome-v1.0.0 \
   -f docker/chrome/Dockerfile.Chrome docker/chrome/
 ```
 

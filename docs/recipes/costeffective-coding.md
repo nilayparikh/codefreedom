@@ -24,12 +24,12 @@ Routes to Azure AI Foundry / Azure OpenAI deployments.
 
 **Models:**
 
-| Model | ID | Context | Input/M | Output/M | Cached Input/M |
-| --- | --- | --- | --- | --- | --- |
-| GPT-5.5 | `openai/gpt-5.5` | 1,050K | $5.00 | $30.00 | $0.50 |
-| GPT-5.4 | `openai/gpt-5.4` | 1,050K | $2.50 | $15.00 | $0.25 |
-| GPT-5.4-Mini | `openai/gpt-5.4-mini` | 400K | $1.00 | $15.00 | $0.08 |
-| GPT-5.4-Nano | `openai/gpt-5.4-nano` | 400K | $0.80 | $12.50 | $0.08 |
+| Model | ID | Context |
+| --- | --- | --- |
+| GPT-5.5 | `openai/gpt-5.5` | 1,050K |
+| GPT-5.4 | `openai/gpt-5.4` | 1,050K |
+| GPT-5.4-Mini | `openai/gpt-5.4-mini` | 400K |
+| GPT-5.4-Nano | `openai/gpt-5.4-nano` | 400K |
 
 All models support reasoning, vision, streaming, and tool use.
 
@@ -46,26 +46,24 @@ Free-tier and subscription models via OpenCode.
 
 **Free models (Zen):**
 
-| Model | ID | Context | Cost |
-| --- | --- | --- | --- |
-| MiMo-V2.5 | `openai/mimo-v2.5-free` | 1,000K | Free |
-| DeepSeek-V4-Flash | `openai/deepseek-v4-flash-free` | 1,000K | Free |
+| Model | ID | Context |
+| --- | --- | --- |
+| MiMo-V2.5 | `openai/mimo-v2.5-free` | 1,000K |
+| DeepSeek-V4-Flash | `openai/deepseek-v4-flash-free` | 1,000K |
 
 Free models have a 12-hour cooldown after hitting rate limits.
 
 **Subscription models (GO):**
 
-| Model | ID | API Format | Context | Input/M | Output/M |
-| --- | --- | --- | --- | --- | --- |
-| MiniMax-M3 | `anthropic/minimax-m3` | Anthropic | 512K | $0.30 | $1.20 |
-| Qwen3.7-Max | `anthropic/qwen3.7-max` | Anthropic | 1,000K | $1.25 | $3.75 |
-| Qwen3.7-Plus | `anthropic/qwen3.7-plus` | Anthropic | 1,000K | $0.32–$0.96 | $1.28–$3.84 |
-| DeepSeek-V4-Flash | `openai/deepseek-v4-flash` | OpenAI | 1,000K | $0.14 | $0.28 |
-| Kimi-K2.7 | `openai/kimi-k2.7` | OpenAI | 262K | $0.95 | $4.00 |
-| MiMo-V2.5 | `openai/mimo-v2.5` | OpenAI | 1,000K | $0.14 | $0.28 |
-| MiMo-V2.5-Pro | `openai/mimo-v2.5-pro` | OpenAI | 1,000K | $0.44 | $0.87 |
-
-Qwen3.7-Plus has tiered pricing — cheaper at ≤256K context.
+| Model | ID | API Format | Context |
+| --- | --- | --- | --- |
+| MiniMax-M3 | `anthropic/minimax-m3` | Anthropic | 512K |
+| Qwen3.7-Max | `anthropic/qwen3.7-max` | Anthropic | 1,000K |
+| Qwen3.7-Plus | `anthropic/qwen3.7-plus` | Anthropic | 1,000K |
+| DeepSeek-V4-Flash | `openai/deepseek-v4-flash` | OpenAI | 1,000K |
+| Kimi-K2.7 | `openai/kimi-k2.7` | OpenAI | 262K |
+| MiMo-V2.5 | `openai/mimo-v2.5` | OpenAI | 1,000K |
+| MiMo-V2.5-Pro | `openai/mimo-v2.5-pro` | OpenAI | 1,000K |
 
 ### OpenRouter
 
@@ -77,17 +75,17 @@ Multi-provider access via OpenRouter.
 
 **Models:**
 
-| Model | ID | Context | Input/M | Output/M |
-| --- | --- | --- | --- | --- |
-| DeepSeek-V4-Pro | `openrouter/deepseek/deepseek-v4-pro` | 1,000K | $0.44 | $0.87 |
-| DeepSeek-V4-Flash | `openrouter/deepseek/deepseek-v4-flash` | 1,000K | $0.14 | $0.28 |
-| MiMo-V2.5 | `openrouter/xiaomi/mimo-v2.5` | 1,000K | $0.14 | $0.28 |
-| MiMo-V2.5-Pro | `openrouter/xiaomi/mimo-v2.5-pro` | 1,000K | $0.44 | $0.87 |
-| Qwen3.7-Plus | `openrouter/qwen/qwen3.7-plus` | 1,000K | $0.32–$0.96 | $1.28–$3.84 |
-| Qwen3.7-Max | `openrouter/qwen/qwen3.7-max` | 1,000K | $1.25 | $3.75 |
-| MiniMax-M3 | `openrouter/minimax/minimax-m3` | 1,000K | $0.30 | $1.20 |
-| Kimi-K2.7 | `openrouter/moonshotai/kimi-k2.7` | 1,000K | $0.95 | $4.00 |
-| FreeRouter | `openrouter/openrouter/free` | 256K | Free | Free |
+| Model | ID | Context |
+| --- | --- | --- |
+| DeepSeek-V4-Pro | `openrouter/deepseek/deepseek-v4-pro` | 1,000K |
+| DeepSeek-V4-Flash | `openrouter/deepseek/deepseek-v4-flash` | 1,000K |
+| MiMo-V2.5 | `openrouter/xiaomi/mimo-v2.5` | 1,000K |
+| MiMo-V2.5-Pro | `openrouter/xiaomi/mimo-v2.5-pro` | 1,000K |
+| Qwen3.7-Plus | `openrouter/qwen/qwen3.7-plus` | 1,000K |
+| Qwen3.7-Max | `openrouter/qwen/qwen3.7-max` | 1,000K |
+| MiniMax-M3 | `openrouter/minimax/minimax-m3` | 1,000K |
+| Kimi-K2.7 | `openrouter/moonshotai/kimi-k2.7` | 1,000K |
+| FreeRouter | `openrouter/openrouter/free` | 256K |
 
 FreeRouter routes to OpenRouter's free model pool. All other models pin to a specific provider (`only: ["deepseek"]`) with no fallbacks.
 
