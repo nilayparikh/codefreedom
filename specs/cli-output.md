@@ -43,7 +43,7 @@ All `eprint()` messages must use an uppercase `[COMPONENT]` prefix. No nested pr
 
 **No nested prefixes.** Instead of `[proxy] [OK]` or `[backup] [WARN]`, write:
 
-```
+```text
 [PROXY] Proxy started at http://localhost:4000.
 [ADMIN] Warning: pg_dump failed (exit code 1).
 ```
@@ -66,7 +66,7 @@ Exceptions:
 
 ## 4. Message Structure
 
-```
+```text
 [COMPONENT] Action completed.
 [COMPONENT] Using data dir: /path/to/dir.
 [COMPONENT] Container 'name' is already running.
@@ -77,7 +77,7 @@ Exceptions:
 
 For multi-line output after an action:
 
-```
+```text
 [CHROME] Container started.
    CDP debug URL: http://127.0.0.1:9222
    MCP endpoint:  http://127.0.0.1:9223/mcp
@@ -91,7 +91,7 @@ Indented continuation lines use 3 spaces.
 - `Warning:` text within the component prefix for non-fatal issues.
 - Always include a suggestion for how to fix the error.
 
-```
+```text
 [ERROR] Docker not found.
    Install Docker: https://docs.docker.com/get-docker/
 ```

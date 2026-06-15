@@ -3,8 +3,6 @@ title: GitHub
 description: GitHub API access for repository operations.
 ---
 
-# GitHub
-
 GitHub API access for repository operations.
 
 ## Quick Start
@@ -28,7 +26,7 @@ cf r tl stop -g
 
 ## How It Works
 
-```
+```text
 Agent → MCP → Docker Container → GitHub
 ```
 

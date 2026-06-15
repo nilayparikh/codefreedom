@@ -54,13 +54,13 @@ codefreedom run tools chrome stop     # stop container
 
 Point Playwright, Puppeteer, or DevTools to the CDP WebSocket:
 
-```
+```text
 ws://127.0.0.1:9222
 ```
 
 Or open DevTools directly:
 
-```
+```text
 devtools://devtools/bundled/inspector.html?ws=127.0.0.1:9222
 ```
 
@@ -78,6 +78,7 @@ Browser profile data (cookies, localStorage, extensions) persists in the mounted
 ## Registry
 
 Published images are available on:
+
 - `docker.io/nilayparikh/codefreedom:chrome`
 - `ghcr.io/nilayparikh/codefreedom:chrome`
 - `ghcr.io/nilayparikh/codefreedom:chrome-latest`

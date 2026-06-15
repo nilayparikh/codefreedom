@@ -76,6 +76,7 @@ docker run --rm codefreedom:web-latest --script < task.yaml
 ## Registry
 
 Published images are available on:
+
 - `docker.io/nilayparikh/codefreedom:web`
 - `ghcr.io/nilayparikh/codefreedom:web`
 - `ghcr.io/nilayparikh/codefreedom:web-latest`

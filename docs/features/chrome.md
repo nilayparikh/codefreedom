@@ -3,8 +3,6 @@ title: Chrome
 description: Headless Chrome browser for web automation.
 ---
 
-# Chrome
-
 Headless Chrome browser for web automation.
 
 ## Quick Start
@@ -28,7 +26,7 @@ cf r tl stop -c
 
 ## How It Works
 
-```
+```text
 Agent → MCP → Docker Container → Chrome
 ```
 

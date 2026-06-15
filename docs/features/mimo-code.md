@@ -65,7 +65,7 @@ MiMoCode uses the same CodeFreedom layers as Claude Code:
 ## Differences from Claude Code
 
 | Aspect | Claude Code | MiMoCode |
-|--------|------------|----------|
+| ------ | ----------- | -------- |
 | Config file | `.claude.json` | `mimocode.json` |
 | Profiles path | `profiles/claude-code.yaml` | `profiles/mimo-code.yaml` |
 | Default image | `codefreedom:latest` | `codefreedom:mimo-code` |

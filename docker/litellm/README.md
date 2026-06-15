@@ -4,7 +4,7 @@ Self-contained Docker image combining **LiteLLM** (proxy + dashboard) with an em
 
 ## Overview
 
-```
+```text
 tini (PID 1)
   └── entrypoint.sh
         ├── Boot PostgreSQL (localhost:5432, TCP only)

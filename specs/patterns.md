@@ -14,6 +14,7 @@ Internal patterns and conventions used throughout the CodeFreedom codebase.
 Component-specific env files are loaded only for the matching subcommand.
 
 **Priority (lowest to highest):**
+
 1. Component config (`.env.claude` / `.env.proxy`)
 2. Shared config (`.env`)
 3. Workspace config (`{workspace}/.env`)
@@ -35,7 +36,7 @@ Tools (chrome, web, github, web-bridge) are **shared** — once started they kee
 3. `cf run tools stop` is the only way to stop it.
 
 | Tool | Env var | Default |
-|------|---------|---------|
+| --- | --- | --- |
 | Chrome | `CODEFREEDOM_CHROME_PORT` | `9222` |
 | Web | `CODEFREEDOM_WEB_PORT` | `8420` |
 | GitHub | `CODEFREEDOM_GITHUB_PORT` | `0` (auto) |

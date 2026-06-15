@@ -3,8 +3,6 @@ title: Proxy
 description: Self-hosted LiteLLM proxy with embedded PostgreSQL for model routing.
 ---
 
-# Proxy
-
 A self-hosted LiteLLM proxy with embedded PostgreSQL. One local endpoint routes to any LLM provider.
 
 ## Quick Start
@@ -27,7 +25,7 @@ cf r px validate
 
 ## How It Works
 
-```
+```text
 Agent → localhost:4000 → LiteLLM Proxy → AI Model
 ```
 
@@ -37,7 +35,7 @@ Your agent talks to `localhost:4000`. The proxy routes the request to whichever 
 
 Proxy config lives in `~/.codefreedom/proxy/`:
 
-```
+```text
 ~/.codefreedom/proxy/
 ├── config/
 │   ├── config.yaml              # LiteLLM config
@@ -147,7 +145,7 @@ cf r px validate
 
 ### `cf run proxy`
 
-```
+```text
 usage: codefreedom run proxy [-h] [-p PORT] [--host HOST] {start,status,stop,restart,validate} ...
 
 positional arguments:

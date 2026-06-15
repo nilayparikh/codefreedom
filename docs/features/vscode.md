@@ -3,8 +3,6 @@ title: VSCode
 description: Configure VSCode to use CodeFreedom's proxy for AI features.
 ---
 
-# VSCode
-
 Configure VSCode to use CodeFreedom's proxy for AI features.
 
 ## Quick Start
@@ -20,7 +18,7 @@ This generates `~/.codefreedom/vscode/settings.json` with proxy settings.
 
 ## How It Works
 
-```
+```text
 VSCode → localhost:4000 → LiteLLM Proxy → AI Model
 ```
 

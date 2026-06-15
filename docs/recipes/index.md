@@ -3,14 +3,12 @@ title: Recipes
 description: Pre-built configurations for common workflows.
 ---
 
-# Recipes
-
 Pre-built configurations for common workflows.
 
 ## Available Recipes
 
 | Recipe | Description | Command |
-|--------|-------------|---------|
+| --- | --- | --- |
 | `_default` | Base recipe with all providers | `cf setup init` |
 | `costeffective-coding` | Cloud-only models, no local | `cf setup init --plan costeffective-coding` |
 | `costeffective-coding-with-local` | Cloud + local models | `cf setup init --plan costeffective-coding-with-local` |

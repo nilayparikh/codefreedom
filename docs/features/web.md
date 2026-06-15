@@ -3,8 +3,6 @@ title: Web
 description: Web search and fetch for research tasks.
 ---
 
-# Web
-
 Web search and fetch for research tasks.
 
 ## Quick Start
@@ -28,7 +26,7 @@ cf r tl stop -w
 
 ## How It Works
 
-```
+```text
 Agent → MCP → Docker Container → Web
 ```
 

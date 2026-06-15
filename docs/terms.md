@@ -3,8 +3,6 @@ title: Terms & Conditions
 description: Terms for using the CodeFreedom documentation site, project materials, and released software.
 ---
 
-# Terms & Conditions
-
 These terms govern your use of the CodeFreedom documentation site, repository, and released software artifacts.
 
 ## Open source license

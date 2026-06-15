@@ -8,7 +8,7 @@ Enables LiteLLM's `websearch_interception` callback to route Claude Code's nativ
 
 ### Request Flow
 
-```
+```text
 Claude Code  ->  LiteLLM Proxy (:4000)  ->  web-bridge (:8500)  ->  Camoufox MCP (:8420/mcp)  ->  search engines
 ```
 
@@ -81,5 +81,6 @@ docker ps --filter name=codefreedom-web-bridge   # confirm it is up
 ## Registry
 
 Published images are available on:
+
 - `docker.io/nilayparikh/codefreedom:web-bridge`
 - `ghcr.io/nilayparikh/codefreedom:web-bridge`

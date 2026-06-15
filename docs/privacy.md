@@ -3,8 +3,6 @@ title: Privacy Policy
 description: Privacy information for the CodeFreedom documentation site and project software.
 ---
 
-# Privacy Policy
-
 This page explains how privacy works for the CodeFreedom documentation site and the CodeFreedom project itself.
 
 ## CodeFreedom software

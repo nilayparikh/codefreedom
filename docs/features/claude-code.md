@@ -3,14 +3,12 @@ title: Agents
 description: Launch coding agents with profile-based model routing, sandbox isolation, and GPU support.
 ---
 
-# Agents
-
 Launch coding agents through CodeFreedom. Switch models, isolate environments, use GPUs — all with flags.
 
 ## Available Agents
 
 | Agent | Full name | Alias | Description |
-|-------|-----------|-------|-------------|
+| ------- | --------- | ----- | ----------- |
 | Claude Code | `claude-code` | `cc` | Anthropic's coding agent |
 | MiMo Code | `mimo-code` | `mc` | Xiaomi's coding agent |
 | OpenCode | `open-code` | `oc` | Terminal-native AI coding agent |
@@ -111,7 +109,7 @@ cf run agent claude-code --sandbox --gpu --gpu-type rocm
 ### Sandbox Options
 
 | Flag | Short | Description |
-|------|-------|-------------|
+| ---- | ----- | ----------- |
 | `--sandbox` | — | Run in Docker container |
 | `--gpu` | — | Enable GPU passthrough |
 | `--gpu-type` | — | `cuda` or `rocm` |
@@ -165,7 +163,7 @@ cf r ag oc --sandbox
 
 ### `cf run agent`
 
-```
+```text
 usage: codefreedom run agent [-h] [-p PROFILE] [-l] {list,claude-code,mimo-code,open-code} ...
 
 agents:
@@ -184,7 +182,7 @@ options:
 ### Short Aliases
 
 | Full command | Short form |
-|--------------|------------|
+| ------------ | ---------- |
 | `cf run agent claude-code` | `cf r ag cc` |
 | `cf run agent mimo-code` | `cf r ag mc` |
 | `cf run agent open-code` | `cf r ag oc` |

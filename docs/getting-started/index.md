@@ -3,8 +3,6 @@ title: Getting Started
 description: Install CodeFreedom and launch your first agent in five minutes.
 ---
 
-# Getting Started
-
 Install CodeFreedom and launch your first agent in five minutes.
 
 ## What You'll Need
@@ -41,7 +39,7 @@ cf r ag cc                       # cf run agent claude-code
 ## Available Agents
 
 | Agent | Full name | Alias | Command |
-|-------|-----------|-------|---------|
+| --- | --- | --- | --- |
 | Claude Code | `claude-code` | `cc` | `cf r ag cc` |
 | MiMo Code | `mimo-code` | `mc` | `cf r ag mc` |
 | OpenCode | `open-code` | `oc` | `cf r ag oc` |
@@ -51,7 +49,7 @@ cf r ag cc                       # cf run agent claude-code
 All commands have short aliases for faster workflows:
 
 | Full command | Short form |
-|--------------|------------|
+| --- | --- |
 | `cf setup` | `cf s` |
 | `cf run` | `cf r` |
 | `cf manage` | `cf m` |

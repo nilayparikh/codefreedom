@@ -81,5 +81,6 @@ Set automatically in the container:
 ## Registry
 
 Published images are available on:
+
 - `docker.io/nilayparikh/codefreedom` (tags: `cuda-v0.1.0`, `rocm-v0.1.0`, `ubuntu-v0.1.0`)
 - `ghcr.io/nilayparikh/codefreedom` (mirror)

@@ -3,8 +3,6 @@ title: Backup
 description: Backup, restore, and manage your CodeFreedom configuration.
 ---
 
-# Backup
-
 Backup, restore, and manage your CodeFreedom configuration.
 
 ## Quick Start
@@ -37,7 +35,7 @@ cf m ad backup
 
 Backups are stored in `~/.codefreedom/backups/` as tar.gz archives:
 
-```
+```text
 ~/.codefreedom/backups/
 ├── codefreedom-backup-20250101-120000.tar.gz
 ├── codefreedom-backup-20250102-120000.tar.gz
@@ -100,7 +98,7 @@ cf m ad prune --days 30
 
 ### `cf manage admin`
 
-```
+```text
 usage: codefreedom manage admin [-h] {backup,restore,list,inspect,prune} ...
 
 positional arguments:

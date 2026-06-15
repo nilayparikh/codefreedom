@@ -92,8 +92,8 @@ See the [Getting Started guide](https://nilayparikh.github.io/codefreedom/) for 
 
 | Feature             | Details                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------- |
-| LLM proxy           | Self-hosted `codefreedom:litellm-latest` image (embedded PostgreSQL, multi-provider routing) |
-| Code agent launcher | `codefreedom run agent claude-code` CLI -- local + sandbox modes                                 |
+| LLM proxy           | Self-hosted `codefreedom:litellm-latest` image (embedded PostgreSQL, multi-provider routing)|
+| Code agent launcher | `codefreedom run agent claude-code` CLI -- local + sandbox modes                            |
 | Sandboxing          | Pre-configured containers (CUDA, ROCm, Ubuntu)                                              |
 | Profile management  | Model switching, env inheritance, isolation                                                 |
 | Browser tools       | Chrome (CDP) + Camoufox (MCP) for web automation                                            |

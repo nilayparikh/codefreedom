@@ -38,9 +38,11 @@ Before you begin, ensure your development environment meets these requirements:
 
 1. **Fork** the repository.
 2. **Create a branch** from `main`:
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
+
 3. Make your changes and commit with descriptive messages.
 4. **Push** your branch and open a Pull Request against `main`.
 5. Use a **descriptive PR title** that summarizes the change.

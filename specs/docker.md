@@ -7,14 +7,14 @@ Docker image families, naming conventions, and publishing.
 Docker tags **must be lowercase**. Examples:
 
 | Correct | Incorrect |
-|---------|-----------|
+| --- | --- |
 | `codefreedom:chrome` | `codefreedom:Chrome` |
 | `codefreedom:cuda-latest` | `codefreedom:CUDA-latest` |
 
 ## Image Families
 
 | Image | Dockerfile | Use Case |
-|-------|------------|----------|
+| --- | --- | --- |
 | **CUDA** | `docker/claude-code/Dockerfile.CUDA` | NVIDIA GPU workloads |
 | **ROCm** | `docker/claude-code/Dockerfile.ROCm` | AMD GPU workloads |
 | **Ubuntu** | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only / general-purpose |

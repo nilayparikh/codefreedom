@@ -3,14 +3,12 @@ title: Tools
 description: Browser automation, web search, and GitHub API as Docker containers.
 ---
 
-# Tools
-
 Browser automation, web search, and GitHub API — all as Docker containers your code agent can use.
 
 ## Available Tools
 
 | Tool | Flag | Short | Port | Description |
-|------|------|-------|------|-------------|
+| ---- | ---- | ----- | ---- | ----------- |
 | Chrome | `--chrome` | `-c` | 9223 | Headless Chrome browser |
 | Web | `--web` | `-w` | 8420 | Web search and fetch |
 | GitHub | `--github` | `-g` | 8129 | GitHub API access |
@@ -42,7 +40,7 @@ cf r tl stop
 
 ## How It Works
 
-```
+```text
 Agent → MCP → Docker Container → Tool
 ```
 
@@ -124,7 +122,7 @@ curl http://localhost:9223/mcp
 
 ### `cf run tools`
 
-```
+```text
 usage: codefreedom run tools [-h] [-c] [-w] [-g] [--web-bridge] {start,stop,restart,status} ...
 
 positional arguments:

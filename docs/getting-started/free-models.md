@@ -3,14 +3,12 @@ title: Free Models
 description: Try models without spending credits.
 ---
 
-# Free Models
-
 Try models without spending credits.
 
 ## Available Free Models
 
 | Model | Provider | Command |
-|-------|----------|---------|
+| --- | --- | --- |
 | DeepSeek R1 | OpenCode | `cf run agent claude-code --profile bare` |
 | DeepSeek V3 | OpenCode | `cf run agent claude-code --profile air` |
 | Qwen3.6-27B | Local | `cf run agent claude-code --profile local` |

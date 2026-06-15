@@ -3,8 +3,6 @@ title: Install
 description: Install CodeFreedom and get started in five minutes.
 ---
 
-# Install
-
 Install CodeFreedom and get started in five minutes.
 
 ## Prerequisites
@@ -37,7 +35,7 @@ cf -h
 
 You should see:
 
-```
+```text
 usage: codefreedom [-h] {setup,run,manage} ...
 
 Unified CLI for code agents.

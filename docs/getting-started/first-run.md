@@ -3,8 +3,6 @@ title: First Run
 description: Three commands to get Claude Code talking to an AI model.
 ---
 
-# First Run
-
 Three commands. No editing required — defaults work out of the box.
 
 ## Step 1: Install a Recipe
@@ -24,7 +22,7 @@ existing settings.
 
 **Output (first run):**
 
-```
+```text
 [recipe] Installing recipe '_default'...
 [recipe] [CREATE] ~/.codefreedom/profiles/claude-code.json
 [recipe] [CREATE] ~/.codefreedom/profiles/claude-code.schema.json
@@ -55,7 +53,7 @@ This pulls and starts the proxy Docker container. First run takes a moment to pu
 
 Wait for:
 
-```
+```text
 [OK] Proxy ready at http://localhost:4000
 ```
 
@@ -93,7 +91,7 @@ cf r ag cc -l          # cf run agent claude-code --list-profiles
 ## Available Agents
 
 | Agent | Full name | Alias | Command |
-|-------|-----------|-------|---------|
+| --- | --- | --- | --- |
 | Claude Code | `claude-code` | `cc` | `cf r ag cc` |
 | MiMo Code | `mimo-code` | `mc` | `cf r ag mc` |
 | OpenCode | `open-code` | `oc` | `cf r ag oc` |
