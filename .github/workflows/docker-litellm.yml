@@ -3,8 +3,9 @@
 # ghcr.io/berriai/litellm in the compose stack. The image bakes in the
 # WebSearch count display patch (see docker/litellm/patch_websearch_count.py).
 #
-# Triggered by changes to docker/litellm/Dockerfile.LiteLLM or its
-# requirements.txt. Manually dispatchable for rebuilds on dependency bumps.
+# Triggered by changes to any file under docker/litellm/ (Dockerfile,
+# plugins, patches, entrypoint, requirements).  Manually dispatchable
+# for rebuilds on dependency bumps.
 #
 # Tags: litellm-v{semver}, litellm-v{major.minor}, litellm-latest
 # Platforms: linux/arm64, linux/amd64
@@ -17,9 +18,7 @@ on:
   push:
     branches: [main, prerelease]
     paths:
-      - "docker/litellm/Dockerfile.LiteLLM"
-      - "docker/litellm/requirements.txt"
-      - "docker/litellm/patch_websearch_count.py"
+      - "docker/litellm/**"
   workflow_dispatch:
 
 env:

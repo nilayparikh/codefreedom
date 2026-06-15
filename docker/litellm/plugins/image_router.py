@@ -38,6 +38,7 @@ Hooks used
 
 from __future__ import annotations
 
+import contextvars
 import glob
 import os
 from typing import Any, Dict, List, Optional, Tuple
@@ -60,6 +61,16 @@ except ImportError:  # pragma: no cover
 _VLM_PROMPT = (
     "Transcribe and describe all code, layout, and textual technical "
     "context from this image to match a software engineer's input."
+)
+
+_VLM_TIMEOUT_SECONDS = 60.0
+
+# Per-request recursion guard.  Each asyncio task carries its own
+# contextvars copy, so concurrent requests never interfere — unlike a
+# plain boolean on the instance which is shared across all in-flight
+# requests.
+_vlm_call_active: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "image_router_vlm_call", default=False
 )
 
 
@@ -171,7 +182,6 @@ class ImageRouterLogger(CustomLogger):
         self._model_codefreedom_cache: Dict[str, Dict[str, Any]] = {}
         self._codes_loaded = False
         self._warned: set = set()
-        self._in_vlm_call = False
 
     # ----------------------------------------------------------------- config
 
@@ -260,30 +270,56 @@ class ImageRouterLogger(CustomLogger):
 
         return False
 
+    @staticmethod
+    def _resolve_master_key() -> str:
+        """Resolve ``LITELLM_MASTER_KEY`` from the env chain.
+
+        Checks ``LITELLM_MASTER_KEY`` first, then
+        ``CF_CLI_LITELLM_MASTER_KEY`` (the CodeFreedom CLI override).
+        Falls back to ``"sk-codefreedom-local"`` (the container default)
+        as a last resort so the VLM call always has a non-empty bearer
+        token.  Never returns an empty string.
+        """
+        key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
+        if key:
+            return key
+        key = os.environ.get("CF_CLI_LITELLM_MASTER_KEY", "").strip()
+        if key:
+            return key
+        return "sk-codefreedom-local"
+
     async def _call_vlm(
-        self, model: str, images: List[Dict[str, Any]]
+        self, model: str, images: List[Dict[str, Any]], master_key: str
     ) -> Optional[str]:
-        """Call a VLM via the proxy's own API for correct model resolution.
+        """Call a single VLM via the proxy's own chat-completions endpoint.
 
-        Uses ``httpx`` to POST to the proxy's own chat completions endpoint
-        so model resolution and auth are handled by the proxy's router.
-        The port is read from ``LITELLM_PORT``, auth from ``LITELLM_MASTER_KEY``.
+        The proxy handles model resolution, auth, and routing — we just
+        need to POST the image payload and read back the text description.
 
-        Checks both ``content`` and ``reasoning_content`` in the response —
-        reasoning models (Qwen, etc.) often return ``content: null`` when
-        thinking is enabled, with the actual text in ``reasoning_content``.
+        Uses a ``contextvars.ContextVar`` (``_vlm_call_active``) to
+        prevent recursion: when this async task is inside a VLM call the
+        ``async_pre_call_hook`` skips image routing so the internal
+        request passes straight through.
+
+        *master_key* is resolved once by the caller and passed in to
+        avoid repeated env lookups and to let the caller bail early when
+        the key is missing.
+
+        Checks both ``content`` and ``reasoning_content`` in the
+        response — reasoning models (Qwen, etc.) often return
+        ``content: null`` when thinking is enabled, with the actual text
+        in ``reasoning_content``.
         """
         user_content: List[Dict[str, Any]] = [{"type": "text", "text": _VLM_PROMPT}]
         user_content.extend(images)
 
         port = os.environ.get("LITELLM_PORT", "4000")
-        master_key = os.environ.get("LITELLM_MASTER_KEY", "sk-codefreedom-local")
 
-        self._in_vlm_call = True
+        token = _vlm_call_active.set(True)
         try:
             import httpx
 
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=_VLM_TIMEOUT_SECONDS) as client:
                 resp = await client.post(
                     f"http://127.0.0.1:{port}/v1/chat/completions",
                     headers={"Authorization": f"Bearer {master_key}"},
@@ -298,16 +334,16 @@ class ImageRouterLogger(CustomLogger):
                     choices = data.get("choices", [])
                     if choices:
                         msg = choices[0].get("message", {})
-                        # Prefer content; fall back to reasoning_content for
-                        # models that return content=null when thinking is on.
                         text = msg.get("content") or msg.get("reasoning_content")
                         if text:
                             return str(text)
+                    return None
                 else:
                     self._warn(
                         f"vlm-error:{model}",
                         f"VLM {model!r} returned HTTP {resp.status_code}: {resp.text[:200]}",
                     )
+                    return None
         except Exception as exc:
             self._warn(
                 f"vlm-error:{model}",
@@ -315,9 +351,7 @@ class ImageRouterLogger(CustomLogger):
             )
             return None
         finally:
-            self._in_vlm_call = False
-
-        return None
+            _vlm_call_active.reset(token)
 
     # --------------------------------------------------------------- hook
 
@@ -328,7 +362,10 @@ class ImageRouterLogger(CustomLogger):
         data: Dict[str, Any],
         call_type: str,
     ) -> Optional[Dict[str, Any]]:
-        if self._in_vlm_call:
+        # Per-request recursion guard: if this asyncio task is already
+        # inside a VLM call, pass through without triggering another
+        # round.  Uses contextvars so concurrent requests are isolated.
+        if _vlm_call_active.get():
             return data
 
         if not self._is_enabled(data):
@@ -352,6 +389,16 @@ class ImageRouterLogger(CustomLogger):
             self._warn("no-vlm-models", "No VLM models configured; passing through")
             return data
 
+        # Resolve master key once; bail early if completely unavailable
+        # to avoid a flood of auth-failure requests.
+        master_key = self._resolve_master_key()
+        if not master_key:
+            self._warn(
+                "no-master-key",
+                "LITELLM_MASTER_KEY is not set; skipping VLM routing",
+            )
+            return data
+
         model_name = data.get("model", "<unknown>")
         self._warn(
             f"routing:{model_name}",
@@ -361,7 +408,7 @@ class ImageRouterLogger(CustomLogger):
 
         description = None
         for vlm in vlm_models:
-            description = await self._call_vlm(vlm, images)
+            description = await self._call_vlm(vlm, images, master_key)
             if description:
                 break
 
