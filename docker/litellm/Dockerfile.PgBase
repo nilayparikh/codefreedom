@@ -1,0 +1,65 @@
+# ── CodeFreedom LiteLLM — PostgreSQL Base Image ──────────────────────────
+# Pre-built checkpoint: PostgreSQL 18.4 compiled from source with stripped
+# features.  Built manually via the docker-litellm-pg-base workflow and
+# pushed to both registries.  The LiteLLM base image FROMs this.
+#
+# Rebuild when: PG_VERSION or PG_TAG changes (rare — quarterly at most).
+#
+# @platform  linux/amd64, linux/arm64
+# ─────────────────────────────────────────────────────────────────────────
+
+FROM debian:trixie-slim
+
+ARG PG_VERSION=18.4
+ARG PG_SOURCE_URL=https://github.com/postgres/postgres.git
+ARG PG_TAG=REL_18_4
+ARG TARGETARCH
+
+ENV PG_CFLAGS_BASE="-O2" \
+    PG_LDFLAGS="-Wl,--as-needed -Wl,-z,now"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        bison \
+        build-essential \
+        ca-certificates \
+        flex \
+        git \
+        libicu-dev \
+        libssl-dev \
+        pkg-config \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      arm64) PG_ARCH_CFLAGS="-march=armv8-a+crypto" ;; \
+      amd64) PG_ARCH_CFLAGS="-march=x86-64-v2" ;; \
+      *)     PG_ARCH_CFLAGS="" ;; \
+    esac; \
+    git clone --depth 1 --branch "${PG_TAG}" "${PG_SOURCE_URL}" /tmp/pg-src; \
+    cd /tmp/pg-src; \
+    CFLAGS="${PG_CFLAGS_BASE} ${PG_ARCH_CFLAGS}" LDFLAGS="${PG_LDFLAGS}" ./configure \
+        --prefix=/usr/local/pgsql \
+        --with-icu \
+        --with-openssl \
+        --without-readline \
+        --without-zlib \
+        --without-bonjour \
+        --without-pam \
+        --without-ldap \
+        --without-gssapi \
+        --without-selinux \
+        --without-systemd \
+        --disable-nls \
+        --disable-debug \
+        --disable-coverage \
+        --disable-profiling \
+        --disable-dtrace \
+        --disable-tap-tests \
+    && make -j"$(nproc)" \
+    && make install \
+    && cd /; rm -rf /tmp/pg-src
+
+RUN find /usr/local/pgsql -name '*.a' -delete \
+    && rm -rf /usr/local/pgsql/share/doc /usr/local/pgsql/share/man

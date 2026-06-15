@@ -1,0 +1,90 @@
+# ── CodeFreedom LiteLLM — Full Base Image ────────────────────────────────
+# Pre-built checkpoint: LiteLLM (from git fork) + curated deps + patches +
+# Prisma engine + plugins.  Built manually via the docker-litellm-base
+# workflow and pushed to both registries.
+#
+# Rebuild when: LITELLM_TAG changes, requirements.txt changes, or
+# patches/plugins change (monthly at most).
+#
+# This image is NOT directly runnable — it's a build artifact.
+# Dockerfile.LitellmFinal FROMs this and adds the runtime layer.
+#
+# @platform  linux/amd64, linux/arm64
+# ─────────────────────────────────────────────────────────────────────────
+
+ARG PG_BASE_IMAGE=nilayparikh/codefreedom:litellm-pg-base-latest
+FROM ${PG_BASE_IMAGE} AS pg-artifacts
+
+FROM python:3.13-slim
+
+ARG LITELLM_FORK_URL=https://github.com/nilayparikh/litellm.git
+ARG LITELLM_TAG=v1.87.1
+ARG TARGETARCH
+
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        gcc \
+        libffi-dev \
+        libssl-dev \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+RUN pip install --no-cache-dir --prefix=/install --no-deps \
+        "litellm @ git+${LITELLM_FORK_URL}@${LITELLM_TAG}#egg=litellm"
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+ENV PYTHONPATH=/install/lib/python3.13/site-packages
+COPY patches/patch_websearch_count.py .
+RUN python patch_websearch_count.py
+
+COPY patches/patch_retry_after_type.py .
+RUN python patch_retry_after_type.py
+
+COPY patches/patch_anthropic_fake_stream_logging.py .
+RUN python patch_anthropic_fake_stream_logging.py
+
+COPY patches/patch_parse_search_tools_noise.py .
+RUN python patch_parse_search_tools_noise.py
+
+COPY patches/patch_responses_azure.py .
+RUN python patch_responses_azure.py
+
+COPY plugins/reasoning_efforts_mapping.py /app/litellm-plugins/reasoning_efforts_mapping.py
+COPY plugins/system_message_merger.py /app/litellm-plugins/system_message_merger.py
+COPY plugins/image_router.py /app/litellm-plugins/image_router.py
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/install/bin:/usr/local/bin:${PATH}"
+RUN case "${TARGETARCH}" in \
+      arm64) PT=linux-arm64-openssl-3.0.x ;; \
+      amd64) PT=debian-openssl-3.0.x ;; \
+      *)     PT=native ;; \
+    esac \
+    && export PRISMA_CLI_BINARY_TARGETS="$PT" \
+    && echo "[prisma] TARGETARCH=${TARGETARCH} -> PRISMA_CLI_BINARY_TARGETS=${PRISMA_CLI_BINARY_TARGETS}" \
+    && cd /install/lib/python3.13/site-packages/litellm/proxy \
+    && npx prisma@5.17.0 generate \
+    && if [ "$PT" != "native" ]; then \
+         SRC=$(find "/root/.cache/prisma" -maxdepth 5 -path "*/${PT}/query-engine" -type f | head -1); \
+       else \
+         SRC=$(find /root/.cache/prisma -maxdepth 4 -name query-engine -type f -path '*-openssl-3*' | head -1); \
+       fi \
+    && HASH=$(echo "$SRC" | grep -oP '[0-9a-f]{40}') \
+    && DST="/root/.cache/prisma-python/binaries/5.17.0/$HASH" \
+    && mkdir -p "$DST" \
+    && ENGINE_NAME=$(python3 -c "from prisma.engine.utils import query_engine_name; print(query_engine_name())") \
+    && cp "$SRC" "$DST/$ENGINE_NAME" \
+    && echo "Engines: prisma ${SRC} -> prisma-python ${ENGINE_NAME}"
+
+COPY --from=pg-artifacts /usr/local/pgsql /usr/local/pgsql
+
+COPY entrypoint.sh /install/entrypoint.sh

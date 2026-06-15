@@ -8,7 +8,7 @@ from pathlib import Path
 pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DOCKERFILE = PROJECT_ROOT / "docker" / "litellm" / "Dockerfile.LiteLLM"
+DOCKERFILE = PROJECT_ROOT / "docker" / "litellm" / "Dockerfile.LitellmFinal"
 ENTRYPOINT = PROJECT_ROOT / "docker" / "litellm" / "entrypoint.sh"
 
 

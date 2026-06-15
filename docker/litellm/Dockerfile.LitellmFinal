@@ -1,0 +1,116 @@
+# ── CodeFreedom LiteLLM — Final Image ────────────────────────────────────
+# Thin runtime overlay on top of the pre-built litellm-base checkpoint.
+# Only adds: runtime deps, user setup, entrypoint, volumes, healthcheck.
+#
+# Build time: ~1-2 minutes (no compilation, no pip install, no Prisma).
+#
+# @platform  linux/amd64, linux/arm64
+# ─────────────────────────────────────────────────────────────────────────
+
+ARG IMAGE_VERSION=1.0.0
+ARG LITELLM_BASE_IMAGE=nilayparikh/codefreedom:litellm-base-v1.87.1
+
+FROM ${LITELLM_BASE_IMAGE} AS litellm-base
+
+FROM python:3.13-slim AS runtime
+
+ARG IMAGE_VERSION
+
+LABEL org.opencontainers.image.title="CodeFreedom - LiteLLM + PostgreSQL" \
+      org.opencontainers.image.description="Self-contained LiteLLM proxy with embedded PostgreSQL 18.4 and the WebSearch count display patch. Replaces ghcr.io/berriai/litellm in the codefreedom proxy stack." \
+      org.opencontainers.image.version="v${IMAGE_VERSION}" \
+      org.opencontainers.image.vendor="nilayparikh" \
+      org.opencontainers.image.authors="Nilay Parikh" \
+      com.codefreedom.platform="LiteLLM" \
+      com.codefreedom.arch="linux/arm64,linux/amd64"
+
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        gosu \
+        libatomic1 \
+        nodejs \
+        npm \
+        tini \
+        $(apt-cache search '^libicu[0-9]+$' | grep -oP 'libicu\d+' | head -1) \
+    && rm -rf /var/lib/apt/lists/* \
+    && gosu --version
+
+COPY --from=litellm-base /usr/local/pgsql /usr/local/pgsql
+COPY --from=litellm-base /install         /usr/local
+
+RUN mkdir -p /usr/local/share/litellm-ui \
+    && python3 - <<'PY'
+import os
+import shutil
+from pathlib import Path
+
+import litellm
+
+packaged_ui = Path(litellm.__file__).parent / 'proxy' / '_experimental' / 'out'
+target_ui = Path('/usr/local/share/litellm-ui')
+
+shutil.copytree(packaged_ui, target_ui, dirs_exist_ok=True)
+
+for file_path in sorted(target_ui.rglob('*.html')):
+    if file_path.name == 'index.html':
+        continue
+
+    rel_parts = file_path.relative_to(target_ui).parts
+    if rel_parts and rel_parts[0] in {'_next', 'litellm-asset-prefix'}:
+        continue
+
+    target_path = file_path.with_suffix('') / 'index.html'
+    os.makedirs(target_path.parent, exist_ok=True)
+    if target_path.exists():
+        file_path.unlink()
+        continue
+    os.replace(file_path, target_path)
+PY
+
+COPY --from=litellm-base \
+    /app/litellm-plugins/ /app/litellm-plugins/
+
+COPY --from=litellm-base \
+    /root/.cache/ /root/.cache/
+
+COPY --from=litellm-base \
+    /root/.npm/ /root/.npm/
+
+RUN groupadd -g 999 litellm \
+    && useradd -u 999 -g litellm -m -d /home/litellm -s /bin/bash litellm \
+    && cp -a /root/.cache /home/litellm/.cache \
+    && cp -a /root/.npm /home/litellm/.npm \
+    && chown -R litellm:litellm /home/litellm/.cache /home/litellm/.npm \
+    && chown -R litellm:litellm /app/litellm-plugins \
+    && ln -sf /home/litellm/.npm /root/.npm \
+    && chmod 755 /root \
+    && chmod -R a+rX /home/litellm/.npm
+
+ENV PATH="/usr/local/pgsql/bin:/usr/local/bin:${PATH}" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PGDATA=/var/lib/postgresql/data \
+    PGSOCKET=/var/run/postgresql \
+    LITELLM_NON_ROOT=true \
+    LITELLM_UI_PATH=/app/litellm-ui \
+    HOME=/home/litellm
+
+COPY --from=litellm-base /install/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+RUN mkdir -p /app /var/lib/postgresql/data /var/lib/postgresql/backup /var/run/postgresql \
+    && chown -R litellm:litellm /var/lib/postgresql /var/run/postgresql /app
+
+WORKDIR /app
+
+VOLUME ["/var/lib/postgresql/data", "/var/lib/postgresql/backup"]
+
+EXPOSE 4000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1', 4000)); s.close()" || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+CMD ["--host", "0.0.0.0", "--port", "4000"]

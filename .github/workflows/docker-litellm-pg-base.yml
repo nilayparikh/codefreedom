@@ -1,0 +1,139 @@
+# ── CodeFreedom: Docker LiteLLM PG Base ──────────────────────────────────
+# Builds the PostgreSQL base image used by the LiteLLM stack.
+# MANUALLY triggered only — rebuild when PG_VERSION or PG_TAG changes.
+#
+# Tags: litellm-pg-base-v{pg_version}, litellm-pg-base-latest
+# Platforms: linux/arm64, linux/amd64
+# ─────────────────────────────────────────────────────────────────────────
+
+name: Docker LiteLLM PG Base
+
+on:
+  workflow_dispatch:
+    inputs:
+      pg_version:
+        description: "PostgreSQL version (e.g. 18.4)"
+        required: true
+        default: "18.4"
+      pg_tag:
+        description: "Git tag in postgres/postgres (e.g. REL_18_4)"
+        required: true
+        default: "REL_18_4"
+
+env:
+  DOCKER_HUB_REPO: nilayparikh/codefreedom
+  GHCR_REPO: ghcr.io/nilayparikh/codefreedom
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64,amd64
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ${{ env.DOCKER_HUB_REPO }}
+            ${{ env.GHCR_REPO }}
+          tags: |
+            type=raw,value=litellm-pg-base-v${{ inputs.pg_version }}
+            type=raw,value=litellm-pg-base-latest
+          labels: |
+            org.opencontainers.image.title=CodeFreedom - LiteLLM PG Base
+            org.opencontainers.image.description=PostgreSQL ${{ inputs.pg_version }} compiled from source for the LiteLLM proxy image.
+            org.opencontainers.image.version=pg-v${{ inputs.pg_version }}
+            com.codefreedom.platform=LiteLLM
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: docker/litellm/
+          file: docker/litellm/Dockerfile.PgBase
+          platforms: linux/arm64,linux/amd64
+          build-args: |
+            PG_VERSION=${{ inputs.pg_version }}
+            PG_TAG=${{ inputs.pg_tag }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=LiteLLM-PgBase
+          cache-to: type=gha,mode=max,scope=LiteLLM-PgBase
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.GHCR_REPO }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Sign Docker Hub image
+        uses: ./.github/actions/cosign-sign
+        with:
+          image: docker.io/${{ env.DOCKER_HUB_REPO }}@${{ steps.build.outputs.digest }}
+
+      - name: Sign GHCR image
+        uses: ./.github/actions/cosign-sign
+        with:
+          image: ${{ env.GHCR_REPO }}@${{ steps.build.outputs.digest }}
+
+  verify:
+    needs: build
+    runs-on: ubuntu-24.04
+    if: needs.build.outputs.digest != ''
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Docker Hub signature
+        uses: ./.github/actions/cosign-verify
+        with:
+          image: docker.io/${{ env.DOCKER_HUB_REPO }}@${{ needs.build.outputs.digest }}
+
+      - name: Verify GHCR signature
+        uses: ./.github/actions/cosign-verify
+        with:
+          image: ${{ env.GHCR_REPO }}@${{ needs.build.outputs.digest }}

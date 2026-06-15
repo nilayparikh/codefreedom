@@ -1,11 +1,11 @@
-# ── CodeFreedom: Docker LiteLLM (self-contained proxy image) ────────────────
-# Builds and publishes the self-hosted LiteLLM proxy image that replaces
-# ghcr.io/berriai/litellm in the compose stack. The image bakes in the
-# WebSearch count display patch (see docker/litellm/patch_websearch_count.py).
+# ── CodeFreedom: Docker LiteLLM (final image) ────────────────────────────
+# Builds the thin runtime overlay on top of the pre-built litellm-base
+# checkpoint image.  Only patches, plugins, entrypoint, and runtime setup.
 #
-# Triggered by changes to any file under docker/litellm/ (Dockerfile,
-# plugins, patches, entrypoint, requirements).  Manually dispatchable
-# for rebuilds on dependency bumps.
+# Build time: ~1-2 minutes (no compilation, no pip install, no Prisma).
+#
+# For full base rebuilds, use the docker-litellm-pg-base and
+# docker-litellm-base workflows instead.
 #
 # Tags: litellm-v{semver}, litellm-v{major.minor}, litellm-latest
 # Platforms: linux/arm64, linux/amd64
@@ -20,6 +20,11 @@ on:
     paths:
       - "docker/litellm/**"
   workflow_dispatch:
+    inputs:
+      litellm_base_tag:
+        description: "Override litellm-base image tag (e.g. litellm-base-v1.87.1)"
+        required: false
+        default: ""
 
 env:
   DOCKER_HUB_REPO: nilayparikh/codefreedom
@@ -46,11 +51,21 @@ jobs:
       - name: Extract image version
         id: version
         run: |
-          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/litellm/Dockerfile.LiteLLM | head -1 | sed 's/.*=\(.*\)/\1/')
+          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/litellm/Dockerfile.LitellmFinal | head -1 | sed 's/.*=\(.*\)/\1/')
           MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
           echo "LiteLLM image version: v${VERSION}"
+
+      - name: Resolve base image tag
+        id: base
+        run: |
+          if [ -n "${{ inputs.litellm_base_tag }}" ]; then
+            echo "tag=${{ inputs.litellm_base_tag }}" >> "${GITHUB_OUTPUT}"
+          else
+            DEFAULT=$(grep '^ARG LITELLM_BASE_IMAGE=' docker/litellm/Dockerfile.LitellmFinal | head -1 | sed 's/.*:\(.*\)/\1/')
+            echo "tag=${DEFAULT}" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
@@ -89,16 +104,17 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: docker/litellm/
-          file: docker/litellm/Dockerfile.LiteLLM
+          file: docker/litellm/Dockerfile.LitellmFinal
           platforms: linux/arm64,linux/amd64
           build-args: |
             IMAGE_VERSION=${{ steps.version.outputs.version }}
+            LITELLM_BASE_IMAGE=${{ env.DOCKER_HUB_REPO }}:${{ steps.base.outputs.tag }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha,scope=LiteLLM
-          cache-to: type=gha,mode=max,scope=LiteLLM
+          cache-from: type=gha,scope=LiteLLM-Final
+          cache-to: type=gha,mode=max,scope=LiteLLM-Final
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'
