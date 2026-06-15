@@ -1,21 +1,18 @@
 """Tests for codefreedom.launcher module."""
 
 from __future__ import annotations
-
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
+pytestmark = pytest.mark.integration
 @pytest.fixture()
 def workspace_dir(tmp_path: Path) -> Path:
     ws = tmp_path / "workspace"
     ws.mkdir()
     return ws
-
-
 class TestGenerateContainerName:
     def test_returns_codefreedom_prefix(self):
         from codefreedom.launcher import _generate_container_name
@@ -36,8 +33,6 @@ class TestGenerateContainerName:
 
         names = {_generate_container_name() for _ in range(50)}
         assert len(names) == 50
-
-
 class TestFindClaudeBinary:
     @patch("shutil.which", return_value="/usr/local/bin/claude")
     def test_returns_path_when_found(self, mock_which):
@@ -53,8 +48,6 @@ class TestFindClaudeBinary:
 
         result = find_claude_binary()
         assert result is None
-
-
 class TestWriteMcpJson:
     def test_creates_mcp_json(self, workspace_dir: Path):
         from codefreedom.launcher import _write_mcp_json
@@ -116,8 +109,6 @@ class TestWriteMcpJson:
 
         mcp_path = workspace_dir / ".mcp.json"
         assert not mcp_path.exists()
-
-
 class TestEnsureCodefreedomDir:
     def test_creates_sandbox_dirs(self):
         from codefreedom.launcher import ensure_codefreedom_dir
@@ -136,8 +127,6 @@ class TestEnsureCodefreedomDir:
         _, claude_json2 = ensure_codefreedom_dir("test-profile")
         data = json.loads(claude_json2.read_text())
         assert data == {"key": "value"}
-
-
 class TestRunLocal:
     @patch("codefreedom.launcher.find_claude_binary", return_value=None)
     def test_returns_1_when_binary_not_found(self, _mock):
@@ -174,8 +163,6 @@ class TestRunLocal:
         run_local({}, [], dangerously_skip=True)
         cmd = mock_popen.call_args[0][0]
         assert "--dangerously-skip-permissions" in cmd
-
-
 class TestStatusAndStop:
     @patch("codefreedom.sandbox.launcher.sandbox_status", return_value=0)
     def test_status_delegates_to_sandbox(self, mock_status):
@@ -192,8 +179,6 @@ class TestStatusAndStop:
         result = stop()
         assert result == 0
         mock_stop.assert_called_once()
-
-
 class TestFailurePaths:
     @patch("subprocess.Popen", side_effect=FileNotFoundError("No such file"))
     @patch("codefreedom.launcher.find_claude_binary", return_value="/usr/bin/claude")
@@ -212,8 +197,6 @@ class TestFailurePaths:
 
         result = run_local({}, [])
         assert result == 130
-
-
 class TestMcpJsonEdgeCases:
     def test_handles_corrupt_existing_mcp_json(self, workspace_dir: Path):
         from codefreedom.launcher import _write_mcp_json

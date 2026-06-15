@@ -1,0 +1,27 @@
+# markdownlint config for CodeFreedom docs
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+default: true
+
+# MD013 - Line length (disable for docs with long URLs/tables)
+MD013: false
+
+# MD033 - Inline HTML (needed for MkDocs Material features like grid cards)
+MD033: false
+
+# MD024 - Duplicate headings (allow in different sections)
+MD024:
+  siblings_only: true
+
+# MD046 - Code block style (fenced with backticks)
+MD046:
+  style: fenced
+
+# MD007 - Unordered list indentation: 4 spaces (Material for MkDocs grid cards)
+MD007:
+  indent: 4
+  start_indented: false
+
+# MD009 - Trailing spaces (allow 2+ for line breaks in prose)
+MD009:
+  br_spaces: 2

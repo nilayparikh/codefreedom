@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RECIPE_COMPOSE_FILES = [

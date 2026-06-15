@@ -10,6 +10,7 @@ the installable ``codefreedom`` package. We add its parent directory to
 
 from __future__ import annotations
 
+
 import sys
 import time
 from pathlib import Path
@@ -27,6 +28,8 @@ fastapi = pytest.importorskip("fastapi")  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app import bridge  # noqa: E402
+
+pytestmark = pytest.mark.integration
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
 

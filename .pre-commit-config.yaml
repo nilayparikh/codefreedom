@@ -1,23 +1,40 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+      - repo: https://github.com/DavidAnson/markdownlint-cli2
+        rev: v0.17.2
+        hooks:
+              - id: markdownlint-cli2
+                args: ["--fix"]
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-PyYAML]
-        args: [--ignore-missing-imports]
+      - repo: local
+        hooks:
+              - id: ruff-check
+                name: ruff check src/ tests/
+                entry: ruff check src/ tests/ --fix --exit-non-zero-on-fix
+                language: system
+                pass_filenames: false
+                always_run: true
+                types: [python]
 
-  - repo: local
-    hooks:
-      - id: pytest
-        name: pytest
-        entry: python -m pytest tests/ -x -q --tb=short
-        language: python
-        types: [python]
-        pass_filenames: false
-        always_run: true
+              - id: mypy-check
+                name: mypy src/
+                entry: mypy src/ --ignore-missing-imports
+                language: system
+                pass_filenames: false
+                always_run: true
+                types: [python]
+
+              - id: pytest-check
+                name: pytest tests/
+                entry: .venv/bin/python -m pytest tests/ -v --tb=short
+                language: system
+                pass_filenames: false
+                always_run: true
+                types: [python]
+
+              - id: mkdocs-build
+                name: mkdocs build --strict
+                entry: mkdocs build --strict
+                language: system
+                pass_filenames: false
+                always_run: true
+                files: "(docs/|mkdocs\\.yml)"

@@ -7,6 +7,7 @@ only the proxy config (``cf setup config vscode``) remains exposed.
 
 from __future__ import annotations
 
+
 import argparse
 import json
 import subprocess
@@ -26,6 +27,8 @@ from codefreedom.cli.vscode import (
     _is_secret_env_var,
     cmd_vscode_claude_config,
 )
+
+pytestmark = pytest.mark.integration
 
 
 def _call_env(profile_env, **kwargs):

@@ -1,10 +1,15 @@
-"""Tests for Claude Code CLI entrypoint."""
+"""Pure-logic tests for Claude Code CLI.
+
+Tests arg parsing logic without I/O.
+"""
 
 from __future__ import annotations
 
 import argparse
 
 import pytest
+
+pytestmark = pytest.mark.unit
 
 
 class TestRegisterArgs:

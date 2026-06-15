@@ -4,181 +4,199 @@ Architecture map. Every module, its responsibility, and how they wire together.
 
 ## Layer Model
 
-```
+```text
 User (CLI)
   |
 cli/          -- command dispatch, user-facing logic
   |
-core/         -- env, profiles, launcher, config
+core/         -- env, profiles, config, interpolation
+  |
+sandbox/      -- container lifecycle, signals, terminal
+docker/       -- Docker client helpers
+tools/        -- tool classes, MCP endpoint dispatch
   |
 infra/        -- Docker images, proxy config, recipes
 ```
 
-Three layers. Each layer calls only the layer below it. No cross-layer or sideways calls.
+Each layer calls only the layer below it. No cross-layer or sideways calls.
 
 ## Component Inventory
 
 ### Core (leaf modules — no intra-package imports)
 
-| Block           | File                               | Responsibility                                                        |
-| --------------- | ---------------------------------- | --------------------------------------------------------------------- |
-| `config`        | `src/codefreedom/config.py`        | `CODEFREEDOM_HOME` path (defaults `~/.codefreedom`)                   |
-| `env_loader`    | `src/codefreedom/env_loader.py`    | 9-layer `.env` chain, `${VAR}` interpolation                          |
-| `log`           | `src/codefreedom/log.py`           | Shared logging (`eprint`) used by all modules                         |
-| `profiles`      | `src/codefreedom/profiles.py`      | Profile JSON, inheritance, env resolution, tools list                 |
-| `tool_registry` | `src/codefreedom/tool_registry.py` | Tool container lifecycle, MCP endpoint dispatch via tool classes      |
-| `admin`         | `src/codefreedom/admin/`           | Backup, restore, prune (subpackage: backup.py, restore.py, prune.py)  |
-
-Details on env chain layers and profile inheritance: see `CLAUDE.md` > Key Patterns.
+| Block           | File                                      | Responsibility                                                        |
+| --------------- | ----------------------------------------- | --------------------------------------------------------------------- |
+| `config`        | `src/codefreedom/core/config.py`          | `CODEFREEDOM_HOME` path, `resolve_agent_config()` single entry point  |
+| `env_loader`    | `src/codefreedom/env_loader.py`           | 9-layer `.env` chain, `eprint()`                                      |
+| `interpolate`   | `src/codefreedom/core/interpolate.py`     | `${VAR}` interpolation                                                 |
+| `log`           | `src/codefreedom/log.py`                  | `tag()`, colored output, shared logging                                |
+| `profiles`      | `src/codefreedom/core/profiles.py`        | Profile YAML loading, `load_profile_env()`, tool profile resolution    |
+| `http_client`   | `src/codefreedom/core/http_client.py`     | Shared HTTP client utilities                                           |
+| `schemas`       | `src/codefreedom/schemas/`                | Pydantic models for profiles, recipes                                  |
 
 ### CLI (subcommands + shared utilities)
 
-| Block             | File                                     | Responsibility                                                                  |
-| ----------------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
-| `main`            | `src/codefreedom/cli/main.py`            | Top-level parser, dispatches to subcommands                                     |
-| `claude`          | `src/codefreedom/cli/claude.py`          | `codefreedom run agent claude-code` — init, profiles, sandbox/native launch                    |
-| `mimo`            | `src/codefreedom/cli/mimo.py`            | `codefreedom run agent mimo-code` — MiMoCode agent, 0-click proxy config, sandbox/native       |
-| `opencode`        | `src/codefreedom/cli/opencode.py`        | `codefreedom run agent open-code` — OpenCode agent, 0-click proxy config, sandbox/native   |
-| `agent`           | `src/codefreedom/cli/run/agent.py`       | Agent dispatch registry, alias resolution, shared CLI validation                |
-| `proxy`           | `src/codefreedom/cli/run/proxy.py`       | `codefreedom run proxy` — init, start/stop/status/validate                          |
-| `tools`           | `src/codefreedom/cli/run/tools.py`       | `codefreedom run tools` — CLI layer for tool management (delegates to registry)     |
-| `chrome`          | `src/codefreedom/cli/chrome.py`          | `codefreedom run tools chrome` — browser container lifecycle                        |
-| `web`             | `src/codefreedom/cli/web.py`             | `codefreedom run tools web` — Camoufox MCP container lifecycle                      |
-| `docker_utils`    | `src/codefreedom/cli/docker_utils.py`    | Shared Docker helpers — `start_tool_container` seam, tool notices, tool metadata |
-| `common`          | `src/codefreedom/cli/common.py`          | Shared CLI utilities                                                            |
-| `formatter`       | `src/codefreedom/cli/formatter.py`       | Help text formatting                                                            |
-| `doctor`          | `src/codefreedom/cli/manage/doctor.py`   | `cf manage doctor` — comprehensive diagnostic checks                                   |
-| `update`          | `src/codefreedom/cli/manage/update.py`   | Update management                                                               |
-| `admin`           | `src/codefreedom/cli/manage/admin.py`    | `codefreedom manage admin` CLI entry point                                             |
-| `recipe`          | `src/codefreedom/cli/setup/recipe.py`    | Recipe setup commands                                                           |
-| `config_setup`    | `src/codefreedom/cli/setup/config.py`    | Config setup commands                                                           |
-| `deinit`          | `src/codefreedom/cli/setup/deinit.py`    | Deinitialization                                                                |
-| `recipe_system`   | `src/codefreedom/recipe/`               | Recipe system (subpackage: store.py, merge.py, plan.py, apply.py)                |
-| `vscode`          | `src/codefreedom/cli/vscode.py`          | `codefreedom setup config vscode` — VS Code config generation (claude, proxy)                 |
+| Block             | File                                        | Responsibility                                                                  |
+| ----------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
+| `main`            | `src/codefreedom/cli/main.py`               | Top-level parser, dispatches to `setup`/`run`/`manage` subcommands              |
+| `common`          | `src/codefreedom/cli/common.py`             | Shared CLI utilities (argument parsing, profile loading, output helpers)        |
+| `formatter`       | `src/codefreedom/cli/formatter.py`          | Help text formatting                                                            |
+| **setup**         |                                             |                                                                                 |
+| `recipe`          | `src/codefreedom/cli/setup/recipe.py`       | `cf setup init` — plan, apply, list recipes                                      |
+| `config_setup`    | `src/codefreedom/cli/setup/config.py`       | `cf setup config vscode` — VS Code chatLanguageModels.json generation           |
+| `deinit`          | `src/codefreedom/cli/setup/deinit.py`       | `cf setup deinit` — teardown, stop containers, remove config                    |
+| **run**           |                                             |                                                                                 |
+| `agent`           | `src/codefreedom/cli/run/agent.py`          | Agent dispatch: alias resolution, `get_agent_names()`, `validate_agent_args()`  |
+| `claude`          | `src/codefreedom/cli/claude.py`             | `cf run agent claude-code` — init, profiles, sandbox/native launch              |
+| `mimo`            | `src/codefreedom/cli/mimo.py`               | `cf run agent mimo-code` — 0-click proxy config, sandbox/native                 |
+| `opencode`        | `src/codefreedom/cli/opencode.py`           | `cf run agent open-code` — 0-click proxy config, sandbox/native                 |
+| `proxy`           | `src/codefreedom/cli/run/proxy.py`          | `cf run proxy` — start/stop/status/validate via Docker Compose                  |
+| `tools`           | `src/codefreedom/cli/run/tools.py`          | `cf run tools` — CLI layer delegates to `tools/registry.py`                     |
+| `docker_utils`    | `src/codefreedom/cli/docker_utils.py`       | `start_tool_container()`, image checks, tool metadata                           |
+| `vscode`          | `src/codefreedom/cli/vscode.py`             | VS Code agent config generation helpers                                         |
+| **manage**        |                                             |                                                                                 |
+| `doctor`          | `src/codefreedom/cli/manage/doctor.py`      | `cf manage doctor` — profile-aware env checks, agent binary checks              |
+| `update`          | `src/codefreedom/cli/manage/update.py`      | Docker image + PyPI update checks                                               |
+| `admin`           | `src/codefreedom/cli/manage/admin.py`       | `cf manage admin` CLI entry point (backup/restore/prune/inspect)                |
+
+### Sandbox (container lifecycle)
+
+| Block           | File                                        | Responsibility                                                                |
+| --------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| `launcher`      | `src/codefreedom/sandbox/launcher.py`       | `run_sandbox()`, `sandbox_status()`, `sandbox_stop()` — canonical container owner |
+| `signals`       | `src/codefreedom/sandbox/signals.py`        | Signal forwarding for sandbox processes                                       |
+| `terminal`      | `src/codefreedom/sandbox/terminal.py`       | Terminal allocation for interactive sandbox sessions                           |
+
+### Tools (MCP endpoint dispatch)
+
+| Block           | File                                        | Responsibility                                                                |
+| --------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| `registry`      | `src/codefreedom/tools/registry.py`         | `acquire_tools()`, `release_tools()`, `start_all_tools()`, `stop_all_tools()` |
+| `chrome`        | `src/codefreedom/tools/chrome.py`           | Chrome MCP tool — `mcp_endpoint`, `mcp_server_name`                           |
+| `web`           | `src/codefreedom/tools/web.py`              | Camoufox MCP tool                                                             |
+| `web_bridge`    | `src/codefreedom/tools/web_bridge.py`       | Web bridge tool                                                               |
+| `github`        | `src/codefreedom/tools/github.py`           | GitHub MCP tool                                                               |
+| `schemas/`      | `src/codefreedom/tools/schemas/`            | Per-tool Pydantic schemas                                                     |
+
+### Agents (VS Code config generation)
+
+| Block           | File                                        | Responsibility                                                                |
+| --------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| `claude_settings`| `src/codefreedom/agents/vscode/claude_settings.py` | Claude Code VS Code settings generation                            |
+| `proxy_models`  | `src/codefreedom/agents/vscode/proxy_models.py`   | Proxy model list for VS Code config                               |
+
+### Recipe System
+
+| Block           | File                                        | Responsibility                                                                |
+| --------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| `store`         | `src/codefreedom/recipe/store.py`           | Git clone/update of recipe repository                                         |
+| `plan`          | `src/codefreedom/recipe/plan.py`            | Recipe plan generation, secrets status, `_find_env_secrets_targets()`          |
+| `merge`         | `src/codefreedom/recipe/merge.py`           | File merge logic for recipe application                                       |
+| `apply`         | `src/codefreedom/recipe/apply.py`           | `_print_summary()`, `_resolve_secret()`, apply execution                      |
+
+### Admin (backup/restore)
+
+| Block           | File                                        | Responsibility                                                                |
+| --------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| `backup`        | `src/codefreedom/admin/backup.py`           | Archive creation, PG dump                                                     |
+| `restore`       | `src/codefreedom/admin/restore.py`          | Archive extraction, diff preview                                              |
+| `prune`         | `src/codefreedom/admin/prune.py`            | Old backup removal                                                            |
+| `_utils`        | `src/codefreedom/admin/_utils.py`           | `_MANAGED_PATHS`, `_collect_files()`, `_redact_value()`                       |
+
+### Docker (client helpers)
+
+| Block           | File                                        | Responsibility                                                                |
+| --------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| `client`        | `src/codefreedom/docker/client.py`          | Docker API client wrapper                                                     |
 
 ### Infrastructure (runtime assets)
 
 | Block             | Location                   | Responsibility                                                                  |
 | ----------------- | -------------------------- | ------------------------------------------------------------------------------- |
-| `docker_images`   | `docker/`                  | CUDA, ROCm, Ubuntu, Chrome, Camoufox, LiteLLM image families                    |
-| `web-bridge`      | `docker/web-bridge/`       | FastAPI sidecar — SearXNG → Camoufox MCP translation for WebSearch interception |
-| `litellm`         | `docker/litellm/`          | Self-hosted LiteLLM proxy image with embedded PostgreSQL 18.4                   |
-| `litellm_patches` | `docker/litellm/patches/`  | Build-time patches applied into the LiteLLM image                               |
-| `litellm_plugins` | `docker/litellm/plugins/`  | LiteLLM callbacks baked into the image (reasoning-efforts mapping)              |
+| `docker_images`   | `docker/`                  | CUDA, ROCm, Ubuntu, Chrome, Camoufox, LiteLLM, GitHub, Web, Web-Bridge images  |
+| `litellm`         | `docker/litellm/`          | Self-contained LiteLLM proxy image with embedded PostgreSQL                     |
+| `litellm_patches` | `docker/litellm/patches/`  | Build-time patches (WebSearch count, Azure responses disable)                   |
+| `litellm_plugins` | `docker/litellm/plugins/`  | Reasoning-efforts mapping baked into image                                      |
+| `web-bridge`      | `docker/web-bridge/`       | FastAPI sidecar — SearXNG → Camoufox MCP translation                           |
 | `proxy_config`    | `~/.codefreedom/proxy/`    | LiteLLM routing, provider YAML, model aliases, plugin configs                   |
 | `recipes`         | `recipes/`                 | Configuration recipes from github.com/nilayparikh/codefreedom-recipes           |
-| `tool_profiles`   | `~/.codefreedom/profiles/` | Per-tool JSON settings (chrome, web)                                            |
-
-**litellm component.** The `docker/litellm/` directory contains a multi-stage Dockerfile (`Dockerfile.LiteLLM`) that builds a self-contained LiteLLM proxy image with embedded PostgreSQL 18.4 (built from source), Prisma schema management, and the WebSearch count display patch. The image installs LiteLLM from a git fork at a pinned tag (default `nilayparikh/litellm.git` at `v1.87.1`) with `--no-deps`, then layers a curated minimal dependency set. Patches in `docker/litellm/patches/` are applied at build time:
-
-- `patch_websearch_count.py` — injects `server_tool_use.web_search_requests` into LiteLLM WebSearch responses so Claude Code TUI displays "Did N searches" (covers short-circuit, typed-plan, and legacy agentic-loop paths).
-- `patch_responses_azure.py` — disables LiteLLM's auto-routing of GPT-5.x through the Azure Responses API (Azure Foundry does not reliably serve the Responses API yet).
-
-Plugins in `docker/litellm/plugins/` are baked into the image and deployed by the entrypoint at container start:
-
-- `reasoning_efforts_mapping.py` — v2 CustomLogger that translates reasoning-effort signals across provider standards using rule-based mapping (`mapping` and `thinking_budget` rule types). Reads its config from a YAML file on the host (user-editable).
-
-The entrypoint (`entrypoint.sh`) orchestrates: PG cluster init, `prisma db push`, plugin deployment, and LiteLLM startup. It uses tini as PID 1 for clean signal forwarding. The image runs as non-root user `codefreedom` (uid 1000).
-
-Replaces the upstream `ghcr.io/berriai/litellm` image so we control the LiteLLM version, patches, and the Trivy CVE surface. Published on `docker.io` and `ghcr.io`.
-
-**web-bridge component.** The `docker/web-bridge/` directory contains `Dockerfile.Bridge`, `requirements.txt`, and `app/bridge.py`. It builds the `codefreedom:web-bridge` image, published on `docker.io` and `ghcr.io`. The bridge runs as a sibling service in the proxy `docker-compose.yaml` on the shared `codefreedom` network — no host port is published. LiteLLM reaches it via service DNS at `http://web-bridge:8500`. The bridge translates SearXNG-shaped `/search` requests into JSON-RPC calls against the Camoufox MCP `web_search` tool, enabling LiteLLM's `websearch_interception` callback to transparently replace Claude Code's native `WebSearch` with a local stealth browser. See `docker/web-bridge/README.md` and `docs/proxy/websearch-interception.md`.
-
-Details on Docker naming, image families, proxy system: see `CLAUDE.md` > Docker / Proxy System.
 
 ## Dependency Graph
 
-```
-config.py, env_loader.py, log.py, profiles.py, tool_registry.py  (leaf — no intra-package deps)
+```text
+core/config.py, core/profiles.py, core/interpolate.py, env_loader.py, log.py  (leaf — no intra-package deps)
   |
-cli/docker_utils.py                                               (log only)
+cli/docker_utils.py                                                          (log only)
   |
-cli/main.py                                                       -> log
-cli/launcher.py                                                    -> config, log
-cli/claude.py                                                      -> config, log, launcher, profiles, tool_registry
-cli/mimo.py                                                        -> config, log, profiles, tool_registry, sandbox
-cli/opencode.py                                                    -> config, log, profiles, tool_registry, sandbox
-cli/run/agent.py                                                   -> log (dynamic import of agent modules)
-cli/run/tools.py                                                   -> log, tools/registry (delegates lifecycle)
-cli/proxy.py                                                       -> config, log
-cli/chrome.py, cli/web.py                                          -> docker_utils, config, log
-cli/vscode.py                                                      -> config, log, profiles
-cli/manage/doctor.py                                               -> config, log, docker_utils
-tools/registry.py                                                  -> log, tools/*, docker_utils
+sandbox/launcher.py                                                          (log, docker/client)
+  |
+cli/main.py                                                                  -> log
+cli/claude.py                                                                -> core/config, log, profiles, tool_registry, sandbox/launcher
+cli/mimo.py                                                                  -> core/config, log, profiles, tool_registry, sandbox/launcher
+cli/opencode.py                                                              -> core/config, log, profiles, tool_registry, sandbox/launcher
+cli/run/agent.py                                                             -> log (dynamic import of agent modules)
+cli/run/tools.py                                                             -> log, tools/registry (delegates lifecycle)
+cli/run/proxy.py                                                             -> core/config, log, env_loader
+cli/vscode.py                                                                -> core/config, log, agents/vscode
+cli/manage/doctor.py                                                         -> core/config, log, docker_utils, core/profiles
+tools/registry.py                                                            -> log, tools/*, docker/client
+recipe/apply.py                                                              -> core/config, env_loader, recipe/merge
+recipe/plan.py                                                               -> core/config, recipe/store
 ```
 
 ## Request Flow
 
-### `codefreedom run agent claude-code --sandbox`
+### `cf run agent claude-code --sandbox`
 
-```
+```text
 main.py (parse)
-  -> claude.py (load profile, resolve sandbox image, get tools)
-    -> profiles.py (load_profiles, get_profile_sandbox_images, get_profile_tools)
-    -> tool_registry.py (acquire_tools: start Docker tool containers, write /proc locks)
-    -> launcher.py (run_docker: create ephemeral container, exec Claude CLI)
-      -> config.py (get_codefreedom_dir for volume mounts)
-    -> tool_registry.py (release_tools: decrement ref_count, stop if last session)
+  -> agent.py (resolve alias 'cc' -> 'claude-code', dispatch to claude.py)
+    -> claude.py (load profile, resolve sandbox image, acquire tools)
+      -> profiles.py (load_profiles, load_profile_env)
+      -> tool_registry.py (acquire_tools: start Docker tool containers)
+      -> sandbox/launcher.py (run_sandbox: create container, exec Claude CLI)
+        -> core/config.py (get_codefreedom_dir for volume mounts)
+      -> tool_registry.py (release_tools)
 ```
 
-### `codefreedom run proxy start`
+### `cf run proxy start`
 
-```
+```text
 main.py (parse)
   -> proxy.py (_start_compose: Docker Compose only)
-    -> config.py (get_codefreedom_dir for proxy path)
+    -> core/config.py (get_codefreedom_dir for proxy path)
     -> env_loader.py (load_dotenv for proxy env files)
     -> docker compose up -d starts:
-       - litellm (:4000)         — codefreedom:litellm-latest (embedded PG, patches baked in)
-       - web-bridge (:8500)      — codefreedom:web-bridge   -->  Camoufox MCP (:8420/mcp)
+       - litellm (:4000)    — codefreedom:litellm-latest (embedded PG, plugins)
+       - web-bridge (:8500) — codefreedom:web-bridge -> Camoufox MCP
 ```
 
-The LiteLLM container entrypoint handles: PG cluster init (first run), `prisma db push`, plugin deployment (reasoning-efforts mapping `.py` into the host-mounted config dir), and LiteLLM startup. The embedded PG listens on localhost:5432 only (no host port exposed).
+### `cf run tools start -c -w`
 
-The web-bridge is a FastAPI sidecar (`docker/web-bridge/`) that translates
-SearXNG-shaped `/search` requests into JSON-RPC calls against the Camoufox
-MCP `web_search` tool. LiteLLM's `websearch_interception` callback routes
-Claude Code's native `WebSearch` to the bridge — transparently replacing it
-with a local stealth browser call.
-
-### `codefreedom run tools chrome start`
-
-```
+```text
 main.py (parse)
-  -> chrome.py (load tool profile, start container)
-    -> docker_utils.py (check_docker, ensure_image, container_is_running)
-    -> config.py (get_codefreedom_dir for data_dir)
+  -> tools.py (parse tool flags, delegate to registry)
+    -> registry.py (start_all_tools: start Chrome + Web containers)
+      -> docker/client.py (Docker API calls)
 ```
 
-### `codefreedom run agent mimo-code --sandbox`
+### `cf setup init -pa costeffective-coding`
 
-```
+```text
 main.py (parse)
-  -> agent.py (resolve 'mimo' -> 'mimo-code', dispatch to mimo.py)
-    -> mimo.py (load profile, detect proxy, generate mimocode.json)
-      -> profiles.py (load_profiles, load_profile_env)
-      -> tool_registry.py (acquire_tools)
-      -> sandbox/launcher.py (run_sandbox: create container, exec mimo CLI)
-      -> tool_registry.py (release_tools)
-```
-
-### `codefreedom run agent open-code --sandbox`
-
-```
-main.py (parse)
-  -> agent.py (resolve 'opencode' -> 'open-code', dispatch to opencode.py)
-    -> opencode.py (load profile, detect proxy, generate opencode.json)
-      -> profiles.py (load_profiles, load_profile_env)
-      -> tool_registry.py (acquire_tools)
-      -> sandbox/launcher.py (run_sandbox: create container, exec opencode CLI)
-      -> tool_registry.py (release_tools)
+  -> recipe.py (init_recipe)
+    -> store.py (_ensure_store: git clone/update recipes)
+    -> plan.py (plan_recipe: generate patch manifest, check secrets)
+    -> user confirms
+    -> apply.py (apply_recipe: merge files, validate secrets via _resolve_secret)
+      -> _resolve_secret: CF_CLI_* -> os.environ -> .env.user -> .env.*.secrets
 ```
 
 ## Rules
 
 - **One responsibility per block.** If a file does two things, split it.
 - **Add a block when shared across 2+ locations.** One-off logic stays inline.
-- **Layer discipline.** CLI calls core. Core calls nothing in the package. Infra is data, not code.
+- **Layer discipline.** CLI calls core. Core calls nothing above it. Infra is data.
 - **Keep this file accurate.** When code changes, update the inventory and graph in the same PR.
 
 ## Tool Registry Design
@@ -188,17 +206,15 @@ The tool registry (`tools/registry.py`) is the **canonical owner** of tool lifec
 
 ### Ownership
 
-- **`tools/registry.py`** — owns acquire/release, session tracking, MCP endpoint resolution, bulk lifecycle operations (start_all, stop_all, status)
-- **`cli/run/tools.py`** — CLI layer only: parsing, user output, delegates to registry
-- **`cli/docker_utils.py`** — Docker primitives (container_is_running, ensure_image)
+- **`tools/registry.py`** — acquire/release, session tracking, MCP endpoint resolution, bulk lifecycle (`start_all_tools`, `stop_all_tools`)
+- **`cli/run/tools.py`** — CLI layer: parsing, output, delegates to registry
+- **`cli/docker_utils.py`** — Docker primitives (`container_is_running`, `ensure_image`)
 
 ### Lifecycle
 
-1. **`codefreedom run agent claude-code` starts** — `acquire_tools()`:
-   - For each tool: call `tool.start()` (no-op if container already running)
-   - Returns list of successfully acquired tools
-2. **Claude session runs** — tools stay running independently
-3. **Claude exits** — `release_tools()` in finally block (no-op, tools persist)
+1. **`cf run agent claude-code` starts** — `acquire_tools()`: start containers, return acquired tools
+2. **Agent session runs** — tools stay running independently
+3. **Agent exits** — `release_tools()` in finally block (no-op, tools persist)
 4. **`cf run tools stop`** — explicit stop via `stop_all_tools()`
 
 ### First-one-starts, last-one-stops

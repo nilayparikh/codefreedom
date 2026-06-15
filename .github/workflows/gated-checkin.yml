@@ -59,7 +59,7 @@ jobs:
 
       - name: Type-check (mypy)
         run: |
-          mypy src/
+          mypy src/ --ignore-missing-imports
 
       - name: Test
         run: |

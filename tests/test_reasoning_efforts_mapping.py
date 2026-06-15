@@ -6,6 +6,7 @@ warn-once behaviour without requiring a running LiteLLM instance.
 
 from __future__ import annotations
 
+
 import asyncio
 import importlib.util
 import os
@@ -15,6 +16,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+
+pytestmark = pytest.mark.integration
 
 _project_root = Path(__file__).resolve().parent.parent
 _src = str(_project_root / "src")

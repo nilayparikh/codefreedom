@@ -121,6 +121,12 @@ omit = [
     "src/codefreedom/admin/*",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "unit: Pure logic tests — no I/O, no Docker, no network (fast, run always)",
+    "integration: Tests requiring filesystem, subprocess, Docker, or network (slower, run on demand)",
+]
+
 [tool.coverage.report]
 show_missing = true
 skip_empty = true

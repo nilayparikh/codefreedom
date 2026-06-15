@@ -5,6 +5,10 @@ from __future__ import annotations
 import argparse
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 
 
 class TestResolveAgent:
@@ -92,3 +96,4 @@ class TestHandleArgs:
         args = argparse.Namespace(agent_name=None)
         result = handle_args(args)
         assert result == 0
+

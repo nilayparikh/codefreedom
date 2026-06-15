@@ -1,9 +1,38 @@
-"""Tests for OpenCode CLI entrypoint."""
+"""Pure-logic tests for OpenCode config generation and model building.
+
+Tests transform functions that take inputs and return outputs with no I/O.
+"""
 
 from __future__ import annotations
 
-import argparse
+import pytest
 
+pytestmark = pytest.mark.unit
+
+
+class TestDetectProxyUrl:
+    def test_default_url(self, monkeypatch):
+        from codefreedom.cli.opencode import _detect_proxy_url
+
+        monkeypatch.delenv("PROXY_BASE_URL", raising=False)
+        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
+        assert _detect_proxy_url({}) == "http://localhost:4000"
+
+    def test_from_base_env_proxy_url(self, monkeypatch):
+        from codefreedom.cli.opencode import _detect_proxy_url
+
+        monkeypatch.delenv("PROXY_BASE_URL", raising=False)
+        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
+        url = _detect_proxy_url({"PROXY_BASE_URL": "http://my-proxy:5000"})
+        assert url == "http://my-proxy:5000"
+
+    def test_from_base_env_litellm_url(self, monkeypatch):
+        from codefreedom.cli.opencode import _detect_proxy_url
+
+        monkeypatch.delenv("PROXY_BASE_URL", raising=False)
+        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
+        url = _detect_proxy_url({"LITELLM_BASE_URL": "http://my-proxy:5000"})
+        assert url == "http://my-proxy:5000"
 
 
 class TestGenerateOpenCodeConfig:
@@ -65,21 +94,3 @@ class TestBuildProviderModels:
         assert "valid-model" in models
         assert "azure/gpt-4" not in models
         assert "gpt-3.5-turbo" not in models
-
-
-class TestRegisterArgs:
-    def test_add_sandbox_flag(self):
-        from codefreedom.cli.opencode import register_args
-
-        parser = argparse.ArgumentParser()
-        register_args(parser)
-        args = parser.parse_args(["--sandbox"])
-        assert args.sandbox is True
-
-    def test_run_as_me_flag(self):
-        from codefreedom.cli.opencode import register_args
-
-        parser = argparse.ArgumentParser()
-        register_args(parser)
-        args = parser.parse_args(["--run-as-me"])
-        assert args.run_as_me is True

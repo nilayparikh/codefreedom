@@ -1,6 +1,6 @@
 """Test isolation — never touch the real ~/.codefreedom.
 
-Sets CODEFREEDOM_HOME to a session-scoped temporary directory so all
+Sets CODEFREEDOM_HOME to a function-scoped temporary directory so all
 calls to ``get_codefreedom_dir()`` return a test-only path.
 
 Individual test modules may override this via ``monkeypatch.setenv``
@@ -10,28 +10,24 @@ for per-test isolation when needed.
 from __future__ import annotations
 
 import os
-import shutil
-import tempfile
 
 import pytest
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _codefreedom_test_home() -> str:  # type: ignore[misc]
-    """Session-scoped fixture: CODEFREEDOM_HOME points to a temp directory.
+@pytest.fixture(autouse=True)
+def _codefreedom_test_home(tmp_path):  # type: ignore[misc]
+    """Function-scoped fixture: CODEFREEDOM_HOME points to a temp directory.
 
-    Runs once per test session, before any test.  Cleans up after all
-    tests complete.
+    Runs once per test function. Each test gets its own isolated directory
+    to prevent cross-test contamination.
     """
     saved = os.environ.get("CODEFREEDOM_HOME")
     saved_tool = os.environ.get("CODEFREEDOM_TOOL_HOME")
-    tmp = tempfile.mkdtemp(prefix="codefreedom-test-")
-    os.environ["CODEFREEDOM_HOME"] = tmp
-    os.environ["CODEFREEDOM_TOOL_HOME"] = tmp
+    os.environ["CODEFREEDOM_HOME"] = str(tmp_path)
+    os.environ["CODEFREEDOM_TOOL_HOME"] = str(tmp_path)
 
-    yield tmp
+    yield tmp_path
 
-    # Restore (or clear) the env vars
     if saved is not None:
         os.environ["CODEFREEDOM_HOME"] = saved
     else:
@@ -40,6 +36,3 @@ def _codefreedom_test_home() -> str:  # type: ignore[misc]
         os.environ["CODEFREEDOM_TOOL_HOME"] = saved_tool
     else:
         os.environ.pop("CODEFREEDOM_TOOL_HOME", None)
-
-    # Remove the temp directory tree
-    shutil.rmtree(tmp, ignore_errors=True)

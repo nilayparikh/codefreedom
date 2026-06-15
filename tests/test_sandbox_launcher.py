@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+
 import signal
 import subprocess
 from unittest.mock import MagicMock, patch
+
+pytestmark = pytest.mark.integration
 
 
 
@@ -213,3 +217,4 @@ class TestSignalForwarding:
 
         forward_signal(proc, signal.SIGTERM, None)
         proc.send_signal.assert_not_called()
+

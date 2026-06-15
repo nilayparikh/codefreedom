@@ -5,8 +5,12 @@ from pathlib import Path
 
 import yaml
 
+import pytest
+
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.tools.registry import load_tool_mcp_endpoints
+
+pytestmark = pytest.mark.integration
 
 
 def _tool_home() -> Path:
