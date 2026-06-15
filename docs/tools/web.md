@@ -33,16 +33,16 @@ web:
   search_cooldown_seconds: 10.0
   search_engines:
     search_engine1:
-      url: https://search.brave.com/search?q={q}
+      url: https://search-engine-1/search?q={q}
       parser: standard
     search_engine2:
-      url: https://www.bing.com/search?q={q}&form=QBLH
+      url: https://search-engine-2/search?q={q}
       parser: standard
   parser_registry:
     standard:
-      result_selectors: "[data-type='web'], .b_algo, #res .g, ..."
-      link_selector: h2 a[href], h3 a[href], a[href]
-      snippet_selectors: .b_caption p, .b_lineclamp2, ...
+      result_selectors: ...
+      link_selector: ...
+      snippet_selectors: ...
       ai_selectors:
         - .chatllm-content
         - .b_ans
@@ -54,7 +54,7 @@ web:
 | `container_name` | `codefreedom-web` | Docker container name |
 | `port` | `8420` | MCP server port |
 | `search_cooldown_seconds` | `10.0` | Delay between searches |
-| `search_engines` | Brave, Bing | Map of engine name → `{url, parser}` |
+| `search_engines` | Choice of your search engine | Map of engine name → `{url, parser}` |
 | `parser_registry` | `standard` | CSS selectors for result extraction |
 
 ## Search Engines
