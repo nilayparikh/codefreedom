@@ -22,6 +22,16 @@ hide:
   </div>
 </div>
 
+## The Problem
+
+AI code agents are powerful, but the ecosystem around them is fragmented. Each agent carries its own configuration, model preferences, and runtime dependencies. There is no portable layer that lets you move between agents, models, or providers without starting over.
+
+That fragmentation creates three compounding risks:
+
+- **Vendor lock-in** -- choosing a provider today can constrain your choices tomorrow. As the model landscape evolves, being tied to one ecosystem means missing better capabilities, pricing, or reliability from competitors.
+- **Unmanaged cost** -- without visibility across providers, there is no way to route work to the most cost-effective model. Token spend grows unchecked because switching providers is a manual, error-prone process.
+- **Complexity as a barrier** -- setting up proxies, sandboxes, and provider integrations demands infrastructure expertise. Developers who should be building products spend time plumbing tooling, or avoid the tools altogether.
+
 ## What You Get
 
 - **Switch models instantly** — DeepSeek for drafting, GPT for reasoning, free models for testing. Same command, different profile.

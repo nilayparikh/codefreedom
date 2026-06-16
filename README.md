@@ -3,7 +3,13 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](pyproject.toml)
 [![Integration Tests](https://github.com/nilayparikh/codefreedom/actions/workflows/integration-test.yml/badge.svg)](https://github.com/nilayparikh/codefreedom/actions/workflows/integration-test.yml)
+[![Gated Check-in](https://github.com/nilayparikh/codefreedom/actions/workflows/gated-checkin.yml/badge.svg)](https://github.com/nilayparikh/codefreedom/actions/workflows/gated-checkin.yml)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/nilayparikh/codefreedom?label=security)](https://securityscorecards.dev/viewer/?uri=github.com/nilayparikh/codefreedom)
+[![Trivy Security Scan](https://github.com/nilayparikh/codefreedom/actions/workflows/trivy.yml/badge.svg)](https://github.com/nilayparikh/codefreedom/actions/workflows/trivy.yml)
 [![PyPI](https://img.shields.io/pypi/v/codefreedom.svg)](https://pypi.org/project/codefreedom/)
+[![Downloads](https://static.pepy.tech/badge/codefreedom)](https://pepy.tech/project/codefreedom)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-nilayparikh%2Fcodefreedom-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/nilayparikh/codefreedom)
+[![GHCR Image](https://img.shields.io/badge/GHCR-ghcr.io%2Fnilayparikh%2Fcodefreedom-2496ED?logo=docker&logoColor=white)](https://ghcr.io/nilayparikh/codefreedom)
 
 **Unified interface for all code agents. Simple LLM routing. Sandboxing just a click away.**
 
@@ -11,11 +17,23 @@
 
 ## What is CodeFreedom?
 
-CodeFreedom is a CLI that sits between you and your code agent (Claude Code, MiMoCode, OpenCode, etc.). It solves three problems:
+### The Problem
 
-1. **Model lock-in** -- switch models across providers without reconfiguring your agent.
-2. **Environment chaos** -- isolated, reproducible sandboxed environments per project with GPU support.
-3. **Config sprawl** -- profiles, proxy routing, and sandbox settings managed from one place (`~/.codefreedom`).
+AI code agents are powerful, but the ecosystem around them is fragmented. Each agent carries its own configuration, model preferences, and runtime dependencies. There is no portable layer that lets you move between agents, models, or providers without starting over.
+
+That fragmentation creates three compounding risks:
+
+- **Vendor lock-in** -- choosing a provider today can constrain your choices tomorrow. As the model landscape evolves, being tied to one ecosystem means missing better capabilities, pricing, or reliability from competitors.
+- **Unmanaged cost** -- without visibility across providers, there is no way to route work to the most cost-effective model. Token spend grows unchecked because switching providers is a manual, error-prone process.
+- **Complexity as a barrier** -- setting up proxies, sandboxes, and provider integrations demands infrastructure expertise. Developers who should be building products spend time plumbing tooling, or avoid the tools altogether.
+
+### The Solution
+
+CodeFreedom is a CLI that sits between you and your code agent (Claude Code, MiMoCode, OpenCode, etc.). It provides a portable abstraction layer so you can:
+
+1. **Switch models and providers** -- change your backend without reconfiguring your agent.
+2. **Isolate environments** -- reproducible, sandboxed sessions per project with GPU support.
+3. **Manage everything from one place** -- profiles, proxy routing, and sandbox settings live in `~/.codefreedom`.
 
 It orchestrates agents through their **publicly supported interfaces** (environment variables, CLI flags, API endpoints). No patching, no reverse-engineering.
 
