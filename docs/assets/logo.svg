@@ -1,16 +1,59 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CodeFreedom">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <linearGradient id="cf-bg" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7986cb"/>
-      <stop offset="1" stop-color="#283593"/>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </radialGradient>
+
+    <!-- Linear Gradient for Left Bracket/Wing -->
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818CF8" />
+      <stop offset="100%" stop-color="#6366F1" />
+    </linearGradient>
+
+    <!-- Linear Gradient for Right Bracket/Wing -->
+    <linearGradient id="secondaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="100%" stop-color="#059669" />
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="url(#cf-bg)"/>
-  <!-- Left bracket: < -->
-  <path d="M24 18 L14 32 L24 46" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <!-- Right bracket: > -->
-  <path d="M40 18 L50 32 L40 46" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <!-- Center dot: the "freedom" choice point between the brackets -->
-  <circle cx="32" cy="32" r="3.5" fill="#ffffff"/>
+
+  <!-- Dark Rounded Background -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+
+  <!-- Subtle grid pattern in background for CLI context -->
+  <g opacity="0.05" stroke="#FFFFFF" stroke-width="2">
+    <line x1="64" y1="0" x2="64" y2="512" />
+    <line x1="128" y1="0" x2="128" y2="512" />
+    <line x1="192" y1="0" x2="192" y2="512" />
+    <line x1="256" y1="0" x2="256" y2="512" />
+    <line x1="320" y1="0" x2="320" y2="512" />
+    <line x1="384" y1="0" x2="384" y2="512" />
+    <line x1="448" y1="0" x2="448" y2="512" />
+    <line x1="0" y1="64" x2="512" y2="64" />
+    <line x1="0" y1="128" x2="512" y2="128" />
+    <line x1="0" y1="192" x2="512" y2="192" />
+    <line x1="0" y1="256" x2="512" y2="256" />
+    <line x1="0" y1="320" x2="512" y2="320" />
+    <line x1="0" y1="384" x2="512" y2="384" />
+    <line x1="0" y1="448" x2="512" y2="448" />
+  </g>
+
+  <!-- Logo Symbol -->
+  <g transform="translate(256, 256)">
+    <!-- Terminal Prompt Underlying Glow -->
+    <path d="M -120, -40 L -70, 0 L -120, 40" fill="none" stroke="#6366F1" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" opacity="0.3" filter="blur(8px)" />
+
+    <!-- Left Bracket (The CLI/Agent Layer) -->
+    <path d="M -110, -50 L -50, 0 L -110, 50" fill="none" stroke="url(#primaryGrad)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Right Bracket (The Opening/Freedom Wing) -->
+    <!-- Curved outward to represent escaping lock-in -->
+    <path d="M 50, -60 C 90, -40 120, 0 120, 50" fill="none" stroke="url(#secondaryGrad)" stroke-width="28" stroke-linecap="round" />
+
+    <!-- The Terminal Cursor / Bridge Node (Translating between them) -->
+    <rect x="-10" y="35" width="50" height="18" rx="9" fill="#F8FAFC" />
+    <circle cx="20" cy="-20" r="16" fill="#34D399" />
+  </g>
 </svg>
