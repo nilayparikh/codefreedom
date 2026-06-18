@@ -1,0 +1,685 @@
+"""Pi Code subcommand -- native launch with extension-based config.
+
+Auto-detects the running CodeFreedom LiteLLM proxy, generates a TypeScript
+extension for dynamic model discovery, and launches Pi (``pi``) with zero
+manual configuration.
+
+Usage:
+    codefreedom run agent pi-code [--profile NAME] [--list-profiles] [agent-args...]
+    codefreedom run agent pi-code [options] [-- <agent-args>]
+
+Extension-based config:
+    - Generates extensions/codefreedom.ts in the pi agent home config dir
+    - Extension uses pi.registerProvider() for dynamic model discovery
+    - Fetches /v1/model/info for rich capabilities (vision, reasoning, costs)
+    - pi-mcp-adapter reads .mcp.json for MCP tool support
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import signal
+import subprocess
+from pathlib import Path
+
+from typing import Any, Dict, List, Optional
+
+from codefreedom.core.config import (
+    get_codefreedom_dir,
+    resolve_pi_profiles_path,
+)
+from codefreedom.core.profiles import (
+    list_profiles,
+)
+from codefreedom.env_loader import load_env_chain
+from codefreedom.log import eprint
+from codefreedom.tools.registry import generate_session_id
+from codefreedom.sandbox.signals import forward_signal
+
+
+def register_args(parser: argparse.ArgumentParser) -> None:
+    """Register Pi-specific arguments on the agent parser."""
+
+
+# ── Constants ──────────────────────────────────────────────────────────────────
+
+PI_SETTINGS_NAME = "settings.json"
+
+CODEFREEDOM_DIR = get_codefreedom_dir()
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+
+def find_pi_binary() -> Optional[str]:
+    """Locate the ``pi`` CLI binary on PATH."""
+    return shutil.which("pi")
+
+
+def _read_image_router_models(store_dir: Path) -> list[str]:
+    """Read image router config to find models with image routing enabled.
+
+    Two sources (matches VSCode ``_load_route_image_models`` logic):
+    1. Image-router plugin YAML — lists VLM models used for transcription.
+    2. Provider YAMLs — models with
+       ``codefreedom.plugins.route-image-request.enabled: true``.
+
+    Returns a deduplicated list of model group names.
+    """
+    import glob as _glob
+
+    import yaml
+
+    result: set[str] = set()
+
+    # Source 1: image-router plugin config
+    plugin_path = (
+        store_dir / "proxy" / "config" / "plugins"
+        / "image-router" / "image-router.yaml"
+    )
+    if plugin_path.exists():
+        try:
+            data = yaml.safe_load(plugin_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                router_cfg = data.get("image-router-for-text-only", {})
+                if isinstance(router_cfg, dict) and router_cfg.get("enabled", False):
+                    for m in router_cfg.get("models", []) or []:
+                        if isinstance(m, str):
+                            result.add(m)
+        except Exception:
+            pass
+
+    # Source 2: provider YAMLs with route-image-request plugin
+    providers_dir = store_dir / "proxy" / "config" / "providers"
+    if providers_dir.is_dir():
+        for yp in _glob.glob(str(providers_dir / "*.yaml")):
+            try:
+                data = yaml.safe_load(Path(yp).read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            for entry in data.get("model_list", []) or []:
+                if not isinstance(entry, dict):
+                    continue
+                name = entry.get("model_name")
+                cf = entry.get("codefreedom")
+                if not (isinstance(name, str) and isinstance(cf, dict)):
+                    continue
+                plugins = cf.get("plugins") or {}
+                route_cfg = plugins.get("route-image-request")
+                if isinstance(route_cfg, dict) and route_cfg.get("enabled") is True:
+                    result.add(name)
+
+    return sorted(result)
+
+
+def _load_alias_models(store_dir: Path) -> list[str]:
+    """Return model names that are ``model_group_alias`` entries.
+
+    Reads ``proxy/config/config.yaml`` and collects the keys of
+    ``router_settings.model_group_alias``.  These are shorthand aliases
+    (e.g. ``opus``, ``sonnet``) that LiteLLM resolves to real model
+    groups at runtime.  By default the extension skips them so users
+    only see actual model entries.
+    """
+    import yaml
+
+    config_path = store_dir / "proxy" / "config" / "config.yaml"
+    if not config_path.is_file():
+        return []
+    try:
+        data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+    router = data.get("router_settings") or {}
+    if not isinstance(router, dict):
+        return []
+    aliases = router.get("model_group_alias") or {}
+    if not isinstance(aliases, dict):
+        return []
+    return sorted(aliases.keys())
+
+
+_EXTENSION_TEMPLATE = '''\
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export default async function (pi: ExtensionAPI) {
+  const baseUrl = process.env.PROXY_BASE_URL || "http://localhost:4000";
+  const apiKey = process.env.PROXY_API_KEY || "";
+  const imageRouterModels = (process.env.IMAGE_ROUTER_MODELS || "")
+    .split(",")
+    .filter(Boolean);
+  const aliasModels = (process.env.ALIAS_MODELS || "")
+    .split(",")
+    .filter(Boolean);
+  const showAliases = ["1", "true", "yes"].includes(
+    (process.env.PI_SHOW_ALIAS_MODELS || "").toLowerCase()
+  );
+
+  const headers: Record<string, string> = {};
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+  // Try /v1/model/info for rich metadata, fall back to /v1/models
+  let models: any[] = [];
+  try {
+    const infoResp = await fetch(`${baseUrl}/v1/model/info`, { headers });
+    if (infoResp.ok) {
+      const infoData = await infoResp.json();
+      const raw = (infoData.data || [])
+        .filter((m: any) => {
+          const name = m.model_name || "";
+          return (
+            !name.startsWith("azure/") &&
+            !["gpt-3.5-turbo", "custom"].includes(name) &&
+            (showAliases || !aliasModels.includes(name))
+          );
+        });
+
+      // Deduplicate by model_name (group name) — keep richest model_info
+      const seen = new Map<string, any>();
+      for (const m of raw) {
+        const name = m.model_name || "";
+        if (!name) continue;
+        const existing = seen.get(name);
+        const existingInfo = existing?.model_info || {};
+        const candidateInfo = m.model_info || {};
+        if (!existing || Object.keys(candidateInfo).length > Object.keys(existingInfo).length) {
+          seen.set(name, m);
+        }
+      }
+
+      models = [...seen.values()].map((m: any) => {
+        const info = m.model_info || {};
+        const name = m.model_name || "unknown";
+        const isVision =
+          info.supports_vision || info.vision || imageRouterModels.includes(name);
+        const isReasoning = info.supports_reasoning || false;
+
+        return {
+          id: name,
+          name: name,
+          reasoning: isReasoning,
+          input: isVision ? ["text", "image"] : ["text"],
+          cost: {
+            input: (info.input_cost_per_token || 0) * 1_000_000,
+            output: (info.output_cost_per_token || 0) * 1_000_000,
+            cacheRead: (info.cache_read_input_token_cost || 0) * 1_000_000,
+            cacheWrite:
+              (info.cache_creation_input_token_cost || 0) * 1_000_000,
+          },
+          contextWindow: info.context_window || info.max_input_tokens || 128000,
+          maxTokens: info.max_output_tokens || 4096,
+        };
+      });
+    }
+  } catch {}
+
+  // Fallback to /v1/models if /v1/model/info failed
+  if (models.length === 0) {
+    try {
+      const resp = await fetch(`${baseUrl}/v1/models`, { headers });
+      const { data } = await resp.json();
+      models = (data || [])
+        .filter(
+          (m: any) =>
+            !m.id.startsWith("azure/") &&
+            !["gpt-3.5-turbo", "custom"].includes(m.id) &&
+            (showAliases || !aliasModels.includes(m.id))
+        )
+        .map((m: any) => ({
+          id: m.id,
+          name: m.id.includes("/") ? m.id.split("/").pop() : m.id,
+          reasoning: false,
+          input: imageRouterModels.includes(m.id)
+            ? ["text", "image"]
+            : ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 128000,
+          maxTokens: 4096,
+        }));
+    } catch {}
+  }
+
+  pi.registerProvider("codefreedom", {
+    name: "CodeFreedom",
+    baseUrl: `${baseUrl}/v1`,
+    apiKey: "$PROXY_API_KEY",
+    api: "openai-completions",
+    models,
+  });
+}
+'''
+
+
+def _generate_codefreedom_extension(config_dir: Path) -> Path:
+    """Generate the CodeFreedom pi extension for dynamic model discovery.
+
+    Creates extensions/codefreedom.ts in the config directory (global pi agent dir).
+    Returns the path to the generated extension file.
+    """
+    ext_dir = config_dir / "extensions"
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    ext_path = ext_dir / "codefreedom.ts"
+    ext_path.write_text(_EXTENSION_TEMPLATE, encoding="utf-8")
+    ext_path.chmod(0o600)
+    eprint(f"[PI] Generated extension at {ext_path}")
+    return ext_path
+
+
+def _write_minimal_settings(
+    pi_agent_dir: Path,
+    extensions: list[str] | None = None,
+) -> Path:
+    """Write pi ``settings.json`` with CodeFreedom provider defaults.
+
+    Prefixes each extension with ``npm:`` so ``pi`` resolves it as an
+    npm source (its native install format). pi will auto-install missing
+    packages at startup via its built-in package manager.
+
+    Returns the path to the written settings file.
+    """
+    pi_agent_dir.mkdir(parents=True, exist_ok=True)
+    config_path = pi_agent_dir / PI_SETTINGS_NAME
+    settings: dict[str, Any] = {
+        "defaultProvider": "codefreedom",
+        "defaultModel": "",
+        "defaultProjectTrust": "always",
+    }
+    if extensions:
+        settings["packages"] = [f"npm:{ext}" for ext in extensions]
+    config_path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+    config_path.chmod(0o600)
+    eprint(f"[PI] Generated settings at {config_path}")
+    return config_path
+
+
+def _read_profile_extensions(
+    profile_name: str,
+    profiles_path: Path,
+) -> list[str]:
+    """Read the ``extensions`` list from the profile YAML."""
+    if not profiles_path.exists():
+        return []
+
+    import yaml
+
+    try:
+        data = yaml.safe_load(profiles_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+    if not isinstance(data, dict):
+        return []
+
+    profiles = data.get("profiles", {})
+    if not isinstance(profiles, dict):
+        return []
+
+    profile = profiles.get(profile_name, {})
+    if not isinstance(profile, dict):
+        return []
+
+    exts = profile.get("extensions", [])
+    return exts if isinstance(exts, list) else []
+
+
+def _read_profile_lsp_servers(
+    profile_name: str,
+    profiles_path: Path,
+) -> dict[str, list[str]]:
+    """Read the ``lsp_servers`` map from the profile YAML.
+
+    Returns e.g. ``{"npm": ["typescript-language-server", ...], "pip": [...]}``.
+    """
+    if not profiles_path.exists():
+        return {}
+
+    import yaml
+
+    try:
+        data = yaml.safe_load(profiles_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+
+    profiles = data.get("profiles", {})
+    if not isinstance(profiles, dict):
+        return {}
+
+    profile = profiles.get(profile_name, {})
+    if not isinstance(profile, dict):
+        return {}
+
+    lsp = profile.get("lsp_servers", {})
+    return lsp if isinstance(lsp, dict) else {}
+
+
+def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
+    """Install missing LSP servers declared in the profile.
+
+    Checks each package with ``which`` and installs via the appropriate
+    package manager (npm -g or pip).
+    """
+    import shutil as _shutil
+
+    for manager, packages in lsp_servers.items():
+        if not isinstance(packages, list):
+            continue
+        missing = []
+        for pkg in packages:
+            # Derive binary name: package name up to first [ or @
+            bin_name = pkg.split("[")[0].split("@")[0]
+            # Handle scoped npm packages: @scope/name -> name
+            if "/" in bin_name:
+                bin_name = bin_name.rsplit("/", 1)[-1]
+            if not _shutil.which(bin_name):
+                missing.append(pkg)
+
+        if not missing:
+            continue
+
+        if manager == "npm":
+            eprint(f"[LSP] Installing npm packages: {', '.join(missing)}")
+            try:
+                subprocess.run(
+                    ["npm", "install", "-g", *missing],
+                    capture_output=True,
+                    timeout=120,
+                )
+            except Exception as exc:
+                eprint(f"[LSP] npm install failed: {exc}")
+
+        elif manager == "pip":
+            eprint(f"[LSP] Installing pip packages: {', '.join(missing)}")
+            try:
+                subprocess.run(
+                    ["pip", "install", "--quiet", *missing],
+                    capture_output=True,
+                    timeout=120,
+                )
+            except Exception as exc:
+                eprint(f"[LSP] pip install failed: {exc}")
+
+
+def _ensure_lean_ctx(pi_agent_dir: Path) -> None:
+    """Install the lean-ctx Rust binary via ``npm install -g lean-ctx-bin``.
+
+    Uses the ``lean-ctx-bin`` npm package which ships pre-built binaries
+    for all platforms (no Rust toolchain needed).  Then runs
+    ``lean-ctx init --agent pi`` to write the MCP config that
+    ``pi-mcp-adapter`` picks up.
+    """
+    import shutil as _shutil
+
+    # Already installed?
+    if _shutil.which("lean-ctx"):
+        return
+
+    eprint("[lean-ctx] installing via npm (lean-ctx-bin)...")
+    try:
+        subprocess.run(
+            ["npm", "install", "-g", "lean-ctx-bin"],
+            check=True,
+            capture_output=True,
+            timeout=120,
+        )
+    except Exception as exc:
+        eprint(f"[lean-ctx] npm install failed: {exc}")
+        return
+
+    if not _shutil.which("lean-ctx"):
+        eprint("[lean-ctx] installed but not on PATH — check npm global bin")
+        return
+
+    eprint("[lean-ctx] configuring for pi...")
+    try:
+        subprocess.run(
+            ["lean-ctx", "init", "--agent", "pi"],
+            capture_output=True,
+            timeout=30,
+        )
+    except Exception:
+        pass
+
+
+def _detect_proxy_url(base_env: Dict[str, str]) -> str:
+    """Detect the proxy URL from environment or use default.
+
+    Checks (in order):
+    1. PROXY_BASE_URL in the merged env
+    2. PROXY_BASE_URL in os.environ
+    3. LITELLM_BASE_URL (legacy) in the merged env
+    4. LITELLM_BASE_URL (legacy) in os.environ
+    5. Default http://localhost:4000
+    """
+    return (
+        base_env.get("PROXY_BASE_URL")
+        or os.environ.get("PROXY_BASE_URL")
+        or base_env.get("LITELLM_BASE_URL")
+        or os.environ.get("LITELLM_BASE_URL")
+        or "http://localhost:4000"
+    )
+
+
+# ── Execution ─────────────────────────────────────────────────────────────────
+
+
+def _get_pi_agent_dir() -> Path:
+    """Return pi's default agent directory (``~/.pi/agent``).
+
+    This is where pi looks for ``settings.json``, ``extensions/``,
+    ``npm/``, and ``sessions/``.  We write our generated files here
+    so they're picked up without overriding ``PI_CONFIG_DIR``.
+    """
+    return Path.home() / ".pi" / "agent"
+
+
+def run_local(
+    profile_env: Dict[str, str],
+    pi_args: List[str],
+    workspace_dir: Path,
+    extensions: list[str] | None = None,
+    acquired_tools: list[str] | None = None,
+    lsp_servers: dict[str, list[str]] | None = None,
+) -> int:
+    """Run ``pi`` natively on the host. Returns exit code."""
+    pi_bin = find_pi_binary()
+    if not pi_bin:
+        eprint(
+            "[ERROR] Pi (pi) not found on PATH.\n"
+            "       Install: npm install -g @earendil-works/pi-coding-agent"
+        )
+        return 1
+
+    extensions = extensions or []
+    eprint("[LOCAL] Running Pi natively...")
+
+    env = {**os.environ}
+    env.update(profile_env)
+
+    pi_agent_dir = _get_pi_agent_dir()
+    pi_agent_dir.mkdir(parents=True, exist_ok=True)
+    _write_minimal_settings(pi_agent_dir, extensions=extensions)
+    _generate_codefreedom_extension(pi_agent_dir)
+
+    # Write .mcp.json so pi-mcp-adapter discovers MCP tool endpoints
+    if acquired_tools:
+        from codefreedom.launcher import _write_mcp_json
+
+        _write_mcp_json(workspace_dir, acquired_tools)
+
+    # lean-ctx binary setup (for pi-lean-ctx extension)
+    if "pi-lean-ctx" in extensions:
+        _ensure_lean_ctx(pi_agent_dir)
+
+    # LSP servers (for pi-lens extension)
+    if lsp_servers:
+        _ensure_lsp_servers(lsp_servers)
+
+    image_router_models = _read_image_router_models(CODEFREEDOM_DIR)
+    if image_router_models:
+        env["IMAGE_ROUTER_MODELS"] = ",".join(image_router_models)
+
+    alias_models = _load_alias_models(CODEFREEDOM_DIR)
+    if alias_models:
+        env["ALIAS_MODELS"] = ",".join(alias_models)
+
+    cmd = [pi_bin]
+    cmd.extend(pi_args)
+
+    try:
+        proc = subprocess.Popen(cmd, env=env)
+        signal.signal(signal.SIGINT, lambda s, f: forward_signal(proc, s, f))
+        signal.signal(signal.SIGTERM, lambda s, f: forward_signal(proc, s, f))
+        proc.wait()
+        return proc.returncode
+    except FileNotFoundError:
+        eprint(f"[ERROR] Pi binary not found at {pi_bin}.")
+        return 1
+    except KeyboardInterrupt:
+        return 130
+
+
+# ── Init command ─────────────────────────────────────────────────────────────
+
+
+def init_pi() -> int:
+    """Print initialization help for Pi."""
+    from codefreedom.cli.docker_utils import print_help_section
+
+    print_help_section(
+        "pi init",
+        [
+            "Pi requires no init -- 0-click proxy config is generated",
+            "automatically on first launch.",
+            "",
+            "To install Pi:",
+            "  npm install -g @earendil-works/pi-coding-agent",
+            "",
+            "To start the proxy (for model routing):",
+            "  cf run proxy start",
+            "",
+            "To launch Pi:",
+            "  cf run agent pi-code",
+        ],
+        docs_url="https://pi.dev/docs/latest/",
+        include_disclaimer=False,
+    )
+    return 0
+
+
+# ── Config subcommand ─────────────────────────────────────────────────────────
+
+
+def cmd_config(args: argparse.Namespace) -> int:
+    """Generate and print a proxy-resolved ``settings.json`` for standalone use.
+
+    Loads the full env chain, detects the proxy, fetches model list,
+    generates a complete ``settings.json`` and outputs it.
+    """
+    workspace_dir = Path.cwd()
+    eprint("[ENV] Loading configuration...")
+    base_env = load_env_chain(workspace_dir, component="claude")
+
+    profile_name = getattr(args, "profile", None) or "default"
+    profiles_path = resolve_pi_profiles_path()
+
+    from codefreedom.cli.common import load_profile_env_only
+
+    profile_env, exit_code = load_profile_env_only(
+        profile_name, profiles_path, base_env, error_prefix="cf run proxy start"
+    )
+    if exit_code != 0 and profile_name != "default":
+        return 1
+
+    # ── Ensure proxy API key is available ──────────────────────────────
+    if not profile_env.get("PROXY_API_KEY"):
+        master_key = base_env.get("LITELLM_MASTER_KEY", "")
+        if master_key:
+            profile_env["PROXY_API_KEY"] = master_key
+
+    proxy_url = _detect_proxy_url(profile_env)
+    eprint(f"[PI] Proxy URL: {proxy_url}")
+    eprint("[PI] Config is now generated dynamically by the codefreedom extension.")
+    eprint("[PI] Run 'cf run agent pi-code' to start pi with auto-configured models.")
+    return 0
+
+
+# ── Main entry point ─────────────────────────────────────────────────────────
+
+
+def run(args: argparse.Namespace) -> int:
+    """Execute the ``pi-code`` subcommand. Returns exit code."""
+
+    # Fast-path flags
+    if args.list_profiles:
+        from codefreedom.cli.common import display_profiles
+
+        profiles_path = resolve_pi_profiles_path()
+        profiles = list_profiles(profiles_path)
+        return display_profiles(
+            profiles_path, profiles, show_env_keys=False, show_tools=True
+        )
+
+    # Actions
+    action = getattr(args, "pi_action", None)
+    if action == "config":
+        return cmd_config(args)
+
+    # ── Load env chain ─────────────────────────────────────────────────────
+    workspace_dir = Path.cwd()
+    eprint("[ENV] Loading configuration...")
+    base_env = load_env_chain(workspace_dir, component="claude")
+
+    # ── Load profile ───────────────────────────────────────────────────────
+    profile_name = args.profile or "default"
+    profiles_path = resolve_pi_profiles_path()
+
+    from codefreedom.cli.common import load_profile_with_tools
+
+    profile_env, _sandbox_images, tools, exit_code = load_profile_with_tools(
+        profile_name, profiles_path, base_env, "local"
+    )
+    if exit_code != 0:
+        return 1
+
+    # ── Ensure proxy API key is available ──────────────────────────────
+    if not profile_env.get("PROXY_API_KEY"):
+        master_key = base_env.get("LITELLM_MASTER_KEY", "")
+        if master_key:
+            profile_env["PROXY_API_KEY"] = master_key
+
+    # ── Read extensions from profile ─────────────────────────────────
+    extensions = _read_profile_extensions(profile_name, profiles_path)
+    if extensions:
+        eprint(f"[PI] Profile extensions: {', '.join(extensions)}")
+
+    # ── Read LSP servers from profile ────────────────────────────────
+    lsp_servers = _read_profile_lsp_servers(profile_name, profiles_path)
+    if lsp_servers:
+        total = sum(len(v) for v in lsp_servers.values() if isinstance(v, list))
+        eprint(f"[PI] Profile LSP servers: {total} packages ({', '.join(lsp_servers.keys())})")
+
+    # ── Tools: acquire if declared in profile ────────────────────────────
+    session_id = generate_session_id("local")
+
+    from codefreedom.cli.common import acquire_and_run
+
+    def _run(acquired_tools: list[str]) -> int:
+        return run_local(
+            profile_env,
+            args.agent_args,
+            workspace_dir,
+            extensions=extensions,
+            acquired_tools=acquired_tools,
+            lsp_servers=lsp_servers,
+        )
+
+    return acquire_and_run(session_id, tools, profile_name, _run)

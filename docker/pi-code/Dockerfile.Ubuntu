@@ -1,0 +1,123 @@
+# ── Pi Code Docker Image — Ubuntu ──────────────────────────────────────────────
+# Platform: All architectures — ARM64, AMD64, Intel
+# Lightweight sandbox base: Pi Coding Agent + dev tools.
+#
+# @platform  Ubuntu
+# @version   v1.0.0
+# @arch      linux/arm64, linux/amd64
+#
+# Base: ubuntu:24.04 (multi-arch)
+#   • Minimal Ubuntu 24.04 + Node.js + Pi (pi) + dev tools
+#
+# Build:
+#   docker build --build-arg IMAGE_VERSION=1.0.0 \
+#     -t codefreedom:pi-code-v1.0.0 \
+#     -f docker/pi-code/Dockerfile.Ubuntu docker/pi-code/
+# ────────────────────────────────────────────────────────────────────────────────
+
+ARG IMAGE_VERSION=1.0.0
+
+# 1. Ubuntu 24.04 (multi-arch: arm64 + amd64)
+FROM ubuntu:24.04
+
+ARG IMAGE_VERSION
+
+LABEL org.opencontainers.image.title="CodeFreedom - Pi Code (Ubuntu)" \
+      org.opencontainers.image.description="Pi Code dev container — Ubuntu base with pi-coding-agent and dev tools." \
+      org.opencontainers.image.version="v${IMAGE_VERSION}" \
+      org.opencontainers.image.vendor="nilayparikh" \
+      org.opencontainers.image.authors="Nilay Parikh" \
+      com.codefreedom.platform="Ubuntu" \
+      com.codefreedom.arch="linux/arm64,linux/amd64"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 2. System packages
+RUN apt-get update \
+    && apt-get -y dist-upgrade \
+    && apt-get install -y --no-install-recommends \
+        python3 \
+        curl \
+        git \
+        ca-certificates \
+        shellcheck \
+        fd-find \
+        tree \
+        ripgrep \
+        jq \
+        yq \
+        sd \
+        unzip \
+        bubblewrap \
+        socat \
+        openssh-client \
+        libgcc-s1 \
+        libstdc++6 \
+        python3-pip \
+        python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s $(which fdfind) /usr/local/bin/fd
+
+# 3. Node.js LTS (v22)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. GitHub CLI
+RUN mkdir -p /usr/share/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5. Pi Coding Agent — install via npm
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent \
+    && npm config set cache /tmp/.npm --global \
+    && npm cache clean --force \
+    && rm -rf /tmp/*
+
+# 5b. LSP servers — system-level tools for pi-lens integration
+#     Pi extensions are installed at runtime, not here.
+RUN npm install -g \
+        typescript-language-server \
+        vscode-langservers-extracted \
+        bash-language-server \
+    && pip3 install --break-system-packages --quiet \
+        python-lsp-server[all] \
+        ruff \
+    && npm cache clean --force \
+    && rm -rf /tmp/* /root/.cache/pip
+
+# 6. Non-root user
+ARG USERNAME=codefreedom
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN set -eux; \
+    group_name="$(getent group "${USER_GID}" | cut -d: -f1 || true)"; \
+    if [ -z "${group_name}" ]; then \
+        group_name="${USERNAME}"; \
+        groupadd --gid "${USER_GID}" "${group_name}"; \
+    fi; \
+    useradd --non-unique --uid "${USER_UID}" --gid "${group_name}" -m -s /bin/bash "${USERNAME}"; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends sudo; \
+    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}"; \
+    chmod 0440 "/etc/sudoers.d/${USERNAME}"; \
+    mkdir -p /workspace; \
+    chown "${USER_UID}:${USER_GID}" /workspace; \
+    rm -rf /var/lib/apt/lists/*
+
+# 7. Environment
+ENV IS_SANDBOX="1" \
+    PI_SKIP_VERSION_CHECK="1" \
+    HOME="/home/${USERNAME}"
+
+WORKDIR /workspace
+
+# 8. Fix npm cache for any-user access
+RUN rm -rf /tmp/.npm && mkdir -p /tmp/.npm && chmod 1777 /tmp/.npm

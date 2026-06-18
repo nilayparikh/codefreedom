@@ -33,7 +33,7 @@ cf r tl status                  # Status
 
 ## How Tools Connect to Agents
 
-When you launch an agent (`cf r ag cc`), CodeFreedom:
+When you launch an agent ([`cf r ag cc`](../agents/index.md)), CodeFreedom:
 
 1. Reads the agent profile's `tools` list (e.g., `[chrome, web, github]`)
 2. Ensures each tool's Docker container is running

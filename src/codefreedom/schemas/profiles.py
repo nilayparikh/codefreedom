@@ -34,6 +34,8 @@ class ProfileEntry(BaseModel, extra="forbid"):
     env: Dict[str, str] = Field(default_factory=dict)
     sandbox: Optional[ModeEnv] = None
     local: Optional[ModeEnv] = None
+    extensions: Optional[List[str]] = None
+    lsp_servers: Optional[Dict[str, List[str]]] = None
 
 
 class ClaudeCodeProfiles(BaseModel, extra="forbid"):

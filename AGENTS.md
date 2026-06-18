@@ -1,282 +1,472 @@
-# AGENTS.md — CodeFreedom Codebase Conventions
+# CodeFreedom — AGENTS.md
 
-This file defines conventions that all AI agents and contributors MUST follow
-when working on the CodeFreedom codebase.
+> Conventions, acceptance criteria, and verification commands for all contributors (human and AI).
 
----
+## Project Overview
 
-## Acceptance Criteria
+CodeFreedom is a CLI (`cf`) that sits between you and your code agent (Claude Code, MiMoCode, OpenCode). It provides:
 
-Every code change must pass these automated checks before commit. They encode
-the conventions below into verifiable gates.
+- **LLM proxy routing** via a self-hosted LiteLLM image (embedded PostgreSQL, multi-provider)
+- **Docker sandboxing** with GPU support (CUDA, ROCm) for isolated agent sessions
+- **Profile management** — model switching, env inheritance, tool declarations
+- **Browser tools** — Chrome (CDP + MCP), Camoufox stealth browser, GitHub MCP, Web Bridge
+- **Recipe system** — pre-built config bundles that wire up proxy, profiles, and providers in one command
 
-### 1. Lint — `ruff check src/ tests/`
+**Python 3.10+** · **Apache 2.0** · Entry points: `codefreedom` / `cf`
 
-| Rule | Convention enforced |
-|------|---------------------|
-| `F401` | No unused imports |
-| `F811` | No redefined unused names |
-| `E` | PEP 8 style (line length, whitespace, syntax) |
-| `W` | Warning-level PEP 8 issues |
-| `I` | Import sorting (stdlib → third-party → local) |
-
-Additional ruff rules recommended for this project:
-
-```toml
-[tool.ruff.lint]
-select = ["F", "E", "W", "I", "T201", "UP"]
-ignore = ["E501"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["T201"]
-```
-
-| Rule | Convention enforced |
-|------|---------------------|
-| `T201` | No bare `print()` — use `tag()` for user-facing output |
-| `UP` | Python upgrade suggestions (modern syntax) |
-
-### 2. Type-check — `mypy src/ --ignore-missing-imports`
-
-Catches type errors, missing return statements, and incorrect signatures.
-
-### 3. Tests — `pytest tests/ -q --tb=short`
-
-All tests must pass. Pre-existing failures are documented in MEMORY.md.
-
-**Test categories (markers):**
-
-| Marker | What | Speed | When to run |
-|--------|------|-------|-------------|
-| `unit` | Pure logic, no I/O | ~2s | Always (pre-commit gate) |
-| `integration` | Filesystem, Docker, network | ~10s | Full validation |
-
-**Acceptance criteria for any code change:**
+## Development Setup
 
 ```bash
-# Fast gate — always run this
+pip install -e ".[dev]"              # editable install with dev deps
+python -m codefreedom --help         # verify CLI works
+```
+
+## Verification Commands
+
+Run these before every commit. All must pass.
+
+```bash
+# 1. Unit tests (fast, ~2s)
 pytest tests/ -m unit -q --tb=short
 
-# Full gate — run before commit
+# 2. Full test suite
 pytest tests/ -q --tb=short
 
-# Scoped to changed module
-pytest tests/test_<module>_helpers.py tests/test_<module>_io.py -q --tb=short
+# 3. Lint
+ruff check src/ tests/
+
+# 4. Type-check
+mypy src/ --ignore-missing-imports
 ```
 
-**When adding new tests:**
+### When Modifying a Module
 
-- Pure logic → `test_<module>_helpers.py` with `pytestmark = pytest.mark.unit`
-- I/O, Docker, subprocess → `test_<module>_io.py` with `pytestmark = pytest.mark.integration`
-- CLI commands → `test_<module>_cmd.py` with `pytestmark = pytest.mark.integration`
-- See `specs/tests.md` for full architecture and decision rules
+| What Changed | Command |
+|---|---|
+| Pure logic | `pytest tests/test_<module>_helpers.py -q` |
+| I/O code | `pytest tests/test_<module>_io.py -q` |
+| CLI commands | `pytest tests/test_<module>_cmd.py -q` |
 
-### 4. Convention-Specific Gates
+Always run the full suite before committing.
 
-These are not yet automated as lint rules but MUST be verified manually or via
-the `/validate` command. They are candidates for custom ruff rules or pytest checks.
+### Pre-Commit Hooks
 
-| Convention | Verification | Status |
-|-----------|--------------|--------|
-| All `print()`/`eprint()` use `tag()` | `grep -rn 'print(f"\[' src/` returns empty | **VIOLATION**: `core/profiles.py` has bare `[ERROR]`, `[WARN]`, `[PROFILE]` |
-| `read_text()`/`write_text()` use `encoding="utf-8"` | `grep -rn 'read_text()\|write_text()' src/ \| grep -v encoding` returns empty | **VIOLATION**: `recipe/plan.py:326` missing encoding |
-| `from __future__ import annotations` in all modules | 50/50 modules — 100% compliant | **PASS** |
-| Agent names are hyphenated | `grep -rn '"claude"\|"mimo"\|"opencode"' src/ \| grep -v shutil.which` returns empty | **PASS** (bare names only in `shutil.which()` for binary lookup) |
-| No comments unless asked | Manual review | N/A |
-| No emojis in code/output | Manual review | N/A |
+The repo uses pre-commit. Hooks run automatically on `git commit`:
 
----
+1. `markdownlint-cli2 --fix` — markdown formatting
+2. `ruff check src/ tests/ --fix` — lint + auto-fix
+3. `mypy src/ --ignore-missing-imports` — type-check
+4. `pytest tests/ -v --tb=short` — full test suite
+5. `mkdocs build --strict` — docs build (only if docs/ changed)
 
-## Color-Coded Tag Policy
+## Acceptance Criteria for Any Code Change
 
-### The Rule
+1. **Unit tests pass** — `pytest tests/ -m unit -q --tb=short`
+2. **Full suite passes** — `pytest tests/ -q --tb=short`
+3. **Lint clean** — `ruff check src/ tests/`
+4. **Types clean** — `mypy src/ --ignore-missing-imports`
+5. **No regressions** — existing tests still pass
+6. **Style matches** — follow existing patterns in the file you're editing
 
-ALL user-facing `print()` / `eprint()` feedback messages MUST use the `tag()`
-helper from `codefreedom.log` for their bracket prefix. Tags MUST be in CAPS.
+## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full component inventory and dependency graph.
+
+### Layer Model
+
+```text
+User (CLI)
+  |
+cli/          — command dispatch, user-facing logic
+  |
+core/         — env, profiles, config, interpolation
+  |
+sandbox/      — container lifecycle, signals, terminal
+docker/       — Docker client helpers
+tools/        — tool classes, MCP endpoint dispatch
+  |
+infra/        — Docker images, proxy config, recipes
+```
+
+Each layer calls only the layer below it. No cross-layer or sideways calls.
+
+### Entry Points
+
+| Entry Point | Module |
+|---|---|
+| `cf` / `codefreedom` | `src/codefreedom/cli/main.py:main` |
+| `python -m codefreedom` | `src/codefreedom/__main__.py` |
+
+### CLI Command Structure
+
+```text
+cf setup    (s)   init (i) | config (c) | deinit (di)
+cf run      (r)   agent (ag) | proxy (px) | tools (tl)
+cf manage   (m)   doctor (dr) | update (up) | admin (adm/ad)
+```
+
+## Code Conventions
+
+### General Style
+
+- **Python 3.10+** — use `dict`, `list[str]`, `str | None` (not `Dict`, `List`, `Optional`)
+- **4-space indentation** for Python (see `.editorconfig`)
+- **LF line endings**, UTF-8 charset
+- **No comments** unless explicitly asked — code should be self-documenting
+- **One responsibility per file** — if a file does two things, split it
+- **Add a module when shared across 2+ locations** — one-off logic stays inline
+
+### Imports
+
+- Use `from __future__ import annotations` at the top of every module
+- Import from the canonical source — never duplicate utilities
+
+### Shared Utilities — Single Source of Truth
+
+| Utility | Defined In | Import From |
+|---|---|---|
+| `eprint()` | `env_loader.py` | `from codefreedom.env_loader import eprint` |
+| `_VAR_REF_RE` | `core/interpolate.py` | `from codefreedom.core.interpolate import _VAR_REF_RE` |
+| `resolve_env_vars()` / `resolve_env_dict()` | `core/interpolate.py` | `from codefreedom.core.interpolate import ...` |
+| `tag()` | `log.py` | `from codefreedom.log import tag` |
+| `get_codefreedom_dir()` | `core/config.py` | `from codefreedom.core.config import get_codefreedom_dir` |
+
+**Do not duplicate** any of these in other modules.
+
+### CLI Output Conventions
+
+All `eprint()` messages must use `tag('TAG')` from `codefreedom.log`. Bare `[TAG]` strings are forbidden.
+
+#### Tag Color Map
+
+| Color | Tags |
+|---|---|
+| **Green** | `OK`, `SET`, `SAME`, `CREATE`, `MKDIR`, `BACKUP`, `PRUNE`, `KEEP` |
+| **Yellow** | `WARN`, `SKIP`, `DEINIT`, `ADMIN`, `DELETE` |
+| **Red** (bold) | `FAIL`, `MISSING`, `ERROR` |
+| **Cyan** | `PLAN`, `SECRETS`, `RECIPE`, `STORE`, `PROXY`, `RESTORE`, `VSCODE`, `TOOLS`, `AGENT`, `DOCTOR`, `SANDBOX`, `MCP`, `FETCH`, `INFO`, `ENV`, `GPU`, `IMAGE`, `CONTAINER`, `NATIVE`, `CONFIG`, `LOCAL` |
+| **Dim** | Any tag not in the above sets |
+
+#### Output Streams
+
+| Stream | Use For | Function |
+|---|---|---|
+| **stderr** | Status, progress, warnings, errors | `eprint()` |
+| **stdout** | Machine-readable output only (URLs, config fragments, list data) | `print()` |
+
+#### Message Format
+
+```text
+[COMPONENT] Action completed.
+[COMPONENT] Using data dir: /path/to/dir.
+```
+
+- All messages end with a period
+- Continuation lines use 3-space indent
+- `[ERROR]` prefix for fatal errors (return code 1)
+- `Warning:` text within the component prefix for non-fatal issues
+
+#### Component Prefixes
+
+| Component | Prefix |
+|---|---|
+| Chrome tool | `[CHROME]` |
+| Web tool | `[WEB]` |
+| GitHub MCP | `[GITHUB]` |
+| Web bridge | `[WEB-BRIDGE]` |
+| Tools manager | `[TOOLS]` |
+| Proxy | `[PROXY]` |
+| Admin/backup | `[ADMIN]` |
+| Deinit | `[DEINIT]` |
+| Doctor | `[DOCTOR]` |
+| Recipe | `[RECIPE]` |
+| Update | `[UPDATE]` |
+| VS Code | `[VSCODE]` |
+| Launcher/sandbox | `[SANDBOX]` |
+| Environment loader | `[ENV]` |
+| Profile loader | `[PROFILE]` |
+| MCP | `[MCP]` |
+
+### Argument Access
+
+Use `getattr(args, 'field', default)` for optional arguments:
 
 ```python
-from codefreedom.log import tag
+# Good
+profile_name = getattr(args, "profile", None) or "default"
+force = getattr(args, "force", False)
 
-# CORRECT
-eprint(f"{tag('PROXY')} Proxy started at http://localhost:{port}")
-print(f"{tag('RECIPE')} Plan applied — {count} file(s) updated.")
-
-# WRONG — no color, inconsistent
-eprint("[PROXY] Proxy started")
-print("[recipe] Plan applied")
+# Bad — may raise AttributeError
+profile_name = args.profile  # if not always set
 ```
 
-### Tag Color Map
+### Type Annotations
 
-| Color          | Tags                                                                                                                                                                                               | When to Use                                          |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| **Green**      | `OK`, `SET`, `SAME`, `CREATE`, `MKDIR`, `BACKUP`, `PRUNE`, `KEEP`                                                                                                                                  | Success, completion, no action needed                |
-| **Red + Bold** | `FAIL`, `MISSING`, `ERROR`                                                                                                                                                                         | Errors, missing required items, hard failures        |
-| **Yellow**     | `WARN`, `SKIP`, `DEINIT`, `ADMIN`, `DELETE`                                                                                                                                                        | Warnings, destructive actions, non-critical issues   |
-| **Cyan**       | `PLAN`, `SECRETS`, `RECIPE`, `STORE`, `PROXY`, `RESTORE`, `VSCODE`, `TOOLS`, `AGENT`, `DOCTOR`, `SANDBOX`, `MCP`, `FETCH`, `INFO`, `ENV`, `GPU`, `IMAGE`, `CONTAINER`, `NATIVE`, `CONFIG`, `LOCAL` | Section labels, informational status, component tags |
-| **Dim**        | Any tag not in the above sets                                                                                                                                                                      | Fallback for unclassified tags                       |
+- `dict` not `Dict`
+- `str | None` not `Optional[str]`
+- `list[str]` not `List[str]`
 
-### When to Use Tags
+## Testing
 
-- **Always** on feedback messages (status updates, confirmations, warnings, errors)
-- **Always** on user-facing instructions or next-step guidance
-- **Not required** on: tabular data rows (inside a tagged context), blank separator
-  lines, debug output (use `eprint()` for debug), continuation lines after a tagged line
+### Test Architecture
 
-### Python 3.10 Compatibility
+Tests are split into **unit** (pure logic, ~2s) and **integration** (I/O, Docker, ~10s).
 
-Nested quotes in f-strings are NOT allowed (Python 3.12+ feature). Always use
-single quotes inside `tag()` when the f-string uses double quotes:
+| Category | Marker | Content |
+|---|---|---|
+| **Unit** | `@pytest.mark.unit` | Pure functions, transforms, parsers, validation |
+| **Integration** | `@pytest.mark.integration` | I/O, Docker, subprocess, network, CLI commands |
+
+### Decision Rule
+
+#### "Does this test read/write files, call subprocess, or make network requests (even mocked)?"
+
+- **Yes** → integration
+- **No** → unit
+
+If a test uses `tmp_path` for filesystem assertions (not just as a throwaway), it's integration. If `tmp_path` is only used to set `CODEFREEDOM_HOME` for env-var resolution, it's unit.
+
+### Test File Naming
+
+| Pattern | Type |
+|---|---|
+| `test_<module>_helpers.py` | Unit tests (pure logic) |
+| `test_<module>_io.py` | Integration tests (I/O, filesystem) |
+| `test_<module>_cmd.py` | Integration tests (CLI commands) |
+| `test_<module>.py` | Single-responsibility module |
+
+### Conventions
+
+- All tests use `tmp_path` fixtures and `monkeypatch` for isolation
+- Never touch real `~/.codefreedom/` during tests
+- `conftest.py` sets `CODEFREEDOM_HOME` to a function-scoped `tmp_path`
+- Test files use `pytestmark = pytest.mark.unit` or `pytest.mark.integration` at module level
+- Private functions (`_prefix`) are tested directly — this is intentional
+- Mock at the lowest boundary: mock `_do_get` for HTTP tests, not `get_json`
+
+### Running Tests
+
+```bash
+# All tests
+pytest tests/ -q
+
+# Unit only (~2s)
+pytest tests/ -m unit -q
+
+# Integration only (~10s)
+pytest tests/ -m integration -q
+
+# Specific file
+pytest tests/test_recipe_merge.py -q
+
+# Specific class
+pytest tests/test_admin_helpers.py::TestCategorize -q
+```
+
+### Adding New Tests
+
+1. Determine unit vs integration (see Decision Rule)
+2. Place in the appropriate file or create one following the naming convention
+3. Add `pytestmark` if creating a new file
+4. Run `pytest tests/ -m unit -q` for unit or `pytest tests/ -m integration -q` for integration
+5. Ensure no regressions: `pytest tests/ -q --tb=short`
+
+## Key Patterns
+
+### Profile Inheritance
+
+- `default` and `bare` are **standalone** — no inheritance
+- All other profiles inherit from `default`
+- Mode-specific overrides (`sandbox.env`, `local.env`) also inherit
+- `tools` field declares tool containers to auto-start
+
+### Environment Variable Chain
+
+Priority (lowest to highest):
+
+1. Component config (`.env.claude` / `.env.proxy`)
+2. Shared config (`.env`)
+3. Workspace config (`{workspace}/.env`)
+4. Component secrets (`.env.claude.secrets` / `.env.proxy.secrets`)
+5. Shared secrets (`.env.secrets`)
+6. Workspace secrets (`{workspace}/.env.secrets`)
+7. User overrides (`.env.user`)
+8. System env (`os.environ`)
+9. `CF_CLI_*` overrides (absolute highest)
+
+All layers support `${VAR}` and `${VAR:-default}` interpolation. Empty-string env vars are valid overrides.
+
+### Tool Module Pattern
+
+All tool modules (chrome, web, github, web_bridge) follow this structure:
 
 ```python
-# CORRECT — single quotes inside double-quoted f-string
-eprint(f"{tag('PROXY')} Message here")
+_DEFAULT_IMAGE = "docker.io/nilayparikh/codefreedom:<tool>-latest"
+_DEFAULT_CONTAINER_NAME = "codefreedom-<tool>"
+_DEFAULT_PORT = <port>
 
-# WRONG — syntax error on Python 3.10
-eprint(f"{tag("PROXY")} Message here")
+def _load_profile() -> dict: ...
+def init_tool() -> int: ...
+def start(settings: dict) -> int: ...
+def stop(settings: dict) -> int: ...
+def restart(settings: dict) -> int: ...
+def status(settings: dict) -> int: ...
+def run(args: argparse.Namespace) -> int: ...
 ```
 
-### Adding New Tags
+### Docker Container Lifecycle
 
-When adding a new component tag:
+Use shared helpers from `docker_utils.py`:
 
-1. Add the tag name to the appropriate `_TAG_*` frozenset in `src/codefreedom/log.py`
-2. Follow the color semantics above (green = success, red = error, yellow = warning, cyan = info)
-3. Use the tag consistently in all print/eprint statements in that component
+| Helper | Purpose |
+|---|---|
+| `container_is_running(name)` | Check if running |
+| `container_exists(name)` | Check if exists |
+| `start_tool_init_gate(profile, tool)` | Pre-start validation |
+| `start_tool_remove_stopped(name, label)` | Clean up old container |
+| `start_tool_ensure_image(settings, label)` | Verify/pull image |
+| `start_tool_docker_guard(label)` | Check Docker available |
+| `stop_tool_container(settings, label)` | Stop and remove |
+| `load_tool_profile(...)` | Load YAML profile with defaults |
 
----
+### Sandbox Containers
 
-## File-Level Conventions
+- Ephemeral: `codefreedom-XXXX` (random 4-hex), auto-removed on exit
+- Pattern: container runs `sleep infinity`; agent is `docker exec`'d into it
+- Volume mounts: workspace (rw), `~/.gitconfig` (ro), `~/.ssh` (ro)
 
-### Python Files
+### Tool Registry — Reference Counting
 
-- **Imports**: Group stdlib, then third-party, then local. One blank line between groups. Enforced by ruff `I` rule.
-- **Type hints**: Use `from __future__ import annotations` at the top of every module.
-- **No comments**: Do not add comments unless explicitly asked.
-- **No emojis**: Never add emojis to code, output, or documentation unless the user requests it.
-- **Error handling**: Only validate at system boundaries. Don't add defensive checks for internal code.
-- **Encoding**: Always pass `encoding="utf-8"` to `read_text()` and `write_text()`. On Windows, the default encoding is `cp1252`, not UTF-8.
+Tools are shared infrastructure. First session starts them, last session stops them.
 
-### YAML Files (docker-compose, recipe.yaml)
+| Session A | Session B | Chrome State |
+|---|---|---|
+| starts | — | started (ref=1) |
+| running | starts | already running (ref=2) |
+| exits | running | stays running (ref=1) |
+| — | exits | stopped (ref=0) |
 
-- Tags in YAML comments should be CAPS when they refer to CLI output tags.
-- Use named Docker volumes (not bind-mounts) for data directories to avoid
-  cross-platform permission issues. Bind-mounts are OK for user-accessible paths
-  (e.g., backup directories).
+### Version Source of Truth
+
+Only `pyproject.toml` holds the version. `__init__.py` derives `__version__` from `importlib.metadata` — never edit it directly.
+
+## Docker Images
+
+| Image | Dockerfile | Use Case |
+|---|---|---|
+| CUDA | `docker/claude-code/Dockerfile.CUDA` | NVIDIA GPU |
+| ROCm | `docker/claude-code/Dockerfile.ROCm` | AMD GPU |
+| Ubuntu | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only |
+| Chrome | `docker/chrome/Dockerfile.Chrome` | Headless Chromium |
+| Web | `docker/web/Dockerfile.Web` | Camoufox MCP |
+| GitHub MCP | `docker/github/Dockerfile.Github` | GitHub API tools |
+| LiteLLM | `docker/litellm/Dockerfile.LiteLLM` | LLM proxy + PG |
+| Web Bridge | `docker/web-bridge/Dockerfile.Bridge` | SearXNG bridge |
+
+Docker tags must be **lowercase**.
+
+## Gotchas
+
+### `--dangerously-skip-permissions`
+
+Sandbox mode **always** passes this to Claude CLI inside the container. Local mode only passes it if the user explicitly requests it.
+
+### Unicode breaks Windows CI
+
+**Always use plain ASCII in user-facing strings.** Windows cp1252 cannot encode Unicode box-drawing characters.
+
+### Encoding on Windows
+
+**Always pass `encoding="utf-8"` to `read_text()` and `write_text()`.** On Windows, the default encoding is `cp1252`, not UTF-8.
+
+### Tool profiles use YAML — not JSON
+
+Tool profiles use `.yaml` files. Legacy `.json` profiles for chrome/web are still supported.
+
+### Proxy is Docker-only — no native mode
+
+The proxy always runs via `docker compose`. No native Python path. Do not reintroduce native-mode logic.
+
+### CustomLogger callbacks: reference `instance`, not the class
+
+Always reference a module-level singleton instance from `config.yaml`, e.g. `plugins.reasoning_efforts_mapping.instance`.
+
+### Patches are baked into the LiteLLM image
+
+Patches in `docker/litellm/patches/` are applied during image build. If you change LiteLLM and a patch can no longer find its target, the build fails loudly.
+
+### Bare agent names are invalid
+
+CodeFreedom canonical names must be hyphenated: `claude-code`, `mimo-code`, `open-code`, `pi-code`. Bare names (`claude`, `mimo`, `opencode`) fail in CLI dispatch.
+
+### Recipe directories are independent copies
+
+`_default`, `costeffective-coding`, `costeffective-coding-with-local` share structure but have independent files. Fix scripts in all 3. Never blindly copy `recipe.yaml` or provider configs.
+
+### Tags must be CAPS with `tag()` helper
+
+All `print()`/`eprint()` feedback must use `tag('TAG')` from `codefreedom.log`. Bare `[TAG]` strings violate the convention. See the tag color map above.
+
+### `eprint` and `_VAR_REF_RE` — single source of truth
+
+`eprint()` is defined once in `env_loader.py`. `_VAR_REF_RE` is defined once in `core/interpolate.py`. Do not duplicate these in other modules.
+
+## CI/CD
+
+### Workflows
+
+| Workflow | Purpose |
+|---|---|
+| `integration-test.yml` | Tests on Python 3.10/11/12 across Ubuntu, Windows, macOS |
+| `gated-checkin.yml` | PR gate |
+| `docker-*.yml` | Build, sign, publish Docker images |
+| `pipy.yaml` | Publish to PyPI on `v*` tags |
+| `trivy.yml` | Security scanning |
+| `scorecard.yml` | OpenSSF Scorecard |
+| `publish-docs.yml` | MkDocs deployment |
+
+### Release Process
+
+```bash
+./scripts/release.sh  # bumps version, tags, publishes
+```
 
 ### Documentation
 
-- Tags referenced in docs should be CAPS: `[PLAN]`, `[RECIPE]`, `[PROXY]`, etc.
-- CLI flags: use `--long-form` and `-s` (short) consistently.
-- When documenting commands, show the recommended `-pa` (plan-and-apply) flow first.
-
----
-
-## Agent Naming Convention
-
-All agents use **hyphenated** forms. Never use single-word names.
-
-| Canonical name | Aliases | Docker image | Directory on disk |
-|---------------|---------|--------------|-------------------|
-| `claude-code` | `cc` | `codefreedom:claude-code-latest` | `claude-code/` |
-| `mimo-code` | `mc` | `codefreedom:mimo-code-latest` | `mimo-code/` |
-| `open-code` | `oc` | `codefreedom:open-code-latest` | `open-code/` |
-
-Bare names (`claude`, `mimo`, `opencode`) are invalid and will fail.
-
-Note: `shutil.which("claude")` is correct — it looks up the actual binary name on PATH, not the CodeFreedom canonical name.
-
----
-
-## Environment Variable Chain
-
-Secrets and config resolve through a priority chain. Higher tiers win.
-
-| Priority | Source | Example |
-|----------|--------|---------|
-| 1 (highest) | `CF_CLI_*` env vars | `CF_CLI_OPENAI_API_KEY` |
-| 2 | `os.environ` | `OPENAI_API_KEY` |
-| 3 | `.env.user` | `~/.codefreedom/.env.user` |
-| 4 (lowest) | `.env.*.secrets` files | `~/.codefreedom/.env.proxy.secrets` |
-
-The `_resolve_secret()` function in `recipe/apply.py` implements this chain.
-The `load_tool_profile()` function in `core/profiles.py` uses a similar chain for tool config.
-
-`GH_TOKEN` is always derived from `GITHUB_PERSONAL_ACCESS_TOKEN` — only one GitHub secret needs to be set.
-
----
-
-## Docker / PostgreSQL Conventions
-
-- **Multi-arch**: All images build for `linux/amd64` + `linux/arm64` except ROCm (amd64-only).
-- **Image versions**: All Dockerfiles use `ARG IMAGE_VERSION=1.0.0`.
-- **PG data**: Docker named volume `codefreedom_pg_data` (not a bind-mount).
-- **PG backup**: Docker named volume `codefreedom_pg_backup` (not a bind-mount).
-- **Container user**: root (no uid/gid mapping — simplest path across platforms).
-- **PG listens**: localhost:5432 only (TCP, never exposed externally).
-- **Cosign**: Use `cosign-sign` to sign, `cosign-verify` to verify. Using verify to sign fails with "no signatures found".
-
----
-
-## Recipe Conventions
-
-Three recipe directories share structure but have independent copies:
-
-- `_default` — base recipe (no local providers)
-- `costeffective-coding` — full recipe (all providers)
-- `costeffective-coding-with-local` — recipe without local providers
-
-**Shared across recipes** (must be identical):
-
-- `scripts/setup-secrets.sh` and `scripts/setup-secrets.ps1`
-
-**Recipe-specific** (do NOT blindly copy):
-
-- `recipe.yaml` (different `required_secrets`, `config_vars`)
-- `proxy/config/providers/*.yaml` (provider configs differ)
-- `.env.*.secrets` (different secret placeholders)
-
-When fixing a script in one recipe, apply the same fix to all 3 recipes.
-
----
-
-## CLI Conventions
-
-- Short aliases: `cf s i` = `cf setup init`, `cf r px` = `cf run proxy`, `cf r ag cc` = `cf run agent claude-code`
-- Admin shortcuts: `cf m ad bu` = `backup`, `cf m ad res` = `restore`, `cf m ad ins` = `inspect`, `cf m ad pr` = `prune`
-- Recommended flow: `cf s i -pa <recipe>` (plan-and-apply with confirmation)
-- Secrets are checked after apply using the full env chain (`.env.*.secrets` + `os.environ` + `CF_CLI_*` overrides)
-- `.env.user` is auto-created on first apply if missing
-- Pre-commit checks: `ruff check` + `mypy` + `pytest` before every commit
-
----
-
-## Pre-Commit Validation
-
-Every commit must pass all three checks:
-
 ```bash
-ruff check src/ tests/                    # lint
-mypy src/ --ignore-missing-imports        # type-check
-pytest tests/ -q --tb=short               # tests
+mkdocs serve -a localhost:8080  # local docs preview
 ```
 
-Use the `/validate` command for a quick single-pass run. For single-file changes, scope ruff/mypy to that file first, then run the full pytest suite.
+## Recipes
 
-### Quick Validation Commands
+Recipes are config bundles from `github.com/nilayparikh/codefreedom-recipes` (git submodule at `recipes/`).
 
-```bash
-# Full pipeline
-ruff check src/ tests/ && mypy src/ --ignore-missing-imports && pytest tests/ -q --tb=short
+| Recipe | Description |
+|---|---|
+| `_default` | Base config — shared tool profiles, proxy config, plugins |
+| `costeffective-coding` | Cloud providers only (Azure, OpenCode, OpenRouter) |
+| `costeffective-coding-with-local` | Cloud + local inference (vLLM, Ollama, etc.) |
 
-# Unit tests only (fast gate)
-pytest tests/ -m unit -q --tb=short
+Apply with: `cf s i -pa <recipe-name>`
 
-# Single file
-ruff check src/codefreedom/cli/mimo.py && mypy src/codefreedom/cli/mimo.py
+## MCP Servers
 
-# Convention checks (manual)
-grep -rn 'print(f"\[' src/codefreedom/     # bare tags without tag()
-grep -rn 'read_text()' src/codefreedom/    # missing encoding
-grep -rn 'write_text(' src/codefreedom/    # missing encoding
-```
+Configured in `.mcp.json`:
+
+| Server | Endpoint |
+|---|---|
+| Chrome DevTools | `http://127.0.0.1:9223/mcp` |
+| Web (Camoufox) | `http://127.0.0.1:8420/mcp` |
+| GitHub | `http://127.0.0.1:8129/mcp` |
+
+## Internal Specs
+
+| Document | Purpose |
+|---|---|
+| `specs/cli-reference.md` | Complete CLI command reference |
+| `specs/cli-output.md` | CLI output conventions |
+| `specs/code-style.md` | Code style and patterns |
+| `specs/patterns.md` | Key patterns (profiles, env chain, tools) |
+| `specs/docker.md` | Docker images and naming |
+| `specs/ci-cd.md` | CI/CD workflows |
+| `specs/tests.md` | Test coverage and architecture |

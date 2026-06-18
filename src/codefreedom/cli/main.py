@@ -11,6 +11,7 @@ Short examples:
     cf r ag cc          # run agent claude-code
     cf r ag mc          # run agent mimo-code
     cf r ag oc          # run agent open-code
+    cf r ag pc          # run agent pi-code
     cf s i              # setup init
     cf r px start       # run proxy start
     cf m dr             # manage doctor
@@ -108,6 +109,7 @@ def main() -> None:
             "examples:\n"
             "  cf r ag cc                   Launch Claude Code agent\n"
             "  cf r ag mc                   Launch MiMo Code agent\n"
+            "  cf r ag pc                   Launch Pi Code agent\n"
             "  cf r px start                Start the LLM proxy\n"
             "  cf s i                       Initialize configuration\n"
             "  cf m dr                      Validate environment"
@@ -170,7 +172,7 @@ def main() -> None:
         run_sub,
         "agent",
         aliases=["ag"],
-        help="Launch coding agents (claude-code, mimo-code, open-code)",
+        help="Launch coding agents (claude-code, mimo-code, open-code, pi-code)",
     )
     from codefreedom.cli.run.agent import build_parser as build_agent_parser
     build_agent_parser(agent_parser)

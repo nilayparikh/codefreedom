@@ -98,6 +98,12 @@ markdown_extensions:
 nav:
       - Home: index.md
       - Get Started: getting-started/index.md
+      - Agents:
+              - Overview: agents/index.md
+              - Claude Code: agents/claude-code.md
+              - MiMo Code: agents/mimo-code.md
+              - OpenCode: agents/open-code.md
+              - Pi Code: agents/pi-code.md
       - Recipes:
               - Overview: recipes/index.md
               - costeffective-coding: recipes/costeffective-coding.md

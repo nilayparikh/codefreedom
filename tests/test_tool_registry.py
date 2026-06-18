@@ -168,7 +168,7 @@ class TestToolRegistryMcpEndpointsDispatch:
         endpoints = load_tool_mcp_endpoints(["chrome"])
         servers = endpoints["mcpServers"]
         assert servers == {
-            "chrome-devtools": {"type": "http", "url": "http://127.0.0.1:9223/mcp"},
+            "chrome-devtools": {"url": "http://127.0.0.1:9223/mcp"},
         }
 
     def test_web_with_defaults(self):
@@ -176,7 +176,7 @@ class TestToolRegistryMcpEndpointsDispatch:
         endpoints = load_tool_mcp_endpoints(["web"])
         servers = endpoints["mcpServers"]
         assert servers == {
-            "web": {"type": "http", "url": "http://127.0.0.1:8420/mcp"},
+            "web": {"url": "http://127.0.0.1:8420/mcp"},
         }
 
     def test_github_with_defaults(self, monkeypatch):
@@ -188,7 +188,7 @@ class TestToolRegistryMcpEndpointsDispatch:
         endpoints = load_tool_mcp_endpoints(["github"])
         servers = endpoints["mcpServers"]
         assert servers == {
-            "github": {"type": "http", "url": "http://127.0.0.1:8082/mcp"},
+            "github": {"url": "http://127.0.0.1:8082/mcp"},
         }
 
     def test_web_bridge_with_defaults(self):
@@ -196,7 +196,7 @@ class TestToolRegistryMcpEndpointsDispatch:
         endpoints = load_tool_mcp_endpoints(["web-bridge"])
         servers = endpoints["mcpServers"]
         assert servers == {
-            "web-bridge": {"type": "http", "url": "http://127.0.0.1:8500/search"},
+            "web-bridge": {"url": "http://127.0.0.1:8500/search"},
         }
 
     def test_all_tools_merged(self):

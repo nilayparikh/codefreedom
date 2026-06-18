@@ -1,0 +1,148 @@
+"""Tests for pi-code launcher helpers."""
+from __future__ import annotations
+
+import json
+import pytest
+from pathlib import Path
+
+pytestmark = pytest.mark.unit
+
+
+class TestReadImageRouterModels:
+    """Tests for _read_image_router_models()."""
+
+    def test_returns_empty_list_when_no_config(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _read_image_router_models
+
+        result = _read_image_router_models(tmp_path)
+        assert result == []
+
+    def test_parses_image_router_config(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _read_image_router_models
+
+        plugin_dir = tmp_path / "proxy" / "config" / "plugins" / "image-router"
+        plugin_dir.mkdir(parents=True)
+        config = {
+            "image-router-for-text-only": {
+                "enabled": True,
+                "models": ["MiMo-V2.5", "DeepSeek-V4-Flash"],
+            }
+        }
+        (plugin_dir / "image-router.yaml").write_text(
+            json.dumps(config), encoding="utf-8"
+        )
+
+        result = _read_image_router_models(tmp_path)
+        assert sorted(result) == ["DeepSeek-V4-Flash", "MiMo-V2.5"]
+
+    def test_returns_empty_when_disabled(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _read_image_router_models
+
+        plugin_dir = tmp_path / "proxy" / "config" / "plugins" / "image-router"
+        plugin_dir.mkdir(parents=True)
+        config = {
+            "image-router-for-text-only": {
+                "enabled": False,
+                "models": ["MiMo-V2.5"],
+            }
+        }
+        (plugin_dir / "image-router.yaml").write_text(
+            json.dumps(config), encoding="utf-8"
+        )
+
+        result = _read_image_router_models(tmp_path)
+        assert result == []
+
+
+class TestGenerateCodefreedomExtension:
+    """Tests for _generate_codefreedom_extension()."""
+
+    def test_creates_extension_file(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _generate_codefreedom_extension
+
+        _generate_codefreedom_extension(tmp_path)
+
+        ext_path = tmp_path / "extensions" / "codefreedom.ts"
+        assert ext_path.exists()
+        content = ext_path.read_text(encoding="utf-8")
+        assert "registerProvider" in content
+        assert "codefreedom" in content
+        assert "PROXY_BASE_URL" in content
+
+    def test_extension_contains_image_router_env(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _generate_codefreedom_extension
+
+        _generate_codefreedom_extension(tmp_path)
+
+        ext_path = tmp_path / "extensions" / "codefreedom.ts"
+        content = ext_path.read_text(encoding="utf-8")
+        assert "IMAGE_ROUTER_MODELS" in content
+
+    def test_extension_uses_model_info_endpoint(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _generate_codefreedom_extension
+
+        _generate_codefreedom_extension(tmp_path)
+
+        ext_path = tmp_path / "extensions" / "codefreedom.ts"
+        content = ext_path.read_text(encoding="utf-8")
+        assert "/v1/model/info" in content
+        assert "supports_vision" in content
+        assert "supports_reasoning" in content
+
+
+class TestWriteMinimalSettings:
+    """Tests for _write_minimal_settings()."""
+
+    def test_writes_settings_json(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _write_minimal_settings
+
+        _write_minimal_settings(tmp_path)
+
+        settings_path = tmp_path / "settings.json"
+        assert settings_path.exists()
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert data["defaultProvider"] == "codefreedom"
+        assert data["defaultProjectTrust"] == "always"
+
+    def test_extensions_get_npm_prefix(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _write_minimal_settings
+
+        _write_minimal_settings(tmp_path, extensions=["pi-mcp-adapter", "@tintinweb/pi-subagents"])
+        data = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+        assert data["packages"] == ["npm:pi-mcp-adapter", "npm:@tintinweb/pi-subagents"]
+
+    def test_creates_parent_dirs(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _write_minimal_settings
+
+        deep_dir = tmp_path / "a" / "b" / "c"
+        _write_minimal_settings(deep_dir)
+
+        assert (deep_dir / "settings.json").exists()
+
+
+class TestEnsureLeanCtx:
+    """Tests for _ensure_lean_ctx()."""
+
+    def test_skips_npm_install_when_binary_on_path(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _ensure_lean_ctx
+        from unittest.mock import patch
+
+        with patch("shutil.which", return_value="/usr/local/bin/lean-ctx"):
+            with patch("subprocess.run") as mock_run:
+                _ensure_lean_ctx(tmp_path)
+                mock_run.assert_not_called()
+
+    def test_runs_npm_install_when_binary_missing(self, tmp_path: Path) -> None:
+        from codefreedom.cli.pi import _ensure_lean_ctx
+        from unittest.mock import patch
+
+        with patch("shutil.which", side_effect=lambda cmd: None if cmd == "lean-ctx" else "/usr/bin/npm"):
+            with patch("subprocess.run") as mock_run:
+                _ensure_lean_ctx(tmp_path)
+                # Should call npm install -g lean-ctx-bin
+                mock_run.assert_any_call(
+                    ["npm", "install", "-g", "lean-ctx-bin"],
+                    check=True,
+                    capture_output=True,
+                    timeout=120,
+                )

@@ -113,6 +113,7 @@ cf r ag cc
 | Claude Code | `cf r ag cc` | `cc` |
 | MiMo Code | `cf r ag mc` | `mc` |
 | OpenCode | `cf r ag oc` | `oc` |
+| Pi Code | `cf r ag pc` | `pc` |
 
 ## Quick Reference
 
