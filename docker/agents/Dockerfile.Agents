@@ -176,7 +176,7 @@ COPY --from=toolchain /usr/share/keyrings/ /usr/share/keyrings/
 COPY --from=toolchain /etc/apt/sources.list.d/ /etc/apt/sources.list.d/
 COPY --from=toolchain /usr/bin/gh /usr/bin/gh
 COPY --from=toolchain /root/.opencode/ /root/.opencode/
-COPY --from=toolchain /usr/local/lib/node_modules/@mimo-ai/ /usr/local/lib/node_modules/@mimo-ai/
+COPY --from=toolchain /usr/lib/node_modules/@mimo-ai/ /usr/lib/node_modules/@mimo-ai/
 
 RUN apt-get update \
     && apt-get -y dist-upgrade \
@@ -269,7 +269,7 @@ COPY --from=toolchain /usr/share/keyrings/ /usr/share/keyrings/
 COPY --from=toolchain /etc/apt/sources.list.d/ /etc/apt/sources.list.d/
 COPY --from=toolchain /usr/bin/gh /usr/bin/gh
 COPY --from=toolchain /root/.opencode/ /root/.opencode/
-COPY --from=toolchain /usr/local/lib/node_modules/@mimo-ai/ /usr/local/lib/node_modules/@mimo-ai/
+COPY --from=toolchain /usr/lib/node_modules/@mimo-ai/ /usr/lib/node_modules/@mimo-ai/
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -354,7 +354,7 @@ COPY --from=toolchain /usr/share/keyrings/ /usr/share/keyrings/
 COPY --from=toolchain /etc/apt/sources.list.d/ /etc/apt/sources.list.d/
 COPY --from=toolchain /usr/bin/gh /usr/bin/gh
 COPY --from=toolchain /root/.opencode/ /root/.opencode/
-COPY --from=toolchain /usr/local/lib/node_modules/@mimo-ai/ /usr/local/lib/node_modules/@mimo-ai/
+COPY --from=toolchain /usr/lib/node_modules/@mimo-ai/ /usr/lib/node_modules/@mimo-ai/
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
