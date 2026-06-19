@@ -1,4 +1,4 @@
-# ── CodeFreedom — Docker Image ──────────────────────────────────────────────────
+# ── CodeFreedom — Docker Agents Image ─────────────────────────────────────────
 # Contains all 3 coding agent CLIs (claude, mimo, opencode).
 # Build targets: ubuntu (CPU), cuda (NVIDIA GPU), rocm (AMD GPU)
 #
@@ -7,14 +7,15 @@
 #
 # Build:
 #   docker build --target ubuntu -t codefreedom:ubuntu-v1.0.0 \
-#     -f docker/unified/Dockerfile.Unified docker/unified/
+#     -f docker/agents/Dockerfile.Agents docker/agents/
 #   docker build --target cuda -t codefreedom:cuda-v1.0.0 \
-#     -f docker/unified/Dockerfile.Unified docker/unified/
+#     -f docker/agents/Dockerfile.Agents docker/agents/
 #   docker build --target rocm -t codefreedom:rocm-v1.0.0 \
-#     -f docker/unified/Dockerfile.Unified docker/unified/
+#     -f docker/agents/Dockerfile.Agents docker/agents/
 # ────────────────────────────────────────────────────────────────────────────────
 
 ARG IMAGE_VERSION=1.0.0
+ARG ROCM_PLATFORM=linux/amd64
 
 # ════════════════════════════════════════════════════════════════════════════════
 # Stage 1: Toolchain — shared across all platforms
@@ -329,7 +330,6 @@ RUN rm -rf /tmp/.npm && mkdir -p /tmp/.npm && chmod 1777 /tmp/.npm
 # Base: rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.10.0
 #   Ubuntu 24.04, Python 3.12, PyTorch 2.10, ROCm 7.2.4
 # ════════════════════════════════════════════════════════════════════════════════
-ARG ROCM_PLATFORM=linux/amd64
 FROM --platform=$ROCM_PLATFORM rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.10.0 AS rocm
 
 ARG IMAGE_VERSION
