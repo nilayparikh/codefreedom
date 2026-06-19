@@ -45,6 +45,19 @@ from codefreedom.sandbox.terminal import terminal_size
 
 def register_args(parser: argparse.ArgumentParser) -> None:
     """Register OpenCode-specific arguments on the agent parser."""
+    gpu_group = parser.add_mutually_exclusive_group()
+    gpu_group.add_argument(
+        "--cuda",
+        action="store_true",
+        dest="gpu_cuda",
+        help="Use CUDA sandbox image for NVIDIA GPUs (only with --sandbox)",
+    )
+    gpu_group.add_argument(
+        "--rocm",
+        action="store_true",
+        dest="gpu_rocm",
+        help="Use ROCm sandbox image for AMD GPUs (only with --sandbox)",
+    )
     parser.add_argument(
         "--sandbox",
         action="store_true",
@@ -59,7 +72,7 @@ def register_args(parser: argparse.ArgumentParser) -> None:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:open-code-latest"
+DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:ubuntu-latest"
 PROXY_MODELS_CACHE_FILE = "proxy-models.json"
 OPENCODE_CONFIG_NAME = "opencode.json"
 _CONTAINER_PREFIX = "codefreedom-opencode-"
@@ -324,6 +337,7 @@ def run_docker(
     profile_name: str,
     sandbox_images: Dict[str, str] | None = None,
     run_as_me: bool = False,
+    gpu_type: str | None = None,
 ) -> int:
     """Run ``opencode`` inside an ephemeral Docker container.
 
@@ -332,7 +346,12 @@ def run_docker(
     from codefreedom.sandbox.launcher import run_sandbox
 
     sandbox_images = sandbox_images or {}
-    image = sandbox_images.get("default") or DEFAULT_OPENCODE_IMAGE
+
+    if gpu_type:
+        image = sandbox_images.get(gpu_type) or f"docker.io/nilayparikh/codefreedom:{gpu_type}-latest"
+        eprint(f"[GPU] Selected '{gpu_type}' sandbox image: {image}.")
+    else:
+        image = sandbox_images.get("default") or DEFAULT_OPENCODE_IMAGE
 
     container_name = f"{_CONTAINER_PREFIX}{secrets.token_hex(2)}"
 
@@ -623,6 +642,13 @@ def run(args: argparse.Namespace) -> int:
 
     run_as_me = getattr(args, "run_as_me", False)
 
+    # ── GPU type from --cuda / --rocm flags ────────────────────────────────
+    gpu_type: str | None = None
+    if getattr(args, "gpu_cuda", False):
+        gpu_type = "cuda"
+    elif getattr(args, "gpu_rocm", False):
+        gpu_type = "rocm"
+
     # ── Tools: acquire if declared in profile ────────────────────────────
     session_id = generate_session_id(mode)
 
@@ -644,6 +670,7 @@ def run(args: argparse.Namespace) -> int:
                 profile_name,
                 sandbox_images=sandbox_images,
                 run_as_me=run_as_me,
+                gpu_type=gpu_type,
             )
         else:
             if run_as_me:

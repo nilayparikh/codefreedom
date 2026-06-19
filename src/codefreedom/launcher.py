@@ -40,7 +40,7 @@ from codefreedom.sandbox.terminal import terminal_size
 
 REGISTRY = os.environ.get("CLAUDE_CODE_REGISTRY", "docker.io/nilayparikh")
 IMAGE_NAME = os.environ.get("CLAUDE_CODE_IMAGE_NAME", "codefreedom")
-IMAGE_TAG = os.environ.get("CLAUDE_CODE_IMAGE_TAG", "latest")
+IMAGE_TAG = os.environ.get("CLAUDE_CODE_IMAGE_TAG", "ubuntu-latest")
 TARGET_IMAGE = f"{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}"
 
 HOME_DIR = Path.home()

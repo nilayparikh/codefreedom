@@ -18,6 +18,7 @@ class TestResolveAgent:
         assert _resolve_agent("claude-code") == "claude-code"
         assert _resolve_agent("mimo-code") == "mimo-code"
         assert _resolve_agent("open-code") == "open-code"
+        assert _resolve_agent("pi-code") == "pi-code"
 
     def test_resolves_alias(self):
         from codefreedom.cli.run.agent import _resolve_agent
@@ -25,6 +26,7 @@ class TestResolveAgent:
         assert _resolve_agent("cc") == "claude-code"
         assert _resolve_agent("mc") == "mimo-code"
         assert _resolve_agent("oc") == "open-code"
+        assert _resolve_agent("pc") == "pi-code"
 
     def test_returns_none_for_unknown(self):
         from codefreedom.cli.run.agent import _resolve_agent

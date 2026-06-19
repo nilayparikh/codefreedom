@@ -11,6 +11,7 @@ Short examples:
     cf r ag cc          # run agent claude-code
     cf r ag mc          # run agent mimo-code
     cf r ag oc          # run agent open-code
+    cf r ag pc          # run agent pi-code
     cf s i              # setup init
     cf r px start       # run proxy start
     cf m dr             # manage doctor
@@ -31,13 +32,27 @@ def _print_version() -> None:
     """Print version, Python, Docker, and dependency info."""
     import importlib.metadata
     import platform
+    import subprocess
+    from pathlib import Path
 
     try:
         ver = importlib.metadata.version("codefreedom")
     except importlib.metadata.PackageNotFoundError:
         ver = "dev"
 
-    print(f"codefreedom {ver}")
+    git_hash = ""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=3,
+            cwd=str(Path(__file__).resolve().parent.parent.parent.parent),
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            git_hash = f" ({result.stdout.strip()})"
+    except Exception:
+        pass
+
+    print(f"codefreedom {ver}{git_hash}")
     print(f"  python     {platform.python_version()}")
     print(f"  platform   {platform.platform()}")
 
@@ -53,7 +68,6 @@ def _print_version() -> None:
             print(f"  {dep:<16} (not installed)")
 
     try:
-        import subprocess
         result = subprocess.run(
             ["docker", "version", "--format", "{{.Server.Version}}"],
             capture_output=True, text=True, timeout=5,
@@ -108,6 +122,7 @@ def main() -> None:
             "examples:\n"
             "  cf r ag cc                   Launch Claude Code agent\n"
             "  cf r ag mc                   Launch MiMo Code agent\n"
+            "  cf r ag pc                   Launch Pi Code agent\n"
             "  cf r px start                Start the LLM proxy\n"
             "  cf s i                       Initialize configuration\n"
             "  cf m dr                      Validate environment"
@@ -170,7 +185,7 @@ def main() -> None:
         run_sub,
         "agent",
         aliases=["ag"],
-        help="Launch coding agents (claude-code, mimo-code, open-code)",
+        help="Launch coding agents (claude-code, mimo-code, open-code, pi-code)",
     )
     from codefreedom.cli.run.agent import build_parser as build_agent_parser
     build_agent_parser(agent_parser)
@@ -342,6 +357,7 @@ def _build_update_args(p: argparse.ArgumentParser) -> None:
 
 def _build_deinit_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("-f", "--force", action="store_true", help="Skip confirmation prompt before removing the CodeFreedom directory")
+    p.add_argument("--clean-images", action="store_true", help="Also remove CodeFreedom Docker images, volumes, and dangling images")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

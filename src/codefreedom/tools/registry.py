@@ -158,7 +158,7 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
             path = "/" + path
 
         url = f"http://127.0.0.1:{port}{path}"
-        servers[tool.mcp_server_name] = {"type": "http", "url": url}
+        servers[tool.mcp_server_name] = {"url": url}
 
     return {"mcpServers": servers}
 

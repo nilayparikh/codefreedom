@@ -1,0 +1,217 @@
+# ── CodeFreedom: Docker Agents (All Platforms) ──────────────────────────────────
+# Builds and publishes images containing all 3 coding agent CLIs.
+# Matrix strategy: ubuntu, cuda, rocm platforms.
+#
+# Branch-based tagging:
+#   main         → {platform}-v{version}, {platform}-latest
+#   prerelease/* → {platform}-dev-{version}   (no latest)
+#   release/*    → {platform}-rc-{version}    (no latest)
+#
+# Platforms: linux/arm64, linux/amd64 (rocm: amd64 only)
+# Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
+#
+# Trigger: manual dispatch only. Branch guard enforced at job level.
+# ────────────────────────────────────────────────────────────────────────────────
+
+name: Docker Agents
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build (all, ubuntu, cuda, rocm)"
+        required: false
+        type: choice
+        options:
+          - all
+          - ubuntu
+          - cuda
+          - rocm
+        default: all
+
+env:
+  DOCKER_HUB_REPO: nilayparikh/codefreedom
+  GHCR_REPO: ghcr.io/nilayparikh/codefreedom
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  filter:
+    runs-on: ubuntu-24.04
+    if: github.ref_name == 'main' || startsWith(github.ref_name, 'prerelease/') || startsWith(github.ref_name, 'release/')
+    outputs:
+      build_matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Build matrix from platform input
+        id: set-matrix
+        run: |
+          PLATFORM="${{ inputs.platform }}"
+          if [ "${PLATFORM}" = "all" ]; then
+            MATRIX='{"include":[{"platform":"ubuntu","target":"ubuntu","platforms":"linux/arm64,linux/amd64","scope":"Ubuntu"},{"platform":"cuda","target":"cuda","platforms":"linux/arm64,linux/amd64","scope":"CUDA"},{"platform":"rocm","target":"rocm","platforms":"linux/amd64","scope":"ROCm"}]}'
+          else
+            case "${PLATFORM}" in
+              ubuntu) MATRIX='{"include":[{"platform":"ubuntu","target":"ubuntu","platforms":"linux/arm64,linux/amd64","scope":"Ubuntu"}]}' ;;
+              cuda)   MATRIX='{"include":[{"platform":"cuda","target":"cuda","platforms":"linux/arm64,linux/amd64","scope":"CUDA"}]}' ;;
+              rocm)   MATRIX='{"include":[{"platform":"rocm","target":"rocm","platforms":"linux/amd64","scope":"ROCm"}]}' ;;
+            esac
+          fi
+          echo "matrix=${MATRIX}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    needs: filter
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.filter.outputs.build_matrix) }}
+    runs-on: ubuntu-24.04
+    outputs:
+      digest-ubuntu: ${{ steps.digest.outputs.digest-ubuntu }}
+      digest-cuda: ${{ steps.digest.outputs.digest-cuda }}
+      digest-rocm: ${{ steps.digest.outputs.digest-rocm }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64,amd64
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Extract version and branch info
+        id: version
+        run: |
+          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/unified/Dockerfile.Unified | head -1 | sed 's/.*=\(.*\)/\1/')
+          BRANCH="${GITHUB_REF_NAME}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "branch=${BRANCH}" >> "${GITHUB_OUTPUT}"
+
+          if [[ "${BRANCH}" == main ]]; then
+            echo "tag_version=v${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "push_latest=true" >> "${GITHUB_OUTPUT}"
+            echo "Branch: main → tags: {platform}-v${VERSION}, {platform}-latest"
+          elif [[ "${BRANCH}" == prerelease/* ]]; then
+            echo "tag_version=dev-${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "push_latest=false" >> "${GITHUB_OUTPUT}"
+            echo "Branch: prerelease → tags: {platform}-dev-${VERSION} (no latest)"
+          elif [[ "${BRANCH}" == release/* ]]; then
+            echo "tag_version=rc-${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "push_latest=false" >> "${GITHUB_OUTPUT}"
+            echo "Branch: release → tags: {platform}-rc-${VERSION} (no latest)"
+          else
+            echo "tag_version=dev-${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "push_latest=false" >> "${GITHUB_OUTPUT}"
+            echo "Branch: ${BRANCH} → tags: {platform}-dev-${VERSION} (no latest)"
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ${{ env.DOCKER_HUB_REPO }}
+            ${{ env.GHCR_REPO }}
+          tags: |
+            type=raw,value=${{ matrix.platform }}-${{ steps.version.outputs.tag_version }}
+            type=raw,value=${{ matrix.platform }}-latest,enable=${{ steps.version.outputs.push_latest == 'true' }}
+          labels: |
+            org.opencontainers.image.title=CodeFreedom - ${{ matrix.platform }}
+            org.opencontainers.image.version=v${{ steps.version.outputs.version }}
+            com.codefreedom.platform=${{ matrix.platform }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: docker/unified/
+          file: docker/unified/Dockerfile.Unified
+          target: ${{ matrix.target }}
+          platforms: ${{ matrix.platforms }}
+          build-args: |
+            IMAGE_VERSION=${{ steps.version.outputs.version }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=${{ matrix.scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.scope }}
+
+      - name: Export digest
+        id: digest
+        run: |
+          echo "digest-${{ matrix.platform }}=${{ steps.build.outputs.digest }}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.GHCR_REPO }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Sign Docker Hub image
+        uses: ./.github/actions/cosign-sign
+        with:
+          image: docker.io/${{ env.DOCKER_HUB_REPO }}@${{ steps.build.outputs.digest }}
+
+      - name: Sign GHCR image
+        uses: ./.github/actions/cosign-sign
+        with:
+          image: ${{ env.GHCR_REPO }}@${{ steps.build.outputs.digest }}
+
+  verify:
+    needs: build
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu, cuda, rocm]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get digest
+        id: get-digest
+        run: |
+          DIGEST="${{ needs.build.outputs[format('digest-{0}', matrix.platform)] }}"
+          echo "digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify Docker Hub signature
+        if: steps.get-digest.outputs.digest != ''
+        uses: ./.github/actions/cosign-verify
+        with:
+          image: docker.io/${{ env.DOCKER_HUB_REPO }}@${{ steps.get-digest.outputs.digest }}
+
+      - name: Verify GHCR signature
+        if: steps.get-digest.outputs.digest != ''
+        uses: ./.github/actions/cosign-verify
+        with:
+          image: ${{ env.GHCR_REPO }}@${{ steps.get-digest.outputs.digest }}

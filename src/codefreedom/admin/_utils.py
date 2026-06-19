@@ -308,6 +308,8 @@ def _categorize(rel_path: str) -> str:
         return "mimo-code"
     if rel_path.startswith("open-code/"):
         return "open-code"
+    if rel_path.startswith("pi-code/"):
+        return "pi-code"
     if rel_path.startswith("tools/"):
         return "tools"
     if rel_path.startswith("sandbox/"):

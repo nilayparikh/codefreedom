@@ -1,7 +1,8 @@
 # ── CodeFreedom PyPI Publish Workflow ─────────────────────────────────────────
 # Builds and publishes the Python package to PyPI.
 #
-# Triggered on: version tags (v*), or manual dispatch.
+# Trigger: manual dispatch only (100% user-controlled).
+# No auto-trigger on tag push or any other event.
 #
 # RC tags (v*rc*) are published as prereleases — users must `pip install --pre`.
 # Final tags (v*) create a proper GitHub Release.
@@ -13,8 +14,6 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -115,5 +114,5 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          prerelease: ${{ contains(github.ref_name, 'rc') }}
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, '.dev') }}
           generate_release_notes: true

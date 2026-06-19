@@ -12,6 +12,11 @@ from codefreedom.cli.setup.deinit import (
     _stop_proxy,
     _stop_tools,
     _remove_codefreedom_dir,
+    _list_codefreedom_images,
+    _remove_codefreedom_images,
+    _remove_codefreedom_volumes,
+    _prune_dangling_images,
+    _clean_docker_cache,
     run,
 )
 
@@ -226,6 +231,206 @@ class TestRemoveCodefreedomDir:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# _list_codefreedom_images
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestListCodefreedomImages:
+    """Tests for _list_codefreedom_images."""
+
+    def test_returns_images(self, monkeypatch):
+        """Returns parsed image list from docker images output."""
+        output = "nilayparikh/codefreedom:ubuntu-latest\nnilayparikh/codefreedom:cuda-latest\n"
+
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *a, **kw: type(
+                "Proc", (object,), {"returncode": 0, "stdout": output}
+            )(),
+        )
+        result = _list_codefreedom_images()
+        assert result == [
+            "nilayparikh/codefreedom:ubuntu-latest",
+            "nilayparikh/codefreedom:cuda-latest",
+        ]
+
+    def test_returns_empty_on_failure(self, monkeypatch):
+        """Returns empty list when docker command fails."""
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *a, **kw: type(
+                "Proc", (object,), {"returncode": 1, "stdout": ""}
+            )(),
+        )
+        assert _list_codefreedom_images() == []
+
+    def test_returns_empty_on_no_docker(self, monkeypatch):
+        """Returns empty list when Docker is not available."""
+
+        def raise_fn(*a, **kw):
+            raise FileNotFoundError
+
+        monkeypatch.setattr(subprocess, "run", raise_fn)
+        assert _list_codefreedom_images() == []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# _remove_codefreedom_images
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestRemoveCodefreedomImages:
+    """Tests for _remove_codefreedom_images."""
+
+    def test_removes_each_image(self, monkeypatch):
+        """Calls docker image rm for each found image."""
+        calls = []
+
+        def fake_run(cmd, *a, **kw):
+            calls.append(cmd)
+            if "images" in cmd:
+                return type(
+                    "Proc",
+                    (object,),
+                    {
+                        "returncode": 0,
+                        "stdout": "nilayparikh/codefreedom:ubuntu-latest\nnilayparikh/codefreedom:chrome-latest\n",
+                    },
+                )()
+            return type("Proc", (object,), {"returncode": 0})()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        _remove_codefreedom_images()
+        rm_calls = [c for c in calls if "image" in c and "rm" in c]
+        assert len(rm_calls) == 2
+        assert rm_calls[0] == [
+            "docker",
+            "image",
+            "rm",
+            "-f",
+            "nilayparikh/codefreedom:ubuntu-latest",
+        ]
+
+    def test_noop_when_no_images(self, monkeypatch):
+        """Does nothing when no images found."""
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *a, **kw: type(
+                "Proc", (object,), {"returncode": 0, "stdout": ""}
+            )(),
+        )
+        _remove_codefreedom_images()  # should not raise
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# _remove_codefreedom_volumes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestRemoveCodefreedomVolumes:
+    """Tests for _remove_codefreedom_volumes."""
+
+    def test_removes_existing_volumes(self, monkeypatch):
+        """Removes volumes that exist."""
+        calls = []
+
+        def fake_run(cmd, *a, **kw):
+            calls.append(cmd)
+            if "inspect" in cmd:
+                return type("Proc", (object,), {"returncode": 0})()
+            return type("Proc", (object,), {"returncode": 0})()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        _remove_codefreedom_volumes()
+        rm_calls = [c for c in calls if "volume" in c and "rm" in c]
+        assert len(rm_calls) == 2
+        assert ["docker", "volume", "rm", "codefreedom_pg_data"] in rm_calls
+        assert ["docker", "volume", "rm", "codefreedom_pg_backup"] in rm_calls
+
+    def test_skips_nonexistent_volumes(self, monkeypatch):
+        """Skips volumes that do not exist."""
+        calls = []
+
+        def fake_run(cmd, *a, **kw):
+            calls.append(cmd)
+            if "inspect" in cmd:
+                return type("Proc", (object,), {"returncode": 1})()
+            return type("Proc", (object,), {"returncode": 0})()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        _remove_codefreedom_volumes()
+        rm_calls = [c for c in calls if "volume" in c and "rm" in c]
+        assert len(rm_calls) == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# _prune_dangling_images
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPruneDanglingImages:
+    """Tests for _prune_dangling_images."""
+
+    def test_runs_docker_image_prune(self, monkeypatch):
+        """Calls docker image prune -f."""
+        calls = []
+
+        def fake_run(cmd, *a, **kw):
+            calls.append(cmd)
+            return type(
+                "Proc",
+                (object,),
+                {"returncode": 0, "stdout": "Total reclaimed space: 0B\n"},
+            )()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        _prune_dangling_images()
+        assert any("image" in c and "prune" in c for c in calls)
+
+    def test_handles_failure(self, monkeypatch):
+        """Does not raise on Docker failure."""
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *a, **kw: type(
+                "Proc", (object,), {"returncode": 1, "stdout": ""}
+            )(),
+        )
+        _prune_dangling_images()  # should not raise
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# _clean_docker_cache
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestCleanDockerCache:
+    """Tests for _clean_docker_cache."""
+
+    def test_calls_all_cleanup_functions(self, monkeypatch):
+        """Calls images, volumes, and prune in order."""
+        call_order = []
+
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit._remove_codefreedom_images",
+            lambda: call_order.append("images"),
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit._remove_codefreedom_volumes",
+            lambda: call_order.append("volumes"),
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit._prune_dangling_images",
+            lambda: call_order.append("prune"),
+        )
+        _clean_docker_cache()
+        assert call_order == ["images", "volumes", "prune"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # run() — full integration
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -255,7 +460,7 @@ class TestRun:
         (tmp_path / "profiles").mkdir(parents=True)
         (tmp_path / "profiles" / "test.yaml").write_text("key: val\n")
 
-        args = argparse.Namespace(force=True)
+        args = argparse.Namespace(force=True, clean_images=False)
 
         exit_code = run(args)
         assert exit_code == 0
@@ -267,7 +472,7 @@ class TestRun:
         self._patch_all(monkeypatch)
         (tmp_path / "profiles").mkdir(parents=True)
 
-        args = argparse.Namespace(force=False)
+        args = argparse.Namespace(force=False, clean_images=False)
 
         monkeypatch.setattr("builtins.input", lambda prompt: "n")
 
@@ -281,7 +486,7 @@ class TestRun:
         self._patch_all(monkeypatch)
         (tmp_path / "profiles").mkdir(parents=True)
 
-        args = argparse.Namespace(force=False)
+        args = argparse.Namespace(force=False, clean_images=False)
 
         monkeypatch.setattr("builtins.input", lambda prompt: "y")
 
@@ -293,7 +498,100 @@ class TestRun:
         """Returns 0 when codefreedom dir does not exist."""
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
         self._patch_all(monkeypatch)
-        args = argparse.Namespace(force=True)
+        args = argparse.Namespace(force=True, clean_images=False)
 
         exit_code = run(args)
         assert exit_code == 0
+
+    def test_clean_images_flag_triggers_cleanup(self, monkeypatch, tmp_path):
+        """With --clean-images, calls _clean_docker_cache."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        self._patch_all(monkeypatch)
+        (tmp_path / "profiles").mkdir(parents=True)
+
+        cleanup_called = []
+
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit._clean_docker_cache",
+            lambda: cleanup_called.append(True),
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit._list_codefreedom_images",
+            lambda: ["nilayparikh/codefreedom:ubuntu-latest"],
+        )
+
+        args = argparse.Namespace(force=True, clean_images=True)
+        exit_code = run(args)
+        assert exit_code == 0
+        assert cleanup_called
+
+    def test_clean_images_without_force_prompts(self, monkeypatch, tmp_path):
+        """With --clean-images but no --force, prompts before cleanup."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        self._patch_all(monkeypatch)
+        (tmp_path / "profiles").mkdir(parents=True)
+
+        cleanup_called = []
+
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit._clean_docker_cache",
+            lambda: cleanup_called.append(True),
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit._list_codefreedom_images",
+            lambda: ["nilayparikh/codefreedom:ubuntu-latest"],
+        )
+
+        prompts = []
+
+        def fake_input(prompt):
+            prompts.append(prompt)
+            return "y"
+
+        monkeypatch.setattr("builtins.input", fake_input)
+
+        args = argparse.Namespace(force=False, clean_images=True)
+        exit_code = run(args)
+        assert exit_code == 0
+        assert cleanup_called
+        assert len(prompts) == 2  # images prompt + directory prompt
+
+    def test_clean_images_prompt_abort(self, monkeypatch, tmp_path):
+        """With --clean-images, aborting image prompt returns 1."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        self._patch_all(monkeypatch)
+        (tmp_path / "profiles").mkdir(parents=True)
+
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit._list_codefreedom_images",
+            lambda: ["nilayparikh/codefreedom:ubuntu-latest"],
+        )
+
+        def fake_input(prompt):
+            if "Continue" in prompt:
+                return "n"
+            return "y"
+
+        monkeypatch.setattr("builtins.input", fake_input)
+
+        args = argparse.Namespace(force=False, clean_images=True)
+        exit_code = run(args)
+        assert exit_code == 1
+
+    def test_without_clean_images_skips_cleanup(self, monkeypatch, tmp_path):
+        """Without --clean-images, skips image cleanup."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        self._patch_all(monkeypatch)
+        (tmp_path / "profiles").mkdir(parents=True)
+
+        cleanup_called = []
+
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit._clean_docker_cache",
+            lambda: cleanup_called.append(True),
+        )
+
+        args = argparse.Namespace(force=True, clean_images=False)
+        exit_code = run(args)
+        assert exit_code == 0
+        assert not cleanup_called

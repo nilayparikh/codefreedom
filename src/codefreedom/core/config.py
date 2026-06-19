@@ -79,6 +79,18 @@ def resolve_opencode_profiles_path() -> Path:
     return get_codefreedom_dir() / "profiles" / "opencode.yaml"
 
 
+def resolve_pi_profiles_path() -> Path:
+    """Return the Pi Code profiles path (test-patchable).
+
+    Checks ``PI_PROFILES_FILE`` env var, falls back to
+    ``~/.codefreedom/profiles/pi-code.yaml``.
+    """
+    override = os.environ.get("PI_PROFILES_FILE")
+    if override:
+        return Path(override)
+    return get_codefreedom_dir() / "profiles" / "pi-code.yaml"
+
+
 def resolve_agent_config(
     agent: str,
     profile_name: str = "default",
@@ -105,6 +117,8 @@ def resolve_agent_config(
         profiles_path = resolve_mimo_profiles_path()
     elif agent == "open-code":
         profiles_path = resolve_opencode_profiles_path()
+    elif agent == "pi-code":
+        profiles_path = resolve_pi_profiles_path()
     else:
         raise ValueError(f"Unknown agent: {agent}")
 

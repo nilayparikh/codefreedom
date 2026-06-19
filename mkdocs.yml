@@ -3,14 +3,14 @@ site_name: CodeFreedom
 site_description: "Single wrapper for all code agents — simple LLM routing, sandboxing, and profile management"
 site_url: https://nilayparikh.github.io/codefreedom/
 repo_url: https://github.com/nilayparikh/codefreedom
-edit_uri: edit/main/docs/
-docs_dir: docs
+edit_uri: edit/main/pages/
+docs_dir: pages
 
 theme:
       name: material
       logo: assets/logo.svg
       favicon: assets/logo.svg
-      custom_dir: docs/overrides
+      custom_dir: pages/overrides
       features:
             - navigation.tabs
             - navigation.tabs.sticky
@@ -98,6 +98,12 @@ markdown_extensions:
 nav:
       - Home: index.md
       - Get Started: getting-started/index.md
+      - Agents:
+              - Overview: agents/index.md
+              - Claude Code: agents/claude-code.md
+              - MiMo Code: agents/mimo-code.md
+              - OpenCode: agents/open-code.md
+              - Pi Code: agents/pi-code.md
       - Recipes:
               - Overview: recipes/index.md
               - costeffective-coding: recipes/costeffective-coding.md

@@ -42,7 +42,6 @@ class TestLoadToolMcpEndpoints:
         servers = endpoints["mcpServers"]
         assert servers == {
             "chrome-devtools": {
-                "type": "http",
                 "url": "http://127.0.0.1:9223/mcp",
             }
         }
@@ -53,7 +52,6 @@ class TestLoadToolMcpEndpoints:
         servers = endpoints["mcpServers"]
         assert servers == {
             "web": {
-                "type": "http",
                 "url": "http://127.0.0.1:8420/mcp",
             }
         }
@@ -154,7 +152,6 @@ class TestLoadToolMcpEndpoints:
         servers = endpoints["mcpServers"]
         assert servers == {
             "github": {
-                "type": "http",
                 "url": "http://127.0.0.1:8082/mcp",
             }
         }
