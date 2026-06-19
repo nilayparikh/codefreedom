@@ -195,5 +195,6 @@ jobs:
 
           echo "Pushed $TAG to origin"
           echo ""
-          echo "PyPI publish will be triggered by tag push."
+          echo "PyPI publish is manual-only. Trigger it from GitHub:"
+          echo "  Actions -> Release -> Run workflow -> select tag $TAG"
           echo "Watch: https://github.com/${{ github.repository }}/actions/workflows/pipy.yaml"

@@ -21,7 +21,7 @@ mypy src/
 |---|---|---|
 | `ci.yml` | Push to ANY branch + PRs | Lint, type-check, unit tests, integration tests, commit lint (PRs only) |
 | `release.yml` | workflow_dispatch | Atomic bump + changelog + commit + tag + push |
-| `pipy.yaml` | Tag push `v*` | Build + publish to PyPI + GitHub Release |
+| `pipy.yaml` | workflow_dispatch | Build + publish to PyPI + GitHub Release (manual only) |
 | `docker-*.yml` | workflow_dispatch | Build, sign, publish Docker images (manual trigger only) |
 | `trivy.yml` | Push to main, PRs, weekly | Security scanning |
 | `scorecard.yml` | Push to main, weekly | OpenSSF Scorecard |
@@ -42,7 +42,7 @@ Releases are triggered via GitHub Actions `workflow_dispatch` — no local scrip
 1. Go to **Actions → Release → Run workflow**
 2. Enter version (e.g., `0.2.1`), select type (dev/rc/final)
 3. Workflow atomically: bumps version, generates changelog, commits, tags, pushes
-4. Tag push triggers `pipy.yaml` for PyPI publish + GitHub Release
+4. Manually trigger `pipy.yaml` to publish to PyPI + create GitHub Release
 
 See `docs/releasing.md` for full branch strategy and release lifecycle.
 

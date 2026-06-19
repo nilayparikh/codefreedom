@@ -167,7 +167,7 @@ Atomic release via `workflow_dispatch`.
 
 ### PyPI Publish (`pipy.yaml`)
 
-Triggered by tag push `v*`. Builds and publishes to PyPI.
+Manual dispatch only (`workflow_dispatch`). 100% user-controlled — no auto-trigger on tag push or any other event.
 
 | Step | Description |
 |---|---|
@@ -201,8 +201,8 @@ All Docker workflows are manual trigger only (`workflow_dispatch`).
 
 ## What Triggers PyPI Release
 
-Only tag pushes matching `v*` trigger the `pipy.yaml` workflow.
-Merging PRs or pushing branches never triggers a release.
+Only manual dispatch triggers the `pipy.yaml` workflow.
+No auto-trigger on tag push, merge, or branch push.
 
 | Action | PyPI Release? |
 |---|---|
@@ -211,7 +211,8 @@ Merging PRs or pushing branches never triggers a release.
 | Push to release/v* | No |
 | Push to main | No |
 | PR to any branch | No |
-| Trigger release.yml | Tag push -> PyPI publish |
+| Tag push (v*) | No |
+| Trigger pipy.yaml manually | Yes |
 
 ## Branch Protection
 
