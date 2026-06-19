@@ -35,7 +35,7 @@ from codefreedom.core.profiles import (
     list_profiles,
 )
 from codefreedom.env_loader import load_env_chain
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.sandbox.signals import forward_signal
 from codefreedom.tools.registry import generate_session_id
 
@@ -288,7 +288,7 @@ def _generate_codefreedom_extension(config_dir: Path) -> Path:
     ext_path = ext_dir / "codefreedom.ts"
     ext_path.write_text(_EXTENSION_TEMPLATE, encoding="utf-8")
     ext_path.chmod(0o600)
-    eprint(f"[PI] Generated extension at {ext_path}")
+    eprint(f"{tag('PI')} Generated extension at {ext_path}")
     return ext_path
 
 
@@ -332,7 +332,7 @@ def _write_minimal_settings(
 
     config_path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
     config_path.chmod(0o600)
-    eprint(f"[PI] Generated settings at {config_path}")
+    eprint(f"{tag('PI')} Generated settings at {config_path}")
     return config_path
 
 
@@ -432,7 +432,7 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
             continue
 
         if manager == "npm":
-            eprint(f"[LSP] Installing npm packages: {', '.join(missing)}")
+            eprint(f"{tag('LSP')} Installing npm packages: {', '.join(missing)}")
             try:
                 subprocess.run(
                     ["npm", "install", "-g", *missing],
@@ -440,10 +440,10 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
                     timeout=120,
                 )
             except Exception as exc:
-                eprint(f"[LSP] npm install failed: {exc}")
+                eprint(f"{tag('LSP')} npm install failed: {exc}")
 
         elif manager == "pip":
-            eprint(f"[LSP] Installing pip packages: {', '.join(missing)}")
+            eprint(f"{tag('LSP')} Installing pip packages: {', '.join(missing)}")
             try:
                 subprocess.run(
                     ["pip", "install", "--quiet", *missing],
@@ -451,7 +451,7 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
                     timeout=120,
                 )
             except Exception as exc:
-                eprint(f"[LSP] pip install failed: {exc}")
+                eprint(f"{tag('LSP')} pip install failed: {exc}")
 
 
 def _ensure_lean_ctx(pi_agent_dir: Path) -> None:
@@ -468,7 +468,7 @@ def _ensure_lean_ctx(pi_agent_dir: Path) -> None:
     if _shutil.which("lean-ctx"):
         return
 
-    eprint("[lean-ctx] installing via npm (lean-ctx-bin)...")
+    eprint(f"{tag('LEAN-CTX')} Installing via npm (lean-ctx-bin)...")
     try:
         subprocess.run(
             ["npm", "install", "-g", "lean-ctx-bin"],
@@ -477,14 +477,14 @@ def _ensure_lean_ctx(pi_agent_dir: Path) -> None:
             timeout=120,
         )
     except Exception as exc:
-        eprint(f"[lean-ctx] npm install failed: {exc}")
+        eprint(f"{tag('LEAN-CTX')} npm install failed: {exc}")
         return
 
     if not _shutil.which("lean-ctx"):
-        eprint("[lean-ctx] installed but not on PATH — check npm global bin")
+        eprint(f"{tag('LEAN-CTX')} Installed but not on PATH — check npm global bin")
         return
 
-    eprint("[lean-ctx] configuring for pi...")
+    eprint(f"{tag('LEAN-CTX')} Configuring for pi...")
     with contextlib.suppress(Exception):
         subprocess.run(
             ["lean-ctx", "init", "--agent", "pi"],
@@ -543,7 +543,7 @@ def run_local(
         return 1
 
     extensions = extensions or []
-    eprint("[LOCAL] Running Pi natively...")
+    eprint(f"{tag('LOCAL')} Running Pi natively...")
 
     env = {**os.environ}
     env.update(profile_env)
@@ -606,7 +606,7 @@ def run_local(
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
-        eprint(f"[ERROR] Pi binary not found at {pi_bin}.")
+        eprint(f"{tag('ERROR')} Pi binary not found at {pi_bin}.")
         return 1
     except KeyboardInterrupt:
         return 130
@@ -630,7 +630,7 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()
-    eprint("[ENV] Loading configuration...")
+    eprint(f"{tag('ENV')} Loading configuration...")
     base_env = load_env_chain(workspace_dir, component="pi")
 
     # ── Load profile ───────────────────────────────────────────────────────
@@ -654,14 +654,14 @@ def run(args: argparse.Namespace) -> int:
     # ── Read extensions from profile ─────────────────────────────────
     extensions = _read_profile_extensions(profile_name, profiles_path)
     if extensions:
-        eprint(f"[PI] Profile extensions: {', '.join(extensions)}")
+        eprint(f"{tag('PI')} Profile extensions: {', '.join(extensions)}")
 
     # ── Read LSP servers from profile ────────────────────────────────
     lsp_servers = _read_profile_lsp_servers(profile_name, profiles_path)
     if lsp_servers:
         total = sum(len(v) for v in lsp_servers.values() if isinstance(v, list))
         eprint(
-            f"[PI] Profile LSP servers: {total} packages ({', '.join(lsp_servers.keys())})"
+            f"{tag('PI')} Profile LSP servers: {total} packages ({', '.join(lsp_servers.keys())})"
         )
 
     # ── Tools: acquire if declared in profile ────────────────────────────
