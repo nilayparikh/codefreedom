@@ -1,26 +1,50 @@
-# ── CodeFreedom PyPI Publish Workflow ─────────────────────────────────────────
-# Builds and publishes the Python package to PyPI.
+# ── CodeFreedom Publish RC Workflow ────────────────────────────────────────────
+# Publishes release candidate version to PyPI from release/v* branches.
 #
-# Trigger: tag push (v*) — creates GitHub Release.
-# Version is derived from the tag at runtime — pyproject.toml is NEVER modified.
+# Trigger: manual dispatch only (100% user-controlled).
+# Branch: release/v* only.
+# Version: derived from version.yaml at runtime.
 #
 # Uses PyPI Trusted Publishing (OIDC) — no API tokens needed.
-# ────────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 
-name: Publish Release
+name: Publish RC
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
+  validate:
+    name: Validate branch
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version
+        id: resolve
+        run: |
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+          if [[ "$BRANCH" != release/v* ]]; then
+            echo "Error: must be on release/v* branch. Current: $BRANCH"
+            exit 1
+          fi
+
+          VERSION=$(grep '^version: ' version.yaml | head -1 | sed 's/version: "\(.*\)"/\1/')
+          RC=$(grep '^rc: ' version.yaml | head -1 | sed 's/rc: //')
+          FULL_VERSION="${VERSION}rc${RC}"
+          echo "version=${FULL_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "Branch: $BRANCH → Version: ${FULL_VERSION}"
+
   test:
     name: "Test on ${{ matrix.os }} / py${{ matrix.python-version }}"
+    needs: validate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -44,7 +68,7 @@ jobs:
 
   build:
     name: Build distribution
-    needs: test
+    needs: [validate, test]
     runs-on: ubuntu-24.04
 
     steps:
@@ -60,18 +84,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install build
 
-      - name: Derive version from tag
-        id: version
-        run: |
-          TAG="${{ github.ref_name }}"
-          VERSION="${TAG#v}"
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
-          echo "Tag: ${TAG} → Version: ${VERSION}"
-
       - name: Override version in pyproject.toml
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.validate.outputs.version }}"
           sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
           echo "Version overridden to ${VERSION}"
           grep '^version' pyproject.toml
@@ -112,20 +127,3 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           attestations: true
-
-  github-release:
-    name: GitHub Release
-    needs: publish
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Create release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          generate_release_notes: true
