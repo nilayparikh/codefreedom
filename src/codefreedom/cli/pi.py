@@ -612,71 +612,6 @@ def run_local(
         return 130
 
 
-# ── Init command ─────────────────────────────────────────────────────────────
-
-
-def init_pi() -> int:
-    """Print initialization help for Pi."""
-    from codefreedom.cli.docker_utils import print_help_section
-
-    print_help_section(
-        "pi init",
-        [
-            "Pi requires no init -- 0-click proxy config is generated",
-            "automatically on first launch.",
-            "",
-            "To install Pi:",
-            "  npm install -g @earendil-works/pi-coding-agent",
-            "",
-            "To start the proxy (for model routing):",
-            "  cf run proxy start",
-            "",
-            "To launch Pi:",
-            "  cf run agent pi-code",
-        ],
-        docs_url="https://pi.dev/docs/latest/",
-        include_disclaimer=False,
-    )
-    return 0
-
-
-# ── Config subcommand ─────────────────────────────────────────────────────────
-
-
-def cmd_config(args: argparse.Namespace) -> int:
-    """Generate and print a proxy-resolved ``settings.json`` for standalone use.
-
-    Loads the full env chain, detects the proxy, fetches model list,
-    generates a complete ``settings.json`` and outputs it.
-    """
-    workspace_dir = Path.cwd()
-    eprint("[ENV] Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="pi")
-
-    profile_name = getattr(args, "profile", None) or "default"
-    profiles_path = resolve_pi_profiles_path()
-
-    from codefreedom.cli.common import load_profile_env_only
-
-    profile_env, exit_code = load_profile_env_only(
-        profile_name, profiles_path, base_env, error_prefix="cf run proxy start"
-    )
-    if exit_code != 0 and profile_name != "default":
-        return 1
-
-    # ── Ensure proxy API key is available ──────────────────────────────
-    if not profile_env.get("PROXY_API_KEY"):
-        master_key = base_env.get("LITELLM_MASTER_KEY", "")
-        if master_key:
-            profile_env["PROXY_API_KEY"] = master_key
-
-    proxy_url = _detect_proxy_url(profile_env)
-    eprint(f"[PI] Proxy URL: {proxy_url}")
-    eprint("[PI] Config is now generated dynamically by the codefreedom extension.")
-    eprint("[PI] Run 'cf run agent pi-code' to start pi with auto-configured models.")
-    return 0
-
-
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 
@@ -692,11 +627,6 @@ def run(args: argparse.Namespace) -> int:
         return display_profiles(
             profiles_path, profiles, show_env_keys=False, show_tools=True
         )
-
-    # Actions
-    action = getattr(args, "pi_action", None)
-    if action == "config":
-        return cmd_config(args)
 
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()

@@ -210,25 +210,6 @@ class TestEnsureLspServers:
 class TestPiEnvLoading:
     """Verify pi-code loads its own component env files."""
 
-    def test_cmd_config_uses_pi_component(self, tmp_path, monkeypatch):
-        """cmd_config must load component='pi', not 'claude'."""
-        import codefreedom.cli.pi as pi_mod
-
-        calls = []
-
-        def fake_load_env_chain(workspace_dir, *, component=None, verbose=True):
-            calls.append(component)
-            return {}
-
-        monkeypatch.setattr(pi_mod, "load_env_chain", fake_load_env_chain)
-        monkeypatch.setattr(
-            pi_mod, "_detect_proxy_url", lambda env: "http://localhost:4000"
-        )
-
-        ns = argparse.Namespace(profile="default")
-        pi_mod.cmd_config(ns)
-        assert calls == ["pi"], f"Expected component='pi', got {calls}"
-
     def test_run_uses_pi_component(self, tmp_path, monkeypatch):
         """run() must load component='pi', not 'claude'."""
         import codefreedom.cli.pi as pi_mod
