@@ -6,5 +6,6 @@
   "MD046": { "style": "fenced" },
   "MD007": { "indent": 4, "start_indented": false },
   "MD009": { "br_spaces": 2 },
-  "MD060": false
+  "MD060": false,
+  "ignores": ["pages/raw/**"]
 }

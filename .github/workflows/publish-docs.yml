@@ -10,7 +10,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "docs/**"
+      - "pages/**"
       - "mkdocs.yml"
       - ".github/workflows/publish-docs.yml"
   workflow_dispatch:
@@ -48,7 +48,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Lint Markdown
-        run: npx markdownlint-cli2 "docs/**/*.md"
+        run: npx markdownlint-cli2 "pages/**/*.md"
 
       - name: Build
         run: mkdocs build --strict

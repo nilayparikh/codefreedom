@@ -12,7 +12,7 @@ Tests verify CodeFreedom's correctness at two levels:
 ### What Belongs Where
 
 | Category | Marker | Typical Content | Example |
-|----------|--------|-----------------|---------|
+|---|---|---|---|
 | **Unit** | `@pytest.mark.unit` | Pure functions, transforms, parsers, validation logic | `_categorize()`, `_deepdiff_merge()`, `_resolve_model_id()` |
 | **Integration** | `@pytest.mark.integration` | I/O, Docker, subprocess, network, full CLI commands | `engine_backup()`, `cmd_vscode_proxy_config()`, `_check_proxy_live()` |
 
@@ -59,7 +59,7 @@ pytest tests/ -q --tb=short
 Test files mirror source structure and are split by responsibility:
 
 | Test File | Tests | Marker |
-|-----------|-------|--------|
+|---|---|---|
 | `test_admin_helpers.py` | Categorization, secrets detection, filenames, SHA256, manifest, duration, encryption | unit |
 | `test_admin_backup.py` | Backup/restore/prune/list/inspect, PostgreSQL dump | integration |
 | `test_recipe_merge.py` | DeepDiff merge, env merge, recursive merge, installation orchestration | unit |
@@ -67,6 +67,33 @@ Test files mirror source structure and are split by responsibility:
 | `test_vscode_proxy_helpers.py` | Model ID resolution, deduplication, entry building, reasoning effort | unit |
 | `test_vscode_proxy_io.py` | Master key resolution, proxy URLs, health check, model fetch, alias/route loading | integration |
 | `test_vscode_proxy_cmd.py` | Full CLI command flow with mocked network | integration |
+| `test_agent_dispatch.py` | Agent registry, name validation, alias resolution | unit |
+| `test_mcp_endpoints.py` | MCP endpoint configuration for all tools | unit |
+| `test_pi_helpers.py` | Pi-code extension generation, model building, profile reading | unit |
+| `test_mimocode_helpers.py` | MiMoCode config generation, provider building | unit |
+| `test_mimocode_io.py` | MiMoCode proxy detection, model fetching | integration |
+| `test_opencode_helpers.py` | OpenCode config generation, provider building | unit |
+| `test_opencode_io.py` | OpenCode proxy detection, model fetching | integration |
+| `test_claudecode_helpers.py` | Claude Code config generation | unit |
+| `test_chrome.py` | Chrome tool lifecycle | integration |
+| `test_web.py` | Web tool lifecycle | integration |
+| `test_github.py` | GitHub MCP tool lifecycle | integration |
+| `test_web_bridge.py` | Web bridge tool lifecycle | integration |
+| `test_tool_registry.py` | Tool registry, reference counting | unit |
+| `test_docker_utils.py` | Docker utility functions | unit |
+| `test_docker_client.py` | Docker client operations | integration |
+| `test_launcher.py` | Sandbox launcher, container lifecycle | integration |
+| `test_sandbox_launcher.py` | Sandbox-specific launcher tests | integration |
+| `test_profiles.py` | Profile loading, inheritance | unit |
+| `test_env_loader.py` | Environment variable loading, chain resolution | unit |
+| `test_log.py` | Logging, tag() helper | unit |
+| `test_doctor.py` | Doctor command, environment validation | integration |
+| `test_deinit.py` | Deinit command, cleanup | integration |
+| `test_proxy.py` | Proxy validation, config loading | integration |
+| `test_image_router.py` | Image routing, VLM model detection | unit |
+| `test_reasoning_efforts_mapping.py` | Reasoning effort configuration | unit |
+| `test_litellm_image_files.py` | LiteLLM Dockerfile validation | unit |
+| `test_http_client.py` | HTTP client operations | integration |
 
 ### Naming Convention
 

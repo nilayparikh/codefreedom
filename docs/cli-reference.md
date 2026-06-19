@@ -4,7 +4,7 @@ Complete command reference for `codefreedom` / `cf`.
 
 ## Command Structure
 
-```
+```text
 cf <command> [action|target] [options]
 
 # Agent Commands
@@ -32,11 +32,11 @@ cf setup deinit [--force]                           # Tear down
 cf run agent <name> [options] [-- <agent-args>]
 cf run agent list
 
-# Supported agents: claude-code (cc), mimo-code (mc), open-code (oc)
+# Supported agents: claude-code (cc), mimo-code (mc), open-code (oc), pi-code (pc)
 
 # Options:
 --profile NAME        Load a named profile (default: 'default')
---sandbox             Run inside Docker container
+--sandbox             Run inside Docker container (not supported for pi-code)
 --run-as-me           Match host uid/gid in sandbox
 --list-profiles       List available profiles and exit
 ```
@@ -73,6 +73,7 @@ cf run proxy validate
 
 ```bash
 cf run tools [start|stop|restart|status]       # Default: status
+cf run tools [-c] [-w] [-g] [--web-bridge]    # Filter by tool
 ```
 
 ## Admin Commands
@@ -96,11 +97,12 @@ cf setup deinit [--force]                        # Tear down
 ## Aliases
 
 | Command | Alias |
-|---------|-------|
+|---|---|
 | `cf run proxy` | `cf r px` |
 | `cf run agent claude-code` | `cf r ag cc` |
 | `cf run agent mimo-code` | `cf r ag mc` |
 | `cf run agent open-code` | `cf r ag oc` |
+| `cf run agent pi-code` | `cf r ag pc` |
 | `cf run tools` | `cf r tl` |
 | `cf manage admin` | `cf m ad` |
 | `cf manage doctor` | `cf m dr` |
@@ -112,7 +114,7 @@ cf setup deinit [--force]                        # Tear down
 ## Deprecated Commands
 
 | Deprecated | Replacement |
-|------------|-------------|
+|---|---|
 | `cf claude` | `cf r ag cc` |
 | `cf mimo` | `cf r ag mc` |
 | `cf opencode` | `cf r ag oc` |
