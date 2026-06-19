@@ -1,34 +1,45 @@
 # Release Process
 
+## Overview
+
+CodeFreedom uses a Gitflow-inspired branching strategy with GitHub Actions for all releases.
+No local release scripts — everything runs in CI via `workflow_dispatch`.
+
 ## Branch Structure
 
 ```text
-main                              <- stable releases (final tags only)
+main                                  <- stable releases (final tags only)
   ^ merge release when approved
-release/v0.2.1                    <- RC testing (rc tags -> PyPI)
+release/v0.2.1                        <- RC testing (rc tags -> PyPI)
   ^ created from prerelease
-prerelease/v0.2.1                 <- feature consolidation (no tags -> no PyPI)
+prerelease/v0.2.1                     <- feature consolidation (no tags -> no PyPI)
   ^ PRs from features
-feature/add-docker-gpu            <- individual work
+feature/add-docker-gpu                <- individual work
 ```
 
 ## Branch Naming
 
-| Type | Pattern | Example |
+| Type | Pattern | Example | Lifecycle |
+|---|---|---|---|
+| Feature | `feature/{short-name}` | `feature/docker-gpu` | Delete after merge to prerelease |
+| Pre-release | `prerelease/v{version}` | `prerelease/v0.2.1` | Delete after promotion to release |
+| Release | `release/v{version}` | `release/v0.2.1` | Delete after merge to main |
+
+## Tag Naming (PEP 440)
+
+| Tag | PyPI action | Example |
 |---|---|---|
-| Feature | `feature/{short-name}` | `feature/docker-gpu` |
-| Pre-release | `prerelease/v{version}` | `prerelease/v0.2.1` |
-| Release | `release/v{version}` | `release/v0.2.1` |
-| Tag (RC) | `v{X.Y.Z}rc{N}` | `v0.2.1rc1` |
-| Tag (final) | `v{X.Y.Z}` | `v0.2.1` |
+| `vX.Y.ZrcN` | Publishes as pre-release (`pip install --pre`) | `v0.2.1rc1` |
+| `vX.Y.Z` | Publishes as stable release | `v0.2.1` |
 
 ## Version in pyproject.toml
 
-| Phase | Version | Example |
+| Branch | Version format | Example |
 |---|---|---|
-| Development | `X.Y.Z` | `0.2.1` |
-| Release candidate | `X.Y.ZrcN` | `0.2.1rc1` |
-| Final release | `X.Y.Z` | `0.2.1` |
+| `feature/*` | `X.Y.Z` | `0.2.1` |
+| `prerelease/*` | `X.Y.Z` | `0.2.1` |
+| `release/*` | `X.Y.ZrcN` | `0.2.1rc1` |
+| `main` | `X.Y.Z` | `0.2.1` |
 
 No `.devN` suffixes. For local testing, install directly:
 
@@ -37,9 +48,6 @@ pip install -e ".[all]"
 ```
 
 ## Release Workflow
-
-All releases are triggered via GitHub Actions `workflow_dispatch`.
-No local scripts — everything runs in CI atomically.
 
 ### Phase 1: Feature Development
 
@@ -96,21 +104,18 @@ git branch -d prerelease/v0.2.1
 git push origin --delete prerelease/v0.2.1
 ```
 
-## CI Workflows
+## Workflows
 
-All CI is consolidated into a single `ci.yml` workflow.
+### CI (`ci.yml`)
 
-| Workflow | Trigger | Purpose |
-|---|---|---|
-| `ci.yml` | Push to ANY branch + PRs to main/pre-release/release | Lint, type-check, unit tests, integration tests, commit lint (PRs only) |
-| `release.yml` | workflow_dispatch | Atomic bump + changelog + commit + tag + push |
-| `pipy.yaml` | Tag push `v*` | Build + publish to PyPI + GitHub Release |
-| `docker-*.yml` | workflow_dispatch | Build, sign, publish Docker images |
-| `trivy.yml` | Various | Security scanning |
-| `scorecard.yml` | Various | OpenSSF Scorecard |
-| `publish-docs.yml` | Various | MkDocs deployment |
+Single workflow for all branches and PRs.
 
-### CI Stages (all in ci.yml)
+| Trigger | What runs |
+|---|---|
+| Push to ANY branch | Lint, type-check, unit tests (3.10/3.11/3.12), integration tests (Ubuntu/Windows/macOS) |
+| PR to main/prerelease/v*/release/v* | Same as above + conventional commit lint |
+
+**Stages:**
 
 1. **Lint** — `ruff check src/ tests/`
 2. **Type-check** — `mypy src/ --ignore-missing-imports`
@@ -118,10 +123,74 @@ All CI is consolidated into a single `ci.yml` workflow.
 4. **Integration tests** — build wheel, install, smoke test (Ubuntu/Windows/macOS)
 5. **Commit lint** — conventional commit validation (PRs only)
 
+### Release (`release.yml`)
+
+Atomic release via `workflow_dispatch`.
+
+| Input | Required | Description |
+|---|---|---|
+| `version` | Yes | Version to release (e.g., `0.2.1`) |
+| `pre-release` | No | Mark as pre-release (default: false) |
+| `candidate` | No | RC number (required if pre-release is true) |
+
+**What it does:**
+
+1. Validates version format, branch, clean working tree, no duplicate tags
+2. Bumps version in `pyproject.toml`
+3. Generates changelog with `git-cliff`
+4. Commits: `release: bump to X.Y.ZrcN`
+5. Tags: creates annotated tag `vX.Y.ZrcN` or `vX.Y.Z`
+6. Pushes commit + tag to origin
+
+**Branch requirements:**
+
+| Release type | Must be on |
+|---|---|
+| RC (`pre-release: true`) | `release/v*` branch |
+| Final (`pre-release: false`) | `main` branch |
+
+### PyPI Publish (`pipy.yaml`)
+
+Triggered by tag push `v*`. Builds and publishes to PyPI.
+
+| Step | Description |
+|---|---|
+| Test | Run full test suite on 3 OS x 3 Python versions |
+| Build | Create sdist + wheel |
+| Publish | Upload to PyPI via OIDC trusted publishing |
+| GitHub Release | Create release (marked as pre-release for RCs) |
+
+### Docker Workflows
+
+All Docker workflows are manual trigger only (`workflow_dispatch`).
+
+| Workflow | Image | Inputs |
+|---|---|---|
+| `docker-chrome.yml` | Chrome browser | `tag` (required), `latest` (default: true) |
+| `docker-cuda.yml` | CUDA GPU | `tag` (required), `latest` (default: true) |
+| `docker-rocm.yml` | ROCm GPU | `tag` (required), `latest` (default: true) |
+| `docker-ubuntu.yml` | CPU-only | `tag` (required), `latest` (default: true) |
+| `docker-litellm.yml` | LiteLLM proxy | `tag` (required), `latest` (default: true), `litellm_base_tag` (optional) |
+| `docker-mimo-code.yml` | MiMo Code | `tag` (required), `latest` (default: true) |
+| `docker-open-code.yml` | Open Code | `tag` (required), `latest` (default: true) |
+| `docker-web.yml` | Camoufox MCP | `tag` (required), `latest` (default: true) |
+| `docker-web-bridge.yml` | Web Bridge | `tag` (required), `latest` (default: true) |
+| `docker-github.yml` | GitHub MCP | `tag` (required), `latest` (default: true) |
+| `docker-litellm-base.yml` | LiteLLM base | `litellm_tag` (required), `pg_base_tag` (required) |
+| `docker-litellm-pg-base.yml` | PostgreSQL base | `pg_version` (required), `pg_tag` (required) |
+
+### Other Workflows
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `trivy.yml` | Push to main, PRs, weekly | Security scanning |
+| `scorecard.yml` | Push to main, weekly | OpenSSF Scorecard |
+| `publish-docs.yml` | Push to main (docs changes) | MkDocs to GitHub Pages |
+
 ## What Triggers PyPI Release
 
 Only tag pushes matching `v*` trigger the `pipy.yaml` workflow.
-Merging PRs never triggers a release.
+Merging PRs or pushing branches never triggers a release.
 
 | Action | PyPI Release? |
 |---|---|
@@ -132,7 +201,32 @@ Merging PRs never triggers a release.
 | PR to any branch | No |
 | Trigger release.yml | Tag push -> PyPI publish |
 
+## Branch Protection
+
+All protected branches use a single rule with pattern:
+
+```text
+main
+prerelease/v*
+release/v*
+```
+
+**Required settings:**
+
+- Require a pull request before merging
+- Require status checks to pass before merging:
+    - `unit-tests (3.10)`
+    - `unit-tests (3.11)`
+    - `unit-tests (3.12)`
+    - `integration (ubuntu-24.04 / py3.12)`
+    - `integration (windows-2022 / py3.12)`
+    - `integration (macos-14 / py3.12)`
+    - `Validate commit messages`
+- Require branches to be up to date before merging
+
 ## Commit Message Format
+
+All commits must follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```text
 type(scope): description
@@ -149,3 +243,17 @@ test     - adding or updating tests
 style    - formatting, no code change
 revert   - reverts a previous commit
 ```
+
+PRs to `prerelease/v*` and `release/v*` branches are validated automatically.
+
+## Local Development
+
+For local testing, install in editable mode:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[all]"
+```
+
+No `.devN` version suffixes. The version in `pyproject.toml` stays as `X.Y.Z` during development and is only bumped to `X.Y.ZrcN` or `X.Y.Z` at release time via the `release.yml` workflow.
