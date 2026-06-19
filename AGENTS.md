@@ -433,9 +433,10 @@ All CI is consolidated into `ci.yml`. No separate lint/test/type-check workflows
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `ci.yml` | Push to ANY branch + PRs | Lint, type-check, unit tests, integration tests, commit lint (PRs only) |
-| `release.yml` | workflow_dispatch | Atomic bump + changelog + commit + tag + push |
+| `release.yml` | workflow_dispatch | Create and push tag (tag is source of truth for version) |
 | `pipy.yaml` | workflow_dispatch | Build + publish to PyPI + GitHub Release (manual only) |
-| `docker-*.yml` | Various | Build, sign, publish Docker images |
+| `docker-agents.yml` | workflow_dispatch | Build + publish Docker agents images (ubuntu/cuda/rocm) |
+| `docker-*.yml` | workflow_dispatch | Build + publish other Docker images |
 | `trivy.yml` | Various | Security scanning |
 | `scorecard.yml` | Various | OpenSSF Scorecard |
 | `publish-docs.yml` | Various | MkDocs deployment |
@@ -448,16 +449,64 @@ All CI is consolidated into `ci.yml`. No separate lint/test/type-check workflows
 4. **Integration tests** — build wheel, install, smoke test (Ubuntu/Windows/macOS)
 5. **Commit lint** — conventional commit validation (PRs only)
 
+### Branch Protection & Promotion Flow
+
+**CRITICAL: NEVER push directly to protected branches (main, prerelease/v*, release/v*).**
+
+Branch protection requires PRs and status checks. Direct pushes will be rejected.
+
+**Required promotion flow:**
+
+```text
+adhoc/* → PR to prerelease/v* → PR to release/v* → PR to main
+```
+
+Steps:
+
+1. Create adhoc branch: `git checkout -b adhoc/your-fix`
+2. Commit changes on adhoc branch
+3. Push adhoc branch: `git push -u origin adhoc/your-fix`
+4. Create PR: adhoc → prerelease/v*
+5. Wait for CI checks to pass, merge PR
+6. Create PR: prerelease/v*→ release/v*
+7. Wait for CI checks to pass, merge PR
+8. Create PR: release/v* → main
+9. Wait for CI checks to pass, merge PR
+
 ### Release Process
 
 Releases are triggered via GitHub Actions `workflow_dispatch` — no local scripts needed.
 
-1. Go to **Actions → Release → Run workflow**
-2. Enter version (e.g., `0.2.1`), check pre-release if RC, enter candidate number
-3. Workflow atomically: bumps version, generates changelog, commits, tags, pushes
-4. Manually trigger `pipy.yaml` to publish to PyPI + create GitHub Release
+**Version is derived from the tag at runtime. `pyproject.toml` is NEVER modified on branches.**
 
-See `docs/releasing.md` for full branch strategy and release lifecycle.
+1. Ensure changes are promoted to desired branch (see promotion flow above)
+2. Go to **Actions → Release → Run workflow**
+3. Enter version (e.g., `0.2.1`), select pre-release type if needed
+4. Workflow creates and pushes the tag
+5. Manually trigger `pipy.yaml` to publish to PyPI + create GitHub Release
+
+**Release types:**
+
+- **Dev**: `0.2.1.dev1` — for testing prerelease features
+- **RC**: `0.2.1rc1` — release candidate for validation
+- **Final**: `0.2.1` — stable release
+
+**Tag is the single source of truth for the version.** The `pipy.yaml` workflow derives the version from the tag at runtime and overrides `pyproject.toml` during build.
+
+### Docker Images
+
+| Image | Dockerfile | Use Case |
+|---|---|---|
+| Ubuntu | `docker/agents/Dockerfile.Agents` (target: ubuntu) | CPU-only, all agents |
+| CUDA | `docker/agents/Dockerfile.Agents` (target: cuda) | NVIDIA GPU, all agents |
+| ROCm | `docker/agents/Dockerfile.Agents` (target: rocm) | AMD GPU, all agents |
+| Chrome | `docker/chrome/Dockerfile.Chrome` | Headless Chromium |
+| Web | `docker/web/Dockerfile.Web` | Camoufox MCP |
+| GitHub MCP | `docker/github/Dockerfile.Github` | GitHub API tools |
+| LiteLLM | `docker/litellm/Dockerfile.LiteLLM` | LLM proxy + PG |
+| Web Bridge | `docker/web-bridge/Dockerfile.Bridge` | SearXNG bridge |
+
+Docker tags must be **lowercase**.
 
 ### Documentation
 
