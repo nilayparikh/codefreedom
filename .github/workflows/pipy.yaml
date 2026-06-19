@@ -4,6 +4,9 @@
 # Trigger: manual dispatch only (100% user-controlled).
 # No auto-trigger on tag push or any other event.
 #
+# Version is derived from the tag at runtime — pyproject.toml is NEVER modified.
+# The tag is the single source of truth for the version being published.
+#
 # RC tags (v*rc*) are published as prereleases — users must `pip install --pre`.
 # Final tags (v*) create a proper GitHub Release.
 #
@@ -62,6 +65,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install build
 
+      - name: Derive version from tag
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          # Strip 'v' prefix: v0.2.1.dev1 → 0.2.1.dev1
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "Tag: ${TAG} → Version: ${VERSION}"
+
+      - name: Override version in pyproject.toml
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+          echo "Version overridden to ${VERSION}"
+          grep '^version' pyproject.toml
+
       - name: Build package
         run: python -m build
 
@@ -70,7 +90,7 @@ jobs:
           ls -la dist/
           test -f dist/codefreedom-*.tar.gz || { echo "MISSING: sdist"; exit 1; }
           test -f dist/codefreedom-*.whl   || { echo "MISSING: wheel"; exit 1; }
-          echo "✓ Artifacts built successfully"
+          echo "Artifacts built successfully"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
