@@ -1,10 +1,13 @@
 """Tests for pi-code launcher helpers."""
+
 from __future__ import annotations
 
 import argparse
 import json
-import pytest
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 pytestmark = pytest.mark.unit
 
@@ -108,7 +111,9 @@ class TestWriteMinimalSettings:
     def test_extensions_get_npm_prefix(self, tmp_path: Path) -> None:
         from codefreedom.cli.pi import _write_minimal_settings
 
-        _write_minimal_settings(tmp_path, extensions=["pi-mcp-adapter", "@tintinweb/pi-subagents"])
+        _write_minimal_settings(
+            tmp_path, extensions=["pi-mcp-adapter", "@tintinweb/pi-subagents"]
+        )
         data = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
         assert data["packages"] == ["npm:pi-mcp-adapter", "npm:@tintinweb/pi-subagents"]
 
@@ -124,29 +129,37 @@ class TestWriteMinimalSettings:
 class TestEnsureLeanCtx:
     """Tests for _ensure_lean_ctx()."""
 
-    def test_skips_npm_install_when_binary_on_path(self, tmp_path: Path) -> None:
+    def test_skips_npm_install_when_binary_on_path(self) -> None:
         from codefreedom.cli.pi import _ensure_lean_ctx
-        from unittest.mock import patch
 
-        with patch("shutil.which", return_value="/usr/local/bin/lean-ctx"):
-            with patch("subprocess.run") as mock_run:
-                _ensure_lean_ctx(tmp_path)
-                mock_run.assert_not_called()
+        with (
+            patch(
+                "codefreedom.cli.pi.shutil.which",
+                return_value="/usr/local/bin/lean-ctx",
+            ),
+            patch("subprocess.run") as mock_run,
+        ):
+            _ensure_lean_ctx()
+            mock_run.assert_not_called()
 
-    def test_runs_npm_install_when_binary_missing(self, tmp_path: Path) -> None:
+    def test_runs_npm_install_when_binary_missing(self) -> None:
         from codefreedom.cli.pi import _ensure_lean_ctx
-        from unittest.mock import patch
 
-        with patch("shutil.which", side_effect=lambda cmd: None if cmd == "lean-ctx" else "/usr/bin/npm"):
-            with patch("subprocess.run") as mock_run:
-                _ensure_lean_ctx(tmp_path)
-                # Should call npm install -g lean-ctx-bin
-                mock_run.assert_any_call(
-                    ["npm", "install", "-g", "lean-ctx-bin"],
-                    check=True,
-                    capture_output=True,
-                    timeout=120,
-                )
+        with (
+            patch(
+                "codefreedom.cli.pi.shutil.which",
+                side_effect=lambda cmd: None if cmd == "lean-ctx" else "/usr/bin/npm",
+            ),
+            patch("subprocess.run") as mock_run,
+        ):
+            _ensure_lean_ctx()
+            # Should call npm install -g lean-ctx-bin
+            mock_run.assert_any_call(
+                ["npm", "install", "-g", "lean-ctx-bin"],
+                check=True,
+                capture_output=True,
+                timeout=120,
+            )
 
 
 class TestEnsureLspServers:
@@ -227,6 +240,7 @@ class TestPiEnvLoading:
         )
 
         import codefreedom.cli.common as common_mod
+
         monkeypatch.setattr(
             common_mod,
             "load_profile_with_tools",

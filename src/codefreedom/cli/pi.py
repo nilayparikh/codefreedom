@@ -86,36 +86,39 @@ def _read_image_router_models(store_dir: Path) -> list[str]:
     if plugin_path.exists():
         try:
             data = yaml.safe_load(plugin_path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                router_cfg = data.get("image-router-for-text-only", {})
-                if isinstance(router_cfg, dict) and router_cfg.get("enabled", False):
-                    for m in router_cfg.get("models", []) or []:
-                        if isinstance(m, str):
-                            result.add(m)
         except Exception:
-            pass
+            data = None
+
+        if isinstance(data, dict):
+            router_cfg = data.get("image-router-for-text-only", {})
+            if isinstance(router_cfg, dict) and router_cfg.get("enabled", False):
+                for m in router_cfg.get("models", []) or []:
+                    if isinstance(m, str):
+                        result.add(m)
 
     # Source 2: provider YAMLs with route-image-request plugin
     providers_dir = store_dir / "proxy" / "config" / "providers"
-    if providers_dir.is_dir():
-        for yp in _glob.glob(str(providers_dir / "*.yaml")):
-            try:
-                data = yaml.safe_load(Path(yp).read_text(encoding="utf-8"))
-            except Exception:
+    if not providers_dir.is_dir():
+        return sorted(result)
+
+    for yp in _glob.glob(str(providers_dir / "*.yaml")):
+        try:
+            data = yaml.safe_load(Path(yp).read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        for entry in data.get("model_list", []) or []:
+            if not isinstance(entry, dict):
                 continue
-            if not isinstance(data, dict):
+            name = entry.get("model_name")
+            cf = entry.get("codefreedom")
+            if not (isinstance(name, str) and isinstance(cf, dict)):
                 continue
-            for entry in data.get("model_list", []) or []:
-                if not isinstance(entry, dict):
-                    continue
-                name = entry.get("model_name")
-                cf = entry.get("codefreedom")
-                if not (isinstance(name, str) and isinstance(cf, dict)):
-                    continue
-                plugins = cf.get("plugins") or {}
-                route_cfg = plugins.get("route-image-request")
-                if isinstance(route_cfg, dict) and route_cfg.get("enabled") is True:
-                    result.add(name)
+            plugins = cf.get("plugins") or {}
+            route_cfg = plugins.get("route-image-request")
+            if isinstance(route_cfg, dict) and route_cfg.get("enabled") is True:
+                result.add(name)
 
     return sorted(result)
 
@@ -140,12 +143,15 @@ def _load_alias_models(store_dir: Path) -> list[str]:
         return []
     if not isinstance(data, dict):
         return []
+
     router = data.get("router_settings") or {}
     if not isinstance(router, dict):
         return []
+
     aliases = router.get("model_group_alias") or {}
     if not isinstance(aliases, dict):
         return []
+
     return sorted(aliases.keys())
 
 
@@ -336,33 +342,47 @@ def _write_minimal_settings(
     return config_path
 
 
-def _read_profile_extensions(
+def _read_profile_field(
     profile_name: str,
     profiles_path: Path,
-) -> list[str]:
-    """Read the ``extensions`` list from the profile YAML."""
+    field: str,
+    default: Any = None,
+) -> Any:
+    """Read a field from a named profile in the YAML profiles file.
+
+    Handles YAML loading, structure validation, and profile lookup.
+    Returns ``default`` if the profile or field is missing.
+    """
     if not profiles_path.exists():
-        return []
+        return default
 
     import yaml
 
     try:
         data = yaml.safe_load(profiles_path.read_text(encoding="utf-8"))
     except Exception:
-        return []
+        return default
 
     if not isinstance(data, dict):
-        return []
+        return default
 
     profiles = data.get("profiles", {})
     if not isinstance(profiles, dict):
-        return []
+        return default
 
     profile = profiles.get(profile_name, {})
     if not isinstance(profile, dict):
-        return []
+        return default
 
-    exts = profile.get("extensions", [])
+    return profile.get(field, default)
+
+
+def _read_profile_extensions(
+    profile_name: str,
+    profiles_path: Path,
+) -> list[str]:
+    """Read the ``extensions`` list from the profile YAML."""
+    exts = _read_profile_field(profile_name, profiles_path, "extensions", [])
     return exts if isinstance(exts, list) else []
 
 
@@ -374,28 +394,7 @@ def _read_profile_lsp_servers(
 
     Returns e.g. ``{"npm": ["typescript-language-server", ...], "pip": [...]}``.
     """
-    if not profiles_path.exists():
-        return {}
-
-    import yaml
-
-    try:
-        data = yaml.safe_load(profiles_path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-    if not isinstance(data, dict):
-        return {}
-
-    profiles = data.get("profiles", {})
-    if not isinstance(profiles, dict):
-        return {}
-
-    profile = profiles.get(profile_name, {})
-    if not isinstance(profile, dict):
-        return {}
-
-    lsp = profile.get("lsp_servers", {})
+    lsp = _read_profile_field(profile_name, profiles_path, "lsp_servers", {})
     return lsp if isinstance(lsp, dict) else {}
 
 
@@ -413,8 +412,6 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
     the package name, then falls back to deriving the binary name from
     the package string.
     """
-    import shutil as _shutil
-
     for manager, packages in lsp_servers.items():
         if not isinstance(packages, list):
             continue
@@ -425,7 +422,7 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
                 bin_name = pkg.split("[")[0].split("@")[0]
                 if "/" in bin_name:
                     bin_name = bin_name.rsplit("/", 1)[-1]
-            if not _shutil.which(bin_name):
+            if not shutil.which(bin_name):
                 missing.append(pkg)
 
         if not missing:
@@ -436,6 +433,7 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
             try:
                 subprocess.run(
                     ["npm", "install", "-g", *missing],
+                    check=False,
                     capture_output=True,
                     timeout=120,
                 )
@@ -447,6 +445,7 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
             try:
                 subprocess.run(
                     ["pip", "install", "--quiet", *missing],
+                    check=False,
                     capture_output=True,
                     timeout=120,
                 )
@@ -454,7 +453,7 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
                 eprint(f"{tag('LSP')} pip install failed: {exc}")
 
 
-def _ensure_lean_ctx(pi_agent_dir: Path) -> None:
+def _ensure_lean_ctx() -> None:
     """Install the lean-ctx Rust binary via ``npm install -g lean-ctx-bin``.
 
     Uses the ``lean-ctx-bin`` npm package which ships pre-built binaries
@@ -462,10 +461,8 @@ def _ensure_lean_ctx(pi_agent_dir: Path) -> None:
     ``lean-ctx init --agent pi`` to write the MCP config that
     ``pi-mcp-adapter`` picks up.
     """
-    import shutil as _shutil
-
     # Already installed?
-    if _shutil.which("lean-ctx"):
+    if shutil.which("lean-ctx"):
         return
 
     eprint(f"{tag('LEAN-CTX')} Installing via npm (lean-ctx-bin)...")
@@ -480,7 +477,7 @@ def _ensure_lean_ctx(pi_agent_dir: Path) -> None:
         eprint(f"{tag('LEAN-CTX')} npm install failed: {exc}")
         return
 
-    if not _shutil.which("lean-ctx"):
+    if not shutil.which("lean-ctx"):
         eprint(f"{tag('LEAN-CTX')} Installed but not on PATH — check npm global bin")
         return
 
@@ -488,6 +485,7 @@ def _ensure_lean_ctx(pi_agent_dir: Path) -> None:
     with contextlib.suppress(Exception):
         subprocess.run(
             ["lean-ctx", "init", "--agent", "pi"],
+            check=False,
             capture_output=True,
             timeout=30,
         )
@@ -561,7 +559,7 @@ def run_local(
 
     # lean-ctx binary setup (for pi-lean-ctx extension)
     if "pi-lean-ctx" in extensions:
-        _ensure_lean_ctx(pi_agent_dir)
+        _ensure_lean_ctx()
 
     # LSP servers (for pi-lens extension)
     if lsp_servers:
