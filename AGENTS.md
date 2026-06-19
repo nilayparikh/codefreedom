@@ -70,7 +70,7 @@ The repo uses pre-commit. Hooks run automatically on `git commit`:
 2. `ruff check src/ tests/ --fix` — lint + auto-fix
 3. `mypy src/ --ignore-missing-imports` — type-check
 4. `pytest tests/ -v --tb=short` — full test suite
-5. `mkdocs build --strict` — docs build (only if docs/ changed)
+5. `mkdocs build --strict` — docs build (only if pages/ changed)
 
 ## Acceptance Criteria for Any Code Change
 
