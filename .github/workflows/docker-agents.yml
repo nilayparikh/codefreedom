@@ -81,7 +81,7 @@ jobs:
       - name: Extract version and branch info
         id: version
         run: |
-          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/unified/Dockerfile.Unified | head -1 | sed 's/.*=\(.*\)/\1/')
+          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/agents/Dockerfile.Agents | head -1 | sed 's/.*=\(.*\)/\1/')
           BRANCH="${GITHUB_REF_NAME}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "branch=${BRANCH}" >> "${GITHUB_OUTPUT}"
@@ -136,8 +136,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v7
         with:
-          context: docker/unified/
-          file: docker/unified/Dockerfile.Unified
+          context: docker/agents/
+          file: docker/agents/Dockerfile.Agents
           target: ${{ matrix.target }}
           platforms: ${{ matrix.platforms }}
           build-args: |

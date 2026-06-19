@@ -15,9 +15,9 @@ Docker tags **must be lowercase**. Examples:
 
 | Image | Dockerfile | Use Case |
 |---|---|---|
-| **Ubuntu** | `docker/unified/Dockerfile.Unified` (target: ubuntu) | CPU-only, all agents |
-| **CUDA** | `docker/unified/Dockerfile.Unified` (target: cuda) | NVIDIA GPU, all agents |
-| **ROCm** | `docker/unified/Dockerfile.Unified` (target: rocm) | AMD GPU, all agents |
+| **Ubuntu** | `docker/agents/Dockerfile.Agents` (target: ubuntu) | CPU-only, all agents |
+| **CUDA** | `docker/agents/Dockerfile.Agents` (target: cuda) | NVIDIA GPU, all agents |
+| **ROCm** | `docker/agents/Dockerfile.Agents` (target: rocm) | AMD GPU, all agents |
 | **Chrome** | `docker/chrome/Dockerfile.Chrome` | Headless Chromium (CDP port 9222) |
 | **Web** | `docker/web/Dockerfile.Web` | Camoufox MCP (stealth web search) |
 | **GitHub MCP** | `docker/github/Dockerfile.Github` | GitHub API tools (port 8082) |
