@@ -1,4 +1,4 @@
-# ── CodeFreedom: Docker (All Agents, All Platforms) ─────────────────────────────
+# ── CodeFreedom: Docker Agents (All Platforms) ──────────────────────────────────
 # Builds and publishes images containing all 3 coding agent CLIs.
 # Matrix strategy: ubuntu, cuda, rocm platforms.
 #
@@ -9,16 +9,14 @@
 #
 # Platforms: linux/arm64, linux/amd64 (rocm: amd64 only)
 # Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
+#
+# Trigger: manual dispatch only. Branch guard enforced at job level.
 # ────────────────────────────────────────────────────────────────────────────────
 
-name: Docker
+name: Docker Agents
 
 on:
   workflow_dispatch:
-    branches:
-      - main
-      - prerelease/*
-      - release/*
     inputs:
       platform:
         description: "Platform to build (all, ubuntu, cuda, rocm)"
@@ -44,6 +42,7 @@ permissions:
 jobs:
   filter:
     runs-on: ubuntu-24.04
+    if: github.ref_name == 'main' || startsWith(github.ref_name, 'prerelease/') || startsWith(github.ref_name, 'release/')
     outputs:
       build_matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -88,22 +87,18 @@ jobs:
           echo "branch=${BRANCH}" >> "${GITHUB_OUTPUT}"
 
           if [[ "${BRANCH}" == main ]]; then
-            echo "prefix=" >> "${GITHUB_OUTPUT}"
             echo "tag_version=v${VERSION}" >> "${GITHUB_OUTPUT}"
             echo "push_latest=true" >> "${GITHUB_OUTPUT}"
             echo "Branch: main → tags: {platform}-v${VERSION}, {platform}-latest"
           elif [[ "${BRANCH}" == prerelease/* ]]; then
-            echo "prefix=dev-" >> "${GITHUB_OUTPUT}"
             echo "tag_version=dev-${VERSION}" >> "${GITHUB_OUTPUT}"
             echo "push_latest=false" >> "${GITHUB_OUTPUT}"
             echo "Branch: prerelease → tags: {platform}-dev-${VERSION} (no latest)"
           elif [[ "${BRANCH}" == release/* ]]; then
-            echo "prefix=rc-" >> "${GITHUB_OUTPUT}"
             echo "tag_version=rc-${VERSION}" >> "${GITHUB_OUTPUT}"
             echo "push_latest=false" >> "${GITHUB_OUTPUT}"
             echo "Branch: release → tags: {platform}-rc-${VERSION} (no latest)"
           else
-            echo "prefix=dev-" >> "${GITHUB_OUTPUT}"
             echo "tag_version=dev-${VERSION}" >> "${GITHUB_OUTPUT}"
             echo "push_latest=false" >> "${GITHUB_OUTPUT}"
             echo "Branch: ${BRANCH} → tags: {platform}-dev-${VERSION} (no latest)"
@@ -217,6 +212,6 @@ jobs:
 
       - name: Verify GHCR signature
         if: steps.get-digest.outputs.digest != ''
-        uses: ./.github.actions/cosign-verify
+        uses: ./.github/actions/cosign-verify
         with:
           image: ${{ env.GHCR_REPO }}@${{ steps.get-digest.outputs.digest }}

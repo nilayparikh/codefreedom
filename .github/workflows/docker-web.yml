@@ -1,6 +1,6 @@
 # ── CodeFreedom: Docker Web (MCP Web Automation) ─────────────────────────────
 # Builds and publishes the web browser MCP automation image.
-# Triggered by changes to docker/web/Dockerfile.Web.
+# Trigger: manual dispatch only.
 #
 # Tags: web-v{semver}, web-v{major.minor}, web-latest
 # Platforms: linux/arm64, linux/amd64

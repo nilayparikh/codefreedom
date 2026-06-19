@@ -6,9 +6,9 @@ name: Trivy
 
 on:
   push:
-    branches: [main]
+    branches: [main, "prerelease/v*", "release/v*"]
   pull_request:
-    branches: [main]
+    branches: [main, "prerelease/v*", "release/v*"]
   schedule:
     - cron: "0 6 * * 1" # Every Monday at 06:00 UTC
 

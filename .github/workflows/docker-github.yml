@@ -1,6 +1,6 @@
 # ── CodeFreedom: Docker GitHub MCP Bridge ──────────────────────────────────────
 # Builds and publishes the GitHub MCP Bridge image.
-# Triggered by changes to docker/github/Dockerfile.Github.
+# Trigger: manual dispatch only.
 #
 # Tags: github-v{semver}, github-v{major.minor}, github-latest
 # Platforms: linux/arm64, linux/amd64

@@ -1,6 +1,6 @@
 # ── CodeFreedom: Docker Chrome (Browser) ───────────────────────────────────────
 # Builds and publishes the Chrome browser automation image.
-# Triggered by changes to docker/chrome/Dockerfile.Chrome.
+# Trigger: manual dispatch only.
 #
 # Tags: chrome-v{semver}, chrome-v{major.minor}, chrome-latest
 # Platforms: linux/arm64, linux/amd64

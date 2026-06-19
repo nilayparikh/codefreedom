@@ -1,6 +1,6 @@
 # ── CodeFreedom: Docker Web Bridge (SearXNG-shaped MCP proxy) ────────────────
 # Builds and publishes the web-bridge sidecar image.
-# Triggered by changes to docker/web-bridge/Dockerfile.Bridge.
+# Trigger: manual dispatch only.
 #
 # Tags: web-bridge-v{semver}, web-bridge-v{major.minor}, web-bridge-latest
 # Platforms: linux/arm64, linux/amd64

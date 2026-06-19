@@ -115,5 +115,5 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          prerelease: ${{ contains(github.ref_name, 'rc') }}
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, '.dev') }}
           generate_release_notes: true

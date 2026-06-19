@@ -42,11 +42,6 @@ jobs:
       - name: Install dependencies
         run: pip install 'mkdocs-material[imaging]==9.7.6' mkdocs-mermaid2-plugin
 
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
       - name: Lint Markdown
         run: npx markdownlint-cli2 "pages/**/*.md"
 

@@ -2,8 +2,9 @@
 # Unified CI for all branches and PRs.
 #
 # Runs on:
-#   - Push to ANY branch (feature/*, prerelease/*, release/*, main)
-#   - PRs to prerelease/*, release/*, main
+#   - Push to main, prerelease/*, release/*
+#   - PRs to main, prerelease/*, release/*
+#   - Manual dispatch (any branch)
 #
 # What runs (chained):
 #   - commit-lint → lint-configs → unit-tests → integration (on every push and PR)
