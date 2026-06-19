@@ -135,9 +135,9 @@ Routes through the proxy. Environment variables set `ANTHROPIC_BASE_URL=http://l
 
 | Variant | Image |
 | --- | --- |
-| Default | `docker.io/nilayparikh/codefreedom:claude-code-latest` |
-| CUDA | `docker.io/nilayparikh/codefreedom:claude-code-cuda-latest` |
-| ROCm | `docker.io/nilayparikh/codefreedom:claude-code-rocm-latest` |
+| Default | `docker.io/nilayparikh/codefreedom:ubuntu-latest` |
+| CUDA | `docker.io/nilayparikh/codefreedom:cuda-latest` |
+| ROCm | `docker.io/nilayparikh/codefreedom:rocm-latest` |
 
 ### MiMo Code
 

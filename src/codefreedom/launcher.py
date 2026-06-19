@@ -40,7 +40,7 @@ from codefreedom.sandbox.terminal import terminal_size
 
 REGISTRY = os.environ.get("CLAUDE_CODE_REGISTRY", "docker.io/nilayparikh")
 IMAGE_NAME = os.environ.get("CLAUDE_CODE_IMAGE_NAME", "codefreedom")
-IMAGE_TAG = os.environ.get("CLAUDE_CODE_IMAGE_TAG", "unified-ubuntu-latest")
+IMAGE_TAG = os.environ.get("CLAUDE_CODE_IMAGE_TAG", "ubuntu-latest")
 TARGET_IMAGE = f"{REGISTRY}/{IMAGE_NAME}:{IMAGE_TAG}"
 
 HOME_DIR = Path.home()
@@ -226,7 +226,7 @@ def run_docker(
     # ── Resolve image ──────────────────────────────────────────────────────────
     if gpu_type:
         image = (
-            sandbox_images.get(gpu_type) or f"{REGISTRY}/{IMAGE_NAME}:unified-{gpu_type}-latest"
+            sandbox_images.get(gpu_type) or f"{REGISTRY}/{IMAGE_NAME}:{gpu_type}-latest"
         )
         eprint(f"{tag('GPU')} Selected '{gpu_type}' sandbox image: {image}.")
     else:

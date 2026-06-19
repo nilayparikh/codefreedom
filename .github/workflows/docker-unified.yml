@@ -1,26 +1,21 @@
-# ── CodeFreedom: Docker Unified (All Agents, All Platforms) ─────────────────────
-# Builds and publishes unified images containing all 3 coding agent CLIs.
+# ── CodeFreedom: Docker (All Agents, All Platforms) ─────────────────────────────
+# Builds and publishes images containing all 3 coding agent CLIs.
 # Matrix strategy: ubuntu, cuda, rocm platforms.
 #
-# Tags: unified-{platform}-v{semver}, unified-{platform}-latest
+# Branch-based tagging:
+#   main         → {platform}-v{version}, {platform}-latest
+#   prerelease/* → {platform}-dev-{version}   (no latest)
+#   release/*    → {platform}-rc-{version}    (no latest)
+#
 # Platforms: linux/arm64, linux/amd64 (rocm: amd64 only)
 # Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
 # ────────────────────────────────────────────────────────────────────────────────
 
-name: Docker Unified
+name: Docker
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Image tag (e.g. v0.2.1, beta)"
-        required: true
-        type: string
-      latest:
-        description: "Tag as latest"
-        required: false
-        type: boolean
-        default: true
       platform:
         description: "Platform to build (all, ubuntu, cuda, rocm)"
         required: false
@@ -51,15 +46,15 @@ jobs:
           - platform: ubuntu
             target: ubuntu
             platforms: linux/arm64,linux/amd64
-            scope: Unified-Ubuntu
+            scope: Ubuntu
           - platform: cuda
             target: cuda
             platforms: linux/arm64,linux/amd64
-            scope: Unified-CUDA
+            scope: CUDA
           - platform: rocm
             target: rocm
             platforms: linux/amd64
-            scope: Unified-ROCm
+            scope: ROCm
     runs-on: ubuntu-24.04
     if: >-
       inputs.platform == 'all' || inputs.platform == matrix.platform
@@ -74,11 +69,35 @@ jobs:
           platforms: arm64,amd64
       - uses: docker/setup-buildx-action@v4
 
-      - name: Extract version
+      - name: Extract version and branch info
         id: version
         run: |
           VERSION=$(grep '^ARG IMAGE_VERSION=' docker/unified/Dockerfile.Unified | head -1 | sed 's/.*=\(.*\)/\1/')
+          BRANCH="${GITHUB_REF_NAME}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "branch=${BRANCH}" >> "${GITHUB_OUTPUT}"
+
+          if [[ "${BRANCH}" == main ]]; then
+            echo "prefix=" >> "${GITHUB_OUTPUT}"
+            echo "tag_version=v${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "push_latest=true" >> "${GITHUB_OUTPUT}"
+            echo "Branch: main → tags: {platform}-v${VERSION}, {platform}-latest"
+          elif [[ "${BRANCH}" == prerelease/* ]]; then
+            echo "prefix=dev-" >> "${GITHUB_OUTPUT}"
+            echo "tag_version=dev-${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "push_latest=false" >> "${GITHUB_OUTPUT}"
+            echo "Branch: prerelease → tags: {platform}-dev-${VERSION} (no latest)"
+          elif [[ "${BRANCH}" == release/* ]]; then
+            echo "prefix=rc-" >> "${GITHUB_OUTPUT}"
+            echo "tag_version=rc-${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "push_latest=false" >> "${GITHUB_OUTPUT}"
+            echo "Branch: release → tags: {platform}-rc-${VERSION} (no latest)"
+          else
+            echo "prefix=dev-" >> "${GITHUB_OUTPUT}"
+            echo "tag_version=dev-${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "push_latest=false" >> "${GITHUB_OUTPUT}"
+            echo "Branch: ${BRANCH} → tags: {platform}-dev-${VERSION} (no latest)"
+          fi
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
@@ -101,28 +120,10 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=unified-${{ matrix.platform }}-${{ inputs.tag }}
-            type=raw,value=unified-${{ matrix.platform }}-latest,enable=${{ inputs.latest }}
-            type=raw,value=claude-code-${{ inputs.tag }},enable=${{ matrix.platform == 'ubuntu' }}
-            type=raw,value=claude-code-latest,enable=${{ inputs.latest && matrix.platform == 'ubuntu' }}
-            type=raw,value=claude-code-cuda-${{ inputs.tag }},enable=${{ matrix.platform == 'cuda' }}
-            type=raw,value=claude-code-cuda-latest,enable=${{ inputs.latest && matrix.platform == 'cuda' }}
-            type=raw,value=claude-code-rocm-${{ inputs.tag }},enable=${{ matrix.platform == 'rocm' }}
-            type=raw,value=claude-code-rocm-latest,enable=${{ inputs.latest && matrix.platform == 'rocm' }}
-            type=raw,value=mimo-code-${{ inputs.tag }},enable=${{ matrix.platform == 'ubuntu' }}
-            type=raw,value=mimo-code-latest,enable=${{ inputs.latest && matrix.platform == 'ubuntu' }}
-            type=raw,value=mimo-code-cuda-${{ inputs.tag }},enable=${{ matrix.platform == 'cuda' }}
-            type=raw,value=mimo-code-cuda-latest,enable=${{ inputs.latest && matrix.platform == 'cuda' }}
-            type=raw,value=mimo-code-rocm-${{ inputs.tag }},enable=${{ matrix.platform == 'rocm' }}
-            type=raw,value=mimo-code-rocm-latest,enable=${{ inputs.latest && matrix.platform == 'rocm' }}
-            type=raw,value=open-code-${{ inputs.tag }},enable=${{ matrix.platform == 'ubuntu' }}
-            type=raw,value=open-code-latest,enable=${{ inputs.latest && matrix.platform == 'ubuntu' }}
-            type=raw,value=open-code-cuda-${{ inputs.tag }},enable=${{ matrix.platform == 'cuda' }}
-            type=raw,value=open-code-cuda-latest,enable=${{ inputs.latest && matrix.platform == 'cuda' }}
-            type=raw,value=open-code-rocm-${{ inputs.tag }},enable=${{ matrix.platform == 'rocm' }}
-            type=raw,value=open-code-rocm-latest,enable=${{ inputs.latest && matrix.platform == 'rocm' }}
+            type=raw,value=${{ matrix.platform }}-${{ steps.version.outputs.tag_version }}
+            type=raw,value=${{ matrix.platform }}-latest,enable=${{ steps.version.outputs.push_latest == 'true' }}
           labels: |
-            org.opencontainers.image.title=CodeFreedom - Unified (${{ matrix.platform }})
+            org.opencontainers.image.title=CodeFreedom - ${{ matrix.platform }}
             org.opencontainers.image.version=v${{ steps.version.outputs.version }}
             com.codefreedom.platform=${{ matrix.platform }}
 

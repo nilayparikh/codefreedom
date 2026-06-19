@@ -72,7 +72,7 @@ def register_args(parser: argparse.ArgumentParser) -> None:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:unified-ubuntu-latest"
+DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:ubuntu-latest"
 PROXY_MODELS_CACHE_FILE = "proxy-models.json"
 OPENCODE_CONFIG_NAME = "opencode.json"
 _CONTAINER_PREFIX = "codefreedom-opencode-"
@@ -348,7 +348,7 @@ def run_docker(
     sandbox_images = sandbox_images or {}
 
     if gpu_type:
-        image = sandbox_images.get(gpu_type) or f"docker.io/nilayparikh/codefreedom:unified-{gpu_type}-latest"
+        image = sandbox_images.get(gpu_type) or f"docker.io/nilayparikh/codefreedom:{gpu_type}-latest"
         eprint(f"[GPU] Selected '{gpu_type}' sandbox image: {image}.")
     else:
         image = sandbox_images.get("default") or DEFAULT_OPENCODE_IMAGE

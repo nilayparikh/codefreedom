@@ -1,16 +1,16 @@
-# ── CodeFreedom — Unified Docker Image ──────────────────────────────────────────
-# Single image containing all 3 coding agent CLIs (claude, mimo, opencode).
+# ── CodeFreedom — Docker Image ──────────────────────────────────────────────────
+# Contains all 3 coding agent CLIs (claude, mimo, opencode).
 # Build targets: ubuntu (CPU), cuda (NVIDIA GPU), rocm (AMD GPU)
 #
 # @version   v1.0.0
 # @arch      linux/arm64, linux/amd64 (ubuntu, cuda), linux/amd64 (rocm)
 #
 # Build:
-#   docker build --target ubuntu -t codefreedom:unified-ubuntu-v1.0.0 \
+#   docker build --target ubuntu -t codefreedom:ubuntu-v1.0.0 \
 #     -f docker/unified/Dockerfile.Unified docker/unified/
-#   docker build --target cuda -t codefreedom:unified-cuda-v1.0.0 \
+#   docker build --target cuda -t codefreedom:cuda-v1.0.0 \
 #     -f docker/unified/Dockerfile.Unified docker/unified/
-#   docker build --target rocm -t codefreedom:unified-rocm-v1.0.0 \
+#   docker build --target rocm -t codefreedom:rocm-v1.0.0 \
 #     -f docker/unified/Dockerfile.Unified docker/unified/
 # ────────────────────────────────────────────────────────────────────────────────
 
@@ -155,8 +155,8 @@ FROM ubuntu:24.04 AS ubuntu
 
 ARG IMAGE_VERSION
 
-LABEL org.opencontainers.image.title="CodeFreedom - Unified (Ubuntu)" \
-      org.opencontainers.image.description="Unified dev container — all coding agents (claude, mimo, opencode) with dev tools. CPU-only." \
+LABEL org.opencontainers.image.title="CodeFreedom - Ubuntu" \
+      org.opencontainers.image.description="CodeFreedom dev container — all coding agents (claude, mimo, opencode) with dev tools. CPU-only." \
       org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
@@ -248,8 +248,8 @@ FROM nvcr.io/nvidia/pytorch:26.04-py3 AS cuda
 
 ARG IMAGE_VERSION
 
-LABEL org.opencontainers.image.title="CodeFreedom - Unified (CUDA)" \
-      org.opencontainers.image.description="Unified dev container — all coding agents (claude, mimo, opencode) with NVIDIA CUDA PyTorch." \
+LABEL org.opencontainers.image.title="CodeFreedom - CUDA" \
+      org.opencontainers.image.description="CodeFreedom dev container — all coding agents (claude, mimo, opencode) with NVIDIA CUDA PyTorch." \
       org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
@@ -334,8 +334,8 @@ FROM --platform=$ROCM_PLATFORM rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch
 
 ARG IMAGE_VERSION
 
-LABEL org.opencontainers.image.title="CodeFreedom - Unified (ROCm)" \
-      org.opencontainers.image.description="Unified dev container — all coding agents (claude, mimo, opencode) with AMD ROCm PyTorch." \
+LABEL org.opencontainers.image.title="CodeFreedom - ROCm" \
+      org.opencontainers.image.description="CodeFreedom dev container — all coding agents (claude, mimo, opencode) with AMD ROCm PyTorch." \
       org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \

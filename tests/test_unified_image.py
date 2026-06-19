@@ -1,4 +1,4 @@
-"""Tests for unified Docker image constants and configuration."""
+"""Tests for Docker image constants and configuration."""
 
 from __future__ import annotations
 
@@ -8,23 +8,23 @@ pytestmark = pytest.mark.unit
 
 
 class TestDefaultImageConstants:
-    """Verify all agent modules point to unified image tags."""
+    """Verify all agent modules point to tool-agnostic image tags."""
 
-    def test_mimo_default_image_is_unified(self):
+    def test_mimo_default_image_uses_platform_tag(self):
         from codefreedom.cli.mimo import DEFAULT_MIMO_IMAGE
-        assert "unified-ubuntu-latest" in DEFAULT_MIMO_IMAGE
+        assert DEFAULT_MIMO_IMAGE == "docker.io/nilayparikh/codefreedom:ubuntu-latest"
 
-    def test_opencode_default_image_is_unified(self):
+    def test_opencode_default_image_uses_platform_tag(self):
         from codefreedom.cli.opencode import DEFAULT_OPENCODE_IMAGE
-        assert "unified-ubuntu-latest" in DEFAULT_OPENCODE_IMAGE
+        assert DEFAULT_OPENCODE_IMAGE == "docker.io/nilayparikh/codefreedom:ubuntu-latest"
 
-    def test_launcher_default_tag_is_unified(self):
+    def test_launcher_default_tag_uses_platform_tag(self):
         from codefreedom.launcher import IMAGE_TAG
-        assert IMAGE_TAG == "unified-ubuntu-latest"
+        assert IMAGE_TAG == "ubuntu-latest"
 
-    def test_launcher_target_image_is_unified(self):
+    def test_launcher_target_image_uses_platform_tag(self):
         from codefreedom.launcher import TARGET_IMAGE
-        assert "unified-ubuntu-latest" in TARGET_IMAGE
+        assert TARGET_IMAGE == "docker.io/nilayparikh/codefreedom:ubuntu-latest"
 
 
 class TestSandboxImagesSchema:
@@ -35,11 +35,11 @@ class TestSandboxImagesSchema:
 
         images = SandboxImages(
             default="test:latest",
-            unified="unified:latest",
+            unified="custom:latest",
             cuda="cuda:latest",
             rocm="rocm:latest",
         )
-        assert images.unified == "unified:latest"
+        assert images.unified == "custom:latest"
 
     def test_unified_field_optional(self):
         from codefreedom.schemas.profiles import SandboxImages
@@ -52,14 +52,14 @@ class TestSandboxImagesSchema:
 
         images = SandboxImages(
             default="default:latest",
-            unified="unified:latest",
-            cuda="unified-cuda:latest",
-            rocm="unified-rocm:latest",
+            unified="custom:latest",
+            cuda="cuda:latest",
+            rocm="rocm:latest",
         )
         assert images.default == "default:latest"
-        assert images.unified == "unified:latest"
-        assert images.cuda == "unified-cuda:latest"
-        assert images.rocm == "unified-rocm:latest"
+        assert images.unified == "custom:latest"
+        assert images.cuda == "cuda:latest"
+        assert images.rocm == "rocm:latest"
 
 
 class TestGpuFlags:
