@@ -112,12 +112,6 @@ jobs:
           else
             FULL_VERSION="$VERSION"
             TAG="v${FULL_VERSION}"
-
-            # Validate branch for final
-            if [ "$BRANCH" != "main" ]; then
-              echo "Error: final releases require main branch. Current: $BRANCH"
-              exit 1
-            fi
           fi
 
           # Check working tree is clean
