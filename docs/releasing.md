@@ -182,13 +182,9 @@ All Docker workflows are manual trigger only (`workflow_dispatch`).
 
 | Workflow | Image | Inputs |
 |---|---|---|
+| `docker-agents.yml` | Unified agents (ubuntu/cuda/rocm) | `platform` (default: all) |
 | `docker-chrome.yml` | Chrome browser | `tag` (required), `latest` (default: true) |
-| `docker-cuda.yml` | CUDA GPU | `tag` (required), `latest` (default: true) |
-| `docker-rocm.yml` | ROCm GPU | `tag` (required), `latest` (default: true) |
-| `docker-ubuntu.yml` | CPU-only | `tag` (required), `latest` (default: true) |
 | `docker-litellm.yml` | LiteLLM proxy | `tag` (required), `latest` (default: true), `litellm_base_tag` (optional) |
-| `docker-mimo-code.yml` | MiMo Code | `tag` (required), `latest` (default: true) |
-| `docker-open-code.yml` | Open Code | `tag` (required), `latest` (default: true) |
 | `docker-web.yml` | Camoufox MCP | `tag` (required), `latest` (default: true) |
 | `docker-web-bridge.yml` | Web Bridge | `tag` (required), `latest` (default: true) |
 | `docker-github.yml` | GitHub MCP | `tag` (required), `latest` (default: true) |

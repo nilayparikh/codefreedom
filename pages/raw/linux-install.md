@@ -320,7 +320,7 @@ nilayparikh@barsana:~/.sources/codefreedom$ cf run agent cc
  ▎ Included in your plan limits for a limited time, then switch to usage credits to continue.
 
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-❯  
+❯
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   ? for shortcuts · ← for agents
 

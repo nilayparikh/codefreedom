@@ -15,17 +15,15 @@ Docker tags **must be lowercase**. Examples:
 
 | Image | Dockerfile | Use Case |
 |---|---|---|
-| **CUDA** | `docker/claude-code/Dockerfile.CUDA` | NVIDIA GPU workloads |
-| **ROCm** | `docker/claude-code/Dockerfile.ROCm` | AMD GPU workloads |
-| **Ubuntu** | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only / general-purpose |
+| **Ubuntu** | `docker/unified/Dockerfile.Unified` (target: ubuntu) | CPU-only, all agents |
+| **CUDA** | `docker/unified/Dockerfile.Unified` (target: cuda) | NVIDIA GPU, all agents |
+| **ROCm** | `docker/unified/Dockerfile.Unified` (target: rocm) | AMD GPU, all agents |
 | **Chrome** | `docker/chrome/Dockerfile.Chrome` | Headless Chromium (CDP port 9222) |
 | **Web** | `docker/web/Dockerfile.Web` | Camoufox MCP (stealth web search) |
 | **GitHub MCP** | `docker/github/Dockerfile.Github` | GitHub API tools (port 8082) |
 | **LiteLLM** | `docker/litellm/Dockerfile.LitellmFinal` | LLM proxy with embedded PostgreSQL |
 | **LiteLLM Base** | `docker/litellm/Dockerfile.LiteLLM` | LiteLLM base image (monthly rebuild) |
 | **PG Base** | `docker/litellm/Dockerfile.PGBase` | PostgreSQL base image (quarterly rebuild) |
-| **MiMo Code** | `docker/mimo-code/Dockerfile.Ubuntu` | MiMo Code sandbox container |
-| **Open Code** | `docker/open-code/Dockerfile.Ubuntu` | Open Code sandbox container |
 | **Web Bridge** | `docker/web-bridge/Dockerfile.Bridge` | SearXNG → Camoufox bridge |
 
 ## Docker Workflows
@@ -34,13 +32,9 @@ All Docker workflows are manual trigger only (`workflow_dispatch`).
 
 | Workflow | Image | Inputs |
 |---|---|---|
+| `docker-agents.yml` | Unified agents (ubuntu/cuda/rocm) | `platform` (default: all) |
 | `docker-chrome.yml` | Chrome browser | `tag` (required), `latest` (default: true) |
-| `docker-cuda.yml` | CUDA GPU | `tag` (required), `latest` (default: true) |
-| `docker-rocm.yml` | ROCm GPU | `tag` (required), `latest` (default: true) |
-| `docker-ubuntu.yml` | CPU-only | `tag` (required), `latest` (default: true) |
 | `docker-litellm.yml` | LiteLLM proxy | `tag` (required), `latest` (default: true), `litellm_base_tag` (optional) |
-| `docker-mimo-code.yml` | MiMo Code | `tag` (required), `latest` (default: true) |
-| `docker-open-code.yml` | Open Code | `tag` (required), `latest` (default: true) |
 | `docker-web.yml` | Camoufox MCP | `tag` (required), `latest` (default: true) |
 | `docker-web-bridge.yml` | Web Bridge | `tag` (required), `latest` (default: true) |
 | `docker-github.yml` | GitHub MCP | `tag` (required), `latest` (default: true) |

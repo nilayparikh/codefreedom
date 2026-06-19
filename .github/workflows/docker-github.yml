@@ -75,7 +75,6 @@ jobs:
             ${{ env.GHCR_REPO }}
           tags: |
             type=raw,value=github-${{ inputs.tag }}
-            
             type=raw,value=github-latest,enable=${{ inputs.latest }}
           labels: |
             org.opencontainers.image.title=CodeFreedom - GitHub MCP Bridge

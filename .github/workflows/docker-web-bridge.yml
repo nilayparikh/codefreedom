@@ -75,7 +75,6 @@ jobs:
             ${{ env.GHCR_REPO }}
           tags: |
             type=raw,value=web-bridge-${{ inputs.tag }}
-            
             type=raw,value=web-bridge-latest,enable=${{ inputs.latest }}
           labels: |
             org.opencontainers.image.title=CodeFreedom - Web Bridge
