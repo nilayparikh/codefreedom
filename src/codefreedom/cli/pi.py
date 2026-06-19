@@ -18,14 +18,14 @@ Extension-based config:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
 import signal
 import subprocess
 from pathlib import Path
-
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codefreedom.core.config import (
     get_codefreedom_dir,
@@ -36,8 +36,8 @@ from codefreedom.core.profiles import (
 )
 from codefreedom.env_loader import load_env_chain
 from codefreedom.log import eprint
-from codefreedom.tools.registry import generate_session_id
 from codefreedom.sandbox.signals import forward_signal
+from codefreedom.tools.registry import generate_session_id
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:
@@ -53,7 +53,7 @@ CODEFREEDOM_DIR = get_codefreedom_dir()
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def find_pi_binary() -> Optional[str]:
+def find_pi_binary() -> str | None:
     """Locate the ``pi`` CLI binary on PATH."""
     return shutil.which("pi")
 
@@ -76,8 +76,12 @@ def _read_image_router_models(store_dir: Path) -> list[str]:
 
     # Source 1: image-router plugin config
     plugin_path = (
-        store_dir / "proxy" / "config" / "plugins"
-        / "image-router" / "image-router.yaml"
+        store_dir
+        / "proxy"
+        / "config"
+        / "plugins"
+        / "image-router"
+        / "image-router.yaml"
     )
     if plugin_path.exists():
         try:
@@ -145,8 +149,13 @@ def _load_alias_models(store_dir: Path) -> list[str]:
     return sorted(aliases.keys())
 
 
-_EXTENSION_TEMPLATE = '''\
+_EXTENSION_TEMPLATE = """\
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+// Standard thinking levels — pi passes these to the proxy,
+// which maps them to model-native values via reasoning-efforts plugin.
+// Must match pi's --thinking flag values: off, minimal, low, medium, high, xhigh
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
 export default async function (pi: ExtensionAPI) {
   const baseUrl = process.env.PROXY_BASE_URL || "http://localhost:4000";
@@ -200,10 +209,21 @@ export default async function (pi: ExtensionAPI) {
           info.supports_vision || info.vision || imageRouterModels.includes(name);
         const isReasoning = info.supports_reasoning || false;
 
+        // thinkingLevelMap maps pi levels to provider values.
+        // Proxy's reasoning-efforts plugin handles the actual mapping,
+        // so we pass pi levels through directly.
+        const thinkingLevelMap: Record<string, string> = {};
+        if (isReasoning) {
+          for (const level of THINKING_LEVELS) {
+            thinkingLevelMap[level] = level;
+          }
+        }
+
         return {
           id: name,
           name: name,
           reasoning: isReasoning,
+          thinkingLevelMap: isReasoning ? thinkingLevelMap : undefined,
           input: isVision ? ["text", "image"] : ["text"],
           cost: {
             input: (info.input_cost_per_token || 0) * 1_000_000,
@@ -235,6 +255,7 @@ export default async function (pi: ExtensionAPI) {
           id: m.id,
           name: m.id.includes("/") ? m.id.split("/").pop() : m.id,
           reasoning: false,
+          thinkingLevelMap: undefined,
           input: imageRouterModels.includes(m.id)
             ? ["text", "image"]
             : ["text"],
@@ -253,7 +274,7 @@ export default async function (pi: ExtensionAPI) {
     models,
   });
 }
-'''
+"""
 
 
 def _generate_codefreedom_extension(config_dir: Path) -> Path:
@@ -277,6 +298,14 @@ def _write_minimal_settings(
 ) -> Path:
     """Write pi ``settings.json`` with CodeFreedom provider defaults.
 
+    Merges with existing settings so user preferences (theme,
+    last changelog version) survive across launches.
+
+    Configuration precedence (highest to lowest):
+    1. CLI flags (--model, --thinking, --provider) from profile env
+    2. settings.json (pi-mutable, preserved across launches)
+    3. Defaults in this function
+
     Prefixes each extension with ``npm:`` so ``pi`` resolves it as an
     npm source (its native install format). pi will auto-install missing
     packages at startup via its built-in package manager.
@@ -285,13 +314,22 @@ def _write_minimal_settings(
     """
     pi_agent_dir.mkdir(parents=True, exist_ok=True)
     config_path = pi_agent_dir / PI_SETTINGS_NAME
-    settings: dict[str, Any] = {
-        "defaultProvider": "codefreedom",
-        "defaultModel": "",
-        "defaultProjectTrust": "always",
-    }
+
+    # Read existing settings to preserve user preferences
+    existing: dict[str, Any] = {}
+    if config_path.is_file():
+        with contextlib.suppress(Exception):
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+
+    # Force-set provider and trust (required for CodeFreedom to work)
+    settings: dict[str, Any] = {**existing}
+    settings["defaultProvider"] = "codefreedom"
+    settings["defaultProjectTrust"] = "always"
+
+    # Update packages (extensions may change between profiles)
     if extensions:
         settings["packages"] = [f"npm:{ext}" for ext in extensions]
+
     config_path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
     config_path.chmod(0o600)
     eprint(f"[PI] Generated settings at {config_path}")
@@ -439,17 +477,15 @@ def _ensure_lean_ctx(pi_agent_dir: Path) -> None:
         return
 
     eprint("[lean-ctx] configuring for pi...")
-    try:
+    with contextlib.suppress(Exception):
         subprocess.run(
             ["lean-ctx", "init", "--agent", "pi"],
             capture_output=True,
             timeout=30,
         )
-    except Exception:
-        pass
 
 
-def _detect_proxy_url(base_env: Dict[str, str]) -> str:
+def _detect_proxy_url(base_env: dict[str, str]) -> str:
     """Detect the proxy URL from environment or use default.
 
     Checks (in order):
@@ -482,8 +518,8 @@ def _get_pi_agent_dir() -> Path:
 
 
 def run_local(
-    profile_env: Dict[str, str],
-    pi_args: List[str],
+    profile_env: dict[str, str],
+    pi_args: list[str],
     workspace_dir: Path,
     extensions: list[str] | None = None,
     acquired_tools: list[str] | None = None,
@@ -531,7 +567,28 @@ def run_local(
     if alias_models:
         env["ALIAS_MODELS"] = ",".join(alias_models)
 
+    # Build command with profile-driven configuration via CLI flags.
+    # CLI flags take precedence over settings.json (which pi may mutate).
     cmd = [pi_bin]
+
+    # Set default model via --model flag
+    default_model = profile_env.get("PI_DEFAULT_MODEL")
+    has_model_flag = any(arg in ("--model", "-m") for arg in pi_args)
+    if not has_model_flag and default_model:
+        cmd.extend(["--model", default_model])
+
+    # Set thinking level via --thinking flag
+    default_thinking = profile_env.get("PI_DEFAULT_THINKING_LEVEL")
+    has_thinking_flag = any(arg == "--thinking" for arg in pi_args)
+    if not has_thinking_flag and default_thinking:
+        cmd.extend(["--thinking", default_thinking])
+
+    # Set provider via --provider flag
+    default_provider = profile_env.get("PI_DEFAULT_PROVIDER", "codefreedom")
+    has_provider_flag = any(arg == "--provider" for arg in pi_args)
+    if not has_provider_flag and default_provider:
+        cmd.extend(["--provider", default_provider])
+
     cmd.extend(pi_args)
 
     try:
@@ -665,7 +722,9 @@ def run(args: argparse.Namespace) -> int:
     lsp_servers = _read_profile_lsp_servers(profile_name, profiles_path)
     if lsp_servers:
         total = sum(len(v) for v in lsp_servers.values() if isinstance(v, list))
-        eprint(f"[PI] Profile LSP servers: {total} packages ({', '.join(lsp_servers.keys())})")
+        eprint(
+            f"[PI] Profile LSP servers: {total} packages ({', '.join(lsp_servers.keys())})"
+        )
 
     # ── Tools: acquire if declared in profile ────────────────────────────
     session_id = generate_session_id("local")
