@@ -1,5 +1,5 @@
 # ── CodeFreedom Release Workflow ──────────────────────────────────────────────
-# Atomic release workflow: bump version, generate changelog, commit, tag, push.
+# Atomic release workflow: generate changelog, tag, push tag.
 # The tag push then triggers pipy.yaml for PyPI publish + GitHub Release.
 #
 # Trigger: workflow_dispatch with version input.
@@ -8,7 +8,9 @@
 #   - RC releases: must be on release/v* branch
 #   - Final releases: must be on main branch
 #
-# This replaces scripts/release.sh with a CI-native approach.
+# NOTE: Version bump and changelog must be committed to the branch BEFORE
+# triggering this workflow. This workflow only creates and pushes the tag.
+# Tags are not protected by branch protection rules.
 # ──────────────────────────────────────────────────────────────────────────────
 
 name: Release
@@ -162,39 +164,24 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump version in pyproject.toml
-        run: |
-          VERSION="${{ needs.validate.outputs.full_version }}"
-          sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
-          echo "Version bumped to $VERSION"
-          grep '^version' pyproject.toml
-
       - name: Generate changelog
         run: |
           git-cliff --tag "${{ needs.validate.outputs.tag }}" -o CHANGELOG.md
           echo "Changelog generated"
 
-      - name: Commit and tag
+      - name: Tag current commit
         run: |
           TAG="${{ needs.validate.outputs.tag }}"
           VERSION="${{ needs.validate.outputs.full_version }}"
 
-          git add pyproject.toml CHANGELOG.md
-          git commit -m "release: bump to ${VERSION}"
           git tag -a "$TAG" -m "Release ${TAG}"
 
-          echo "Committed and tagged: $TAG"
+          echo "Tagged: $TAG"
 
-      - name: Push
+      - name: Push tag
         run: |
           TAG="${{ needs.validate.outputs.tag }}"
-          BRANCH="${{ needs.validate.outputs.branch }}"
 
-          git push origin "$BRANCH"
           git push origin "$TAG"
 
-          echo "Pushed $TAG to origin"
-          echo ""
-          echo "PyPI publish is manual-only. Trigger it from GitHub:"
-          echo "  Actions -> Release -> Run workflow -> select tag $TAG"
-          echo "Watch: https://github.com/${{ github.repository }}/actions/workflows/pipy.yaml"
+          echo "Pushed tag $TAG to origin"
