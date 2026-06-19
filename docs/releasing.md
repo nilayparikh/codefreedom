@@ -8,13 +8,13 @@ No local release scripts — everything runs in CI via `workflow_dispatch`.
 ## Branch Structure
 
 ```text
-main                                  <- stable releases (final tags only)
+main                              <- stable releases (final tags only)
   ^ merge release when approved
-release/v0.2.1                        <- RC testing (rc tags -> PyPI)
+release/v0.2.1                    <- RC testing (rc tags -> PyPI)
   ^ created from prerelease
-prerelease/v0.2.1                     <- feature consolidation (no tags -> no PyPI)
+prerelease/v0.2.1                 <- feature consolidation (dev tags -> PyPI)
   ^ PRs from features
-feature/add-docker-gpu                <- individual work
+feature/add-docker-gpu            <- individual work
 ```
 
 ## Branch Naming
@@ -29,6 +29,7 @@ feature/add-docker-gpu                <- individual work
 
 | Tag | PyPI action | Example |
 |---|---|---|
+| `vX.Y.Z.devN` | Publishes as pre-release (`pip install --pre`) | `v0.2.1.dev1` |
 | `vX.Y.ZrcN` | Publishes as pre-release (`pip install --pre`) | `v0.2.1rc1` |
 | `vX.Y.Z` | Publishes as stable release | `v0.2.1` |
 
@@ -37,17 +38,20 @@ feature/add-docker-gpu                <- individual work
 | Branch | Version format | Example |
 |---|---|---|
 | `feature/*` | `X.Y.Z` | `0.2.1` |
-| `prerelease/*` | `X.Y.Z` | `0.2.1` |
+| `prerelease/*` | `X.Y.Z.devN` | `0.2.1.dev1` |
 | `release/*` | `X.Y.ZrcN` | `0.2.1rc1` |
 | `main` | `X.Y.Z` | `0.2.1` |
 
-No `.devN` suffixes. For local testing, install directly:
+For local testing, install directly:
 
 ```bash
 pip install -e ".[all]"
 ```
 
 ## Release Workflow
+
+All releases are triggered via GitHub Actions `workflow_dispatch`.
+No local scripts — everything runs in CI atomically.
 
 ### Phase 1: Feature Development
 
@@ -63,6 +67,12 @@ git checkout -b feature/docker-gpu
 ```bash
 git checkout prerelease/v0.2.1
 # Merge PRs from feature branches
+# Optionally trigger dev release:
+#   Actions -> Release -> Run workflow
+#     version: 0.2.1
+#     pre-release: true
+#     type: dev
+#     dev-number: 1
 ```
 
 ### Phase 3: Release Candidate
@@ -76,11 +86,13 @@ git push -u origin release/v0.2.1
 # Actions -> Release -> Run workflow
 #   version: 0.2.1
 #   pre-release: true
+#   type: rc
 #   candidate: 1
 
 # Found a bug? Fix on release branch, then trigger again:
 #   version: 0.2.1
 #   pre-release: true
+#   type: rc
 #   candidate: 2
 ```
 
@@ -129,25 +141,29 @@ Atomic release via `workflow_dispatch`.
 
 | Input | Required | Description |
 |---|---|---|
-| `version` | Yes | Version to release (e.g., `0.2.1`) |
+| `version` | Yes | Base version (e.g., `0.2.1`) |
 | `pre-release` | No | Mark as pre-release (default: false) |
-| `candidate` | No | RC number (required if pre-release is true) |
+| `type` | No | Pre-release type: `dev` or `rc` (default: `rc`) |
+| `candidate` | No | RC number (required if type=rc) |
+| `dev-number` | No | Dev number (required if type=dev) |
 
 **What it does:**
 
 1. Validates version format, branch, clean working tree, no duplicate tags
-2. Bumps version in `pyproject.toml`
-3. Generates changelog with `git-cliff`
-4. Commits: `release: bump to X.Y.ZrcN`
-5. Tags: creates annotated tag `vX.Y.ZrcN` or `vX.Y.Z`
-6. Pushes commit + tag to origin
+2. Builds full version string: `X.Y.Z.devN`, `X.Y.ZrcN`, or `X.Y.Z`
+3. Bumps version in `pyproject.toml`
+4. Generates changelog with `git-cliff`
+5. Commits: `release: bump to X.Y.Z.devN` or `release: bump to X.Y.ZrcN`
+6. Tags: creates annotated tag
+7. Pushes commit + tag to origin
 
 **Branch requirements:**
 
 | Release type | Must be on |
 |---|---|
-| RC (`pre-release: true`) | `release/v*` branch |
-| Final (`pre-release: false`) | `main` branch |
+| Dev (`type=dev`) | `prerelease/v*` branch |
+| RC (`type=rc`) | `release/v*` branch |
+| Final (`pre-release=false`) | `main` branch |
 
 ### PyPI Publish (`pipy.yaml`)
 
@@ -158,7 +174,7 @@ Triggered by tag push `v*`. Builds and publishes to PyPI.
 | Test | Run full test suite on 3 OS x 3 Python versions |
 | Build | Create sdist + wheel |
 | Publish | Upload to PyPI via OIDC trusted publishing |
-| GitHub Release | Create release (marked as pre-release for RCs) |
+| GitHub Release | Create release (marked as pre-release for dev/rc) |
 
 ### Docker Workflows
 
@@ -256,4 +272,4 @@ source .venv/bin/activate
 pip install -e ".[all]"
 ```
 
-No `.devN` version suffixes. The version in `pyproject.toml` stays as `X.Y.Z` during development and is only bumped to `X.Y.ZrcN` or `X.Y.Z` at release time via the `release.yml` workflow.
+The version in `pyproject.toml` is bumped only at release time via the `release.yml` workflow.
