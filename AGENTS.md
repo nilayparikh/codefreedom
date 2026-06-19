@@ -434,7 +434,7 @@ All CI is consolidated into `ci.yml`. No separate lint/test/type-check workflows
 |---|---|---|
 | `ci.yml` | Push to ANY branch + PRs | Lint, type-check, unit tests, integration tests, commit lint (PRs only) |
 | `release.yml` | workflow_dispatch | Atomic bump + changelog + commit + tag + push |
-| `pipy.yaml` | Tag push `v*` | Build + publish to PyPI + GitHub Release |
+| `pipy.yaml` | workflow_dispatch | Build + publish to PyPI + GitHub Release (manual only) |
 | `docker-*.yml` | Various | Build, sign, publish Docker images |
 | `trivy.yml` | Various | Security scanning |
 | `scorecard.yml` | Various | OpenSSF Scorecard |
@@ -455,7 +455,7 @@ Releases are triggered via GitHub Actions `workflow_dispatch` — no local scrip
 1. Go to **Actions → Release → Run workflow**
 2. Enter version (e.g., `0.2.1`), check pre-release if RC, enter candidate number
 3. Workflow atomically: bumps version, generates changelog, commits, tags, pushes
-4. Tag push triggers `pipy.yaml` for PyPI publish + GitHub Release
+4. Manually trigger `pipy.yaml` to publish to PyPI + create GitHub Release
 
 See `docs/releasing.md` for full branch strategy and release lifecycle.
 
