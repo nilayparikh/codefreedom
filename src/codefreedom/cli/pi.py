@@ -399,11 +399,19 @@ def _read_profile_lsp_servers(
     return lsp if isinstance(lsp, dict) else {}
 
 
+_LSP_BINARY_MAP: dict[str, str] = {
+    "python-lsp-server[all]": "pylsp",
+    "python-lsp-server": "pylsp",
+    "vscode-langservers-extracted": "vscode-langservers-extracted",
+}
+
+
 def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
     """Install missing LSP servers declared in the profile.
 
-    Checks each package with ``which`` and installs via the appropriate
-    package manager (npm -g or pip).
+    Uses ``_LSP_BINARY_MAP`` for packages whose executable differs from
+    the package name, then falls back to deriving the binary name from
+    the package string.
     """
     import shutil as _shutil
 
@@ -412,11 +420,11 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
             continue
         missing = []
         for pkg in packages:
-            # Derive binary name: package name up to first [ or @
-            bin_name = pkg.split("[")[0].split("@")[0]
-            # Handle scoped npm packages: @scope/name -> name
-            if "/" in bin_name:
-                bin_name = bin_name.rsplit("/", 1)[-1]
+            bin_name = _LSP_BINARY_MAP.get(pkg)
+            if bin_name is None:
+                bin_name = pkg.split("[")[0].split("@")[0]
+                if "/" in bin_name:
+                    bin_name = bin_name.rsplit("/", 1)[-1]
             if not _shutil.which(bin_name):
                 missing.append(pkg)
 

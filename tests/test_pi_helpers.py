@@ -149,6 +149,64 @@ class TestEnsureLeanCtx:
                 )
 
 
+class TestEnsureLspServers:
+    """Verify LSP server detection handles package/binary mismatches."""
+
+    def test_pylsp_not_reinstalled_when_present(self, monkeypatch):
+        """python-lsp-server[all] should check for 'pylsp', not 'python-lsp-server'."""
+        import codefreedom.cli.pi as pi_mod
+
+        installed = {"pylsp", "typescript-language-server"}
+
+        def fake_which(name):
+            return "/usr/bin/" + name if name in installed else None
+
+        monkeypatch.setattr("shutil.which", fake_which)
+
+        npm_calls = []
+        pip_calls = []
+
+        def fake_subprocess_run(cmd, **kwargs):
+            if cmd[0] == "npm":
+                npm_calls.append(cmd)
+            elif cmd[0] == "pip":
+                pip_calls.append(cmd)
+
+        monkeypatch.setattr("subprocess.run", fake_subprocess_run)
+
+        lsp_servers = {
+            "npm": ["typescript-language-server"],
+            "pip": ["python-lsp-server[all]"],
+        }
+        pi_mod._ensure_lsp_servers(lsp_servers)
+
+        assert pip_calls == [], f"Expected no pip install, got {pip_calls}"
+
+    def test_vscode_langservers_not_reinstalled(self, monkeypatch):
+        """vscode-langservers-extracted installs multiple binaries, not one matching the package name."""
+        import codefreedom.cli.pi as pi_mod
+
+        installed = {"vscode-langservers-extracted"}
+
+        def fake_which(name):
+            return "/usr/bin/" + name if name in installed else None
+
+        monkeypatch.setattr("shutil.which", fake_which)
+
+        npm_calls = []
+
+        def fake_subprocess_run(cmd, **kwargs):
+            if cmd[0] == "npm":
+                npm_calls.append(cmd)
+
+        monkeypatch.setattr("subprocess.run", fake_subprocess_run)
+
+        lsp_servers = {"npm": ["vscode-langservers-extracted"]}
+        pi_mod._ensure_lsp_servers(lsp_servers)
+
+        assert npm_calls == [], f"Expected no npm install, got {npm_calls}"
+
+
 class TestPiEnvLoading:
     """Verify pi-code loads its own component env files."""
 
