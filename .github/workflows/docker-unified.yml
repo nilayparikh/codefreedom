@@ -15,6 +15,10 @@ name: Docker
 
 on:
   workflow_dispatch:
+    branches:
+      - main
+      - prerelease/*
+      - release/*
     inputs:
       platform:
         description: "Platform to build (all, ubuntu, cuda, rocm)"
