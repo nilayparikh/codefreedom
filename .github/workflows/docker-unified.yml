@@ -38,26 +38,32 @@ permissions:
   id-token: write
 
 jobs:
+  filter:
+    runs-on: ubuntu-24.04
+    outputs:
+      build_matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Build matrix from platform input
+        id: set-matrix
+        run: |
+          PLATFORM="${{ inputs.platform }}"
+          if [ "${PLATFORM}" = "all" ]; then
+            MATRIX='{"include":[{"platform":"ubuntu","target":"ubuntu","platforms":"linux/arm64,linux/amd64","scope":"Ubuntu"},{"platform":"cuda","target":"cuda","platforms":"linux/arm64,linux/amd64","scope":"CUDA"},{"platform":"rocm","target":"rocm","platforms":"linux/amd64","scope":"ROCm"}]}'
+          else
+            case "${PLATFORM}" in
+              ubuntu) MATRIX='{"include":[{"platform":"ubuntu","target":"ubuntu","platforms":"linux/arm64,linux/amd64","scope":"Ubuntu"}]}' ;;
+              cuda)   MATRIX='{"include":[{"platform":"cuda","target":"cuda","platforms":"linux/arm64,linux/amd64","scope":"CUDA"}]}' ;;
+              rocm)   MATRIX='{"include":[{"platform":"rocm","target":"rocm","platforms":"linux/amd64","scope":"ROCm"}]}' ;;
+            esac
+          fi
+          echo "matrix=${MATRIX}" >> "${GITHUB_OUTPUT}"
+
   build:
+    needs: filter
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu
-            target: ubuntu
-            platforms: linux/arm64,linux/amd64
-            scope: Ubuntu
-          - platform: cuda
-            target: cuda
-            platforms: linux/arm64,linux/amd64
-            scope: CUDA
-          - platform: rocm
-            target: rocm
-            platforms: linux/amd64
-            scope: ROCm
+      matrix: ${{ fromJSON(needs.filter.outputs.build_matrix) }}
     runs-on: ubuntu-24.04
-    if: >-
-      inputs.platform == 'all' || inputs.platform == matrix.platform
     outputs:
       digest-ubuntu: ${{ steps.digest.outputs.digest-ubuntu }}
       digest-cuda: ${{ steps.digest.outputs.digest-cuda }}
@@ -207,6 +213,6 @@ jobs:
 
       - name: Verify GHCR signature
         if: steps.get-digest.outputs.digest != ''
-        uses: ./.github/actions/cosign-verify
+        uses: ./.github.actions/cosign-verify
         with:
           image: ${{ env.GHCR_REPO }}@${{ steps.get-digest.outputs.digest }}
