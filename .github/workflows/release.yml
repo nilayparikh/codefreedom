@@ -1,0 +1,168 @@
+# ── CodeFreedom Release Workflow ──────────────────────────────────────────────
+# Atomic release workflow: bump version, generate changelog, commit, tag, push.
+# The tag push then triggers pipy.yaml for PyPI publish + GitHub Release.
+#
+# Trigger: workflow_dispatch with version input.
+# Branch requirements:
+#   - RC releases: must be on release/v* branch
+#   - Final releases: must be on main branch
+#
+# This replaces scripts/release.sh with a CI-native approach.
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., 0.2.1 or 0.2.1rc1)"
+        required: true
+        type: string
+      pre-release:
+        description: "Mark as pre-release (RC)"
+        required: false
+        type: boolean
+        default: false
+      candidate:
+        description: "Release candidate number (required if pre-release is true)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-24.04
+    outputs:
+      full_version: ${{ steps.resolve.outputs.full_version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      is_rc: ${{ steps.resolve.outputs.is_rc }}
+      branch: ${{ steps.resolve.outputs.branch }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: resolve
+        run: |
+          VERSION="${{ inputs.version }}"
+          IS_RC="${{ inputs.pre-release }}"
+          CANDIDATE="${{ inputs.candidate }}"
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+          # Validate version format
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: version must be X.Y.Z format, got: $VERSION"
+            exit 1
+          fi
+
+          # Build full version string
+          if [ "$IS_RC" = "true" ]; then
+            if [ -z "$CANDIDATE" ]; then
+              echo "Error: pre-release requires candidate number"
+              exit 1
+            fi
+            FULL_VERSION="${VERSION}rc${CANDIDATE}"
+            TAG="v${FULL_VERSION}"
+
+            # Validate branch for RC
+            if [[ "$BRANCH" != release/v* ]]; then
+              echo "Error: RC releases require release/v* branch. Current: $BRANCH"
+              exit 1
+            fi
+          else
+            FULL_VERSION="$VERSION"
+            TAG="v${FULL_VERSION}"
+
+            # Validate branch for final
+            if [ "$BRANCH" != "main" ]; then
+              echo "Error: final releases require main branch. Current: $BRANCH"
+              exit 1
+            fi
+          fi
+
+          # Check working tree is clean
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Error: working tree is dirty"
+            git status --short
+            exit 1
+          fi
+
+          # Check tag doesn't already exist
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Error: tag $TAG already exists"
+            exit 1
+          fi
+
+          echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "is_rc=$IS_RC" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          echo "Release: $FULL_VERSION (tag: $TAG)"
+          echo "Branch: $BRANCH"
+          echo "Pre-release: $IS_RC"
+
+  release:
+    name: Create release
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install git-cliff
+        run: pip install git-cliff
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version in pyproject.toml
+        run: |
+          VERSION="${{ needs.validate.outputs.full_version }}"
+          sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+          echo "Version bumped to $VERSION"
+          grep '^version' pyproject.toml
+
+      - name: Generate changelog
+        run: |
+          git-cliff --tag "${{ needs.validate.outputs.tag }}" -o CHANGELOG.md
+          echo "Changelog generated"
+
+      - name: Commit and tag
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+          VERSION="${{ needs.validate.outputs.full_version }}"
+
+          git add pyproject.toml CHANGELOG.md
+          git commit -m "release: bump to ${VERSION}"
+          git tag -a "$TAG" -m "Release ${TAG}"
+
+          echo "Committed and tagged: $TAG"
+
+      - name: Push
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+          BRANCH="${{ needs.validate.outputs.branch }}"
+
+          git push origin "$BRANCH"
+          git push origin "$TAG"
+
+          echo "Pushed $TAG to origin"
+          echo ""
+          echo "PyPI publish will be triggered by tag push."
+          echo "Watch: https://github.com/${{ github.repository }}/actions/workflows/pipy.yaml"

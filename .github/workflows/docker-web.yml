@@ -10,10 +10,17 @@
 name: Docker Web
 
 on:
-  push:
-    branches: [main, prerelease]
-    paths: ["docker/web/Dockerfile.Web"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (e.g. v0.2.1, beta)"
+        required: true
+        type: string
+      latest:
+        description: "Tag as latest"
+        required: false
+        type: boolean
+        default: true
 
 env:
   DOCKER_HUB_REPO: nilayparikh/codefreedom
@@ -47,14 +54,12 @@ jobs:
           echo "📦 Version: v${VERSION}"
 
       - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -69,9 +74,9 @@ jobs:
             ${{ env.DOCKER_HUB_REPO }}
             ${{ env.GHCR_REPO }}
           tags: |
-            type=raw,value=web-v${{ steps.version.outputs.version }}
-            type=raw,value=web-v${{ steps.version.outputs.major_minor }}
-            type=raw,value=web-latest
+            type=raw,value=web-${{ inputs.tag }}
+            
+            type=raw,value=web-latest,enable=${{ inputs.latest }}
           labels: |
             org.opencontainers.image.title=CodeFreedom - Web Browser (MCP)
             org.opencontainers.image.description=Web automation with Camoufox (Firefox fork) + Xvfb + PyAutoGUI + MCP server
@@ -87,7 +92,7 @@ jobs:
           platforms: linux/arm64,linux/amd64
           build-args: |
             IMAGE_VERSION=${{ steps.version.outputs.version }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
@@ -95,7 +100,6 @@ jobs:
           cache-to: type=gha,mode=max,scope=Web
 
       - name: Generate artifact attestation
-        if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.GHCR_REPO }}
@@ -103,13 +107,11 @@ jobs:
           push-to-registry: true
 
       - name: Sign Docker Hub image
-        if: github.event_name != 'pull_request'
         uses: ./.github/actions/cosign-sign
         with:
           image: docker.io/${{ env.DOCKER_HUB_REPO }}@${{ steps.build.outputs.digest }}
 
       - name: Sign GHCR image
-        if: github.event_name != 'pull_request'
         uses: ./.github/actions/cosign-sign
         with:
           image: ${{ env.GHCR_REPO }}@${{ steps.build.outputs.digest }}
@@ -117,7 +119,6 @@ jobs:
   verify:
     needs: build
     runs-on: ubuntu-24.04
-    if: github.event_name != 'pull_request' && needs.build.outputs.digest != ''
     permissions:
       contents: read
       packages: read

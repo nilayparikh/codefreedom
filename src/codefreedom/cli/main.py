@@ -32,13 +32,27 @@ def _print_version() -> None:
     """Print version, Python, Docker, and dependency info."""
     import importlib.metadata
     import platform
+    import subprocess
+    from pathlib import Path
 
     try:
         ver = importlib.metadata.version("codefreedom")
     except importlib.metadata.PackageNotFoundError:
         ver = "dev"
 
-    print(f"codefreedom {ver}")
+    git_hash = ""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=3,
+            cwd=str(Path(__file__).resolve().parent.parent.parent.parent),
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            git_hash = f" ({result.stdout.strip()})"
+    except Exception:
+        pass
+
+    print(f"codefreedom {ver}{git_hash}")
     print(f"  python     {platform.python_version()}")
     print(f"  platform   {platform.platform()}")
 
@@ -54,7 +68,6 @@ def _print_version() -> None:
             print(f"  {dep:<16} (not installed)")
 
     try:
-        import subprocess
         result = subprocess.run(
             ["docker", "version", "--format", "{{.Server.Version}}"],
             capture_output=True, text=True, timeout=5,

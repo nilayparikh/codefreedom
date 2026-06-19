@@ -17,26 +17,39 @@ CodeFreedom is a CLI (`cf`) that sits between you and your code agent (Claude Co
 ## Development Setup
 
 ```bash
+python3 -m venv .venv                # create venv (first time only)
+source .venv/bin/activate            # activate venv
 pip install -e ".[dev]"              # editable install with dev deps
 python -m codefreedom --help         # verify CLI works
 ```
 
+> **CRITICAL: Python Environment Rule**
+> ALL Python operations (pip install, pytest, mypy, ruff, git-cliff, etc.)
+> MUST use the project's `.venv`. Never install into system Python or
+> use `--break-system-packages`. Commands must be prefixed with
+> `.venv/bin/` or run after `source .venv/bin/activate`.
+>
+> Bad:  `pip install git-cliff`
+> Bad:  `pip install --break-system-packages git-cliff`
+> Good: `.venv/bin/pip install git-cliff`
+> Good: `source .venv/bin/activate && pip install git-cliff`
+
 ## Verification Commands
 
-Run these before every commit. All must pass.
+Run these before every commit. All must pass (use `.venv/bin/` prefix or ensure venv is active).
 
 ```bash
 # 1. Unit tests (fast, ~2s)
-pytest tests/ -m unit -q --tb=short
+.venv/bin/pytest tests/ -m unit -q --tb=short
 
 # 2. Full test suite
-pytest tests/ -q --tb=short
+.venv/bin/pytest tests/ -q --tb=short
 
 # 3. Lint
-ruff check src/ tests/
+.venv/bin/ruff check src/ tests/
 
 # 4. Type-check
-mypy src/ --ignore-missing-imports
+.venv/bin/mypy src/ --ignore-missing-imports
 ```
 
 ### When Modifying a Module
@@ -415,21 +428,36 @@ All `print()`/`eprint()` feedback must use `tag('TAG')` from `codefreedom.log`. 
 
 ### Workflows
 
-| Workflow | Purpose |
-|---|---|
-| `integration-test.yml` | Tests on Python 3.10/11/12 across Ubuntu, Windows, macOS |
-| `gated-checkin.yml` | PR gate |
-| `docker-*.yml` | Build, sign, publish Docker images |
-| `pipy.yaml` | Publish to PyPI on `v*` tags |
-| `trivy.yml` | Security scanning |
-| `scorecard.yml` | OpenSSF Scorecard |
-| `publish-docs.yml` | MkDocs deployment |
+All CI is consolidated into `ci.yml`. No separate lint/test/type-check workflows.
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `ci.yml` | Push to ANY branch + PRs | Lint, type-check, unit tests, integration tests, commit lint (PRs only) |
+| `release.yml` | workflow_dispatch | Atomic bump + changelog + commit + tag + push |
+| `pipy.yaml` | Tag push `v*` | Build + publish to PyPI + GitHub Release |
+| `docker-*.yml` | Various | Build, sign, publish Docker images |
+| `trivy.yml` | Various | Security scanning |
+| `scorecard.yml` | Various | OpenSSF Scorecard |
+| `publish-docs.yml` | Various | MkDocs deployment |
+
+### CI Stages (all in ci.yml)
+
+1. **Lint** — `ruff check src/ tests/`
+2. **Type-check** — `mypy src/ --ignore-missing-imports`
+3. **Unit tests** — `pytest tests/ -v --tb=short` (Python 3.10/3.11/3.12)
+4. **Integration tests** — build wheel, install, smoke test (Ubuntu/Windows/macOS)
+5. **Commit lint** — conventional commit validation (PRs only)
 
 ### Release Process
 
-```bash
-./scripts/release.sh  # bumps version, tags, publishes
-```
+Releases are triggered via GitHub Actions `workflow_dispatch` — no local scripts needed.
+
+1. Go to **Actions → Release → Run workflow**
+2. Enter version (e.g., `0.2.1`), check pre-release if RC, enter candidate number
+3. Workflow atomically: bumps version, generates changelog, commits, tags, pushes
+4. Tag push triggers `pipy.yaml` for PyPI publish + GitHub Release
+
+See `docs/releasing.md` for full branch strategy and release lifecycle.
 
 ### Documentation
 
