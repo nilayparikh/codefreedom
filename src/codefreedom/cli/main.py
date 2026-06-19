@@ -357,6 +357,7 @@ def _build_update_args(p: argparse.ArgumentParser) -> None:
 
 def _build_deinit_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("-f", "--force", action="store_true", help="Skip confirmation prompt before removing the CodeFreedom directory")
+    p.add_argument("--clean-images", action="store_true", help="Also remove CodeFreedom Docker images, volumes, and dangling images")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -3,6 +3,7 @@
 Usage:
     codefreedom setup deinit              Interactive teardown (prompts for confirmation)
     codefreedom setup deinit --force      Skip confirmation prompt
+    codefreedom setup deinit --clean-images  Also remove Docker images and volumes
     codefreedom setup deinit --help       Show this help
 
 Teardown steps:
@@ -10,12 +11,11 @@ Teardown steps:
   2. Stop all tools (chrome, web, github, web-bridge)
   3. Find and remove any remaining CodeFreedom Docker containers (sandbox
      sessions, orphaned containers, etc.)
-  4. Prompt the user to confirm removal of the CodeFreedom home directory
+  4. Remove the shared ``codefreedom`` Docker network
+  5. (Optional) Remove CodeFreedom Docker images, PG volumes, and dangling images
+  6. Prompt the user to confirm removal of the CodeFreedom home directory
      (``~/.codefreedom/`` or ``$CODEFREEDOM_HOME``)
-  5. Remove the CodeFreedom home directory
-
-Does NOT remove Docker images. Use ``docker image prune`` or
-``docker rmi`` separately if you also want to reclaim image space.
+  7. Remove the CodeFreedom home directory
 """
 
 from __future__ import annotations
@@ -193,9 +193,119 @@ def _remove_codefreedom_dir(cf_dir: Path) -> None:
             pass
 
 
+def _list_codefreedom_images() -> list[str]:
+    """Return locally-pulled CodeFreedom images (``nilayparikh/codefreedom:*``)."""
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "images",
+                "--filter",
+                "reference=nilayparikh/codefreedom*",
+                "--format",
+                "{{.Repository}}:{{.Tag}}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if result.returncode != 0:
+            return []
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return []
+
+
+def _remove_codefreedom_images() -> None:
+    """Remove all local CodeFreedom Docker images."""
+    images = _list_codefreedom_images()
+    if not images:
+        eprint(f"{tag('DEINIT')} No CodeFreedom Docker images found.")
+        return
+
+    eprint(f"{tag('DEINIT')} Removing {len(images)} CodeFreedom image(s)...")
+    for image in images:
+        eprint(f"   Removing '{image}'...")
+        try:
+            subprocess.run(
+                ["docker", "image", "rm", "-f", image],
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+    eprint(f"{tag('DEINIT')} CodeFreedom images removed.")
+
+
+def _remove_codefreedom_volumes() -> None:
+    """Remove CodeFreedom PostgreSQL named volumes."""
+    volumes = ["codefreedom_pg_data", "codefreedom_pg_backup"]
+    removed = 0
+    for vol in volumes:
+        try:
+            inspect = subprocess.run(
+                ["docker", "volume", "inspect", vol],
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            if inspect.returncode == 0:
+                eprint(f"{tag('DEINIT')} Removing volume '{vol}'...")
+                subprocess.run(
+                    ["docker", "volume", "rm", vol],
+                    capture_output=True,
+                    timeout=15,
+                    check=False,
+                )
+                removed += 1
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+    if removed:
+        eprint(f"{tag('DEINIT')} Removed {removed} volume(s).")
+    else:
+        eprint(f"{tag('DEINIT')} No CodeFreedom volumes found.")
+
+
+def _prune_dangling_images() -> None:
+    """Prune dangling (untagged) Docker images."""
+    eprint(f"{tag('DEINIT')} Pruning dangling Docker images...")
+    try:
+        result = subprocess.run(
+            ["docker", "image", "prune", "-f"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        if result.returncode == 0:
+            reclaimed = ""
+            for line in result.stdout.splitlines():
+                if "reclaimed" in line.lower():
+                    reclaimed = line.strip()
+                    break
+            if reclaimed:
+                eprint(f"{tag('DEINIT')} {reclaimed}")
+            else:
+                eprint(f"{tag('DEINIT')} Dangling images pruned.")
+        else:
+            eprint(f"{tag('DEINIT')} Warning: could not prune dangling images.")
+    except (subprocess.SubprocessError, FileNotFoundError):
+        eprint(f"{tag('DEINIT')} Warning: could not prune dangling images.")
+
+
+def _clean_docker_cache() -> None:
+    """Remove all CodeFreedom Docker images, volumes, and dangling images."""
+    _remove_codefreedom_images()
+    _remove_codefreedom_volumes()
+    _prune_dangling_images()
+
+
 def run(args: argparse.Namespace) -> int:
     """Execute the deinit subcommand. Returns exit code."""
     force = getattr(args, "force", False)
+    clean_images = getattr(args, "clean_images", False)
     cf_dir = get_codefreedom_dir()
 
     eprint(f"{tag('DEINIT')} Starting CodeFreedom teardown...")
@@ -244,7 +354,28 @@ def run(args: argparse.Namespace) -> int:
         pass
     print()
 
-    # ── Step 5: Confirm and remove CodeFreedom home directory ────────────
+    # ── Step 5: Remove Docker images, volumes, and dangling images ───────
+    if clean_images:
+        if not force:
+            images = _list_codefreedom_images()
+            eprint(
+                f"[DEINIT] This will remove {len(images)} CodeFreedom image(s),"
+                " PG volumes, and dangling images."
+            )
+            eprint()
+            try:
+                response = input("   Continue? [y/N] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                eprint()
+                eprint(f"{tag('DEINIT')} Aborted.")
+                return 1
+            if response not in ("y", "yes"):
+                eprint(f"{tag('DEINIT')} Aborted.")
+                return 1
+        _clean_docker_cache()
+        print()
+
+    # ── Step 6: Confirm and remove CodeFreedom home directory ────────────
     if not cf_dir.exists():
         eprint(f"{tag('DEINIT')} Directory '{cf_dir}' does not exist — nothing more to do.")
         eprint(f"{tag('DEINIT')} Teardown complete.")
