@@ -643,7 +643,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     """
     workspace_dir = Path.cwd()
     eprint("[ENV] Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="claude")
+    base_env = load_env_chain(workspace_dir, component="pi")
 
     profile_name = getattr(args, "profile", None) or "default"
     profiles_path = resolve_pi_profiles_path()
@@ -693,7 +693,7 @@ def run(args: argparse.Namespace) -> int:
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()
     eprint("[ENV] Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="claude")
+    base_env = load_env_chain(workspace_dir, component="pi")
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"

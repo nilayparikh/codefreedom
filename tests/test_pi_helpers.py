@@ -1,6 +1,7 @@
 """Tests for pi-code launcher helpers."""
 from __future__ import annotations
 
+import argparse
 import json
 import pytest
 from pathlib import Path
@@ -146,3 +147,60 @@ class TestEnsureLeanCtx:
                     capture_output=True,
                     timeout=120,
                 )
+
+
+class TestPiEnvLoading:
+    """Verify pi-code loads its own component env files."""
+
+    def test_cmd_config_uses_pi_component(self, tmp_path, monkeypatch):
+        """cmd_config must load component='pi', not 'claude'."""
+        import codefreedom.cli.pi as pi_mod
+
+        calls = []
+
+        def fake_load_env_chain(workspace_dir, *, component=None, verbose=True):
+            calls.append(component)
+            return {}
+
+        monkeypatch.setattr(pi_mod, "load_env_chain", fake_load_env_chain)
+        monkeypatch.setattr(
+            pi_mod, "_detect_proxy_url", lambda env: "http://localhost:4000"
+        )
+
+        ns = argparse.Namespace(profile="default")
+        pi_mod.cmd_config(ns)
+        assert calls == ["pi"], f"Expected component='pi', got {calls}"
+
+    def test_run_uses_pi_component(self, tmp_path, monkeypatch):
+        """run() must load component='pi', not 'claude'."""
+        import codefreedom.cli.pi as pi_mod
+
+        calls = []
+
+        def fake_load_env_chain(workspace_dir, *, component=None, verbose=True):
+            calls.append(component)
+            return {}
+
+        monkeypatch.setattr(pi_mod, "load_env_chain", fake_load_env_chain)
+        monkeypatch.setattr(pi_mod, "find_pi_binary", lambda: "/usr/bin/pi")
+        monkeypatch.setattr(
+            pi_mod, "_detect_proxy_url", lambda env: "http://localhost:4000"
+        )
+
+        import codefreedom.cli.common as common_mod
+        monkeypatch.setattr(
+            common_mod,
+            "load_profile_with_tools",
+            lambda name, path, env, mode: ({}, [], [], 0),
+        )
+        monkeypatch.setattr(
+            common_mod,
+            "acquire_and_run",
+            lambda sid, tools, name, fn: 0,
+        )
+
+        ns = argparse.Namespace(
+            list_profiles=False, profile="default", pi_action=None, agent_args=[]
+        )
+        pi_mod.run(ns)
+        assert calls == ["pi"], f"Expected component='pi', got {calls}"
