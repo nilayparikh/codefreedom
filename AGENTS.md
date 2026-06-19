@@ -367,9 +367,9 @@ Only `pyproject.toml` holds the version. `__init__.py` derives `__version__` fro
 
 | Image | Dockerfile | Use Case |
 |---|---|---|
-| CUDA | `docker/claude-code/Dockerfile.CUDA` | NVIDIA GPU |
-| ROCm | `docker/claude-code/Dockerfile.ROCm` | AMD GPU |
-| Ubuntu | `docker/claude-code/Dockerfile.Ubuntu` | CPU-only |
+| Ubuntu | `docker/unified/Dockerfile.Unified` (target: ubuntu) | CPU-only, all agents |
+| CUDA | `docker/unified/Dockerfile.Unified` (target: cuda) | NVIDIA GPU, all agents |
+| ROCm | `docker/unified/Dockerfile.Unified` (target: rocm) | AMD GPU, all agents |
 | Chrome | `docker/chrome/Dockerfile.Chrome` | Headless Chromium |
 | Web | `docker/web/Dockerfile.Web` | Camoufox MCP |
 | GitHub MCP | `docker/github/Dockerfile.Github` | GitHub API tools |

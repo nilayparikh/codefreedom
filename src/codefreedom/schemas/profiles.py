@@ -15,6 +15,7 @@ class SandboxImages(BaseModel, extra="forbid"):
     """Sandbox images keyed by GPU type."""
 
     default: Optional[str] = None
+    unified: Optional[str] = None
     cuda: Optional[str] = None
     rocm: Optional[str] = None
 
