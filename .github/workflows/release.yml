@@ -4,6 +4,7 @@
 #
 # Trigger: workflow_dispatch with version input.
 # Branch requirements:
+#   - Dev releases: must be on prerelease/v* branch
 #   - RC releases: must be on release/v* branch
 #   - Final releases: must be on main branch
 #
@@ -16,16 +17,29 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g., 0.2.1 or 0.2.1rc1)"
+        description: "Base version (e.g., 0.2.1)"
         required: true
         type: string
       pre-release:
-        description: "Mark as pre-release (RC)"
+        description: "Mark as pre-release"
         required: false
         type: boolean
         default: false
+      type:
+        description: "Pre-release type: dev or rc"
+        required: false
+        type: choice
+        options:
+          - rc
+          - dev
+        default: "rc"
       candidate:
-        description: "Release candidate number (required if pre-release is true)"
+        description: "Release candidate number (required if type=rc)"
+        required: false
+        type: string
+        default: ""
+      dev-number:
+        description: "Dev number (required if type=dev)"
         required: false
         type: string
         default: ""
@@ -40,7 +54,6 @@ jobs:
     outputs:
       full_version: ${{ steps.resolve.outputs.full_version }}
       tag: ${{ steps.resolve.outputs.tag }}
-      is_rc: ${{ steps.resolve.outputs.is_rc }}
       branch: ${{ steps.resolve.outputs.branch }}
     steps:
       - uses: actions/checkout@v6
@@ -51,8 +64,10 @@ jobs:
         id: resolve
         run: |
           VERSION="${{ inputs.version }}"
-          IS_RC="${{ inputs.pre-release }}"
+          IS_PRE="${{ inputs.pre-release }}"
+          TYPE="${{ inputs.type }}"
           CANDIDATE="${{ inputs.candidate }}"
+          DEV_NUM="${{ inputs.dev-number }}"
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
           # Validate version format
@@ -62,17 +77,35 @@ jobs:
           fi
 
           # Build full version string
-          if [ "$IS_RC" = "true" ]; then
-            if [ -z "$CANDIDATE" ]; then
-              echo "Error: pre-release requires candidate number"
-              exit 1
-            fi
-            FULL_VERSION="${VERSION}rc${CANDIDATE}"
-            TAG="v${FULL_VERSION}"
+          if [ "$IS_PRE" = "true" ]; then
+            if [ "$TYPE" = "rc" ]; then
+              if [ -z "$CANDIDATE" ]; then
+                echo "Error: type=rc requires candidate number"
+                exit 1
+              fi
+              FULL_VERSION="${VERSION}rc${CANDIDATE}"
+              TAG="v${FULL_VERSION}"
 
-            # Validate branch for RC
-            if [[ "$BRANCH" != release/v* ]]; then
-              echo "Error: RC releases require release/v* branch. Current: $BRANCH"
+              # Validate branch for RC
+              if [[ "$BRANCH" != release/v* ]]; then
+                echo "Error: RC releases require release/v* branch. Current: $BRANCH"
+                exit 1
+              fi
+            elif [ "$TYPE" = "dev" ]; then
+              if [ -z "$DEV_NUM" ]; then
+                echo "Error: type=dev requires dev-number"
+                exit 1
+              fi
+              FULL_VERSION="${VERSION}.dev${DEV_NUM}"
+              TAG="v${FULL_VERSION}"
+
+              # Validate branch for dev
+              if [[ "$BRANCH" != prerelease/v* ]]; then
+                echo "Error: dev releases require prerelease/v* branch. Current: $BRANCH"
+                exit 1
+              fi
+            else
+              echo "Error: type must be 'dev' or 'rc', got: $TYPE"
               exit 1
             fi
           else
@@ -101,12 +134,10 @@ jobs:
 
           echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "is_rc=$IS_RC" >> $GITHUB_OUTPUT
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
           echo "Release: $FULL_VERSION (tag: $TAG)"
           echo "Branch: $BRANCH"
-          echo "Pre-release: $IS_RC"
 
   release:
     name: Create release
