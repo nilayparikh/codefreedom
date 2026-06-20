@@ -2,9 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](pyproject.toml)
-[![Integration Tests](https://github.com/nilayparikh/codefreedom/actions/workflows/integration-test.yml/badge.svg)](https://github.com/nilayparikh/codefreedom/actions/workflows/integration-test.yml)
-[![Gated Check-in](https://github.com/nilayparikh/codefreedom/actions/workflows/gated-checkin.yml/badge.svg)](https://github.com/nilayparikh/codefreedom/actions/workflows/gated-checkin.yml)
-[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/nilayparikh/codefreedom?label=OpenSSF)](https://securityscorecards.dev/viewer/?uri=github.com/nilayparikh/codefreedom)
+[![CI](https://github.com/nilayparikh/codefreedom/actions/workflows/ci.yml/badge.svg)](https://github.com/nilayparikh/codefreedom/actions/workflows/ci.yml)
 [![Trivy Security Scan](https://github.com/nilayparikh/codefreedom/actions/workflows/trivy.yml/badge.svg)](https://github.com/nilayparikh/codefreedom/actions/workflows/trivy.yml)
 [![PyPI](https://img.shields.io/pypi/v/codefreedom.svg)](https://pypi.org/project/codefreedom/)
 [![Downloads](https://static.pepy.tech/badge/codefreedom)](https://pepy.tech/project/codefreedom)
