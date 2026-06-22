@@ -119,7 +119,12 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> list[dict]:
 
 
 def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
-    """Generate Codex model catalog from proxy model list."""
+    """Generate Codex model catalog from proxy model list.
+
+    Filters out known alias models (fable, opus, sonnet, haiku).
+    """
+    _ALIAS_MODELS = {"fable", "opus", "sonnet", "haiku"}
+
     catalog = []
     seen = set()
 
@@ -130,10 +135,11 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
 
         model_id_lower = model_id.lower()
 
-        # Skip internal LiteLLM models and provider-prefixed helpers
+        # Skip internal LiteLLM models, provider-prefixed helpers, and aliases
         if model_id_lower.startswith("azure/") or model_id_lower in (
             "gpt-3.5-turbo",
             "custom",
+            *_ALIAS_MODELS,
         ):
             continue
 
@@ -202,12 +208,9 @@ def _generate_codex_config(
         'model_provider = "codefreedom"',
         'model_reasoning_effort = "medium"',
         'model_context_window = 131072',
+        f'model_catalog_json = "{catalog_path.as_posix()}"',
+        "",
     ]
-
-    if catalog:
-        lines.append(f'model_catalog_json = "{catalog_path.as_posix()}"')
-
-    lines.append("")
     lines.append("[model_providers.codefreedom]")
     lines.append('name = "CodeFreedom Proxy"')
     lines.append(f'base_url = "{proxy_url.rstrip("/")}/v1"')
