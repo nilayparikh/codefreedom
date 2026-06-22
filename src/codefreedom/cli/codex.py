@@ -118,11 +118,17 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> list[dict]:
         return []
 
 
-def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
+def _generate_model_catalog(
+    proxy_models: list[dict],
+    show_aliases: bool = False,
+) -> list[dict]:
     """Generate Codex model catalog from proxy model list.
 
     Matches the official Codex custom provider format (see MiniMax docs).
+    When show_aliases is False, filters out known alias models (opus, sonnet, etc.).
     """
+    _ALIAS_MODELS = {"fable", "opus", "sonnet", "haiku"}
+
     catalog = []
     seen = set()
 
@@ -138,6 +144,10 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
             "gpt-3.5-turbo",
             "custom",
         ):
+            continue
+
+        # Skip alias models unless explicitly enabled
+        if not show_aliases and model_id_lower in _ALIAS_MODELS:
             continue
 
         seen.add(model_id)
@@ -185,10 +195,13 @@ def _generate_codex_config(
 
     api_key = profile_env.get("PROXY_API_KEY", "")
 
+    # Check if alias models should be shown
+    show_aliases = bool(profile_env.get("MIMOCODE_SHOW_ALIAS_MODELS", "").strip())
+
     # Fetch models from proxy
     eprint(f"{tag('CODEX')} Fetching models from proxy...")
     proxy_models = _fetch_proxy_models(proxy_url, api_key=api_key)
-    catalog = _generate_model_catalog(proxy_models)
+    catalog = _generate_model_catalog(proxy_models, show_aliases=show_aliases)
 
     if catalog:
         eprint(f"{tag('CODEX')} Found {len(catalog)} model(s) from proxy.")
