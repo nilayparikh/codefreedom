@@ -123,6 +123,7 @@ def main() -> None:
             "  cf r ag cc                   Launch Claude Code agent\n"
             "  cf r ag mc                   Launch MiMo Code agent\n"
             "  cf r ag pc                   Launch Pi Code agent\n"
+            "  cf r ag ec                   Launch Eigent desktop workforce\n"
             "  cf r px start                Start the LLM proxy\n"
             "  cf s i                       Initialize configuration\n"
             "  cf m dr                      Validate environment"

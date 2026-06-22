@@ -51,6 +51,12 @@ _AGENTS: dict[str, tuple[str, str, str, list[str]]] = {
         "Pi Code — Earendil's AI coding agent with 0-click proxy config",
         ["pc"],
     ),
+    "eigent-code": (
+        "codefreedom.cli.eigent",
+        "run",
+        "Eigent — multi-agent desktop workforce with 0-click proxy config",
+        ["ec"],
+    ),
 }
 
 # Build reverse alias map: alias → canonical name
@@ -142,6 +148,7 @@ def build_parser(parent: argparse.ArgumentParser) -> None:
         "  cf r ag cc                       Launch Claude Code\n"
         "  cf r ag mc --sandbox             Launch MiMo in sandbox\n"
         "  cf r ag pc                       Launch Pi Code\n"
+        "  cf r ag ec                       Launch Eigent desktop workforce\n"
         "  cf r ag list                     List available agents"
     )
     from codefreedom.cli.formatter import CodeFreedomHelpFormatter
