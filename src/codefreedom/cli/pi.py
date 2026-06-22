@@ -429,10 +429,14 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
             continue
 
         if manager == "npm":
+            npm_bin = shutil.which("npm")
+            if not npm_bin:
+                eprint(f"{tag('LSP')} npm not found on PATH — cannot install packages")
+                continue
             eprint(f"{tag('LSP')} Installing npm packages: {', '.join(missing)}")
             try:
                 subprocess.run(
-                    ["npm", "install", "-g", *missing],
+                    [npm_bin, "install", "-g", *missing],
                     check=False,
                     capture_output=True,
                     timeout=120,
@@ -441,10 +445,14 @@ def _ensure_lsp_servers(lsp_servers: dict[str, list[str]]) -> None:
                 eprint(f"{tag('LSP')} npm install failed: {exc}")
 
         elif manager == "pip":
+            pip_bin = shutil.which("pip")
+            if not pip_bin:
+                eprint(f"{tag('LSP')} pip not found on PATH — cannot install packages")
+                continue
             eprint(f"{tag('LSP')} Installing pip packages: {', '.join(missing)}")
             try:
                 subprocess.run(
-                    ["pip", "install", "--quiet", *missing],
+                    [pip_bin, "install", "--quiet", *missing],
                     check=False,
                     capture_output=True,
                     timeout=120,
@@ -465,10 +473,15 @@ def _ensure_lean_ctx() -> None:
     if shutil.which("lean-ctx"):
         return
 
+    npm_bin = shutil.which("npm")
+    if not npm_bin:
+        eprint(f"{tag('LEAN-CTX')} npm not found on PATH — cannot install")
+        return
+
     eprint(f"{tag('LEAN-CTX')} Installing via npm (lean-ctx-bin)...")
     try:
         subprocess.run(
-            ["npm", "install", "-g", "lean-ctx-bin"],
+            [npm_bin, "install", "-g", "lean-ctx-bin"],
             check=True,
             capture_output=True,
             timeout=120,
@@ -477,14 +490,15 @@ def _ensure_lean_ctx() -> None:
         eprint(f"{tag('LEAN-CTX')} npm install failed: {exc}")
         return
 
-    if not shutil.which("lean-ctx"):
+    lean_ctx_bin = shutil.which("lean-ctx")
+    if not lean_ctx_bin:
         eprint(f"{tag('LEAN-CTX')} Installed but not on PATH — check npm global bin")
         return
 
     eprint(f"{tag('LEAN-CTX')} Configuring for pi...")
     with contextlib.suppress(Exception):
         subprocess.run(
-            ["lean-ctx", "init", "--agent", "pi"],
+            [lean_ctx_bin, "init", "--agent", "pi"],
             check=False,
             capture_output=True,
             timeout=30,

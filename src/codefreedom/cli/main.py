@@ -245,6 +245,16 @@ def main() -> None:
     from codefreedom.cli.manage.admin import build_parser as build_admin_parser
     build_admin_parser(admin_parser)
 
+    # ── git — commit & PR workflows ──────────────────────────────────────
+    git_parser = _add_subparser(
+        subparsers,
+        "git",
+        aliases=["g"],
+        help="Git workflows: commit messages, PR creation (cmt, pr, init)",
+    )
+    from codefreedom.cli.git import build_parser as build_git_parser
+    build_git_parser(git_parser)
+
     # ══════════════════════════════════════════════════════════════════════
     # Argument parsing & dispatch
     # ══════════════════════════════════════════════════════════════════════
@@ -303,6 +313,10 @@ def main() -> None:
         else:
             manage_parser.print_help()
             sys.exit(1)
+
+    # ── git ────────────────────────────────────────────────────────────────
+    elif cmd in ("git", "g"):
+        _dispatch("codefreedom.cli.git", "run", args)
 
     # ── Fallback ───────────────────────────────────────────────────────────
     else:

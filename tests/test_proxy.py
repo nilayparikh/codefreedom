@@ -432,8 +432,8 @@ class TestEnsureWebBridgeImage:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """When the image is missing AND we can't locate the Dockerfile,
-        the helper should warn (not crash) and return 0 — the rest of the
-        proxy stack can still come up; only the bridge will be unhealthy.
+        the helper should warn and return 1 — cannot proceed without
+        the image or a way to build it.
         """
         from codefreedom.cli.run import proxy as proxy_mod
 
@@ -451,7 +451,7 @@ class TestEnsureWebBridgeImage:
         rc = (
             proxy_mod._ensure_web_bridge_image()
         )  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-        assert rc == 0  # soft-warn, not hard-fail
+        assert rc == 1  # hard fail — no image, no source tree
 
     def test_image_missing_and_build_succeeds(
         self, monkeypatch: pytest.MonkeyPatch
