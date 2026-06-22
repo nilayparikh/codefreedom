@@ -121,9 +121,14 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> list[dict]:
 def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
     """Generate Codex model catalog from proxy model list.
 
-    Filters out known alias models (fable, opus, sonnet, haiku).
+    Filters out all alias models (Anthropic + OpenAI/Codex aliases).
     """
-    _ALIAS_MODELS = {"fable", "opus", "sonnet", "haiku"}
+    _ALIAS_MODELS = {
+        # Anthropic aliases
+        "fable", "opus", "sonnet", "haiku", "custom",
+        # OpenAI/Codex aliases
+        "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.2",
+    }
 
     catalog = []
     seen = set()
