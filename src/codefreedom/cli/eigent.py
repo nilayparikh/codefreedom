@@ -230,16 +230,18 @@ def _generate_eigent_env(
     # Build CAMEL framework env vars for proxy routing
     eigent_env: Dict[str, str] = {}
 
-    # OpenAI-compatible provider routing through proxy
+    # Backend (Python/CAMEL) - reads these
     eigent_env["OPENAI_API_KEY"] = api_key
     eigent_env["OPENAI_BASE_URL"] = f"{proxy_url.rstrip('/')}/v1"
+    eigent_env["OPENAI_API_BASE"] = f"{proxy_url.rstrip('/')}/v1"
 
     # Anthropic provider routing through proxy
     eigent_env["ANTHROPIC_API_KEY"] = api_key
     eigent_env["ANTHROPIC_BASE_URL"] = proxy_url.rstrip('/')
 
-    # Generic OpenAI-compatible fallback (used by some CAMEL components)
-    eigent_env["OPENAI_API_BASE"] = f"{proxy_url.rstrip('/')}/v1"
+    # Frontend (React/Vite) - reads these for BYOK configuration
+    eigent_env["VITE_OPENAI_API_BASE"] = f"{proxy_url.rstrip('/')}/v1"
+    eigent_env["VITE_OPENAI_API_KEY"] = api_key
 
     # Eigent-specific: disable cloud services for local-only operation
     eigent_env["VITE_USE_LOCAL_PROXY"] = "true"
