@@ -65,7 +65,7 @@ dev = [
     "httpx>=0.28",
     "fastapi>=0.115",
 ]
-docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2"]
+docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2.3"]
 camoufox = ["beautifulsoup4>=4.14.3"]
 encrypt = ["cryptography>=42.0"]
 ci = ["codefreedom[dev,docs,camoufox,encrypt]"]
