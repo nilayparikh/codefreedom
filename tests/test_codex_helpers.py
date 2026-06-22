@@ -39,24 +39,31 @@ class TestGenerateCodexConfig:
     def test_basic_config(self):
         from codefreedom.cli.codex import _generate_codex_config
 
-        config = _generate_codex_config("http://localhost:4000", {})
-        assert "model_providers.codefreedom" in config
+        config, catalog = _generate_codex_config("http://localhost:4000", {})
+        assert 'model_provider = "codefreedom"' in config
+        assert "[model_providers.codefreedom]" in config
         assert 'base_url = "http://localhost:4000/v1"' in config
-        assert "requires_openai_auth = true" in config
+        assert 'name = "CodeFreedom Proxy"' in config
+        assert 'wire_api = "responses"' in config
 
     def test_with_api_key(self):
         from codefreedom.cli.codex import _generate_codex_config
 
-        config = _generate_codex_config(
+        config, catalog = _generate_codex_config(
             "http://localhost:4000", {"PROXY_API_KEY": "sk-test"}
         )
-        assert "requires_openai_auth = false" in config
-        assert 'env_key = "PROXY_API_KEY"' in config
+        assert 'env_key = "OPENAI_API_KEY"' in config
+
+    def test_without_api_key(self):
+        from codefreedom.cli.codex import _generate_codex_config
+
+        config, catalog = _generate_codex_config("http://localhost:4000", {})
+        assert "env_key" not in config
 
     def test_with_default_model(self):
         from codefreedom.cli.codex import _generate_codex_config
 
-        config = _generate_codex_config(
+        config, catalog = _generate_codex_config(
             "http://localhost:4000", {"CODEX_DEFAULT_MODEL": "gpt-4o"}
         )
         assert 'model = "gpt-4o"' in config
@@ -64,14 +71,30 @@ class TestGenerateCodexConfig:
     def test_proxy_url_trailing_slash_stripped(self):
         from codefreedom.cli.codex import _generate_codex_config
 
-        config = _generate_codex_config("http://localhost:4000/", {})
+        config, catalog = _generate_codex_config("http://localhost:4000/", {})
         assert 'base_url = "http://localhost:4000/v1"' in config
 
     def test_custom_proxy_url(self):
         from codefreedom.cli.codex import _generate_codex_config
 
-        config = _generate_codex_config("http://my-proxy:8080", {})
+        config, catalog = _generate_codex_config("http://my-proxy:8080", {})
         assert 'base_url = "http://my-proxy:8080/v1"' in config
+
+    def test_catalog_at_root_level(self):
+        from codefreedom.cli.codex import _generate_codex_config
+
+        config, catalog = _generate_codex_config("http://localhost:4000", {})
+        # model_catalog_json must be at root level, NOT inside [model_providers...]
+        if "model_catalog_json" in config:
+            lines = config.splitlines()
+            in_provider_section = False
+            for line in lines:
+                if line.strip().startswith("[model_providers"):
+                    in_provider_section = True
+                elif line.strip().startswith("[") and not line.strip().startswith("[["):
+                    in_provider_section = False
+                if "model_catalog_json" in line:
+                    assert not in_provider_section, "model_catalog_json must be at root level"
 
 
 class TestFindCodexBinary:
