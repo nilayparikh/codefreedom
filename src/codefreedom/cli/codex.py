@@ -12,7 +12,8 @@ Proxy auto-config:
     - Detects the proxy at PROXY_BASE_URL (default: http://localhost:4000)
     - Generates ``~/.codefreedom/codex-code/config/config.toml`` with proxy provider
     - Sets ``CODEX_HOME`` env var to point at the generated config directory
-    - Codex auto-discovers models from the provider's ``/v1/models`` endpoint
+    - Custom models must be selected via ``codex -m <model_name>`` (the /model
+      picker only shows built-in OpenAI models)
 """
 
 from __future__ import annotations
@@ -288,6 +289,10 @@ def run_local(
     proxy_api_key = profile_env.get("PROXY_API_KEY", "")
     if proxy_api_key:
         env["OPENAI_API_KEY"] = proxy_api_key
+
+    if catalog_content:
+        eprint(f"{tag('CODEX')} Tip: Use 'codex -m <model>' to select a custom model.")
+        eprint(f"{tag('CODEX')} Example: codex -m MiMo-V2.5 -m sonnet")
 
     cmd = [codex_bin]
     cmd.extend(codex_args)
