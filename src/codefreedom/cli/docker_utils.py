@@ -18,6 +18,7 @@ import yaml
 from pydantic import BaseModel
 
 from codefreedom.core.interpolate import interpolate_all_strings
+from codefreedom.docker.pull import pull_if_stale
 from codefreedom.env_loader import apply_cf_cli_overrides
 from codefreedom.log import eprint
 
@@ -279,7 +280,10 @@ def ensure_image(
     build_tip: str = "",
     profile_path: str = "~/.codefreedom/profiles/<tool>.json",
 ) -> bool:
-    """Ensure the Docker image is available locally; pull if missing.
+    """Ensure the Docker image is available locally; pull if missing or stale.
+
+    Compares local vs remote digests before pulling to avoid unnecessary
+    downloads. Falls back to cache if the registry is unreachable.
 
     Args:
         image: Docker image reference (e.g. 'codefreedom:chrome').
@@ -297,32 +301,32 @@ def ensure_image(
         timeout=10,
         check=False,
     )
-    if _inspect.returncode == 0:
-        eprint(f"[{label}] Using cached image '{image}'.")
-        return True
+    if _inspect.returncode != 0:
+        eprint(f"[{label}] Image '{image}' not found locally, pulling...")
+        pull = subprocess.run(
+            ["docker", "pull", image],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if pull.returncode == 0:
+            eprint(f"[{label}] Image pulled.")
+            return True
 
-    eprint(f"[{label}] Image '{image}' not found locally, pulling...")
-    pull = subprocess.run(
-        ["docker", "pull", image],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-    if pull.returncode == 0:
-        eprint(f"[{label}] Image pulled.")
-        return True
+        eprint(f"[ERROR] Failed to pull image '{image}'.")
+        if pull.stderr:
+            eprint(f"   {pull.stderr.strip()}")
+        eprint("")
+        eprint("  Tips:")
+        if build_tip:
+            eprint(f"    * Build locally:  {build_tip}")
+        eprint(f"    * Set 'image' in {profile_path} to your local tag")
+        eprint("    * Wait for CI to publish the image to ghcr.io")
+        return False
 
-    eprint(f"[ERROR] Failed to pull image '{image}'.")
-    if pull.stderr:
-        eprint(f"   {pull.stderr.strip()}")
-    eprint("")
-    eprint("  Tips:")
-    if build_tip:
-        eprint(f"    * Build locally:  {build_tip}")
-    eprint(f"    * Set 'image' in {profile_path} to your local tag")
-    eprint("    * Wait for CI to publish the image to ghcr.io")
-    return False
+    pull_if_stale(image, label=label)
+    return True
 
 
 def generate_container_name(base_name: str) -> str:

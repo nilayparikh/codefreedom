@@ -13,9 +13,10 @@ pytestmark = pytest.mark.integration
 
 
 class TestRunSandbox:
+    @patch("codefreedom.sandbox.launcher.pull_if_stale")
     @patch("subprocess.run")
     @patch("subprocess.Popen")
-    def test_success_returns_zero(self, mock_popen, mock_run):
+    def test_success_returns_zero(self, mock_popen, mock_run, mock_pull):
         from codefreedom.sandbox.launcher import run_sandbox
 
         inspect_result = MagicMock()
@@ -108,8 +109,9 @@ class TestRunSandbox:
         )
         assert result == 1
 
+    @patch("codefreedom.sandbox.launcher.pull_if_stale")
     @patch("subprocess.run")
-    def test_returns_1_on_create_failure(self, mock_run):
+    def test_returns_1_on_create_failure(self, mock_run, mock_pull):
         from codefreedom.sandbox.launcher import run_sandbox
 
         inspect_result = MagicMock()
