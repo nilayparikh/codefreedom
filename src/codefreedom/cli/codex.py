@@ -144,6 +144,7 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
         display_name = model_id.split("/")[-1] if "/" in model_id else model_id
 
         catalog.append({
+            "id": model_id,
             "slug": model_id,
             "display_name": display_name,
             "description": f"{display_name} via CodeFreedom proxy",
@@ -204,6 +205,7 @@ def _generate_codex_config(
         "",
         f'model = "{default_model}"',
         'model_provider = "codefreedom"',
+        'model_reasoning_effort = "medium"',
         'model_context_window = 131072',
         "",
     ]
