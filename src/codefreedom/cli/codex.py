@@ -118,14 +118,52 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> list[dict]:
         return []
 
 
-def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
+def _parse_model_aliases(raw: str) -> dict[str, str]:
+    """Parse CODEX_MODEL_ALIASES env var into {slug: model_id} dict.
+
+    Format: "slug1=model_id1,slug2=model_id2"
+    """
+    aliases: dict[str, str] = {}
+    if not raw:
+        return aliases
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if "=" in pair:
+            slug, model_id = pair.split("=", 1)
+            aliases[slug.strip()] = model_id.strip()
+    return aliases
+
+
+def _generate_model_catalog(
+    proxy_models: list[dict],
+    aliases: dict[str, str] | None = None,
+) -> list[dict]:
     """Generate Codex model catalog from proxy model list.
 
-    Codex requires the catalog to be an object with a "models" array.
-    Each model needs id, slug, name, provider, hidden, and capability metadata.
+    Matches the official Codex model catalog schema with all required fields.
+    Aliases map short slugs to proxy model IDs.
     """
     catalog = []
     seen = set()
+    aliases = aliases or {}
+
+    _REASONING_LEVELS = [
+        {"effort": "low", "description": "Fast responses with lighter reasoning"},
+        {"effort": "medium", "description": "Balances speed and reasoning depth for everyday tasks"},
+        {"effort": "high", "description": "Greater reasoning depth for complex problems"},
+        {"effort": "xhigh", "description": "Extra high reasoning depth for complex problems"},
+    ]
+
+    _NON_REASONING_LEVELS = [
+        {"effort": "low", "description": "Fast responses with lighter reasoning"},
+        {"effort": "medium", "description": "Balances speed and reasoning depth for everyday tasks"},
+        {"effort": "high", "description": "Greater reasoning depth for complex problems"},
+    ]
+
+    # Build reverse map: model_id -> list of alias slugs
+    alias_by_model: dict[str, list[str]] = {}
+    for alias_slug, model_id in aliases.items():
+        alias_by_model.setdefault(model_id, []).append(alias_slug)
 
     for m in proxy_models:
         model_id = m.get("id", "")
@@ -144,32 +182,53 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
         seen.add(model_id)
         display_name = model_id.split("/")[-1] if "/" in model_id else model_id
 
-        # Determine capabilities based on model name heuristics
+        # Determine if model supports reasoning based on name heuristics
         is_reasoning = any(
             kw in model_id_lower
             for kw in ("o1", "o3", "o4", "reasoning", "deepseek-r", "think")
         )
 
         catalog.append({
-            "id": model_id,
             "slug": model_id,
-            "display_name": f"{display_name} (CodeFreedom)",
-            "name": display_name,
-            "provider": "codefreedom",
-            "context_length": 131072,
+            "display_name": display_name,
+            "description": f"{display_name} via CodeFreedom proxy",
             "default_reasoning_level": "medium" if is_reasoning else "low",
             "supported_reasoning_levels": (
-                ["low", "medium", "high", "xhigh"]
-                if is_reasoning
-                else ["low", "medium", "high"]
+                _REASONING_LEVELS if is_reasoning else _NON_REASONING_LEVELS
             ),
-            "capabilities": {
-                "chat": True,
-                "tools": True,
-                "reasoning": is_reasoning,
-            },
-            "hidden": False,
+            "shell_type": "shell_command",
+            "visibility": "list",
+            "supported_in_api": True,
+            "priority": 50,
+            "context_window": 131072,
+            "supports_reasoning_summaries": True,
+            "supports_parallel_tool_calls": True,
+            "input_modalities": ["text"],
+            "supports_search_tool": False,
         })
+
+        # Add alias entries (short slug -> same model)
+        for alias_slug in alias_by_model.get(model_id, []):
+            if alias_slug not in seen:
+                seen.add(alias_slug)
+                catalog.append({
+                    "slug": alias_slug,
+                    "display_name": f"{display_name} ({alias_slug})",
+                    "description": f"{display_name} via CodeFreedom proxy (alias: {alias_slug})",
+                    "default_reasoning_level": "medium" if is_reasoning else "low",
+                    "supported_reasoning_levels": (
+                        _REASONING_LEVELS if is_reasoning else _NON_REASONING_LEVELS
+                    ),
+                    "shell_type": "shell_command",
+                    "visibility": "list",
+                    "supported_in_api": True,
+                    "priority": 51,
+                    "context_window": 131072,
+                    "supports_reasoning_summaries": True,
+                    "supports_parallel_tool_calls": True,
+                    "input_modalities": ["text"],
+                    "supports_search_tool": False,
+                })
 
     return catalog
 
@@ -187,10 +246,13 @@ def _generate_codex_config(
 
     api_key = profile_env.get("PROXY_API_KEY", "")
 
+    # Parse model aliases from profile env
+    aliases = _parse_model_aliases(profile_env.get("CODEX_MODEL_ALIASES", ""))
+
     # Fetch models from proxy
     eprint(f"{tag('CODEX')} Fetching models from proxy...")
     proxy_models = _fetch_proxy_models(proxy_url, api_key=api_key)
-    catalog = _generate_model_catalog(proxy_models)
+    catalog = _generate_model_catalog(proxy_models, aliases=aliases)
 
     if catalog:
         eprint(f"{tag('CODEX')} Found {len(catalog)} model(s) from proxy.")
