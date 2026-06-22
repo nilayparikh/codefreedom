@@ -91,18 +91,6 @@ def resolve_pi_profiles_path() -> Path:
     return get_codefreedom_dir() / "profiles" / "pi-code.yaml"
 
 
-def resolve_eigent_profiles_path() -> Path:
-    """Return the Eigent profiles path (test-patchable).
-
-    Checks ``EIGENT_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/profiles/eigent-code.yaml``.
-    """
-    override = os.environ.get("EIGENT_PROFILES_FILE")
-    if override:
-        return Path(override)
-    return get_codefreedom_dir() / "profiles" / "eigent-code.yaml"
-
-
 def resolve_agent_config(
     agent: str,
     profile_name: str = "default",
@@ -131,8 +119,6 @@ def resolve_agent_config(
         profiles_path = resolve_opencode_profiles_path()
     elif agent == "pi-code":
         profiles_path = resolve_pi_profiles_path()
-    elif agent == "eigent-code":
-        profiles_path = resolve_eigent_profiles_path()
     else:
         raise ValueError(f"Unknown agent: {agent}")
 
