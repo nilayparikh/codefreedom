@@ -121,8 +121,8 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> list[dict]:
 def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
     """Generate Codex model catalog from proxy model list.
 
-    Codex does NOT auto-discover models from /v1/models for custom providers.
-    We must explicitly list models in a catalog JSON file.
+    Codex requires the catalog to be an object with a "models" array.
+    Each model needs id, slug, name, provider, and hidden fields.
     """
     catalog = []
     seen = set()
@@ -146,7 +146,10 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
 
         catalog.append({
             "id": model_id,
+            "slug": model_id,
             "name": display_name,
+            "provider": "codefreedom",
+            "hidden": False,
         })
 
     return catalog
@@ -204,7 +207,16 @@ def _generate_codex_config(
 
     lines.append("")
 
-    catalog_content = _json.dumps(catalog, indent=2) if catalog else ""
+    # Add custom_models entries for TUI discovery
+    if catalog:
+        for m in catalog:
+            lines.append('[[model_providers.codefreedom.custom_models]]')
+            lines.append(f'id = "{m["id"]}"')
+            lines.append(f'name = "{m["name"]}"')
+            lines.append("")
+
+    # Wrap catalog in {"models": [...]} format required by Codex
+    catalog_content = _json.dumps({"models": catalog}, indent=2) if catalog else ""
 
     return "\n".join(lines), catalog_content
 
