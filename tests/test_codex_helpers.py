@@ -44,7 +44,7 @@ class TestGenerateCodexConfig:
         assert "[model_providers.codefreedom]" in config
         assert 'base_url = "http://localhost:4000/v1"' in config
         assert 'name = "CodeFreedom Proxy"' in config
-        assert 'wire_api = "chat"' in config
+        assert 'wire_api = "responses"' in config
 
     def test_with_api_key(self):
         from codefreedom.cli.codex import _generate_codex_config

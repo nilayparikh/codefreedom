@@ -131,7 +131,7 @@ def _generate_codex_config(
     lines.append("[model_providers.codefreedom]")
     lines.append('name = "CodeFreedom Proxy"')
     lines.append(f'base_url = "{proxy_url.rstrip("/")}/v1"')
-    lines.append('wire_api = "chat"')
+    lines.append('wire_api = "responses"')
 
     if api_key:
         lines.append('env_key = "OPENAI_API_KEY"')
