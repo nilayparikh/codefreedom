@@ -1,0 +1,174 @@
+"""cf git — Git commit and PR workflow commands.
+
+Subcommands:
+    cf git cmt   — LLM-powered commit message generation and committing
+    cf git pr    — LLM-powered PR title/description generation and creation
+    cf git init  — Initialize .cf.yaml project config
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+from codefreedom.log import eprint, tag
+
+
+def build_parser(parser: argparse.ArgumentParser) -> None:
+    """Build the argument parser for cf git."""
+    sub = parser.add_subparsers(dest="git_command", title="git commands")
+
+    # ── git cmt ──────────────────────────────────────────────────────────
+    cmt = sub.add_parser(
+        "cmt",
+        aliases=["c"],
+        help="Generate commit message via LLM and commit",
+        description="LLM-powered commit workflow: stage, generate message, confirm, commit.",
+    )
+    cmt.add_argument(
+        "-m", "--message",
+        type=str, default=None,
+        help="Provide commit message directly, skip LLM generation",
+    )
+    cmt.add_argument(
+        "-y", "--yes",
+        action="store_true",
+        help="Auto-commit without confirmation prompt",
+    )
+    cmt.add_argument(
+        "-n", "--no-scope",
+        action="store_true",
+        help="Skip scope in conventional commit (type: desc instead of type(scope): desc)",
+    )
+    cmt.add_argument(
+        "-S", "--signed",
+        action="store_true", default=None,
+        help="Override: sign this commit with GPG",
+    )
+    cmt.add_argument(
+        "--no-sign",
+        action="store_true",
+        help="Override: don't sign this commit",
+    )
+    cmt.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview generated message without committing",
+    )
+    cmt.add_argument(
+        "files",
+        nargs="*",
+        metavar="FILE",
+        help="Specific files to stage (default: all changed)",
+    )
+    cmt.set_defaults(func=_dispatch_cmt)
+
+    # ── git pr ───────────────────────────────────────────────────────────
+    pr = sub.add_parser(
+        "pr",
+        aliases=["p"],
+        help="Generate PR title/description and create PR",
+        description="LLM-powered PR workflow: generate title and body, create PR.",
+    )
+    pr_sub = pr.add_subparsers(dest="pr_action", title="pr actions")
+
+    pr_default = pr_sub.add_parser(
+        "create",
+        help="Create PR via gh CLI (default action)",
+    )
+    _add_pr_flags(pr_default)
+    pr_default.set_defaults(func=_dispatch_pr_create)
+
+    pr_gen = pr_sub.add_parser(
+        "generate",
+        aliases=["gen"],
+        help="Generate PR title and body without creating",
+    )
+    _add_pr_flags(pr_gen)
+    pr_gen.set_defaults(func=_dispatch_pr_generate)
+
+    pr.set_defaults(func=_dispatch_pr_default)
+
+    # ── git init ─────────────────────────────────────────────────────────
+    init = sub.add_parser(
+        "init",
+        aliases=["i"],
+        help="Initialize .cf.yaml project config",
+        description="Create .cf.yaml at git root with commented template and detected modules.",
+    )
+    init.add_argument(
+        "-f", "--force",
+        action="store_true",
+        help="Overwrite existing .cf.yaml",
+    )
+    init.set_defaults(func=_dispatch_init)
+
+
+def _add_pr_flags(parser: argparse.ArgumentParser) -> None:
+    """Add shared flags to a PR subparser."""
+    parser.add_argument(
+        "-s", "--source",
+        type=str, default=None,
+        help="Source branch (default: current branch)",
+    )
+    parser.add_argument(
+        "-t", "--target",
+        type=str, default=None,
+        help="Target branch (default: main)",
+    )
+    parser.add_argument(
+        "-b", "--browser-mode",
+        action="store_true",
+        help="Open browser instead of using gh CLI",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview without any action",
+    )
+
+
+def _dispatch_cmt(args: argparse.Namespace) -> None:
+    """Dispatch cf git cmt."""
+    from codefreedom.cli.git.commit import run_commit
+    sys.exit(run_commit(args))
+
+
+def _dispatch_pr_default(args: argparse.Namespace) -> None:
+    """Dispatch cf git pr (default: open browser)."""
+    from codefreedom.cli.git.pr import run_pr
+    args.create = False
+    args.generate = False
+    sys.exit(run_pr(args))
+
+
+def _dispatch_pr_create(args: argparse.Namespace) -> None:
+    """Dispatch cf git pr create."""
+    from codefreedom.cli.git.pr import run_pr
+    args.create = True
+    args.generate = False
+    sys.exit(run_pr(args))
+
+
+def _dispatch_pr_generate(args: argparse.Namespace) -> None:
+    """Dispatch cf git pr generate."""
+    from codefreedom.cli.git.pr import run_pr
+    args.create = False
+    args.generate = True
+    sys.exit(run_pr(args))
+
+
+def _dispatch_init(args: argparse.Namespace) -> None:
+    """Dispatch cf git init."""
+    from codefreedom.cli.git.init_cmd import run_init
+    sys.exit(run_init(args))
+
+
+def run(args: argparse.Namespace) -> int:
+    """Entry point for cf git subcommands."""
+    func = getattr(args, "func", None)
+    if func:
+        return func(args)
+
+    eprint(f"{tag('ERROR')} No git subcommand specified.")
+    return 1

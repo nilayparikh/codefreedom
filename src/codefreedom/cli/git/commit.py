@@ -1,0 +1,184 @@
+"""cf git cmt — Commit workflow with LLM-generated messages."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+from pathlib import Path
+
+from codefreedom.cli.git import git_ops, llm, templates
+from codefreedom.cli.git.config import (
+    get_model,
+    get_modules,
+    get_template,
+    is_conventional_commit,
+    is_signed_commit,
+    load_git_config,
+)
+from codefreedom.log import eprint, tag
+
+_CONVENTIONAL_TYPES = [
+    "feat", "fix", "chore", "docs", "style",
+    "refactor", "perf", "test", "build", "ci", "revert",
+]
+
+
+def _build_commit_system_prompt(
+    config: dict,
+    no_scope: bool = False,
+) -> str:
+    """Build the system prompt for commit message generation."""
+    modules = get_modules(config)
+    conventional = is_conventional_commit(config)
+
+    parts = ["You are a git commit message generator.", ""]
+
+    if conventional:
+        if modules:
+            parts.append(f"Available modules/scopes: {', '.join(modules)}")
+            parts.append("Pick the most relevant module for the scope.")
+        else:
+            parts.append("Infer the scope from the changed files.")
+        parts.append("")
+
+        if no_scope:
+            parts.append("Output format (no scope):")
+            parts.append("TYPE: DESCRIPTION")
+            parts.append("")
+            parts.append(
+                f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}"
+            )
+        else:
+            parts.append("Output format:")
+            parts.append("TYPE(SCOPE): DESCRIPTION")
+            parts.append("")
+            parts.append(
+                f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}"
+            )
+            parts.append("SCOPE is the module/area affected.")
+
+        parts.append("")
+        parts.append("DESCRIPTION should be a short imperative description (max 72 chars).")
+        parts.append("Output ONLY the commit message, nothing else.")
+    else:
+        parts.append("Generate a short, clear commit message describing the changes.")
+        parts.append("Output ONLY the commit message, nothing else.")
+
+    return "\n".join(parts)
+
+
+def _prompt_user(message: str) -> str:
+    """Prompt the user for confirmation. Returns 'y', 'n', or 'e'."""
+    try:
+        response = input(f"\n{message} [Y/n/e(dit)]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return "n"
+    if not response:
+        return "y"
+    return response[0]
+
+
+def _open_editor(initial_text: str) -> str | None:
+    """Open $EDITOR with the initial text. Returns edited text or None on failure."""
+    editor = os.environ.get("EDITOR", "vi")
+    tmp_path = Path("/tmp") / "cf_commit_msg.txt"
+    tmp_path.write_text(initial_text, encoding="utf-8")
+    try:
+        subprocess.run([editor, str(tmp_path)], check=True)
+        return tmp_path.read_text(encoding="utf-8").strip()
+    except Exception:
+        return None
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def run_commit(args: object) -> int:
+    """Execute the commit workflow."""
+    work_dir = Path.cwd()
+
+    if not git_ops.is_git_repo(work_dir):
+        eprint(f"{tag('ERROR')} Not a git repository.")
+        return 1
+
+    explicit_message = getattr(args, "message", None)
+    auto_yes = getattr(args, "yes", False)
+    no_scope = getattr(args, "no_scope", False)
+    force_signed = getattr(args, "signed", None)
+    no_sign = getattr(args, "no_sign", False)
+    dry_run = getattr(args, "dry_run", False)
+    files = getattr(args, "files", None)
+
+    config = load_git_config(work_dir)
+    use_signed = is_signed_commit(config) if not no_sign else False
+    if force_signed:
+        use_signed = True
+
+    changed = git_ops.get_changed_files(work_dir)
+    if not changed:
+        eprint(f"{tag('WARN')} No changes to commit.")
+        return 0
+
+    staged = git_ops.get_staged_files(work_dir)
+    if files:
+        ok = git_ops.stage_files(files, cwd=work_dir)
+        if not ok:
+            eprint(f"{tag('ERROR')} Failed to stage files.")
+            return 1
+    elif not staged:
+        ok = git_ops.stage_files(cwd=work_dir)
+        if not ok:
+            eprint(f"{tag('ERROR')} Failed to stage files.")
+            return 1
+
+    staged_diff = git_ops.get_staged_diff(work_dir)
+    if not staged_diff.strip():
+        eprint(f"{tag('WARN')} No staged changes to commit.")
+        return 0
+
+    if explicit_message:
+        commit_msg = explicit_message
+    else:
+        model = get_model(config)
+        system_prompt = _build_commit_system_prompt(config, no_scope)
+        user_prompt = f"Diff:\n\n{staged_diff}"
+
+        eprint(f"{tag('COMMIT')} Generating commit message via {model}...")
+        response = llm.generate_message(model, system_prompt, user_prompt)
+        if response is None:
+            return 1
+
+        parsed = llm.parse_commit_response(response)
+        template = get_template(config, "commit_message")
+        commit_msg = templates.render_template(template, parsed)
+
+        if no_scope:
+            commit_msg = templates.strip_scope(commit_msg)
+
+    eprint(f"{tag('COMMIT')} Generated message:\n  {commit_msg}")
+
+    if dry_run:
+        eprint(f"{tag('INFO')} Dry run — not committing.")
+        return 0
+
+    if not auto_yes:
+        choice = _prompt_user("Confirm?")
+        if choice == "n":
+            eprint(f"{tag('SKIP')} Commit aborted.")
+            return 0
+        elif choice == "e":
+            edited = _open_editor(commit_msg)
+            if edited:
+                commit_msg = edited
+            else:
+                eprint(f"{tag('ERROR')} Editor failed.")
+                return 1
+
+    ok, output = git_ops.commit(commit_msg, signed=use_signed, cwd=work_dir)
+    if ok:
+        eprint(f"{tag('OK')} Committed successfully.")
+        if output.strip():
+            eprint(output.strip())
+        return 0
+    else:
+        eprint(f"{tag('ERROR')} Commit failed:\n{output}")
+        return 1
