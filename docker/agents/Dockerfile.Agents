@@ -1,5 +1,5 @@
 # ── CodeFreedom — Docker Agents Image ─────────────────────────────────────────
-# Contains all 3 coding agent CLIs (claude, mimo, opencode).
+# Contains all 4 coding agent CLIs (claude, mimo, opencode, codex).
 # Build targets: ubuntu (CPU), cuda (NVIDIA GPU), rocm (AMD GPU)
 #
 # @version   v1.0.0
@@ -20,7 +20,7 @@ ARG ROCM_PLATFORM=linux/amd64
 # ════════════════════════════════════════════════════════════════════════════════
 # Stage 1: Toolchain — shared across all platforms
 # Installs common packages, Node.js, GitHub CLI, productivity utils,
-# language servers, Trivy, and all 3 agent CLIs (claude, mimo, opencode).
+# language servers, Trivy, and all 4 agent CLIs (claude, mimo, opencode, codex).
 # ════════════════════════════════════════════════════════════════════════════════
 FROM ubuntu:24.04 AS toolchain
 
@@ -149,6 +149,11 @@ RUN curl -fsSL https://opencode.ai/install --output /tmp/opencode-install.sh \
     && chmod 755 /usr/local/bin/opencode \
     && rm -rf /tmp/*
 
+# 10. Codex CLI
+RUN npm install -g @openai/codex \
+    && npm config set cache /tmp/.npm --global \
+    && npm cache clean --force
+
 
 # ════════════════════════════════════════════════════════════════════════════════
 # Stage 2: Ubuntu (CPU-only) — all architectures
@@ -158,7 +163,7 @@ FROM ubuntu:24.04 AS ubuntu
 ARG IMAGE_VERSION
 
 LABEL org.opencontainers.image.title="CodeFreedom - Ubuntu" \
-      org.opencontainers.image.description="CodeFreedom dev container — all coding agents (claude, mimo, opencode) with dev tools. CPU-only." \
+      org.opencontainers.image.description="CodeFreedom dev container — all coding agents (claude, mimo, opencode, codex) with dev tools. CPU-only." \
       org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
@@ -179,6 +184,7 @@ COPY --from=toolchain /etc/apt/sources.list.d/ /etc/apt/sources.list.d/
 COPY --from=toolchain /usr/bin/gh /usr/bin/gh
 COPY --from=toolchain /root/.opencode/ /root/.opencode/
 COPY --from=toolchain /usr/lib/node_modules/@mimo-ai/ /usr/lib/node_modules/@mimo-ai/
+COPY --from=toolchain /usr/lib/node_modules/@openai/ /usr/lib/node_modules/@openai/
 
 RUN apt-get update \
     && apt-get -y dist-upgrade \
@@ -235,6 +241,7 @@ ENV IS_SANDBOX="1" \
     MIMOCODE_DISABLE_AUTOUPDATE="1" \
     MIMOCODE_DISABLE_MODELS_FETCH="1" \
     OPENCODE_DISABLE_AUTOUPDATE="1" \
+    CODEX_DISABLE_AUTOUPDATE="1" \
     HOME="/home/${USERNAME}"
 
 WORKDIR /workspace
@@ -252,7 +259,7 @@ FROM nvcr.io/nvidia/pytorch:26.04-py3 AS cuda
 ARG IMAGE_VERSION
 
 LABEL org.opencontainers.image.title="CodeFreedom - CUDA" \
-      org.opencontainers.image.description="CodeFreedom dev container — all coding agents (claude, mimo, opencode) with NVIDIA CUDA PyTorch." \
+      org.opencontainers.image.description="CodeFreedom dev container — all coding agents (claude, mimo, opencode, codex) with NVIDIA CUDA PyTorch." \
       org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
@@ -273,6 +280,7 @@ COPY --from=toolchain /etc/apt/sources.list.d/ /etc/apt/sources.list.d/
 COPY --from=toolchain /usr/bin/gh /usr/bin/gh
 COPY --from=toolchain /root/.opencode/ /root/.opencode/
 COPY --from=toolchain /usr/lib/node_modules/@mimo-ai/ /usr/lib/node_modules/@mimo-ai/
+COPY --from=toolchain /usr/lib/node_modules/@openai/ /usr/lib/node_modules/@openai/
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -321,6 +329,7 @@ ENV IS_SANDBOX="1" \
     MIMOCODE_DISABLE_AUTOUPDATE="1" \
     MIMOCODE_DISABLE_MODELS_FETCH="1" \
     OPENCODE_DISABLE_AUTOUPDATE="1" \
+    CODEX_DISABLE_AUTOUPDATE="1" \
     HOME="/home/${USERNAME}"
 
 WORKDIR /workspace
@@ -338,7 +347,7 @@ FROM --platform=$ROCM_PLATFORM rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch
 ARG IMAGE_VERSION
 
 LABEL org.opencontainers.image.title="CodeFreedom - ROCm" \
-      org.opencontainers.image.description="CodeFreedom dev container — all coding agents (claude, mimo, opencode) with AMD ROCm PyTorch." \
+      org.opencontainers.image.description="CodeFreedom dev container — all coding agents (claude, mimo, opencode, codex) with AMD ROCm PyTorch." \
       org.opencontainers.image.version="v${IMAGE_VERSION}" \
       org.opencontainers.image.vendor="nilayparikh" \
       org.opencontainers.image.authors="Nilay Parikh" \
@@ -359,6 +368,7 @@ COPY --from=toolchain /etc/apt/sources.list.d/ /etc/apt/sources.list.d/
 COPY --from=toolchain /usr/bin/gh /usr/bin/gh
 COPY --from=toolchain /root/.opencode/ /root/.opencode/
 COPY --from=toolchain /usr/lib/node_modules/@mimo-ai/ /usr/lib/node_modules/@mimo-ai/
+COPY --from=toolchain /usr/lib/node_modules/@openai/ /usr/lib/node_modules/@openai/
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -407,6 +417,7 @@ ENV IS_SANDBOX="1" \
     MIMOCODE_DISABLE_AUTOUPDATE="1" \
     MIMOCODE_DISABLE_MODELS_FETCH="1" \
     OPENCODE_DISABLE_AUTOUPDATE="1" \
+    CODEX_DISABLE_AUTOUPDATE="1" \
     HOME="/home/${USERNAME}"
 
 WORKDIR /workspace
