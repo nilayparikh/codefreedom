@@ -40,9 +40,11 @@ class TestGenerateCodexConfig:
         from codefreedom.cli.codex import _generate_codex_config
 
         config = _generate_codex_config("http://localhost:4000", {})
-        assert "model_providers.codefreedom" in config
+        assert 'model_provider = "codefreedom"' in config
+        assert "[model_providers.codefreedom]" in config
         assert 'base_url = "http://localhost:4000/v1"' in config
-        assert "requires_openai_auth = true" in config
+        assert 'name = "CodeFreedom Proxy"' in config
+        assert 'wire_api = "chat"' in config
 
     def test_with_api_key(self):
         from codefreedom.cli.codex import _generate_codex_config
@@ -50,8 +52,13 @@ class TestGenerateCodexConfig:
         config = _generate_codex_config(
             "http://localhost:4000", {"PROXY_API_KEY": "sk-test"}
         )
-        assert "requires_openai_auth = false" in config
-        assert 'env_key = "PROXY_API_KEY"' in config
+        assert 'env_key = "OPENAI_API_KEY"' in config
+
+    def test_without_api_key(self):
+        from codefreedom.cli.codex import _generate_codex_config
+
+        config = _generate_codex_config("http://localhost:4000", {})
+        assert "env_key" not in config
 
     def test_with_default_model(self):
         from codefreedom.cli.codex import _generate_codex_config
