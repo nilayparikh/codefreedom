@@ -15,7 +15,6 @@ import signal
 import subprocess
 from typing import List
 
-from codefreedom.docker.pull import pull_if_stale
 from codefreedom.log import eprint
 from codefreedom.sandbox.signals import forward_signal
 
@@ -32,7 +31,7 @@ def run_sandbox(
     """Run an agent inside an ephemeral Docker container.
 
     Args:
-        image: Docker image reference (e.g. ``docker.io/nilayparikh/codefreedom:ubuntu-latest``)
+        image: Docker image reference (e.g. ``docker.io/nilayparikh/codefreedom:claude-code-latest``)
         container_name: Unique name for the ephemeral container
         base_opts: List of docker run arguments (volumes, user, network, etc.)
         env_flags: List of -e KEY=VALUE pairs for the docker run and exec commands
@@ -66,7 +65,7 @@ def run_sandbox(
                 eprint(f"   {pull.stderr.strip()}")
             return 1
     else:
-        pull_if_stale(image, label="IMAGE")
+        eprint(f"[IMAGE] Using cached image '{image}'.")
 
     # ── Start ephemeral container ─────────────────────────────────────────────
     eprint(f"[RUN] Creating ephemeral container '{container_name}'...")

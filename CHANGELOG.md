@@ -9,12 +9,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/) and
 
 ### Added
 
-- `cf git cmt` — LLM-powered commit message generation with conventional commit format
-- `cf git pr` — LLM-powered PR title/description generation and creation
-- `cf git init` — initialize `.cf.yaml` project config with auto-detected modules
-- Generic `.cf.yaml` project config system (any module can add its block)
-- `git.yaml` profile in `_default`, `costeffective-coding`, `costeffective-coding-with-local` recipes
-- Unit and integration tests for git workflow module (64 tests)
 - Branching strategy documentation (`docs/releasing.md`)
 - Changelog generation via git-cliff
 - `--bump-rc` and `--create-release-branch` flags in `release.sh`

@@ -91,18 +91,6 @@ def resolve_pi_profiles_path() -> Path:
     return get_codefreedom_dir() / "profiles" / "pi-code.yaml"
 
 
-def resolve_codex_profiles_path() -> Path:
-    """Return the Codex profiles path (test-patchable).
-
-    Checks ``CODEX_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/profiles/codex-code.yaml``.
-    """
-    override = os.environ.get("CODEX_PROFILES_FILE")
-    if override:
-        return Path(override)
-    return get_codefreedom_dir() / "profiles" / "codex-code.yaml"
-
-
 def resolve_agent_config(
     agent: str,
     profile_name: str = "default",
@@ -131,8 +119,6 @@ def resolve_agent_config(
         profiles_path = resolve_opencode_profiles_path()
     elif agent == "pi-code":
         profiles_path = resolve_pi_profiles_path()
-    elif agent == "codex-code":
-        profiles_path = resolve_codex_profiles_path()
     else:
         raise ValueError(f"Unknown agent: {agent}")
 
@@ -140,7 +126,7 @@ def resolve_agent_config(
     profiles = load_profiles(profiles_path)
 
     # Load env chain
-    component = agent.split("-")[0]  # "claude", "mimo", "open", "codex"
+    component = agent.split("-")[0]  # "claude", "mimo", "open"
     env = load_env_chain(workspace_dir or Path.cwd(), component=component)
 
     # Resolve profile
