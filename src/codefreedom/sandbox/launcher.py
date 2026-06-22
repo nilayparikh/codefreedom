@@ -15,6 +15,7 @@ import signal
 import subprocess
 from typing import List
 
+from codefreedom.docker.pull import pull_if_stale
 from codefreedom.log import eprint
 from codefreedom.sandbox.signals import forward_signal
 
@@ -65,7 +66,7 @@ def run_sandbox(
                 eprint(f"   {pull.stderr.strip()}")
             return 1
     else:
-        eprint(f"[IMAGE] Using cached image '{image}'.")
+        pull_if_stale(image, label="IMAGE")
 
     # ── Start ephemeral container ─────────────────────────────────────────────
     eprint(f"[RUN] Creating ephemeral container '{container_name}'...")
