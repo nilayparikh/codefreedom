@@ -160,20 +160,18 @@ def _write_codex_config(
 def _ensure_codex_sandbox_dir(profile_name: str) -> tuple[Path, Path]:
     """Create isolated sandbox directories for Codex.
 
-    Returns (codex_home, config_dir) -- the CODEX_HOME directory
+    Returns (codex_home, config_path) -- the CODEX_HOME directory
     and the path to the generated ``config.toml`` config file.
     """
     profile_dir = CODEFREEDOM_DIR / "codex-code" / "sandbox" / profile_name
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     codex_home = profile_dir / "home"
-    for sub in ("data", "config", "cache", "state"):
-        (codex_home / sub).mkdir(parents=True, exist_ok=True)
+    codex_home.mkdir(parents=True, exist_ok=True)
 
-    config_dir = profile_dir / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
+    config_path = codex_home / CODEX_CONFIG_NAME
 
-    return codex_home, config_dir
+    return codex_home, config_path
 
 
 # ── Execution ─────────────────────────────────────────────────────────────────
@@ -200,22 +198,21 @@ def run_local(
     proxy_url = _detect_proxy_url(profile_env)
     eprint(f"{tag('CODEX')} Detecting proxy at {proxy_url}...")
     config_content = _generate_codex_config(proxy_url, profile_env)
-    config_dir = CODEFREEDOM_DIR / "codex-code" / "config"
-    _write_codex_config(config_content, config_dir)
 
     codex_home = CODEFREEDOM_DIR / "codex-code" / "home"
     codex_home.mkdir(parents=True, exist_ok=True)
     env["CODEX_HOME"] = str(codex_home)
 
+    # Write config.toml directly to CODEX_HOME (Codex expects it there)
+    config_path = codex_home / CODEX_CONFIG_NAME
+    config_path.write_text(config_content, encoding="utf-8")
+    config_path.chmod(0o600)
+    eprint(f"{tag('CODEX')} Generated proxy config at {config_path}")
+
     # Inject OPENAI_API_KEY for proxy authentication
     proxy_api_key = profile_env.get("PROXY_API_KEY", "")
     if proxy_api_key:
         env["OPENAI_API_KEY"] = proxy_api_key
-
-    codex_config_dir = codex_home / "config"
-    codex_config_dir.mkdir(parents=True, exist_ok=True)
-    codex_config_file = codex_config_dir / CODEX_CONFIG_NAME
-    codex_config_file.write_text(config_content, encoding="utf-8")
 
     cmd = [codex_bin]
     cmd.extend(codex_args)
@@ -265,8 +262,10 @@ def run_docker(
     proxy_url = _detect_proxy_url(profile_env)
     eprint(f"{tag('CODEX')} Detecting proxy at {proxy_url}...")
     config_content = _generate_codex_config(proxy_url, profile_env)
-    codex_home_dir, config_dir = _ensure_codex_sandbox_dir(profile_name)
-    config_path = _write_codex_config(config_content, config_dir)
+    codex_home_dir, config_path = _ensure_codex_sandbox_dir(profile_name)
+    config_path.write_text(config_content, encoding="utf-8")
+    config_path.chmod(0o600)
+    eprint(f"{tag('CODEX')} Generated proxy config at {config_path}")
 
     env_flags: list[str] = []
     for key in sorted(profile_env.keys()):
@@ -307,8 +306,6 @@ def run_docker(
         f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
         "-v",
         f"{codex_home_dir}:{container_home}/.codex",
-        "-v",
-        f"{config_path}:{container_home}/.codex/config/{CODEX_CONFIG_NAME}:ro",
         "-e",
         f"HOME={container_home}",
         "-e",
