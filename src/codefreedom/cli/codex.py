@@ -118,52 +118,13 @@ def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> list[dict]:
         return []
 
 
-def _parse_model_aliases(raw: str) -> dict[str, str]:
-    """Parse CODEX_MODEL_ALIASES env var into {slug: model_id} dict.
-
-    Format: "slug1=model_id1,slug2=model_id2"
-    """
-    aliases: dict[str, str] = {}
-    if not raw:
-        return aliases
-    for pair in raw.split(","):
-        pair = pair.strip()
-        if "=" in pair:
-            slug, model_id = pair.split("=", 1)
-            aliases[slug.strip()] = model_id.strip()
-    return aliases
-
-
-def _generate_model_catalog(
-    proxy_models: list[dict],
-    aliases: dict[str, str] | None = None,
-) -> list[dict]:
+def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
     """Generate Codex model catalog from proxy model list.
 
-    Matches the official Codex model catalog schema with all required fields.
-    Aliases map short slugs to proxy model IDs.
+    Matches the official Codex custom provider format (see MiniMax docs).
     """
     catalog = []
     seen = set()
-    aliases = aliases or {}
-
-    _REASONING_LEVELS = [
-        {"effort": "low", "description": "Fast responses with lighter reasoning"},
-        {"effort": "medium", "description": "Balances speed and reasoning depth for everyday tasks"},
-        {"effort": "high", "description": "Greater reasoning depth for complex problems"},
-        {"effort": "xhigh", "description": "Extra high reasoning depth for complex problems"},
-    ]
-
-    _NON_REASONING_LEVELS = [
-        {"effort": "low", "description": "Fast responses with lighter reasoning"},
-        {"effort": "medium", "description": "Balances speed and reasoning depth for everyday tasks"},
-        {"effort": "high", "description": "Greater reasoning depth for complex problems"},
-    ]
-
-    # Build reverse map: model_id -> list of alias slugs
-    alias_by_model: dict[str, list[str]] = {}
-    for alias_slug, model_id in aliases.items():
-        alias_by_model.setdefault(model_id, []).append(alias_slug)
 
     for m in proxy_models:
         model_id = m.get("id", "")
@@ -182,53 +143,30 @@ def _generate_model_catalog(
         seen.add(model_id)
         display_name = model_id.split("/")[-1] if "/" in model_id else model_id
 
-        # Determine if model supports reasoning based on name heuristics
-        is_reasoning = any(
-            kw in model_id_lower
-            for kw in ("o1", "o3", "o4", "reasoning", "deepseek-r", "think")
-        )
-
         catalog.append({
             "slug": model_id,
             "display_name": display_name,
             "description": f"{display_name} via CodeFreedom proxy",
-            "default_reasoning_level": "medium" if is_reasoning else "low",
-            "supported_reasoning_levels": (
-                _REASONING_LEVELS if is_reasoning else _NON_REASONING_LEVELS
-            ),
+            "default_reasoning_level": "high",
+            "supported_reasoning_levels": [
+                {"effort": "none", "description": "Think-Off"},
+                {"effort": "low", "description": "Fast responses with lighter reasoning"},
+                {"effort": "medium", "description": "Balances speed and reasoning depth"},
+                {"effort": "high", "description": "Deep reasoning for complex problems"},
+            ],
             "shell_type": "shell_command",
             "visibility": "list",
             "supported_in_api": True,
-            "priority": 50,
-            "context_window": 131072,
+            "priority": 0,
+            "base_instructions": f"You are Codex, a coding agent based on {display_name}. You and the user share the same workspace and collaborate to achieve the user's goals.",
             "supports_reasoning_summaries": True,
+            "default_reasoning_summary": "none",
+            "support_verbosity": False,
+            "truncation_policy": {"mode": "bytes", "limit": 10000},
             "supports_parallel_tool_calls": True,
+            "experimental_supported_tools": [],
             "input_modalities": ["text"],
-            "supports_search_tool": False,
         })
-
-        # Add alias entries (short slug -> same model)
-        for alias_slug in alias_by_model.get(model_id, []):
-            if alias_slug not in seen:
-                seen.add(alias_slug)
-                catalog.append({
-                    "slug": alias_slug,
-                    "display_name": f"{display_name} ({alias_slug})",
-                    "description": f"{display_name} via CodeFreedom proxy (alias: {alias_slug})",
-                    "default_reasoning_level": "medium" if is_reasoning else "low",
-                    "supported_reasoning_levels": (
-                        _REASONING_LEVELS if is_reasoning else _NON_REASONING_LEVELS
-                    ),
-                    "shell_type": "shell_command",
-                    "visibility": "list",
-                    "supported_in_api": True,
-                    "priority": 51,
-                    "context_window": 131072,
-                    "supports_reasoning_summaries": True,
-                    "supports_parallel_tool_calls": True,
-                    "input_modalities": ["text"],
-                    "supports_search_tool": False,
-                })
 
     return catalog
 
@@ -246,30 +184,29 @@ def _generate_codex_config(
 
     api_key = profile_env.get("PROXY_API_KEY", "")
 
-    # Parse model aliases from profile env
-    aliases = _parse_model_aliases(profile_env.get("CODEX_MODEL_ALIASES", ""))
-
     # Fetch models from proxy
     eprint(f"{tag('CODEX')} Fetching models from proxy...")
     proxy_models = _fetch_proxy_models(proxy_url, api_key=api_key)
-    catalog = _generate_model_catalog(proxy_models, aliases=aliases)
+    catalog = _generate_model_catalog(proxy_models)
 
     if catalog:
         eprint(f"{tag('CODEX')} Found {len(catalog)} model(s) from proxy.")
     else:
         eprint(f"{tag('CODEX')} No models found from proxy, using default config.")
 
+    # Pick default model from profile or first catalog entry
+    default_model = profile_env.get("CODEX_DEFAULT_MODEL", "")
+    if not default_model and catalog:
+        default_model = catalog[0]["slug"]
+
     lines = [
         "# Auto-generated by CodeFreedom -- do not edit manually",
         "",
+        f'model = "{default_model}"',
         'model_provider = "codefreedom"',
+        'model_context_window = 131072',
         "",
     ]
-
-    default_model = profile_env.get("CODEX_DEFAULT_MODEL", "")
-    if default_model:
-        lines.append(f'model = "{default_model}"')
-        lines.append("")
 
     lines.append("[model_providers.codefreedom]")
     lines.append('name = "CodeFreedom Proxy"')
@@ -287,14 +224,6 @@ def _generate_codex_config(
         lines.append(f'model_catalog_json = "{catalog_path.as_posix()}"')
 
     lines.append("")
-
-    # Add custom_models entries for TUI discovery
-    if catalog:
-        for m in catalog:
-            lines.append('[[model_providers.codefreedom.custom_models]]')
-            lines.append(f'id = "{m["id"]}"')
-            lines.append(f'name = "{m["name"]}"')
-            lines.append("")
 
     # Wrap catalog in {"models": [...]} format required by Codex
     catalog_content = _json.dumps({"models": catalog}, indent=2) if catalog else ""
