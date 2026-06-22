@@ -31,7 +31,7 @@ def run_sandbox(
     """Run an agent inside an ephemeral Docker container.
 
     Args:
-        image: Docker image reference (e.g. ``docker.io/nilayparikh/codefreedom:claude-code-latest``)
+        image: Docker image reference (e.g. ``docker.io/nilayparikh/codefreedom:ubuntu-latest``)
         container_name: Unique name for the ephemeral container
         base_opts: List of docker run arguments (volumes, user, network, etc.)
         env_flags: List of -e KEY=VALUE pairs for the docker run and exec commands
