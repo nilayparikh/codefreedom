@@ -154,6 +154,7 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
 def _generate_codex_config(
     proxy_url: str,
     profile_env: dict[str, str],
+    codex_home: Path | None = None,
 ) -> tuple[str, str]:
     """Generate codex config.toml and model_catalog.json content pointing at the proxy.
 
@@ -195,7 +196,9 @@ def _generate_codex_config(
 
     # Reference model catalog if we have models
     if catalog:
-        catalog_path = CODEFREEDOM_DIR / "codex-code" / "home" / "model_catalog.json"
+        # Use the provided codex_home path for catalog reference
+        effective_home = codex_home or (CODEFREEDOM_DIR / "codex-code" / "home")
+        catalog_path = effective_home / "model_catalog.json"
         lines.append(f'model_catalog_json = "{catalog_path.as_posix()}"')
 
     lines.append("")
@@ -262,9 +265,9 @@ def run_local(
 
     proxy_url = _detect_proxy_url(profile_env)
     eprint(f"{tag('CODEX')} Detecting proxy at {proxy_url}...")
-    config_content, catalog_content = _generate_codex_config(proxy_url, profile_env)
 
     codex_home = CODEFREEDOM_DIR / "codex-code" / "home"
+    config_content, catalog_content = _generate_codex_config(proxy_url, profile_env, codex_home)
     codex_home.mkdir(parents=True, exist_ok=True)
     env["CODEX_HOME"] = str(codex_home)
 
@@ -333,8 +336,8 @@ def run_docker(
 
     proxy_url = _detect_proxy_url(profile_env)
     eprint(f"{tag('CODEX')} Detecting proxy at {proxy_url}...")
-    config_content, catalog_content = _generate_codex_config(proxy_url, profile_env)
     codex_home_dir, config_path = _ensure_codex_sandbox_dir(profile_name)
+    config_content, catalog_content = _generate_codex_config(proxy_url, profile_env, codex_home_dir)
     config_path.write_text(config_content, encoding="utf-8")
     config_path.chmod(0o600)
     eprint(f"{tag('CODEX')} Generated proxy config at {config_path}")
