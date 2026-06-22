@@ -143,7 +143,8 @@ RUN npm install -g @mimo-ai/cli \
     && rm -rf /tmp/*
 
 # 9. OpenCode — install via official install script
-RUN curl -fsSL https://opencode.ai/install | bash \
+RUN curl -fsSL https://opencode.ai/install --output /tmp/opencode-install.sh \
+    && bash /tmp/opencode-install.sh --no-modify-path \
     && cp /root/.opencode/bin/opencode /usr/local/bin/opencode \
     && chmod 755 /usr/local/bin/opencode \
     && rm -rf /tmp/*
@@ -171,6 +172,7 @@ COPY --from=toolchain /usr/lib/node_modules/ /usr/lib/node_modules/
 COPY --from=toolchain /usr/bin/node /usr/bin/node
 COPY --from=toolchain /usr/bin/npm /usr/bin/npm
 COPY --from=toolchain /usr/bin/npx /usr/bin/npx
+COPY --from=toolchain /usr/bin/mimo /usr/bin/mimo
 COPY --from=toolchain /usr/local/share/ /usr/local/share/
 COPY --from=toolchain /usr/share/keyrings/ /usr/share/keyrings/
 COPY --from=toolchain /etc/apt/sources.list.d/ /etc/apt/sources.list.d/
@@ -264,6 +266,7 @@ COPY --from=toolchain /usr/lib/node_modules/ /usr/lib/node_modules/
 COPY --from=toolchain /usr/bin/node /usr/bin/node
 COPY --from=toolchain /usr/bin/npm /usr/bin/npm
 COPY --from=toolchain /usr/bin/npx /usr/bin/npx
+COPY --from=toolchain /usr/bin/mimo /usr/bin/mimo
 COPY --from=toolchain /usr/local/share/ /usr/local/share/
 COPY --from=toolchain /usr/share/keyrings/ /usr/share/keyrings/
 COPY --from=toolchain /etc/apt/sources.list.d/ /etc/apt/sources.list.d/
@@ -349,6 +352,7 @@ COPY --from=toolchain /usr/lib/node_modules/ /usr/lib/node_modules/
 COPY --from=toolchain /usr/bin/node /usr/bin/node
 COPY --from=toolchain /usr/bin/npm /usr/bin/npm
 COPY --from=toolchain /usr/bin/npx /usr/bin/npx
+COPY --from=toolchain /usr/bin/mimo /usr/bin/mimo
 COPY --from=toolchain /usr/local/share/ /usr/local/share/
 COPY --from=toolchain /usr/share/keyrings/ /usr/share/keyrings/
 COPY --from=toolchain /etc/apt/sources.list.d/ /etc/apt/sources.list.d/
