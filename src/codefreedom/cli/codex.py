@@ -122,7 +122,7 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
     """Generate Codex model catalog from proxy model list.
 
     Codex requires the catalog to be an object with a "models" array.
-    Each model needs id, slug, name, provider, and hidden fields.
+    Each model needs id, slug, name, provider, hidden, and capability metadata.
     """
     catalog = []
     seen = set()
@@ -144,11 +144,30 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
         seen.add(model_id)
         display_name = model_id.split("/")[-1] if "/" in model_id else model_id
 
+        # Determine capabilities based on model name heuristics
+        is_reasoning = any(
+            kw in model_id_lower
+            for kw in ("o1", "o3", "o4", "reasoning", "deepseek-r", "think")
+        )
+
         catalog.append({
             "id": model_id,
             "slug": model_id,
+            "display_name": f"{display_name} (CodeFreedom)",
             "name": display_name,
             "provider": "codefreedom",
+            "context_length": 131072,
+            "default_reasoning_level": "medium" if is_reasoning else "low",
+            "supported_reasoning_levels": (
+                ["low", "medium", "high", "xhigh"]
+                if is_reasoning
+                else ["low", "medium", "high"]
+            ),
+            "capabilities": {
+                "chat": True,
+                "tools": True,
+                "reasoning": is_reasoning,
+            },
             "hidden": False,
         })
 
