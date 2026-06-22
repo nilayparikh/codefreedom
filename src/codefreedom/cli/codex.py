@@ -225,17 +225,150 @@ def _write_codex_config(
     config_content: str,
     config_dir: Path,
 ) -> Path:
-    """Write the generated ``config.toml`` to *config_dir*.
+    """Write the generated ``config.toml`` to *config_dir*, merging with existing config.
 
+    Preserves user-added sections (projects, tui, windows, etc.) by parsing
+    the existing config and only updating CodeFreedom-managed sections.
     Creates parent directories if they don't exist.
     Returns the path to the written config file.
     """
     config_dir.mkdir(parents=True, exist_ok=True)
     config_path = config_dir / CODEX_CONFIG_NAME
-    config_path.write_text(config_content, encoding="utf-8")
+
+    # If existing config exists, merge instead of overwrite
+    if config_path.exists():
+        try:
+            existing_content = config_path.read_text(encoding="utf-8")
+            merged = _merge_toml_configs(existing_content, config_content)
+            config_path.write_text(merged, encoding="utf-8")
+            eprint(f"{tag('CODEX')} Merged proxy config at {config_path}")
+        except Exception:
+            # Fallback to overwrite if merge fails
+            config_path.write_text(config_content, encoding="utf-8")
+            eprint(f"{tag('CODEX')} Regenerated proxy config at {config_path}")
+    else:
+        config_path.write_text(config_content, encoding="utf-8")
+        eprint(f"{tag('CODEX')} Generated proxy config at {config_path}")
+
     config_path.chmod(0o600)
-    eprint(f"{tag('CODEX')} Generated proxy config at {config_path}")
     return config_path
+
+
+def _merge_toml_configs(existing: str, new: str) -> str:
+    """Merge new CodeFreedom config into existing config, preserving user sections.
+
+    Updates only CodeFreedom-managed keys:
+    - model_provider, model
+    - [model_providers.codefreedom] and its custom_models
+    - model_catalog_json
+
+    Preserves everything else (projects, tui, windows, etc.)
+    """
+    existing_lines = existing.splitlines()
+    new_lines = new.splitlines()
+
+    # Extract sections from new config
+    new_sections: dict[str, list[str]] = {}
+    current_section = ""
+    for line in new_lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and not stripped.startswith("[["):
+            current_section = stripped
+            new_sections[current_section] = [line]
+        elif stripped.startswith("[["):
+            # Array of tables like [[model_providers.codefreedom.custom_models]]
+            current_section = stripped
+            if current_section not in new_sections:
+                new_sections[current_section] = []
+            new_sections[current_section].append(line)
+        elif current_section:
+            new_sections[current_section].append(line)
+        else:
+            # Top-level keys
+            if "" not in new_sections:
+                new_sections[""] = []
+            new_sections[""].append(line)
+
+    # Build merged config
+    result_lines: list[str] = []
+    skip_until_next_section = False
+    seen_codefreedom_sections: set[str] = set()
+
+    for line in existing_lines:
+        stripped = line.strip()
+
+        # Check if this is a section header
+        if stripped.startswith("[[") or (stripped.startswith("[") and not stripped.startswith("[[")):
+            # Determine if this is a CodeFreedom-managed section
+            is_codefreedom = "model_providers.codefreedom" in stripped
+
+            if is_codefreedom:
+                # Replace with new content
+                if stripped not in seen_codefreedom_sections:
+                    seen_codefreedom_sections.add(stripped)
+                    if stripped in new_sections:
+                        result_lines.extend(new_sections[stripped])
+                        result_lines.append("")
+                skip_until_next_section = True
+                continue
+            else:
+                skip_until_next_section = False
+
+        # Skip lines in CodeFreedom sections (we already replaced them)
+        if skip_until_next_section:
+            continue
+
+        # Replace top-level CodeFreedom keys
+        if stripped.startswith("model_provider") or stripped.startswith("model =") or stripped.startswith("model_catalog_json"):
+            continue  # Will be added from new config
+
+        result_lines.append(line)
+
+    # Add any new sections not in existing config
+    for section, lines in new_sections.items():
+        if section == "":
+            # Add top-level keys that weren't in existing
+            for line in lines:
+                key = line.split("=")[0].strip() if "=" in line else ""
+                if key and not any(ln.strip().startswith(key) for ln in result_lines):
+                    result_lines.append(line)
+        elif section not in seen_codefreedom_sections:
+            result_lines.extend(lines)
+            result_lines.append("")
+
+    # Ensure CodeFreedom top-level keys are present
+    cf_top_keys = {}
+    for line in new_sections.get("", []):
+        if "=" in line:
+            key = line.split("=")[0].strip()
+            cf_top_keys[key] = line
+
+    # Insert CodeFreedom top-level keys at the beginning (after comment)
+    insert_pos = 0
+    for i, line in enumerate(result_lines):
+        if line.strip().startswith("#"):
+            insert_pos = i + 1
+        else:
+            break
+
+    for key, line in cf_top_keys.items():
+        if not any(ln.strip().startswith(key) for ln in result_lines):
+            result_lines.insert(insert_pos, line)
+            insert_pos += 1
+
+    # Clean up empty lines
+    cleaned: list[str] = []
+    prev_empty = False
+    for line in result_lines:
+        if line.strip() == "":
+            if not prev_empty:
+                cleaned.append(line)
+            prev_empty = True
+        else:
+            cleaned.append(line)
+            prev_empty = False
+
+    return "\n".join(cleaned)
 
 
 def _ensure_codex_sandbox_dir(profile_name: str) -> tuple[Path, Path]:
@@ -284,11 +417,8 @@ def run_local(
     codex_home.mkdir(parents=True, exist_ok=True)
     env["CODEX_HOME"] = str(codex_home)
 
-    # Write config.toml directly to CODEX_HOME (Codex expects it there)
-    config_path = codex_home / CODEX_CONFIG_NAME
-    config_path.write_text(config_content, encoding="utf-8")
-    config_path.chmod(0o600)
-    eprint(f"{tag('CODEX')} Generated proxy config at {config_path}")
+    # Write config.toml with merge support (preserves user sections)
+    _write_codex_config(config_content, codex_home)
 
     # Write model catalog if we have one
     if catalog_content:
@@ -355,9 +485,9 @@ def run_docker(
     eprint(f"{tag('CODEX')} Detecting proxy at {proxy_url}...")
     codex_home_dir, config_path = _ensure_codex_sandbox_dir(profile_name)
     config_content, catalog_content = _generate_codex_config(proxy_url, profile_env, codex_home_dir)
-    config_path.write_text(config_content, encoding="utf-8")
-    config_path.chmod(0o600)
-    eprint(f"{tag('CODEX')} Generated proxy config at {config_path}")
+
+    # Write config.toml with merge support (preserves user sections)
+    _write_codex_config(config_content, codex_home_dir)
 
     # Write model catalog if we have one
     if catalog_content:
