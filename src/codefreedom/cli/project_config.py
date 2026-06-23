@@ -1,7 +1,7 @@
 """cf project config — generic .cf.yaml management.
 
 Any module can add/update its block in .cf.yaml.
-The git module adds a `git:` block via cf git init.
+The git module reads config from profiles/git.yaml and auto-detects modules.
 """
 
 from __future__ import annotations

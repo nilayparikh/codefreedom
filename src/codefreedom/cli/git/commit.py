@@ -67,14 +67,15 @@ def _build_commit_system_prompt(
     return "\n".join(parts)
 
 
-def _prompt_user(message: str) -> str:
-    """Prompt the user for confirmation. Returns 'y', 'n', or 'e'."""
+def _prompt_user(message: str, default: str = "y") -> str:
+    """Prompt the user for confirmation. Returns 'y' or 'n'."""
+    hint = "Y/n" if default == "y" else "y/N"
     try:
-        response = input(f"\n{message} [Y/n/e(dit)]: ").strip().lower()
+        response = input(f"\n{message} [{hint}]: ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         return "n"
     if not response:
-        return "y"
+        return default
     return response[0]
 
 
@@ -106,6 +107,7 @@ def run_commit(args: object) -> int:
     force_signed = getattr(args, "signed", None)
     no_sign = getattr(args, "no_sign", False)
     dry_run = getattr(args, "dry_run", False)
+    stage_only = getattr(args, "stage_only", False)
     files = getattr(args, "files", None)
 
     config = load_git_config(work_dir)
@@ -118,19 +120,46 @@ def run_commit(args: object) -> int:
         eprint(f"{tag('WARN')} No changes to commit.")
         return 0
 
-    staged = git_ops.get_staged_files(work_dir)
-    if files:
-        ok = git_ops.stage_files(files, cwd=work_dir)
-        if not ok:
-            eprint(f"{tag('ERROR')} Failed to stage files.")
-            return 1
-    elif not staged:
-        ok = git_ops.stage_files(cwd=work_dir)
-        if not ok:
-            eprint(f"{tag('ERROR')} Failed to stage files.")
-            return 1
+    if dry_run:
+        staged = git_ops.get_staged_files(work_dir)
+        unstaged = [f for f in changed if f not in staged]
+        if not staged and not unstaged:
+            eprint(f"{tag('WARN')} No changes to commit.")
+            return 0
+        if unstaged:
+            eprint(f"{tag('INFO')} Unstaged files (not staging in dry-run): {', '.join(unstaged)}")
+        if not staged:
+            staged_diff = "\n".join(
+                f"diff --git a/{f} b/{f}\nnew file mode 100644\n--- /dev/null\n+++ b/{f}"
+                for f in unstaged[:5]
+            )
+        else:
+            staged_diff = git_ops.get_staged_diff(work_dir)
+    elif stage_only:
+        staged = git_ops.get_staged_files(work_dir)
+        if files:
+            ok = git_ops.stage_files(files, cwd=work_dir)
+            if not ok:
+                eprint(f"{tag('ERROR')} Failed to stage files.")
+                return 1
+            staged = git_ops.get_staged_files(work_dir)
+        if not staged:
+            eprint(f"{tag('WARN')} No staged changes. Use 'git add' first or run without --stage-only.")
+            return 0
+        staged_diff = git_ops.get_staged_diff(work_dir)
+    else:
+        if files:
+            ok = git_ops.stage_files(files, cwd=work_dir)
+            if not ok:
+                eprint(f"{tag('ERROR')} Failed to stage files.")
+                return 1
+        else:
+            ok = git_ops.stage_files(cwd=work_dir)
+            if not ok:
+                eprint(f"{tag('ERROR')} Failed to stage files.")
+                return 1
+        staged_diff = git_ops.get_staged_diff(work_dir)
 
-    staged_diff = git_ops.get_staged_diff(work_dir)
     if not staged_diff.strip():
         eprint(f"{tag('WARN')} No staged changes to commit.")
         return 0
@@ -140,10 +169,12 @@ def run_commit(args: object) -> int:
     else:
         model = get_model(config)
         system_prompt = _build_commit_system_prompt(config, no_scope)
-        user_prompt = f"Diff:\n\n{staged_diff}"
+        staged_files = git_ops.get_staged_files(work_dir)
+        files_list = "\n".join(f"- {f}" for f in staged_files)
+        user_prompt = f"Files changed:\n{files_list}\n\nDiff:\n\n{staged_diff}"
 
         eprint(f"{tag('COMMIT')} Generating commit message via {model}...")
-        response = llm.generate_message(model, system_prompt, user_prompt)
+        response = llm.generate_message(model, system_prompt, user_prompt, max_tokens=16000, work_dir=work_dir)
         if response is None:
             return 1
 
@@ -161,7 +192,7 @@ def run_commit(args: object) -> int:
         return 0
 
     if not auto_yes:
-        choice = _prompt_user("Confirm?")
+        choice = _prompt_user("Commit?")
         if choice == "n":
             eprint(f"{tag('SKIP')} Commit aborted.")
             return 0
@@ -178,6 +209,17 @@ def run_commit(args: object) -> int:
         eprint(f"{tag('OK')} Committed successfully.")
         if output.strip():
             eprint(output.strip())
+
+        if not auto_yes:
+            push_choice = _prompt_user("Push to remote?")
+            if push_choice == "y":
+                eprint(f"{tag('PUSH')} Pushing to origin...")
+                push_ok, push_output = git_ops.push(cwd=work_dir)
+                if push_ok:
+                    eprint(f"{tag('OK')} Pushed successfully.")
+                else:
+                    eprint(f"{tag('ERROR')} Push failed:\n{push_output}")
+
         return 0
     else:
         eprint(f"{tag('ERROR')} Commit failed:\n{output}")

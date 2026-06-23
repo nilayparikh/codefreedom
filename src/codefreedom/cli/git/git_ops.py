@@ -111,6 +111,15 @@ def commit(message: str, signed: bool = False, cwd: Path | None = None) -> tuple
     return result.returncode == 0, result.stdout + result.stderr
 
 
+def push(cwd: Path | None = None) -> tuple[bool, str]:
+    """Push current branch to origin. Returns (success, output)."""
+    branch = get_current_branch(cwd)
+    if not branch:
+        return False, "Could not determine current branch"
+    result = _run_git(["push", "origin", branch], cwd=cwd)
+    return result.returncode == 0, result.stdout + result.stderr
+
+
 def parse_remote_owner_repo(remote_url: str) -> tuple[str, str] | None:
     """Extract owner and repo from a remote URL.
 

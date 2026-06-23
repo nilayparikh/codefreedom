@@ -40,13 +40,16 @@ def _build_pr_system_prompt(config: dict) -> str:
     return "\n".join(parts)
 
 
-def _prompt_user(message: str) -> str:
-    """Prompt the user for confirmation."""
+def _prompt_user(message: str, default: str = "y") -> str:
+    """Prompt the user for confirmation. Returns 'y' or 'n'."""
+    hint = "Y/n" if default == "y" else "y/N"
     try:
-        response = input(f"\n{message} [Y/n]: ").strip().lower()
+        response = input(f"\n{message} [{hint}]: ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         return "n"
-    return "y" if not response else response[0]
+    if not response:
+        return default
+    return response[0]
 
 
 def _open_browser(url: str) -> bool:
@@ -113,18 +116,29 @@ def run_pr(args: object) -> int:
         eprint(f"{tag('WARN')} No changes between {target} and {source}.")
         return 0
 
+    changed_files = []
+    for line in diff.split("\n"):
+        if line.startswith("diff --git"):
+            parts = line.split(" b/")
+            if len(parts) > 1:
+                changed_files.append(parts[-1])
+
     system_prompt = _build_pr_system_prompt(config)
     template = get_template(config, "pr_description")
+    files_list = "\n".join(f"- {f}" for f in changed_files[:20])
+    max_diff_len = 8000
+    truncated_diff = diff[:max_diff_len] + "\n... (truncated)" if len(diff) > max_diff_len else diff
     user_prompt = (
         f"Source branch: {source}\n"
         f"Target branch: {target}\n\n"
         f"Commits since {target}:\n{log}\n\n"
-        f"Diff:\n{diff}\n\n"
+        f"Files changed:\n{files_list}\n\n"
+        f"Diff:\n{truncated_diff}\n\n"
         f"PR description template:\n{template}"
     )
 
     eprint(f"{tag('PR')} Generating PR description via {model}...")
-    response = llm.generate_message(model, system_prompt, user_prompt, max_tokens=1000)
+    response = llm.generate_message(model, system_prompt, user_prompt, max_tokens=16000, work_dir=work_dir)
     if response is None:
         return 1
 
