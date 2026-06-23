@@ -59,11 +59,11 @@ def _resolve_recipe_branch() -> str:
     base = f"{major}.{minor}.{patch}"
 
     if suffix.startswith("rc"):
-        return f"rc/{base}"
+        return f"rc/v{base}"
     if suffix.startswith(".dev") or suffix.startswith("dev"):
-        return f"dev/{base}"
+        return f"dev/v{base}"
 
-    return base
+    return f"v{base}"
 
 
 def _raw_base(branch: str) -> str:
