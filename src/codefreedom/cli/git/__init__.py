@@ -91,8 +91,6 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     _add_pr_flags(pr_gen)
     pr_gen.set_defaults(func=_dispatch_pr_generate)
 
-    pr.set_defaults(func=_dispatch_pr_default)
-
 
 def _add_pr_flags(parser: argparse.ArgumentParser) -> None:
     """Add shared flags to a PR subparser."""
@@ -122,14 +120,6 @@ def _dispatch_cmt(args: argparse.Namespace) -> None:
     """Dispatch cf git cmt."""
     from codefreedom.cli.git.commit import run_commit
     sys.exit(run_commit(args))
-
-
-def _dispatch_pr_default(args: argparse.Namespace) -> None:
-    """Dispatch cf git pr (default: open browser)."""
-    from codefreedom.cli.git.pr import run_pr
-    args.create = False
-    args.generate = False
-    sys.exit(run_pr(args))
 
 
 def _dispatch_pr_create(args: argparse.Namespace) -> None:
