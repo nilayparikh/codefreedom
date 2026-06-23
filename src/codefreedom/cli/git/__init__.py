@@ -3,7 +3,6 @@
 Subcommands:
     cf git cmt   — LLM-powered commit message generation and committing
     cf git pr    — LLM-powered PR title/description generation and creation
-    cf git init  — Initialize .cf.yaml project config
 """
 
 from __future__ import annotations
@@ -56,6 +55,11 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
         help="Preview generated message without committing",
     )
     cmt.add_argument(
+        "-s", "--stage-only",
+        action="store_true",
+        help="Only commit manually staged changes (don't auto-stage)",
+    )
+    cmt.add_argument(
         "files",
         nargs="*",
         metavar="FILE",
@@ -88,20 +92,6 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     pr_gen.set_defaults(func=_dispatch_pr_generate)
 
     pr.set_defaults(func=_dispatch_pr_default)
-
-    # ── git init ─────────────────────────────────────────────────────────
-    init = sub.add_parser(
-        "init",
-        aliases=["i"],
-        help="Initialize .cf.yaml project config",
-        description="Create .cf.yaml at git root with commented template and detected modules.",
-    )
-    init.add_argument(
-        "-f", "--force",
-        action="store_true",
-        help="Overwrite existing .cf.yaml",
-    )
-    init.set_defaults(func=_dispatch_init)
 
 
 def _add_pr_flags(parser: argparse.ArgumentParser) -> None:
@@ -156,12 +146,6 @@ def _dispatch_pr_generate(args: argparse.Namespace) -> None:
     args.create = False
     args.generate = True
     sys.exit(run_pr(args))
-
-
-def _dispatch_init(args: argparse.Namespace) -> None:
-    """Dispatch cf git init."""
-    from codefreedom.cli.git.init_cmd import run_init
-    sys.exit(run_init(args))
 
 
 def run(args: argparse.Namespace) -> int:

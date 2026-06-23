@@ -1,4 +1,4 @@
-"""Integration tests for cf git — config loading, init, git operations."""
+"""Integration tests for cf git — config loading, git operations."""
 
 from __future__ import annotations
 
@@ -28,7 +28,6 @@ from codefreedom.cli.git.git_ops import (
     parse_remote_owner_repo,
     stage_files,
 )
-from codefreedom.cli.git.init_cmd import _detect_modules, run_init
 
 pytestmark = pytest.mark.integration
 
@@ -207,80 +206,3 @@ class TestGitOps:
     def test_parse_remote_owner_repo_invalid(self):
         result = parse_remote_owner_repo("https://gitlab.com/owner/repo.git")
         assert result is None
-
-
-# ── Module detection ──────────────────────────────────────────────────────
-
-
-class TestDetectModules:
-    def test_detects_src_dirs(self, tmp_path):
-        src = tmp_path / "src" / "codefreedom"
-        for d in ["cli", "core", "sandbox", "tools"]:
-            (src / d).mkdir(parents=True)
-        (src / "__init__.py").touch()
-        modules = _detect_modules(tmp_path)
-        assert modules == ["cli", "core", "sandbox", "tools"]
-
-    def test_ignores_underscore_dirs(self, tmp_path):
-        src = tmp_path / "src" / "codefreedom"
-        (src / "cli").mkdir(parents=True)
-        (src / "_internal").mkdir(parents=True)
-        modules = _detect_modules(tmp_path)
-        assert modules == ["cli"]
-
-    def test_no_src_dir(self, tmp_path):
-        assert _detect_modules(tmp_path) == []
-
-
-# ── cf git init ───────────────────────────────────────────────────────────
-
-
-class TestGitInit:
-    def test_creates_cf_yaml(self, git_repo, monkeypatch):
-        monkeypatch.chdir(git_repo)
-        args = type("Args", (), {"force": False})()
-        result = run_init(args)
-        assert result == 0
-        assert (git_repo / ".cf.yaml").exists()
-        content = (git_repo / ".cf.yaml").read_text(encoding="utf-8")
-        assert "git:" in content
-
-    def test_adds_git_block_to_existing(self, git_repo, monkeypatch):
-        monkeypatch.chdir(git_repo)
-        existing = "# existing config\ndocker:\n  image: test\n"
-        (git_repo / ".cf.yaml").write_text(existing, encoding="utf-8")
-        args = type("Args", (), {"force": False})()
-        result = run_init(args)
-        assert result == 0
-        content = (git_repo / ".cf.yaml").read_text(encoding="utf-8")
-        assert "git:" in content
-        assert "docker:" in content
-
-    def test_skips_when_git_block_exists(self, git_repo, monkeypatch):
-        monkeypatch.chdir(git_repo)
-        content = "git:\n  model: gpt-4o\n"
-        (git_repo / ".cf.yaml").write_text(content, encoding="utf-8")
-        args = type("Args", (), {"force": False})()
-        result = run_init(args)
-        assert result == 0
-        assert (git_repo / ".cf.yaml").read_text(encoding="utf-8") == content
-
-    def test_force_updates_git_block(self, git_repo, monkeypatch):
-        monkeypatch.chdir(git_repo)
-        (git_repo / ".cf.yaml").write_text("git:\n  model: old\n", encoding="utf-8")
-        args = type("Args", (), {"force": True})()
-        result = run_init(args)
-        assert result == 0
-        content = (git_repo / ".cf.yaml").read_text(encoding="utf-8")
-        assert "old" not in content
-        assert "git:" in content
-
-    def test_not_git_repo(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(
-            "codefreedom.cli.git.init_cmd.get_git_root",
-            lambda _=None: None,
-        )
-        args = type("Args", (), {"force": False})()
-        result = run_init(args)
-        assert result == 1
