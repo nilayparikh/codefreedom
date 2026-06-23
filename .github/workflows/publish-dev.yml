@@ -1,9 +1,9 @@
 # ── CodeFreedom Publish Dev Workflow ───────────────────────────────────────────
-# Publishes prerelease dev version to PyPI from prerelease/v* branches.
+# Publishes prerelease dev version to PyPI from dev/v* branches.
 #
 # Trigger: manual dispatch only (100% user-controlled).
-# Branch: prerelease/v* only.
-# Version: derived from version.yaml at runtime.
+# Branch: dev/v* only.
+# Version: derived from version.yaml at runtime (e.g., 0.2.2rc1.dev1).
 #
 # Uses PyPI Trusted Publishing (OIDC) — no API tokens needed.
 # ──────────────────────────────────────────────────────────────────────────────
@@ -31,14 +31,15 @@ jobs:
         run: |
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-          if [[ "$BRANCH" != prerelease/v* ]]; then
-            echo "Error: must be on prerelease/v* branch. Current: $BRANCH"
+          if [[ "$BRANCH" != dev/v* ]]; then
+            echo "Error: must be on dev/v* branch. Current: $BRANCH"
             exit 1
           fi
 
           VERSION=$(grep '^version: ' version.yaml | head -1 | sed 's/version: "\(.*\)"/\1/')
+          RC=$(grep '^rc: ' version.yaml | head -1 | sed 's/rc: //')
           DEV=$(grep '^dev: ' version.yaml | head -1 | sed 's/dev: //')
-          FULL_VERSION="${VERSION}.dev${DEV}"
+          FULL_VERSION="${VERSION}rc${RC}.dev${DEV}"
           echo "version=${FULL_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "Branch: $BRANCH → Version: ${FULL_VERSION}"
 
