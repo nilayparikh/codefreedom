@@ -1,9 +1,9 @@
 # ── CodeFreedom Publish RC Workflow ────────────────────────────────────────────
-# Publishes release candidate version to PyPI from release/v* branches.
+# Publishes release candidate version to PyPI from rc/v* branches.
 #
 # Trigger: manual dispatch only (100% user-controlled).
-# Branch: release/v* only.
-# Version: derived from version.yaml at runtime.
+# Branch: rc/v* only.
+# Version: derived from version.yaml at runtime (e.g., 0.2.2rc1).
 #
 # Uses PyPI Trusted Publishing (OIDC) — no API tokens needed.
 # ──────────────────────────────────────────────────────────────────────────────
@@ -31,8 +31,8 @@ jobs:
         run: |
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-          if [[ "$BRANCH" != release/v* ]]; then
-            echo "Error: must be on release/v* branch. Current: $BRANCH"
+          if [[ "$BRANCH" != rc/v* ]]; then
+            echo "Error: must be on rc/v* branch. Current: $BRANCH"
             exit 1
           fi
 

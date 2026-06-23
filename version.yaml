@@ -4,15 +4,15 @@
 # Workflows read this file to determine version strings.
 # release.py reads this file to create tags.
 #
-# version: stable release version (e.g., 0.2.1)
+# version: stable release version (e.g., 0.2.2)
 # dev: dev iteration number (incremented after each dev release)
 # rc: release candidate number (incremented after each RC release)
 #
 # PyPI versions:
-#   - dev: {version}.dev{dev} (e.g., 0.2.1.dev1)
-#   - rc: {version}rc{rc} (e.g., 0.2.1rc1)
-#   - final: {version} (e.g., 0.2.1)
+#   - dev: {version}rc{rc}.dev{dev} (e.g., 0.2.2rc1.dev1)
+#   - rc: {version}rc{rc} (e.g., 0.2.2rc1)
+#   - final: {version} (e.g., 0.2.2)
 
-version: "0.2.1"
+version: "0.2.2"
 dev: 1
 rc: 1

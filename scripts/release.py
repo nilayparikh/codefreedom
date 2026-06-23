@@ -11,6 +11,7 @@ Usage:
     python scripts/release.py --bump dev
     python scripts/release.py --bump rc
     python scripts/release.py --bump version
+    python scripts/release.py --bump-rc
 """
 
 from __future__ import annotations
@@ -44,12 +45,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Create and push a release tag")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done without executing")
     parser.add_argument("--bump", choices=["dev", "rc", "version"], help="Bump version before release")
+    parser.add_argument("--bump-rc", action="store_true", help="Bump rc counter and reset dev (for next RC cycle)")
     args = parser.parse_args()
 
     data = load_version()
     version = data["version"]
     dev = data.get("dev", 1)
     rc = data.get("rc", 1)
+
+    if args.bump_rc:
+        data["rc"] = rc + 1
+        data["dev"] = 1
+        rc = data["rc"]
+        dev = 1
+        save_version(data)
+        run(["git", "add", "version.yaml"])
+        run(["git", "commit", "-m", f"chore: bump rc to {rc}, reset dev to 1"])
+        print(f"Updated version.yaml: rc={rc}, dev=1")
+        return 0
 
     if args.bump == "version":
         parts = version.split(".")
@@ -97,6 +110,7 @@ def main() -> int:
             print(f"  git commit -m 'chore: bump version to {version}'")
         print(f"  git tag -a {tag} -m 'Release {tag}'")
         print(f"  git push origin {tag}")
+        print(f"  Auto-increment: version={version} → patch bump, reset rc/dev")
         return 0
 
     if args.bump:
@@ -110,6 +124,19 @@ def main() -> int:
 
     run(["git", "push", "origin", tag])
     print(f"Pushed tag: {tag}")
+
+    parts = version.split(".")
+    parts[-1] = str(int(parts[-1]) + 1)
+    next_version = ".".join(parts)
+    data["version"] = next_version
+    data["dev"] = 1
+    data["rc"] = 1
+    save_version(data)
+    run(["git", "add", "version.yaml"])
+    run(["git", "commit", "-m", f"chore: bump version to {next_version} for next release"])
+    run(["git", "push", "origin", "main"])
+    print(f"Auto-incremented version.yaml to {next_version}")
+
     print()
     print(f"Tag {tag} pushed. GitHub Actions will now:")
     print(f"  1. Run tests")
