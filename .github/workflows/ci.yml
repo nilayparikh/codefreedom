@@ -2,8 +2,8 @@
 # Unified CI for all branches and PRs.
 #
 # Runs on:
-#   - Push to main, prerelease/*, release/*
-#   - PRs to main, prerelease/*, release/*
+#   - Push to main, dev/*, rc/*
+#   - PRs to main, dev/*, rc/*
 #   - Manual dispatch (any branch)
 #
 # What runs (chained):
@@ -18,13 +18,13 @@ on:
   push:
     branches:
       - main
-      - "prerelease/v*"
-      - "release/v*"
+      - "dev/v*"
+      - "rc/v*"
   pull_request:
     branches:
       - main
-      - "prerelease/v*"
-      - "release/v*"
+      - "dev/v*"
+      - "rc/v*"
   workflow_dispatch:
 
 permissions:

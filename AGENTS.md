@@ -432,9 +432,10 @@ All CI is consolidated into `ci.yml`. No separate lint/test/type-check workflows
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `ci.yml` | Push to ANY branch + PRs | Lint, type-check, unit tests, integration tests, commit lint (PRs only) |
-| `release.yml` | workflow_dispatch | Create and push tag (tag is source of truth for version) |
-| `pipy.yaml` | workflow_dispatch | Build + publish to PyPI + GitHub Release (manual only) |
+| `ci.yml` | Push to ANY branch + PRs | Lint, type-check, unit tests, integration tests |
+| `publish-dev.yml` | workflow_dispatch | Build + publish dev version to PyPI (dev/v* only) |
+| `publish-rc.yml` | workflow_dispatch | Build + publish RC version to PyPI (rc/v* only) |
+| `pipy.yaml` | tag push (v*) | Build + publish final version to PyPI + GitHub Release |
 | `docker-agents.yml` | workflow_dispatch | Build + publish Docker agents images (ubuntu/cuda/rocm) |
 | `docker-*.yml` | workflow_dispatch | Build + publish other Docker images |
 | `trivy.yml` | Various | Security scanning |
@@ -447,51 +448,53 @@ All CI is consolidated into `ci.yml`. No separate lint/test/type-check workflows
 2. **Type-check** — `mypy src/ --ignore-missing-imports`
 3. **Unit tests** — `pytest tests/ -v --tb=short` (Python 3.10/3.11/3.12)
 4. **Integration tests** — build wheel, install, smoke test (Ubuntu/Windows/macOS)
-5. **Commit lint** — conventional commit validation (PRs only)
 
 ### Branch Protection & Promotion Flow
 
-**CRITICAL: NEVER push directly to protected branches (main, prerelease/v*, release/v*).**
+**CRITICAL: NEVER push directly to protected branches (main, dev/v*, rc/v*).**
 
 Branch protection requires PRs and status checks. Direct pushes will be rejected.
 
 **Required promotion flow:**
 
 ```text
-adhoc/* → PR to prerelease/v* → PR to release/v* → PR to main
+feature/* → PR to dev/v* → PR to rc/v* → PR to main
 ```
 
 Steps:
 
-1. Create adhoc branch: `git checkout -b adhoc/your-fix`
-2. Commit changes on adhoc branch
-3. Push adhoc branch: `git push -u origin adhoc/your-fix`
-4. Create PR: adhoc → prerelease/v*
+1. Create feature branch: `git checkout -b feature/your-feature`
+2. Commit changes on feature branch
+3. Push feature branch: `git push -u origin feature/your-feature`
+4. Create PR: feature → dev/v*
 5. Wait for CI checks to pass, merge PR
-6. Create PR: prerelease/v*→ release/v*
+6. Create PR: dev/v*→ rc/v*
 7. Wait for CI checks to pass, merge PR
-8. Create PR: release/v* → main
+8. Create PR: rc/v* → main
 9. Wait for CI checks to pass, merge PR
 
 ### Release Process
 
 Releases are triggered via GitHub Actions `workflow_dispatch` — no local scripts needed.
 
-**Version is derived from the tag at runtime. `pyproject.toml` is NEVER modified on branches.**
+**Version is derived from `version.yaml`. `pyproject.toml` is NEVER modified on branches.**
+
+**Version format:**
+
+- **Dev**: `{version}rc{rc}.dev{dev}` (e.g., `0.2.2rc1.dev1`) — from `dev/v*` branches
+- **RC**: `{version}rc{rc}` (e.g., `0.2.2rc1`) — from `rc/v*` branches
+- **Final**: `{version}` (e.g., `0.2.2`) — tag on `main`
+
+**Promotion steps:**
 
 1. Ensure changes are promoted to desired branch (see promotion flow above)
-2. Go to **Actions → Release → Run workflow**
-3. Enter version (e.g., `0.2.1`), select pre-release type if needed
-4. Workflow creates and pushes the tag
-5. Manually trigger `pipy.yaml` to publish to PyPI + create GitHub Release
+2. For dev releases: Go to **Actions → Publish Dev → Run workflow** (must be on `dev/v*`)
+3. For RC releases: Go to **Actions → Publish RC → Run workflow** (must be on `rc/v*`)
+4. For final releases: Run `python scripts/release.py` on `main` to create tag, then `pipy.yaml` publishes
 
-**Release types:**
+**After final release:** `release.py` auto-increments `version` patch and resets `rc`/`dev` counters.
 
-- **Dev**: `0.2.1.dev1` — for testing prerelease features
-- **RC**: `0.2.1rc1` — release candidate for validation
-- **Final**: `0.2.1` — stable release
-
-**Tag is the single source of truth for the version.** The `pipy.yaml` workflow derives the version from the tag at runtime and overrides `pyproject.toml` during build.
+**For next RC cycle:** Run `python scripts/release.py --bump-rc` to increment `rc` and reset `dev`.
 
 ### Docker Images
 
