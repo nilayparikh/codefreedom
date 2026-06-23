@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.docker.pull import pull_if_stale
 from codefreedom.log import eprint, tag
 from codefreedom.env_loader import get_env, load_dotenv
 
@@ -187,54 +186,69 @@ def _ensure_web_bridge_image() -> int:
     """
     image = _web_bridge_image()
 
+    # Fast path: image already present?
     check = subprocess.run(
         ["docker", "image", "inspect", image],
         capture_output=True,
         check=False,
     )
-    if check.returncode != 0:
-        eprint(f"[PROXY] Web-bridge image '{image}' not found locally, pulling...")
-        pull = subprocess.run(
-            ["docker", "pull", image],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-        if pull.returncode != 0:
-            build_ctx = _web_bridge_build_context()
-            if build_ctx is None:
-                eprint(
-                    f"{tag('PROXY')} Web-bridge image '{image}' not found."
-                    " Source tree unavailable — cannot build."
-                )
-                return 1
-            eprint(
-                f"[PROXY] Web-bridge image '{image}' not found locally."
-                " Building from source tree..."
-            )
-            eprint("   This is a one-time build (may take ~30 s).")
-            result = subprocess.run(
-                [
-                    "docker",
-                    "build",
-                    "-t",
-                    image,
-                    "-f",
-                    str(build_ctx / "Dockerfile.Bridge"),
-                    str(build_ctx),
-                ],
-                capture_output=False,
-                timeout=300,
-                check=False,
-            )
-            if result.returncode != 0:
-                eprint(f"{tag('PROXY')} Failed to build {image}. Check docker output above.")
-                return 1
-            eprint(f"{tag('PROXY')} Built {image}.")
-            return 0
+    if check.returncode == 0:
+        return 0
 
-    pull_if_stale(image, label="PROXY")
+    # Pull the multi-arch image from the registry.  The published image
+    # contains both linux/arm64 and linux/amd64; Docker selects the
+    # correct manifest for the host architecture.
+    eprint(f"[PROXY] Web-bridge image '{image}' not found locally, pulling...")
+    pull = subprocess.run(
+        ["docker", "pull", image],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if pull.returncode == 0:
+        eprint("[PROXY] Web-bridge image pulled.")
+        return 0
+
+    # Pull failed — fall back to a local build from the source tree.
+    build_ctx = _web_bridge_build_context()
+    if build_ctx is None:
+        eprint(
+            f"[PROXY] Warning: '{image}' image is missing and the source tree"
+            " (docker/web-bridge/) could not be located."
+        )
+        eprint(
+            "   Build it manually:"
+            f"  docker build -t {image} -f docker/web-bridge/Dockerfile.Bridge"
+            " docker/web-bridge/"
+        )
+        eprint("   The web-bridge sidecar will fail to start until the image exists.")
+        # Don't hard-fail: the rest of the proxy stack can still come up.
+        return 0
+
+    eprint(
+        f"[PROXY] Web-bridge image '{image}' not found locally."
+        " Building from source tree..."
+    )
+    eprint("   This is a one-time build (may take ~30 s).")
+    result = subprocess.run(
+        [
+            "docker",
+            "build",
+            "-t",
+            image,
+            "-f",
+            str(build_ctx / "Dockerfile.Bridge"),
+            str(build_ctx),
+        ],
+        capture_output=False,
+        timeout=300,
+        check=False,
+    )
+    if result.returncode != 0:
+        eprint(f"{tag('PROXY')} Failed to build {image}. Check docker output above.")
+        return 1
+    eprint(f"{tag('PROXY')} Built {image}.")
     return 0
 
 
@@ -313,9 +327,6 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     # referenced by docker-compose.yaml).  All proxy instances share this
     # network regardless of SUFFIX_ID.
     _ensure_codefreedom_network()
-
-    litellm_image = merged_env.get("LITELLM_IMAGE", _DEFAULT_LITELLM_IMAGE)
-    pull_if_stale(litellm_image, label="PROXY")
 
     result = subprocess.run(
         [

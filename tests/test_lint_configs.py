@@ -120,8 +120,7 @@ class TestDockerfileLint:
             timeout=30,
         )
         if result.returncode != 0:
-            output = result.stdout or result.stderr
-            pytest.fail(f"{dockerfile} hadolint errors:\n{output}")
+            pytest.fail(f"{dockerfile} hadolint errors:\n{result.stdout}")
 
     @pytest.mark.parametrize(
         "dockerfile",

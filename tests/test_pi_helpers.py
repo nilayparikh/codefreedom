@@ -148,15 +148,14 @@ class TestEnsureLeanCtx:
         with (
             patch(
                 "codefreedom.cli.pi.shutil.which",
-                side_effect=lambda cmd: None
-                if cmd == "lean-ctx"
-                else "/usr/bin/npm",
+                side_effect=lambda cmd: None if cmd == "lean-ctx" else "/usr/bin/npm",
             ),
             patch("subprocess.run") as mock_run,
         ):
             _ensure_lean_ctx()
+            # Should call npm install -g lean-ctx-bin
             mock_run.assert_any_call(
-                ["/usr/bin/npm", "install", "-g", "lean-ctx-bin"],
+                ["npm", "install", "-g", "lean-ctx-bin"],
                 check=True,
                 capture_output=True,
                 timeout=120,
