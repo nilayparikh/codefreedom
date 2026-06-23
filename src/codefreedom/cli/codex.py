@@ -19,6 +19,7 @@ Proxy auto-config:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import secrets
 import shutil
@@ -180,6 +181,81 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
     return catalog
 
 
+def _inject_default_model(codex_args: list[str], profile_env: dict[str, str]) -> list[str]:
+    """Inject -m <model> into codex_args if not already present.
+
+    Codex CLI requires the -m flag for custom providers (the /model picker
+    only shows built-in OpenAI models). This ensures the default model from
+    the profile is passed automatically.
+    """
+    has_model_flag = any(a in ("-m", "--model") for a in codex_args)
+    if has_model_flag:
+        return codex_args
+
+    default_model = profile_env.get("CODEX_DEFAULT_MODEL", "")
+    if not default_model:
+        return codex_args
+
+    return ["-m", default_model, *codex_args]
+
+
+def _update_codex_mcp(tools: list[str], codex_home: Path) -> None:
+    """Register MCP servers in codex config.toml.
+
+    Writes tool endpoints into ``config.toml`` using the TOML format
+    required by Codex CLI. Preserves existing non-tool MCP entries.
+    """
+    import tomlkit
+
+    from codefreedom.tools.registry import _MCP_TOOLS
+
+    if not tools:
+        return
+
+    config_path = codex_home / CODEX_CONFIG_NAME
+    if not config_path.exists():
+        return
+
+    try:
+        existing = tomlkit.loads(config_path.read_text(encoding="utf-8"))
+    except (tomlkit.exceptions.TOMLKitError, OSError):
+        eprint(f"{tag('CODEX')} Could not parse {config_path} — skipping MCP update.")
+        return
+
+    existing.setdefault("mcp_servers", tomlkit.table())
+    before_keys = set(existing["mcp_servers"].keys())
+
+    for tool_name in tools:
+        if tool_name not in _MCP_TOOLS:
+            continue
+
+        tool = _MCP_TOOLS[tool_name]
+        try:
+            port, path = tool.mcp_endpoint
+        except (FileNotFoundError, json.JSONDecodeError):
+            continue
+
+        if not path.startswith("/"):
+            path = "/" + path
+
+        url = f"http://127.0.0.1:{port}{path}"
+        server_table = tomlkit.table()
+        server_table.add("url", url)
+        existing["mcp_servers"][tool.mcp_server_name] = server_table
+
+    after_keys = set(existing["mcp_servers"].keys())
+    added = after_keys - before_keys
+
+    if added:
+        config_path.write_text(tomlkit.dumps(existing), encoding="utf-8")
+        eprint(
+            f"{tag('CODEX')} Registered MCP in {config_path}:"
+            f" {', '.join(sorted(added))}"
+        )
+    else:
+        eprint(f"{tag('CODEX')} All MCP servers already registered.")
+
+
 def _generate_codex_config(
     proxy_url: str,
     profile_env: dict[str, str],
@@ -334,6 +410,7 @@ def _ensure_codex_sandbox_dir(profile_name: str) -> tuple[Path, Path]:
 def run_local(
     profile_env: dict[str, str],
     codex_args: list[str],
+    acquired_tools: list[str] | None = None,
 ) -> int:
     """Run ``codex`` natively on the host. Returns exit code."""
     codex_bin = find_codex_binary()
@@ -360,6 +437,10 @@ def run_local(
     # Write config.toml
     _write_codex_config(config_content, codex_home)
 
+    # Register MCP servers in config.toml
+    if acquired_tools:
+        _update_codex_mcp(acquired_tools, codex_home)
+
     # Write model catalog
     if catalog_content:
         catalog_path = codex_home / "model_catalog.json"
@@ -376,7 +457,7 @@ def run_local(
     eprint(f"{tag('CODEX')} Example: codex -m MiMo-V2.5")
 
     cmd = [codex_bin]
-    cmd.extend(codex_args)
+    cmd.extend(_inject_default_model(codex_args, profile_env))
 
     try:
         proc = subprocess.Popen(cmd, env=env)
@@ -399,6 +480,7 @@ def run_docker(
     sandbox_images: dict[str, str] | None = None,
     run_as_me: bool = False,
     gpu_type: str | None = None,
+    acquired_tools: list[str] | None = None,
 ) -> int:
     """Run ``codex`` inside an ephemeral Docker container.
 
@@ -427,6 +509,10 @@ def run_docker(
 
     # Write config.toml (merge with existing)
     _write_codex_config(config_content, codex_home_dir)
+
+    # Register MCP servers in config.toml
+    if acquired_tools:
+        _update_codex_mcp(acquired_tools, codex_home_dir)
 
     # Write model catalog
     if catalog_content:
@@ -488,7 +574,7 @@ def run_docker(
         + ["-e", f"HOME={container_home}"]
         + ["-e", f"CODEX_HOME={container_home}/.codex"]
         + [container_name, "codex"]
-        + codex_args
+        + _inject_default_model(codex_args, profile_env)
     )
 
     exec_extra_env = [
@@ -656,10 +742,11 @@ def run(args: argparse.Namespace) -> int:
                 sandbox_images=sandbox_images,
                 run_as_me=run_as_me,
                 gpu_type=gpu_type,
+                acquired_tools=acquired_tools,
             )
         else:
             if run_as_me:
                 eprint(f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring.")
-            return run_local(profile_env, args.agent_args)
+            return run_local(profile_env, args.agent_args, acquired_tools=acquired_tools)
 
     return acquire_and_run(session_id, tools, profile_name, _run)
