@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codefreedom"
-version = "0.2.1.dev1"
+version = "0.2.2rc1.dev1"
 description = "Unified interface for all code agents — LLM proxy routing, Docker sandboxing, profile management, and browser tools. Switch models and providers without reconfiguring."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -118,10 +118,7 @@ ignore_missing_imports = true
 # ── Coverage ────────────────────────────────────────────────────────────────
 [tool.coverage.run]
 source = ["codefreedom"]
-omit = [
-    "tests/*",
-    "src/codefreedom/admin/*",
-]
+omit = ["tests/*", "src/codefreedom/admin/*"]
 
 [tool.pytest.ini_options]
 markers = [

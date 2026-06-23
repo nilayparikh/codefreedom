@@ -32,8 +32,8 @@ def _resolve_recipe_branch() -> str:
     """Resolve the recipe branch from the CLI version.
 
     Branch mapping:
-      - 0.2.1rc1       → rc/v0.2.1
-      - 0.2.2.dev3     → dev/v0.2.2
+      - 0.2.2rc1.dev1  → dev/v0.2.2
+      - 0.2.2rc1       → rc/v0.2.2
       - 0.2.2          → v0.2.2
       - 0.0.0 (fallback) → main
     """
@@ -58,10 +58,10 @@ def _resolve_recipe_branch() -> str:
     suffix = m.group(2)
     base = f"{major}.{minor}.{patch}"
 
+    if ".dev" in suffix:
+        return f"dev/v{base}"
     if suffix.startswith("rc"):
         return f"rc/v{base}"
-    if suffix.startswith(".dev") or suffix.startswith("dev"):
-        return f"dev/v{base}"
 
     return f"v{base}"
 
