@@ -27,6 +27,7 @@ keywords = [
 #   PyYAML         — YAML parsing (litellm config validation)
 #   types-PyYAML   — type stubs needed by litellm's config parser at runtime
 #   deepdiff       — structural YAML/JSON diff for recipe merging
+#   tomlkit        — TOML read/write for codex config.toml
 dependencies = [
     "PyYAML>=6.0",
     "types-PyYAML",
@@ -35,7 +36,8 @@ dependencies = [
     "GitPython>=3.1.43",
     "python-dotenv>=1.0",
     "httpx>=0.28",
-    "docker>=7.0",
+    "docker>=7.1.0",
+    "tomlkit>=0.11",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -63,11 +65,11 @@ dev = [
     "pytest-cov>=5.0",
     "types-PyYAML",
     "httpx>=0.28",
-    "fastapi>=0.115",
+    "fastapi>=0.138.0",
 ]
-docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2"]
-camoufox = ["beautifulsoup4>=4.14.3"]
-encrypt = ["cryptography>=42.0"]
+docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2.3"]
+camoufox = ["beautifulsoup4>=4.15.0"]
+encrypt = ["cryptography>=49.0.0"]
 ci = ["codefreedom[dev,docs,camoufox,encrypt]"]
 all = ["codefreedom[dev,camoufox,encrypt]"]
 

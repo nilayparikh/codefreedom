@@ -43,11 +43,20 @@ _client = _LazyClient()
 
 
 def ensure_image(image: str) -> None:
-    """Pull a Docker image if it is not already cached locally."""
+    """Pull a Docker image if it is not cached locally or is stale.
+
+    Compares local vs remote digests before pulling to avoid unnecessary
+    downloads. Falls back to cache if the registry is unreachable.
+    """
+    from codefreedom.docker.pull import pull_if_stale
+
     try:
         _client.images.get(image)
     except Exception:
         _client.images.pull(image)
+        return
+
+    pull_if_stale(image)
 
 
 def container_is_running(name: str) -> bool:

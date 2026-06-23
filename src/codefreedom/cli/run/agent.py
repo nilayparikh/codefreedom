@@ -5,7 +5,7 @@ Usage:
     cf r ag <name> ...
     cf r ag list
 
-Supported agents: claude-code (cc), mimo-code (mc), open-code (oc), pi-code (pc)
+Supported agents: claude-code (cc), mimo-code (mc), open-code (oc), pi-code (pc), codex-code (cx)
 Adding new agents: add to _AGENTS registry dict below.
 """
 
@@ -50,6 +50,12 @@ _AGENTS: dict[str, tuple[str, str, str, list[str]]] = {
         "run",
         "Pi Code — Earendil's AI coding agent with 0-click proxy config",
         ["pc"],
+    ),
+    "codex-code": (
+        "codefreedom.cli.codex",
+        "run",
+        "Codex — OpenAI's coding agent with 0-click proxy config",
+        ["cx"],
     ),
 }
 
@@ -142,6 +148,7 @@ def build_parser(parent: argparse.ArgumentParser) -> None:
         "  cf r ag cc                       Launch Claude Code\n"
         "  cf r ag mc --sandbox             Launch MiMo in sandbox\n"
         "  cf r ag pc                       Launch Pi Code\n"
+        "  cf r ag cx                       Launch Codex\n"
         "  cf r ag list                     List available agents"
     )
     from codefreedom.cli.formatter import CodeFreedomHelpFormatter
