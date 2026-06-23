@@ -174,7 +174,7 @@ def run_commit(args: object) -> int:
         user_prompt = f"Files changed:\n{files_list}\n\nDiff:\n\n{staged_diff}"
 
         eprint(f"{tag('COMMIT')} Generating commit message via {model}...")
-        response = llm.generate_message(model, system_prompt, user_prompt, max_tokens=1500, work_dir=work_dir)
+        response = llm.generate_message(model, system_prompt, user_prompt, max_tokens=16000, work_dir=work_dir)
         if response is None:
             return 1
 

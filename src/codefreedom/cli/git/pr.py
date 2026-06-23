@@ -138,7 +138,7 @@ def run_pr(args: object) -> int:
     )
 
     eprint(f"{tag('PR')} Generating PR description via {model}...")
-    response = llm.generate_message(model, system_prompt, user_prompt, max_tokens=1500, work_dir=work_dir)
+    response = llm.generate_message(model, system_prompt, user_prompt, max_tokens=16000, work_dir=work_dir)
     if response is None:
         return 1
 
