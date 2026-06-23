@@ -16,6 +16,9 @@ venv/
 # matched (that path holds the self-hosted proxy image source).
 /litellm/
 
+# Recipes — managed as a separate repo, not a submodule
+/recipes/
+
 # IDE
 .vscode/
 .idea/
