@@ -24,14 +24,57 @@ from codefreedom.log import eprint, tag
 
 RECIPE_OWNER = "nilayparikh"
 RECIPE_REPO = "codefreedom-recipes"
-RECIPE_BRANCH = "main"
 
 _OFFICIAL_REPO_URL = f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}.git"
-_RAW_BASE = (
-    f"https://raw.githubusercontent.com/"
-    f"{RECIPE_OWNER}/{RECIPE_REPO}/{RECIPE_BRANCH}"
-)
-_GITHUB_API_BASE = f"https://api.github.com/repos/{RECIPE_OWNER}/{RECIPE_REPO}"
+
+
+def _resolve_recipe_branch() -> str:
+    """Resolve the recipe branch from the CLI version.
+
+    Branch mapping:
+      - 0.2.1rc1       → rc/v0.2.1
+      - 0.2.2.dev3     → dev/v0.2.2
+      - 0.2.2          → v0.2.2
+      - 0.0.0 (fallback) → main
+    """
+    from codefreedom import __version__
+
+    ver = __version__
+    if ver == "0.0.0":
+        return "main"
+
+    parts = ver.split(".", 2)
+    if len(parts) < 3:
+        return "main"
+
+    major, minor = parts[0], parts[1]
+    patch_prerelease = parts[2]
+
+    m = re.match(r"(\d+)(.*)", patch_prerelease)
+    if not m:
+        return "main"
+
+    patch = m.group(1)
+    suffix = m.group(2)
+    base = f"{major}.{minor}.{patch}"
+
+    if suffix.startswith("rc"):
+        return f"rc/{base}"
+    if suffix.startswith(".dev") or suffix.startswith("dev"):
+        return f"dev/{base}"
+
+    return base
+
+
+def _raw_base(branch: str) -> str:
+    return (
+        f"https://raw.githubusercontent.com/"
+        f"{RECIPE_OWNER}/{RECIPE_REPO}/{branch}"
+    )
+
+
+def _github_api_base(branch: str) -> str:
+    return f"https://api.github.com/repos/{RECIPE_OWNER}/{RECIPE_REPO}"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Exceptions
@@ -280,9 +323,12 @@ def _list_recipes_from_store(store_path: Path) -> List[str]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _raw_url(recipe_name: str, path: str = "") -> str:
+def _raw_url(recipe_name: str, path: str = "", branch: str | None = None) -> str:
     """Build raw.githubusercontent.com URL for a recipe file."""
-    parts = [_RAW_BASE, recipe_name]
+    if branch is None:
+        branch = _resolve_recipe_branch()
+    base = _raw_base(branch)
+    parts = [base, recipe_name]
     if path:
         parts.append(path)
     return "/".join(parts)
@@ -348,10 +394,12 @@ def _fetch_recipe_files(
     return files
 
 
-def _fetch_available_recipes() -> List[str]:
+def _fetch_available_recipes(branch: str | None = None) -> List[str]:
     """List available recipes by checking each top-level dir for recipe.yaml."""
+    if branch is None:
+        branch = _resolve_recipe_branch()
     try:
-        url = f"{_GITHUB_API_BASE}/contents"
+        url = f"{_github_api_base(branch)}/contents"
         raw = _fetch_text(url)
         items = json.loads(raw)
         candidates: List[str] = []
@@ -361,7 +409,7 @@ def _fetch_available_recipes() -> List[str]:
                 if name.startswith("_"):
                     continue  # Skip private/base recipes
                 try:
-                    _fetch_text(_raw_url(name, "recipe.yaml"))
+                    _fetch_text(_raw_url(name, "recipe.yaml", branch=branch))
                     candidates.append(name)
                 except RecipeError:
                     pass

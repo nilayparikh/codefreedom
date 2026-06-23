@@ -12,10 +12,11 @@ from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint, tag
 from codefreedom.recipe.store import (
-    _GITHUB_API_BASE,
     _fetch_available_recipes,
+    _github_api_base,
     _list_recipes_from_store,
     _resolve_recipe as _store_resolve_recipe,
+    _resolve_recipe_branch,
     _resolve_store,
     RECIPE_OWNER,
     RECIPE_REPO,
@@ -31,16 +32,16 @@ def list_recipes(store: Optional[str] = None, staging: bool = False) -> int:
 
     Returns exit code 0 on success, 1 on failure.
     """
-    branch = "staging" if staging else "main"
+    branch = _resolve_recipe_branch() if not staging else "staging"
     store_path = _resolve_store(store, branch=branch)
 
     if store_path:
         recipes = _list_recipes_from_store(store_path)
     else:
-        recipes = _fetch_available_recipes()
+        recipes = _fetch_available_recipes(branch)
 
     if not recipes:
-        source = store_path or _GITHUB_API_BASE
+        source = store_path or _github_api_base(branch)
         eprint(f"{tag('RECIPE')} No recipes found.")
         eprint(f"   {source}")
         return 1
@@ -82,7 +83,7 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     cf_dir = get_codefreedom_dir()
 
     # ── 1. Recipe source ────────────────────────────────────────────────
-    branch = "staging" if staging else "main"
+    branch = _resolve_recipe_branch() if not staging else "staging"
     store_path = _resolve_store(store, branch=branch)
     manifest, files = _store_resolve_recipe(name, store_path=store_path)
     if manifest is None:
@@ -151,7 +152,7 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     cf_dir = get_codefreedom_dir()
 
     # ── 1. Resolve recipe ──────────────────────────────────────────────
-    branch = "staging" if staging else "main"
+    branch = _resolve_recipe_branch() if not staging else "staging"
     store_path = _resolve_store(store, branch=branch)
     manifest, files = _store_resolve_recipe(name, store_path=store_path)
     if manifest is None:
