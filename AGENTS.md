@@ -118,6 +118,16 @@ cf run      (r)   agent (ag) | proxy (px) | tools (tl)
 cf manage   (m)   doctor (dr) | update (up) | admin (adm/ad)
 ```
 
+### Registered Agents
+
+| Agent | Alias | Module |
+|---|---|---|
+| `claude-code` | `cc` | `cli/claude.py` |
+| `mimo-code` | `mc` | `cli/mimo.py` |
+| `open-code` | `oc` | `cli/opencode.py` |
+| `pi-code` | `pc` | `cli/pi.py` |
+| `codex-code` | `cx` | `cli/codex.py` |
+
 ## Code Conventions
 
 ### General Style
@@ -410,7 +420,7 @@ Patches in `docker/litellm/patches/` are applied during image build. If you chan
 
 ### Bare agent names are invalid
 
-CodeFreedom canonical names must be hyphenated: `claude-code`, `mimo-code`, `open-code`, `pi-code`. Bare names (`claude`, `mimo`, `opencode`) fail in CLI dispatch.
+CodeFreedom canonical names must be hyphenated: `claude-code`, `mimo-code`, `open-code`, `pi-code`, `codex-code`. Bare names (`claude`, `mimo`, `opencode`, `pi`, `codex`) fail in CLI dispatch.
 
 ### Recipe directories are independent copies
 
@@ -496,21 +506,6 @@ Releases are triggered via GitHub Actions `workflow_dispatch` — no local scrip
 
 **For next RC cycle:** Run `python scripts/release.py --bump-rc` to increment `rc` and reset `dev`.
 
-### Docker Images
-
-| Image | Dockerfile | Use Case |
-|---|---|---|
-| Ubuntu | `docker/agents/Dockerfile.Agents` (target: ubuntu) | CPU-only, all agents |
-| CUDA | `docker/agents/Dockerfile.Agents` (target: cuda) | NVIDIA GPU, all agents |
-| ROCm | `docker/agents/Dockerfile.Agents` (target: rocm) | AMD GPU, all agents |
-| Chrome | `docker/chrome/Dockerfile.Chrome` | Headless Chromium |
-| Web | `docker/web/Dockerfile.Web` | Camoufox MCP |
-| GitHub MCP | `docker/github/Dockerfile.Github` | GitHub API tools |
-| LiteLLM | `docker/litellm/Dockerfile.LiteLLM` | LLM proxy + PG |
-| Web Bridge | `docker/web-bridge/Dockerfile.Bridge` | SearXNG bridge |
-
-Docker tags must be **lowercase**.
-
 ### Documentation
 
 ```bash
@@ -519,13 +514,14 @@ mkdocs serve -a localhost:8080  # local docs preview
 
 ## Recipes
 
-Recipes are config bundles from `github.com/nilayparikh/codefreedom-recipes` (git submodule at `recipes/`).
+Recipes are config bundles from `github.com/nilayparikh/codefreedom-recipes`.
 
 | Recipe | Description |
 |---|---|
-| `_default` | Base config — shared tool profiles, proxy config, plugins |
-| `costeffective-coding` | Cloud providers only (Azure, OpenCode, OpenRouter) |
+| `costeffective-coding` | Cloud providers only (Azure, OpenCode, OpenRouter, DeepSeek) |
 | `costeffective-coding-with-local` | Cloud + local inference (vLLM, Ollama, etc.) |
+
+Both recipes extend `_default` (base config with shared tool profiles, proxy config, plugins). `_default` is not directly visible to users — it is applied automatically as a base layer.
 
 Apply with: `cf s i -pa <recipe-name>`
 

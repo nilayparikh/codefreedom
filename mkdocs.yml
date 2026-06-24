@@ -104,6 +104,7 @@ nav:
               - MiMo Code: agents/mimo-code.md
               - OpenCode: agents/open-code.md
               - Pi Code: agents/pi-code.md
+              - Codex: agents/codex-code.md
       - Recipes:
               - Overview: recipes/index.md
               - costeffective-coding: recipes/costeffective-coding.md

@@ -40,8 +40,10 @@ It orchestrates agents through their **publicly supported interfaces** (environm
 | Agent | Alias | Description |
 |-------|-------|-------------|
 | **Claude Code** | `cc` | Anthropic's code agent |
-| **MiMoCode** | `mc` | Xiaomi's code agent |
+| **MiMo Code** | `mc` | Xiaomi's code agent |
 | **OpenCode** | `oc` | OpenCode code agent |
+| **Pi Code** | `pc` | Earendil's code agent with extension-based model discovery |
+| **Codex** | `cx` | OpenAI's code agent with 0-click proxy config |
 
 All agents share the same proxy, sandbox, and tooling layers.
 
@@ -54,7 +56,9 @@ All agents share the same proxy, sandbox, and tooling layers.
 ### Install
 
 ```bash
-pip install codefreedom
+uv tool install codefreedom              # Recommended (uv)
+# or
+pip install codefreedom                  # Alternative (pip)
 ```
 
 ### Pick a recipe and set up
@@ -96,8 +100,10 @@ cf r ag cc --sandbox --rocm   # AMD GPU
 | `cf r px stop` | Stop proxy + tools |
 | `cf r px status` | Check proxy health |
 | `cf r ag cc` | Launch Claude Code |
-| `cf r ag mc` | Launch MiMoCode |
+| `cf r ag mc` | Launch MiMo Code |
 | `cf r ag oc` | Launch OpenCode |
+| `cf r ag pc` | Launch Pi Code |
+| `cf r ag cx` | Launch Codex |
 | `cf run tools status` | Check tool container status |
 | `cf manage admin backup` | Backup config |
 | `cf manage doctor` | Diagnose issues |

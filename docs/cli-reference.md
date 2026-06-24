@@ -32,7 +32,7 @@ cf setup deinit [--force]                           # Tear down
 cf run agent <name> [options] [-- <agent-args>]
 cf run agent list
 
-# Supported agents: claude-code (cc), mimo-code (mc), open-code (oc), pi-code (pc)
+# Supported agents: claude-code (cc), mimo-code (mc), open-code (oc), pi-code (pc), codex-code (cx)
 
 # Options:
 --profile NAME        Load a named profile (default: 'default')
