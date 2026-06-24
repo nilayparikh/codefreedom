@@ -222,7 +222,7 @@ def _install_recipe_files(
                         default = match.group(2) if match.group(2) is not None else ""
                         return vars_dict.get(var_name, os.environ.get(var_name, default))
 
-                    file_content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, file_content)
+                    file_content = re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", _replace_var, file_content)
 
                 if dst.exists():
                     new_count = _merge_file(dst, file_content, merge_mode, str(dst.relative_to(cf_dir)))
@@ -250,7 +250,7 @@ def _install_recipe_files(
                 default = match.group(2) if match.group(2) is not None else ""
                 return vars_dict.get(var_name, os.environ.get(var_name, default))
 
-            content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, content)
+            content = re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", _replace_var, content)
 
         if split_key:
             data = yaml.safe_load(content)
