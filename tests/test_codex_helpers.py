@@ -94,7 +94,9 @@ class TestGenerateCodexConfig:
                 elif line.strip().startswith("[") and not line.strip().startswith("[["):
                     in_provider_section = False
                 if "model_catalog_json" in line:
-                    assert not in_provider_section, "model_catalog_json must be at root level"
+                    assert (
+                        not in_provider_section
+                    ), "model_catalog_json must be at root level"
 
 
 class TestFindCodexBinary:
@@ -109,3 +111,49 @@ class TestFindCodexBinary:
 
         monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/codex")
         assert find_codex_binary() == "/usr/bin/codex"
+
+
+class TestCodexEnvLoading:
+    def test_run_uses_codex_runtime_resolution(self, monkeypatch):
+        import argparse
+        import codefreedom.cli.codex as codex_mod
+
+        calls = []
+
+        def fake_resolve_agent_runtime(
+            agent, *, workspace_dir, profile_name="default", mode="local"
+        ):
+            calls.append((agent, profile_name, mode))
+
+            class Runtime:
+                base_env = {}
+
+            return Runtime()
+
+        monkeypatch.setattr(
+            codex_mod, "resolve_agent_runtime", fake_resolve_agent_runtime
+        )
+
+        import codefreedom.cli.common as common_mod
+
+        monkeypatch.setattr(
+            common_mod,
+            "load_profile_with_tools",
+            lambda name, path, env, mode: ({}, {}, [], 0),
+        )
+        monkeypatch.setattr(
+            common_mod, "acquire_and_run", lambda sid, tools, name, fn: 0
+        )
+
+        ns = argparse.Namespace(
+            list_profiles=False,
+            profile="default",
+            codex_action=None,
+            sandbox=False,
+            gpu_cuda=False,
+            gpu_rocm=False,
+            run_as_me=False,
+            agent_args=[],
+        )
+        codex_mod.run(ns)
+        assert calls == [("codex-code", "default", "local")]

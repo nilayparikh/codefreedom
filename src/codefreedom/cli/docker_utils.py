@@ -576,7 +576,7 @@ def init_tool_redirect(tool_filename: str) -> int:
     print_help_section(
         f"{label} init",
         [
-            "Use:  cf s i                         # install _default base recipe",
+            "Use:  cf s i <recipe-name>            # install a recipe",
             "      cf s i -l                      # list available recipes",
             "      cf s i -p <name>               # preview a recipe without applying",
             "      cf s i -pa <name>              # plan and apply a recipe",

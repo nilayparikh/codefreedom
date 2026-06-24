@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import yaml
 
 from codefreedom.core.http_client import HTTPError, HTTPStatusError
-from codefreedom.env_loader import load_env_chain
+from codefreedom.env_loader import get_env
 from codefreedom.log import eprint, tag
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -385,7 +385,7 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     eprint(
         f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}..."
     )
-    base_env = load_env_chain(workspace_dir, component="proxy")
+    base_env = get_env(workspace_dir, component="proxy", verbose=False)
 
     eprint(f"{tag('VSCODE')} Probing proxy at {_proxy_health_url(host, port)} ...")
     if not _check_proxy_live(host, port):

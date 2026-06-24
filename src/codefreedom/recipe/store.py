@@ -519,7 +519,19 @@ def _read_local_files(
     for entry in manifest.get("files", []):
         src_path = entry.get("path", "")
         target = entry.get("target", src_path)
+        copy_dir = entry.get("copy_dir", False)
         file_path = recipe_dir / src_path
-        if file_path.exists():
+
+        if copy_dir and file_path.is_dir():
+            # Read all files in the directory recursively
+            for item in file_path.rglob("*"):
+                if item.is_file():
+                    rel_path = item.relative_to(file_path)
+                    file_key = f"{src_path}/{rel_path}" if src_path else str(rel_path)
+                    try:
+                        files[file_key] = item.read_text(encoding="utf-8")
+                    except (UnicodeDecodeError, OSError):
+                        pass  # Skip binary files
+        elif file_path.exists() and file_path.is_file():
             files[target] = file_path.read_text(encoding="utf-8")
     return files

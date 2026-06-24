@@ -15,6 +15,7 @@ import argparse
 from pathlib import Path
 from typing import Any, Callable
 
+from codefreedom.core.settings import resolve_agent_runtime
 from codefreedom.log import eprint
 
 # ── Profile display ─────────────────────────────────────────────────────────
@@ -94,34 +95,30 @@ def load_profile_env_only(
         Tuple of (profile_env, exit_code) where exit_code is 0 on success,
         1 on error.
     """
-    from codefreedom.core.profiles import (
-        ProfileError,
-        load_profile_env,
-        load_profiles,
-    )
+    from codefreedom.core.profiles import ProfileError
 
     profile_env: dict[str, str] = {}
 
-    if profiles_path.exists():
-        try:
-            profiles_dict = load_profiles(profiles_path)
-            profile_env = load_profile_env(
-                profile_name,
-                profiles_path,
-                base_env,
-                mode="local",
-                profiles=profiles_dict,
-            )
-        except ProfileError as exc:
-            eprint(f"[ERROR] {exc}")
-            return profile_env, 1
-    elif profile_name != "default":
+    if not profiles_path.exists() and profile_name != "default":
         eprint(
             f"[ERROR] Profile '{profile_name}' requested but no profiles file found."
         )
         return profile_env, 1
-    else:
+    elif not profiles_path.exists():
         eprint(f"[ERROR] No profiles file found. Run `{error_prefix}` first.")
+        return profile_env, 1
+
+    try:
+        agent = _agent_name_from_profiles_path(profiles_path)
+        runtime = resolve_agent_runtime(
+            agent,
+            workspace_dir=Path.cwd(),
+            profile_name=profile_name,
+            mode="local",
+        )
+        profile_env = runtime.profile_env
+    except (ProfileError, ValueError) as exc:
+        eprint(f"[ERROR] {exc}")
         return profile_env, 1
 
     if not profile_env:
@@ -218,45 +215,56 @@ def load_profile_with_tools(
         Tuple of (profile_env, sandbox_images, tools, exit_code)
         exit_code is 0 on success, 1 on error.
     """
-    from codefreedom.core.profiles import (
-        ProfileError,
-        get_profile_sandbox_images,
-        get_profile_tools,
-        load_profile_env,
-        load_profiles,
-    )
+    from codefreedom.core.profiles import ProfileError
 
     profile_env: dict[str, str] = {}
     sandbox_images: dict[str, str] = {}
     tools: list[str] = []
 
-    if profiles_path.exists():
-        try:
-            profiles_dict = load_profiles(profiles_path)
-            profile_env = load_profile_env(
-                profile_name, profiles_path, base_env, mode, profiles=profiles_dict
-            )
-            sandbox_images = get_profile_sandbox_images(
-                profile_name, profiles_path, profiles=profiles_dict
-            )
-            tools = get_profile_tools(
-                profile_name, profiles_path, profiles=profiles_dict
-            )
-        except ProfileError as e:
-            if show_errors:
-                eprint(f"[ERROR] {e}")
-            return profile_env, sandbox_images, tools, 1
-    elif profile_name != "default":
+    if not profiles_path.exists() and profile_name != "default":
         if show_errors:
             eprint(
                 f"[ERROR] Profile '{profile_name}' requested but no profiles file found."
             )
         return profile_env, sandbox_images, tools, 1
-    else:
+    elif not profiles_path.exists():
         if show_errors:
             eprint("[PROFILE] No profiles file found. Using defaults only.")
+        return profile_env, sandbox_images, tools, 0
+
+    try:
+        agent = _agent_name_from_profiles_path(profiles_path)
+        runtime = resolve_agent_runtime(
+            agent,
+            workspace_dir=Path.cwd(),
+            profile_name=profile_name,
+            mode=mode,
+        )
+        profile_env = runtime.profile_env
+        sandbox_images = runtime.sandbox_images
+        tools = runtime.tools
+    except (ProfileError, ValueError) as e:
+        if show_errors:
+            eprint(f"[ERROR] {e}")
+        return profile_env, sandbox_images, tools, 1
 
     return profile_env, sandbox_images, tools, 0
+
+
+def _agent_name_from_profiles_path(profiles_path: Path) -> str:
+    """Infer canonical agent name from a profile filename."""
+    name = profiles_path.name
+    mapping = {
+        "claude-code.yaml": "claude-code",
+        "mimo-code.yaml": "mimo-code",
+        "opencode.yaml": "open-code",
+        "open-code.yaml": "open-code",
+        "pi-code.yaml": "pi-code",
+        "codex-code.yaml": "codex-code",
+    }
+    if name not in mapping:
+        raise ValueError(f"Unknown profiles path: {profiles_path}")
+    return mapping[name]
 
 
 # ── Tool execution helpers ──────────────────────────────────────────────────

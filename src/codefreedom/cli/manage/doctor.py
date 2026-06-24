@@ -35,6 +35,7 @@ from codefreedom.cli.docker_utils import (
     tool_home,
 )
 from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.settings import resolve_config_value
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Check result types
@@ -186,9 +187,7 @@ def _check_recipe_instruction() -> CheckResult:
                 recipe_name = line.split(":", 1)[1].strip()
                 return _ok(f"Recipe installed: {recipe_name}")
         return _ok("RECIPE.md found")
-    return _skip(
-        "No RECIPE.md — run 'cf s i' to install a recipe and download one"
-    )
+    return _skip("No RECIPE.md — run 'cf s i' to install a recipe and download one")
 
 
 @_section("CodeFreedom Home")
@@ -382,9 +381,11 @@ ESSENTIAL_PROXY_FILES = [
 def _check_profile_files() -> CheckResult:
     tool_home = _resolve_tool_home()
     profiles_dir = tool_home / "profiles"
-    discovered = sorted(
-        p.name for p in profiles_dir.glob("*.yaml") if p.is_file()
-    ) if profiles_dir.is_dir() else []
+    discovered = (
+        sorted(p.name for p in profiles_dir.glob("*.yaml") if p.is_file())
+        if profiles_dir.is_dir()
+        else []
+    )
     missing = [f for f in ESSENTIAL_PROFILE_FILES if f not in discovered]
     if missing:
         return _warn(
@@ -439,7 +440,9 @@ def _check_pg_data_dir() -> CheckResult:
     PG data uses a Docker named volume (codefreedom_pg_data) instead of
     a host bind-mount, avoiding permission issues on Windows/macOS/Linux.
     """
-    return _ok("PG data uses Docker named volume 'codefreedom_pg_data' (no host dir needed)")
+    return _ok(
+        "PG data uses Docker named volume 'codefreedom_pg_data' (no host dir needed)"
+    )
 
 
 @_section("PostgreSQL / Proxy Data")
@@ -465,7 +468,9 @@ def _check_compose_pg_volume() -> CheckResult:
     )
     if result.returncode == 0:
         return _ok("Named volume 'codefreedom_pg_data' exists")
-    return _ok("Named volume 'codefreedom_pg_data' will be created on first proxy start")
+    return _ok(
+        "Named volume 'codefreedom_pg_data' will be created on first proxy start"
+    )
 
 
 # ── Section: Docker Images ─────────────────────────────────────────────────
@@ -576,40 +581,11 @@ def _resolve_env_var_value(
     Returns ``(value, source_description)`` or ``(None, None)`` if not found
     in any source.
     """
-    # 1. CF_CLI_* override (highest priority — beats everything)
-    cf_cli_name = f"CF_CLI_{name}"
-    if cf_cli_name in os.environ and os.environ[cf_cli_name]:
-        return os.environ[cf_cli_name], f"{cf_cli_name} (machine env override)"
-
-    # 2. Direct env var
-    if name in os.environ and os.environ[name]:
-        return os.environ[name], f"{name} (machine env)"
-
-    # 3. .env.user (user-managed overrides)
-    cf_dir = get_codefreedom_dir()
-    user_env = cf_dir / ".env.user"
-    if user_env.exists():
-        content = user_env.read_text(encoding="utf-8")
-        for line in content.splitlines():
-            stripped = line.strip()
-            if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
-                val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
-                if val and val != "CHANGE_ME":
-                    return val, f"{name} (in .env.user)"
-
-    # 4. Env files
-    if env_files:
-        for env_file in env_files:
-            if env_file.exists():
-                content = env_file.read_text(encoding="utf-8")
-                for line in content.splitlines():
-                    stripped = line.strip()
-                    if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
-                        val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
-                        if val and val != "CHANGE_ME":
-                            return val, f"{name} (in {env_file.name})"
-
-    return None, None
+    return resolve_config_value(
+        name,
+        workspace_dir=Path.cwd(),
+        extra_env_files=env_files,
+    )
 
 
 @_section("Environment Variables (Proxy)")
@@ -681,16 +657,12 @@ def _load_claude_profile_env() -> dict[str, str]:
 
 @_section("Environment Variables (Claude)")
 def _check_anthropic_base_url() -> CheckResult:
-    return _check_claude_env_var(
-        "ANTHROPIC_BASE_URL", "Anthropic API base URL"
-    )
+    return _check_claude_env_var("ANTHROPIC_BASE_URL", "Anthropic API base URL")
 
 
 @_section("Environment Variables (Claude)")
 def _check_anthropic_auth_token() -> CheckResult:
-    return _check_claude_env_var(
-        "ANTHROPIC_AUTH_TOKEN", "Anthropic auth token"
-    )
+    return _check_claude_env_var("ANTHROPIC_AUTH_TOKEN", "Anthropic auth token")
 
 
 def _check_claude_env_var(name: str, label: str) -> CheckResult:
@@ -756,9 +728,12 @@ def _check_proxy_running() -> CheckResult:
     try:
         result = subprocess.run(
             [
-                "docker", "ps",
-                "--filter", f"name={container}",
-                "--format", "{{.Status}}",
+                "docker",
+                "ps",
+                "--filter",
+                f"name={container}",
+                "--format",
+                "{{.Status}}",
             ],
             capture_output=True,
             text=True,
@@ -783,9 +758,12 @@ def _check_web_bridge_running() -> CheckResult:
     try:
         result = subprocess.run(
             [
-                "docker", "ps",
-                "--filter", f"name={container}",
-                "--format", "{{.Status}}",
+                "docker",
+                "ps",
+                "--filter",
+                f"name={container}",
+                "--format",
+                "{{.Status}}",
             ],
             capture_output=True,
             text=True,
@@ -938,9 +916,13 @@ def run(verbose: bool = False) -> int:
     if failed == 0 and warned == 0:
         print(f"  {green(f'[OK] All {passed} checks passed. Your setup looks good!')}")
     elif failed == 0:
-        print(f"  {yellow(f'[OK] {passed} passed, {warned} warnings')} — review items above.")
+        print(
+            f"  {yellow(f'[OK] {passed} passed, {warned} warnings')} — review items above."
+        )
     else:
-        print(f"  {red(bold(f'[FAIL] {failed} failure(s), {warned} warning(s), {passed} passed.'))}")
+        print(
+            f"  {red(bold(f'[FAIL] {failed} failure(s), {warned} warning(s), {passed} passed.'))}"
+        )
 
     print()
     return 0 if failed == 0 else (2 if warned > 0 else 1)

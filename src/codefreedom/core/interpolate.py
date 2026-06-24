@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import re
 
-_VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-(.*))?\}")
+_VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-([^}]*))?\}")
 
 
 def resolve_env_vars(value: str, context: dict[str, str] | None = None) -> str:

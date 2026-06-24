@@ -119,44 +119,19 @@ def resolve_agent_config(
 
     This is the canonical config seam for agent entrypoints.
     """
-    from codefreedom.core.profiles import load_profiles, load_profile_env
-    from codefreedom.env_loader import load_env_chain
+    from codefreedom.core.settings import resolve_agent_runtime
 
-    # Resolve profiles path
-    if agent == "claude-code":
-        profiles_path = resolve_profiles_path()
-    elif agent == "mimo-code":
-        profiles_path = resolve_mimo_profiles_path()
-    elif agent == "open-code":
-        profiles_path = resolve_opencode_profiles_path()
-    elif agent == "pi-code":
-        profiles_path = resolve_pi_profiles_path()
-    elif agent == "codex-code":
-        profiles_path = resolve_codex_profiles_path()
-    else:
-        raise ValueError(f"Unknown agent: {agent}")
-
-    # Load profiles
-    profiles = load_profiles(profiles_path)
-
-    # Load env chain
-    component = agent.split("-")[0]  # "claude", "mimo", "open", "codex"
-    env = load_env_chain(workspace_dir or Path.cwd(), component=component)
-
-    # Resolve profile
-    profile_env = load_profile_env(
-        profile_name, profiles_path, env, profiles=profiles
+    runtime = resolve_agent_runtime(
+        agent,
+        workspace_dir=workspace_dir or Path.cwd(),
+        profile_name=profile_name,
+        mode="local",
     )
 
-    # Extract tools and sandbox images from profile
-    profile_def = profiles.get(profile_name, {})
-    tools = profile_def.get("tools", [])
-    sandbox_images = profile_def.get("sandbox_images", {})
-
     return {
-        "env": profile_env,
-        "profiles_path": profiles_path,
-        "profile": profile_def,
-        "tools": tools,
-        "sandbox_images": sandbox_images,
+        "env": runtime.profile_env,
+        "profiles_path": runtime.profiles_path,
+        "profile": {},
+        "tools": runtime.tools,
+        "sandbox_images": runtime.sandbox_images,
     }

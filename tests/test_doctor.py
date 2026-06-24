@@ -415,14 +415,14 @@ class TestResolveEnvVarValue:
         monkeypatch.setenv("MY_VAR", "direct-value")
         value, source = _resolve_env_var_value("MY_VAR")
         assert value == "direct-value"
-        assert source == "MY_VAR (machine env)"
+        assert source == "machine env"
 
     def test_finds_cf_cli_override(self, monkeypatch):
         """CF_CLI_MY_VAR should be found even without MY_VAR."""
         monkeypatch.setenv("CF_CLI_MY_VAR", "cf-cli-value")
         value, source = _resolve_env_var_value("MY_VAR")
         assert value == "cf-cli-value"
-        assert "CF_CLI_MY_VAR" in source
+        assert source == "CF_CLI_* override"
 
     def test_cf_cli_takes_priority_over_direct(self, monkeypatch):
         """CF_CLI_MY_VAR should win over MY_VAR."""
@@ -430,7 +430,7 @@ class TestResolveEnvVarValue:
         monkeypatch.setenv("MY_VAR", "direct-value")
         value, source = _resolve_env_var_value("MY_VAR")
         assert value == "cf-cli-value"
-        assert "CF_CLI_MY_VAR" in source
+        assert source == "CF_CLI_* override"
 
     def test_finds_in_env_file(self, tmp_path):
         """Value in an env file should be found."""
@@ -438,7 +438,7 @@ class TestResolveEnvVarValue:
         env_file.write_text("MY_VAR=file-value\n")
         value, source = _resolve_env_var_value("MY_VAR", env_files=[env_file])
         assert value == "file-value"
-        assert "in .env.test" in source
+        assert source == ".env.test"
 
     def test_env_file_ignored_when_change_me(self, tmp_path):
         """CHANGE_ME placeholder values should be treated as unset."""
@@ -463,7 +463,7 @@ class TestResolveEnvVarValue:
         env_file.write_text("MY_VAR=file-value\n")
         value, source = _resolve_env_var_value("MY_VAR", env_files=[env_file])
         assert value == "override-value"
-        assert "CF_CLI_MY_VAR" in source
+        assert source == "CF_CLI_* override"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -478,7 +478,9 @@ class TestRun:
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
-        monkeypatch.setattr("codefreedom.cli.manage.doctor.shutil.which", lambda _: None)
+        monkeypatch.setattr(
+            "codefreedom.cli.manage.doctor.shutil.which", lambda _: None
+        )
 
         # run() should return non-zero since many checks will fail
         result = run()
@@ -489,7 +491,9 @@ class TestRun:
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
-        monkeypatch.setattr("codefreedom.cli.manage.doctor.shutil.which", lambda _: None)
+        monkeypatch.setattr(
+            "codefreedom.cli.manage.doctor.shutil.which", lambda _: None
+        )
 
         result = run(verbose=True)
         assert result in (0, 1, 2)

@@ -148,9 +148,7 @@ class TestEnsureLeanCtx:
         with (
             patch(
                 "codefreedom.cli.pi.shutil.which",
-                side_effect=lambda cmd: None
-                if cmd == "lean-ctx"
-                else "/usr/bin/npm",
+                side_effect=lambda cmd: None if cmd == "lean-ctx" else "/usr/bin/npm",
             ),
             patch("subprocess.run") as mock_run,
         ):
@@ -225,16 +223,22 @@ class TestPiEnvLoading:
     """Verify pi-code loads its own component env files."""
 
     def test_run_uses_pi_component(self, tmp_path, monkeypatch):
-        """run() must load component='pi', not 'claude'."""
+        """run() must resolve pi-code through the shared runtime seam."""
         import codefreedom.cli.pi as pi_mod
 
         calls = []
 
-        def fake_load_env_chain(workspace_dir, *, component=None, verbose=True):
-            calls.append(component)
-            return {}
+        def fake_resolve_agent_runtime(
+            agent, *, workspace_dir, profile_name="default", mode="local"
+        ):
+            calls.append((agent, profile_name, mode))
 
-        monkeypatch.setattr(pi_mod, "load_env_chain", fake_load_env_chain)
+            class Runtime:
+                base_env = {}
+
+            return Runtime()
+
+        monkeypatch.setattr(pi_mod, "resolve_agent_runtime", fake_resolve_agent_runtime)
         monkeypatch.setattr(pi_mod, "find_pi_binary", lambda: "/usr/bin/pi")
         monkeypatch.setattr(
             pi_mod, "_detect_proxy_url", lambda env: "http://localhost:4000"
@@ -257,4 +261,4 @@ class TestPiEnvLoading:
             list_profiles=False, profile="default", pi_action=None, agent_args=[]
         )
         pi_mod.run(ns)
-        assert calls == ["pi"], f"Expected component='pi', got {calls}"
+        assert calls == [("pi-code", "default", "local")]

@@ -10,7 +10,7 @@ User (CLI)
 cli/          -- command dispatch, user-facing logic
   |
 core/         -- env, profiles, config, interpolation
-  |
+  |             core/settings.py is the configuration owner
 sandbox/      -- container lifecycle, signals, terminal
 docker/       -- Docker client helpers
 tools/        -- tool classes, MCP endpoint dispatch
@@ -27,6 +27,7 @@ Each layer calls only the layer below it. No cross-layer or sideways calls.
 | Block           | File                                      | Responsibility                                                        |
 | --------------- | ----------------------------------------- | --------------------------------------------------------------------- |
 | `config`        | `src/codefreedom/core/config.py`          | `CODEFREEDOM_HOME` path, `resolve_agent_config()` single entry point  |
+| `settings`      | `src/codefreedom/core/settings.py`        | Common runtime config and secret resolution seam, typed settings, provenance |
 | `env_loader`    | `src/codefreedom/env_loader.py`           | 9-layer `.env` chain, `eprint()`                                      |
 | `interpolate`   | `src/codefreedom/core/interpolate.py`     | `${VAR}` interpolation                                                 |
 | `log`           | `src/codefreedom/log.py`                  | `tag()`, colored output, shared logging                                |
@@ -131,17 +132,25 @@ cli/docker_utils.py                                                          (lo
 sandbox/launcher.py                                                          (log, docker/client)
   |
 cli/main.py                                                                  -> log
-cli/claude.py                                                                -> core/config, log, profiles, tool_registry, sandbox/launcher
-cli/mimo.py                                                                  -> core/config, log, profiles, tool_registry, sandbox/launcher
-cli/opencode.py                                                              -> core/config, log, profiles, tool_registry, sandbox/launcher
+cli/claude.py                                                                -> core/settings, log, profiles, tool_registry, sandbox/launcher
+cli/mimo.py                                                                  -> core/settings, log, profiles, tool_registry, sandbox/launcher
+cli/opencode.py                                                              -> core/settings, log, profiles, tool_registry, sandbox/launcher
 cli/run/agent.py                                                             -> log (dynamic import of agent modules)
 cli/run/tools.py                                                             -> log, tools/registry (delegates lifecycle)
 cli/run/proxy.py                                                             -> core/config, log, env_loader
 cli/vscode.py                                                                -> core/config, log, agents/vscode
 cli/manage/doctor.py                                                         -> core/config, log, docker_utils, core/profiles
 tools/registry.py                                                            -> log, tools/*, docker/client
-recipe/apply.py                                                              -> core/config, env_loader, recipe/merge
+recipe/apply.py                                                              -> core/settings, recipe/merge
 recipe/plan.py                                                               -> core/config, recipe/store
+
+## Common Module Rule
+
+`src/codefreedom/core/settings.py` is the common module for runtime configuration and secrets.
+
+- Runtime commands should resolve configuration and secrets through that module.
+- `src/codefreedom/env_loader.py` remains the low-level source loader, not an alternate consumer seam.
+- Recipe files in `codefreedom-recipes` remain declarative inputs and must not introduce separate configuration or secret-handling logic.
 ```
 
 ## Request Flow

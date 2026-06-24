@@ -35,7 +35,7 @@ from codefreedom.core.config import (
 from codefreedom.core.profiles import (
     list_profiles,
 )
-from codefreedom.env_loader import load_env_chain
+from codefreedom.core.settings import resolve_agent_runtime
 from codefreedom.log import eprint
 from codefreedom.tools.registry import generate_session_id
 from codefreedom.sandbox.signals import forward_signal
@@ -347,7 +347,10 @@ def run_docker(
     sandbox_images = sandbox_images or {}
 
     if gpu_type:
-        image = sandbox_images.get(gpu_type) or f"docker.io/nilayparikh/codefreedom:{gpu_type}-latest"
+        image = (
+            sandbox_images.get(gpu_type)
+            or f"docker.io/nilayparikh/codefreedom:{gpu_type}-latest"
+        )
         eprint(f"[GPU] Selected '{gpu_type}' sandbox image: {image}.")
     else:
         image = sandbox_images.get("default") or DEFAULT_MIMO_IMAGE
@@ -384,7 +387,9 @@ def run_docker(
         )
     else:
         if run_as_me:
-            eprint("[SANDBOX] --run-as-me not supported on Windows; running as default user.")
+            eprint(
+                "[SANDBOX] --run-as-me not supported on Windows; running as default user."
+            )
         container_home = "/home/codefreedom"
         container_user_flag = []
         eprint("[SANDBOX] Running as default container user 'codefreedom' (uid 1000).")
@@ -481,7 +486,13 @@ def cmd_config(args: argparse.Namespace) -> int:
     """
     workspace_dir = Path.cwd()
     eprint("[ENV] Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="claude")
+    runtime = resolve_agent_runtime(
+        "mimo-code",
+        workspace_dir=workspace_dir,
+        profile_name=getattr(args, "profile", None) or "default",
+        mode="local",
+    )
+    base_env = runtime.base_env
 
     profile_name = getattr(args, "profile", None) or "default"
     profiles_path = resolve_mimo_profiles_path()
@@ -616,17 +627,22 @@ def run(args: argparse.Namespace) -> int:
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()
     eprint("[ENV] Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="claude")
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
     profiles_path = resolve_mimo_profiles_path()
     mode = "sandbox" if args.sandbox else "local"
+    runtime = resolve_agent_runtime(
+        "mimo-code",
+        workspace_dir=workspace_dir,
+        profile_name=profile_name,
+        mode=mode,
+    )
 
     from codefreedom.cli.common import load_profile_with_tools
 
     profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
-        profile_name, profiles_path, base_env, mode
+        profile_name, profiles_path, runtime.base_env, mode
     )
     if exit_code != 0:
         return 1
@@ -636,7 +652,7 @@ def run(args: argparse.Namespace) -> int:
     # (e.g. if load_profiles had premature interpolation — fixed now,
     # but kept as defense-in-depth).
     if not profile_env.get("PROXY_API_KEY"):
-        master_key = base_env.get("LITELLM_MASTER_KEY", "")
+        master_key = runtime.base_env.get("LITELLM_MASTER_KEY", "")
         if master_key:
             profile_env["PROXY_API_KEY"] = master_key
 

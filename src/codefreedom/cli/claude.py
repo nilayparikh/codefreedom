@@ -13,8 +13,8 @@ import argparse
 from pathlib import Path
 
 from codefreedom.core.config import resolve_profiles_path
+from codefreedom.core.settings import resolve_agent_runtime
 from codefreedom.log import eprint, tag
-from codefreedom.env_loader import load_env_chain
 from codefreedom.launcher import run_docker, run_local
 from codefreedom.core.profiles import (
     list_profiles,
@@ -72,7 +72,7 @@ def init_claude() -> int:
     print_help_section(
         "claude init",
         [
-            "Use:  cf s i                         # install _default base recipe",
+            "Use:  cf s i <recipe-name>            # install a recipe",
             "      cf s i -l                      # list available recipes",
             "      cf s i -p <name>               # preview a recipe without applying",
             "      cf s i -pa <name>              # plan and apply a recipe",
@@ -100,7 +100,13 @@ def cmd_config(args: argparse.Namespace) -> int:
 
     # ── Load env chain ─────────────────────────────────────────────────────
     eprint(f"{tag('ENV')} Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="claude")
+    runtime = resolve_agent_runtime(
+        "claude-code",
+        workspace_dir=workspace_dir,
+        profile_name=getattr(args, "profile", None) or "default",
+        mode="local",
+    )
+    base_env = runtime.base_env
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = getattr(args, "profile", None) or "default"
@@ -109,7 +115,10 @@ def cmd_config(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_env_only
 
     profile_env, exit_code = load_profile_env_only(
-        profile_name, profiles_path, base_env, error_prefix="codefreedom run agent claude-code init"
+        profile_name,
+        profiles_path,
+        base_env,
+        error_prefix="codefreedom run agent claude-code init",
     )
     if exit_code != 0:
         return 1
@@ -182,7 +191,6 @@ def run(args: argparse.Namespace) -> int:
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()
     eprint(f"{tag('ENV')} Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="claude")
 
     # ── GPU type from --cuda / --rocm flags ────────────────────────────────
     gpu_type: str | None = None
@@ -195,11 +203,17 @@ def run(args: argparse.Namespace) -> int:
     profile_name = args.profile or "default"
     profiles_path = resolve_profiles_path()
     mode = "sandbox" if args.sandbox else "local"
+    runtime = resolve_agent_runtime(
+        "claude-code",
+        workspace_dir=workspace_dir,
+        profile_name=profile_name,
+        mode=mode,
+    )
 
     from codefreedom.cli.common import load_profile_with_tools
 
     profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
-        profile_name, profiles_path, base_env, mode
+        profile_name, profiles_path, runtime.base_env, mode
     )
     if exit_code != 0:
         return 1
@@ -245,7 +259,9 @@ def run(args: argparse.Namespace) -> int:
             )
         else:
             if run_as_me:
-                eprint(f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring.")
+                eprint(
+                    f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring."
+                )
             # Write .mcp.json so the agent discovers MCP tool endpoints
             if acquired_tools:
                 from codefreedom.launcher import _write_mcp_json
