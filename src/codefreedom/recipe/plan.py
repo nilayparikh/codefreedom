@@ -11,6 +11,7 @@ import yaml
 from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.log import eprint, tag
+from codefreedom.recipe.materialize import materialize_recipe
 from codefreedom.recipe.store import (
     _fetch_available_recipes,
     _github_api_base,
@@ -87,17 +88,13 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     store_path = _resolve_store(store, branch=branch)
     manifest, files = _store_resolve_recipe(name, store_path=store_path)
     if manifest is None:
-        # Silently skip _default when not found in the store
-        if name == "_default":
-            source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
-            eprint(f"{tag('RECIPE')} No '_default' recipe in store — skipping.")
-            eprint(f"   Store: {source}")
-            return 0
         eprint(f"{tag('RECIPE')} Recipe '{name}' not found.")
         eprint("   Run 'cf s i -l' to see available recipes.")
         source = store_path or f"https://github.com/{RECIPE_OWNER}/{RECIPE_REPO}"
         eprint(f"   Store: {source}")
         return 1
+
+    vars_dict = _load_recipe_vars(manifest)
 
     # ── 1b. Collect all managed targets for orphan detection ────────────
     all_managed: set[str] = set()
@@ -121,11 +118,35 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
             )
         else:
             _collect_targets(base_manifest)
-            _install_recipe_files(base_manifest, base_files, cf_dir)
+            _install_recipe_files(base_manifest, base_files, cf_dir, vars_dict=vars_dict)
 
     # ── 2. Install / merge each file ─────────────────────────────────────
     _collect_targets(manifest)
-    _install_recipe_files(manifest, files, cf_dir)
+
+    has_generated = bool(manifest.get("generated_artifacts"))
+    if has_generated:
+        result = materialize_recipe(manifest, files)
+        static_entries = [e for e in result["entries"] if e["type"] == "static"]
+        generated_entries = [e for e in result["entries"] if e["type"] == "generated"]
+
+        static_manifest = {**manifest, "files": [
+            {"path": e["target"], "target": e["target"], "merge": e["merge"]}
+            for e in static_entries
+        ]}
+        static_files = {e["target"]: e["content"] for e in static_entries}
+        _install_recipe_files(static_manifest, static_files, cf_dir, vars_dict=vars_dict)
+
+        for entry in generated_entries:
+            dst = cf_dir / entry["target"]
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(entry["content"], encoding="utf-8")
+            if dst.suffix == ".sh":
+                import stat
+                dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            print(f"  {tag('CREATE')} {entry['target']} (generated)")
+            all_managed.add(entry["target"])
+    else:
+        _install_recipe_files(manifest, files, cf_dir, vars_dict=vars_dict)
 
     # ── 2b. Orphan detection — delete files from previous recipe(s) ────
     _remove_orphans(all_managed, cf_dir)
@@ -160,6 +181,8 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         print("       Run 'cf s i -l' to see available recipes.")
         return 1
 
+    vars_dict = _load_recipe_vars(manifest)
+
     # ── 2. Resolve extends chain ───────────────────────────────────────
     plan_entries: list[dict] = []
 
@@ -167,9 +190,50 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         for entry in man.get("files", []):
             src = entry.get("path", "")
             target = entry.get("target", src)
+            split_key = entry.get("split_by_key")
             content = fdict.get(target) or fdict.get(src)
             if content is None:
                 continue
+
+            if split_key:
+                data = yaml.safe_load(content)
+                if not isinstance(data, dict):
+                    continue
+
+                common = data.get("common", {})
+                section = data.get(split_key, {})
+
+                for name, profile_data in section.items():
+                    merged = {**common, **profile_data}
+                    merged_content = yaml.dump(
+                        merged, default_flow_style=False, sort_keys=False
+                    )
+
+                    if target.endswith("/"):
+                        individual_target = f"{target}{name}.yaml"
+                    else:
+                        individual_target = f"{target}/{name}.yaml"
+
+                    plan_entries.append(
+                        {
+                            "target": individual_target,
+                            "content": merged_content,
+                            "merge": entry.get("merge", "auto"),
+                            "source": source_label,
+                        }
+                    )
+                continue
+
+            if vars_dict:
+                import os
+                import re
+
+                def _replace_var(match: re.Match) -> str:
+                    var_name = match.group(1)
+                    default = match.group(2) if match.group(2) is not None else ""
+                    return vars_dict.get(var_name, os.environ.get(var_name, default))
+
+                content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, content)
             plan_entries.append(
                 {
                     "target": target,
@@ -187,6 +251,21 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
             _collect(base_man, base_files, extends)
 
     _collect(manifest, files, name)
+
+    # ── 2b. Include generated artifacts in plan ────────────────────────
+    has_generated = bool(manifest.get("generated_artifacts"))
+    if has_generated:
+        result = materialize_recipe(manifest, files)
+        for entry in result["entries"]:
+            if entry["type"] == "generated":
+                plan_entries.append(
+                    {
+                        "target": entry["target"],
+                        "content": entry["content"],
+                        "merge": "overwrite",
+                        "source": f"{name} (generated)",
+                    }
+                )
 
     # ── 2b. Deduplicate by target — keep only the last entry (highest  ──
     #        priority from the extending recipe).                         ──
@@ -401,6 +480,21 @@ def _generate_plan_id() -> str:
 
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(10))
+
+
+def _load_recipe_vars(manifest: Dict[str, Any]) -> Dict[str, str]:
+    """Load vars from the recipe's vars file if declared in the manifest."""
+    vars_file = manifest.get("vars")
+    if not vars_file:
+        return {}
+    recipe_dir = manifest.get("_recipe_dir")
+    if not recipe_dir:
+        return {}
+    vars_path = Path(recipe_dir) / vars_file
+    if not vars_path.exists():
+        return {}
+    with open(vars_path, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
 
 
 def _ensure_user_env(cf_dir: Path) -> None:

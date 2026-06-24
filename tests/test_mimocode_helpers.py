@@ -47,11 +47,59 @@ class TestDetectProxyUrl:
 
         monkeypatch.delenv("PROXY_BASE_URL", raising=False)
         monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
-        url = _detect_proxy_url({
-            "PROXY_BASE_URL": "http://proxy:4000",
-            "LITELLM_BASE_URL": "http://litellm:4000",
-        })
+        url = _detect_proxy_url(
+            {
+                "PROXY_BASE_URL": "http://proxy:4000",
+                "LITELLM_BASE_URL": "http://litellm:4000",
+            }
+        )
         assert url == "http://proxy:4000"
+
+
+class TestMimoEnvLoading:
+    def test_run_uses_mimo_runtime_resolution(self, monkeypatch):
+        import argparse
+        import codefreedom.cli.mimo as mimo_mod
+
+        calls = []
+
+        def fake_resolve_agent_runtime(
+            agent, *, workspace_dir, profile_name="default", mode="local"
+        ):
+            calls.append((agent, profile_name, mode))
+
+            class Runtime:
+                base_env = {}
+
+            return Runtime()
+
+        monkeypatch.setattr(
+            mimo_mod, "resolve_agent_runtime", fake_resolve_agent_runtime
+        )
+
+        import codefreedom.cli.common as common_mod
+
+        monkeypatch.setattr(
+            common_mod,
+            "load_profile_with_tools",
+            lambda name, path, env, mode: ({}, {}, [], 0),
+        )
+        monkeypatch.setattr(
+            common_mod, "acquire_and_run", lambda sid, tools, name, fn: 0
+        )
+
+        ns = argparse.Namespace(
+            list_profiles=False,
+            profile="default",
+            mimo_action=None,
+            sandbox=False,
+            gpu_cuda=False,
+            gpu_rocm=False,
+            run_as_me=False,
+            agent_args=[],
+        )
+        mimo_mod.run(ns)
+        assert calls == [("mimo-code", "default", "local")]
 
 
 class TestGenerateMimoConfig:

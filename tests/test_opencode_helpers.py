@@ -94,3 +94,49 @@ class TestBuildProviderModels:
         assert "valid-model" in models
         assert "azure/gpt-4" not in models
         assert "gpt-3.5-turbo" not in models
+
+
+class TestOpenCodeEnvLoading:
+    def test_run_uses_open_code_runtime_resolution(self, monkeypatch):
+        import argparse
+        import codefreedom.cli.opencode as opencode_mod
+
+        calls = []
+
+        def fake_resolve_agent_runtime(
+            agent, *, workspace_dir, profile_name="default", mode="local"
+        ):
+            calls.append((agent, profile_name, mode))
+
+            class Runtime:
+                base_env = {}
+
+            return Runtime()
+
+        monkeypatch.setattr(
+            opencode_mod, "resolve_agent_runtime", fake_resolve_agent_runtime
+        )
+
+        import codefreedom.cli.common as common_mod
+
+        monkeypatch.setattr(
+            common_mod,
+            "load_profile_with_tools",
+            lambda name, path, env, mode: ({}, {}, [], 0),
+        )
+        monkeypatch.setattr(
+            common_mod, "acquire_and_run", lambda sid, tools, name, fn: 0
+        )
+
+        ns = argparse.Namespace(
+            list_profiles=False,
+            profile="default",
+            opencode_action=None,
+            sandbox=False,
+            gpu_cuda=False,
+            gpu_rocm=False,
+            run_as_me=False,
+            agent_args=[],
+        )
+        opencode_mod.run(ns)
+        assert calls == [("open-code", "default", "local")]

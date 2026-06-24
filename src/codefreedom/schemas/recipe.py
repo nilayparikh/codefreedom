@@ -17,6 +17,14 @@ class FileEntry(BaseModel, extra="forbid"):
     merge: Optional[str] = Field(
         default=None, pattern=r"^(deepdiff|env|auto|overwrite)$"
     )
+    split_by_key: Optional[str] = Field(
+        default=None,
+        description="Key to split file into multiple target files",
+    )
+    copy_dir: Optional[bool] = Field(
+        default=None,
+        description="Copy entire directory recursively instead of single file",
+    )
 
 
 class SecretEntry(BaseModel, extra="forbid"):
@@ -26,6 +34,10 @@ class SecretEntry(BaseModel, extra="forbid"):
     prompt: Optional[str] = None
     hint: Optional[str] = None
     default: Optional[str] = None
+    env: Optional[str] = Field(
+        default=None,
+        description="Interpolation format for use in profiles/config",
+    )
 
 
 class ConfigEntry(BaseModel, extra="forbid"):
@@ -35,6 +47,10 @@ class ConfigEntry(BaseModel, extra="forbid"):
     default: Optional[str] = None
     prompt: Optional[str] = None
     hint: Optional[str] = None
+    env: Optional[str] = Field(
+        default=None,
+        description="Interpolation format for use in profiles/config",
+    )
 
 
 class DirEntry(BaseModel, extra="forbid"):
@@ -44,6 +60,14 @@ class DirEntry(BaseModel, extra="forbid"):
     _target: Optional[str] = None  # resolved at runtime
 
 
+class GeneratedArtifact(BaseModel, extra="forbid"):
+    """An artifact to generate from a recipe (e.g., setup scripts, env templates)."""
+
+    kind: str
+    target: str
+    source_recipe: Optional[str] = None
+
+
 class RecipeConfig(BaseModel, extra="forbid"):
     """Schema for recipe.yaml — defines a CodeFreedom configuration recipe."""
 
@@ -51,6 +75,7 @@ class RecipeConfig(BaseModel, extra="forbid"):
     description: Optional[str] = None
     version: Optional[int] = Field(default=None, ge=1)
     extends: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]+$")
+    vars: Optional[str] = Field(default=None, description="Path to recipe.vars.yaml file")
     files: List[FileEntry]
     dirs: Optional[List[str]] = None
     required_secrets: Optional[List[SecretEntry]] = None
@@ -58,6 +83,9 @@ class RecipeConfig(BaseModel, extra="forbid"):
     optional_config: Optional[List[ConfigEntry]] = None
     tools_optional: Optional[List[str]] = None
     advice: Optional[str] = None
+    common_blocks: Optional[dict] = None
+    generated_artifacts: Optional[List[GeneratedArtifact]] = None
+    profile_presets: Optional[dict] = None
 
     @field_validator("tools_optional")
     @classmethod

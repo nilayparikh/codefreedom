@@ -30,10 +30,10 @@ from codefreedom.core.config import (
     get_codefreedom_dir,
     resolve_codex_profiles_path,
 )
+from codefreedom.core.settings import resolve_agent_runtime
 from codefreedom.core.profiles import (
     list_profiles,
 )
-from codefreedom.env_loader import load_env_chain
 from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import generate_session_id
 from codefreedom.sandbox.signals import forward_signal
@@ -126,9 +126,17 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
     """
     _ALIAS_MODELS = {
         # Anthropic aliases
-        "fable", "opus", "sonnet", "haiku", "custom",
+        "fable",
+        "opus",
+        "sonnet",
+        "haiku",
+        "custom",
         # OpenAI/Codex aliases
-        "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.2",
+        "gpt-5.5",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.3-codex",
+        "gpt-5.2",
     }
 
     catalog = []
@@ -152,36 +160,49 @@ def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:
         seen.add(model_id)
         display_name = model_id.split("/")[-1] if "/" in model_id else model_id
 
-        catalog.append({
-            "id": model_id,
-            "slug": model_id,
-            "display_name": display_name,
-            "description": f"{display_name} via CodeFreedom proxy",
-            "default_reasoning_level": "high",
-            "supported_reasoning_levels": [
-                {"effort": "none", "description": "Think-Off"},
-                {"effort": "low", "description": "Fast responses with lighter reasoning"},
-                {"effort": "medium", "description": "Balances speed and reasoning depth"},
-                {"effort": "high", "description": "Deep reasoning for complex problems"},
-            ],
-            "shell_type": "shell_command",
-            "visibility": "list",
-            "supported_in_api": True,
-            "priority": 0,
-            "base_instructions": f"You are Codex, a coding agent based on {display_name}. You and the user share the same workspace and collaborate to achieve the user's goals.",
-            "supports_reasoning_summaries": True,
-            "default_reasoning_summary": "none",
-            "support_verbosity": False,
-            "truncation_policy": {"mode": "bytes", "limit": 10000},
-            "supports_parallel_tool_calls": True,
-            "experimental_supported_tools": [],
-            "input_modalities": ["text"],
-        })
+        catalog.append(
+            {
+                "id": model_id,
+                "slug": model_id,
+                "display_name": display_name,
+                "description": f"{display_name} via CodeFreedom proxy",
+                "default_reasoning_level": "high",
+                "supported_reasoning_levels": [
+                    {"effort": "none", "description": "Think-Off"},
+                    {
+                        "effort": "low",
+                        "description": "Fast responses with lighter reasoning",
+                    },
+                    {
+                        "effort": "medium",
+                        "description": "Balances speed and reasoning depth",
+                    },
+                    {
+                        "effort": "high",
+                        "description": "Deep reasoning for complex problems",
+                    },
+                ],
+                "shell_type": "shell_command",
+                "visibility": "list",
+                "supported_in_api": True,
+                "priority": 0,
+                "base_instructions": f"You are Codex, a coding agent based on {display_name}. You and the user share the same workspace and collaborate to achieve the user's goals.",
+                "supports_reasoning_summaries": True,
+                "default_reasoning_summary": "none",
+                "support_verbosity": False,
+                "truncation_policy": {"mode": "bytes", "limit": 10000},
+                "supports_parallel_tool_calls": True,
+                "experimental_supported_tools": [],
+                "input_modalities": ["text"],
+            }
+        )
 
     return catalog
 
 
-def _inject_default_model(codex_args: list[str], profile_env: dict[str, str]) -> list[str]:
+def _inject_default_model(
+    codex_args: list[str], profile_env: dict[str, str]
+) -> list[str]:
     """Inject -m <model> into codex_args if not already present.
 
     Codex CLI requires the -m flag for custom providers (the /model picker
@@ -288,7 +309,7 @@ def _generate_codex_config(
         f'model = "{default_model}"',
         'model_provider = "codefreedom"',
         'model_reasoning_effort = "medium"',
-        'model_context_window = 131072',
+        "model_context_window = 131072",
         f'model_catalog_json = "{catalog_path.as_posix()}"',
         "",
     ]
@@ -430,7 +451,9 @@ def run_local(
     eprint(f"{tag('CODEX')} Detecting proxy at {proxy_url}...")
 
     codex_home = CODEFREEDOM_DIR / "codex-code" / "home"
-    config_content, catalog_content = _generate_codex_config(proxy_url, profile_env, codex_home)
+    config_content, catalog_content = _generate_codex_config(
+        proxy_url, profile_env, codex_home
+    )
     codex_home.mkdir(parents=True, exist_ok=True)
     env["CODEX_HOME"] = str(codex_home)
 
@@ -492,7 +515,10 @@ def run_docker(
     sandbox_images = sandbox_images or {}
 
     if gpu_type:
-        image = sandbox_images.get(gpu_type) or f"docker.io/nilayparikh/codefreedom:{gpu_type}-latest"
+        image = (
+            sandbox_images.get(gpu_type)
+            or f"docker.io/nilayparikh/codefreedom:{gpu_type}-latest"
+        )
         eprint(f"{tag('GPU')} Selected '{gpu_type}' sandbox image: {image}.")
     else:
         image = sandbox_images.get("default") or DEFAULT_CODEX_IMAGE
@@ -505,7 +531,9 @@ def run_docker(
     proxy_url = _detect_proxy_url(profile_env)
     eprint(f"{tag('CODEX')} Detecting proxy at {proxy_url}...")
     codex_home_dir, config_path = _ensure_codex_sandbox_dir(profile_name)
-    config_content, catalog_content = _generate_codex_config(proxy_url, profile_env, codex_home_dir)
+    config_content, catalog_content = _generate_codex_config(
+        proxy_url, profile_env, codex_home_dir
+    )
 
     # Write config.toml (merge with existing)
     _write_codex_config(config_content, codex_home_dir)
@@ -540,10 +568,14 @@ def run_docker(
         )
     else:
         if run_as_me:
-            eprint(f"{tag('WARN')} --run-as-me not supported on Windows; running as default user.")
+            eprint(
+                f"{tag('WARN')} --run-as-me not supported on Windows; running as default user."
+            )
         container_home = "/home/codefreedom"
         container_user_flag = []
-        eprint(f"{tag('SANDBOX')} Running as default container user 'codefreedom' (uid 1000).")
+        eprint(
+            f"{tag('SANDBOX')} Running as default container user 'codefreedom' (uid 1000)."
+        )
 
     base_opts = [
         "--network",
@@ -628,7 +660,13 @@ def cmd_config(args: argparse.Namespace) -> int:
     """Generate and print a proxy-resolved ``config.toml`` for standalone use."""
     workspace_dir = Path.cwd()
     eprint(f"{tag('ENV')} Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="codex")
+    runtime = resolve_agent_runtime(
+        "codex-code",
+        workspace_dir=workspace_dir,
+        profile_name=getattr(args, "profile", None) or "default",
+        mode="local",
+    )
+    base_env = runtime.base_env
 
     profile_name = getattr(args, "profile", None) or "default"
     profiles_path = resolve_codex_profiles_path()
@@ -636,7 +674,10 @@ def cmd_config(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_env_only
 
     profile_env, exit_code = load_profile_env_only(
-        profile_name, profiles_path, base_env, error_prefix="cf run agent codex-code config"
+        profile_name,
+        profiles_path,
+        base_env,
+        error_prefix="cf run agent codex-code config",
     )
     if exit_code != 0 and profile_name != "default":
         return 1
@@ -697,22 +738,27 @@ def run(args: argparse.Namespace) -> int:
 
     workspace_dir = Path.cwd()
     eprint(f"{tag('ENV')} Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="codex")
 
     profile_name = args.profile or "default"
     profiles_path = resolve_codex_profiles_path()
     mode = "sandbox" if args.sandbox else "local"
+    runtime = resolve_agent_runtime(
+        "codex-code",
+        workspace_dir=workspace_dir,
+        profile_name=profile_name,
+        mode=mode,
+    )
 
     from codefreedom.cli.common import load_profile_with_tools
 
     profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
-        profile_name, profiles_path, base_env, mode
+        profile_name, profiles_path, runtime.base_env, mode
     )
     if exit_code != 0:
         return 1
 
     if not profile_env.get("PROXY_API_KEY"):
-        master_key = base_env.get("LITELLM_MASTER_KEY", "")
+        master_key = runtime.base_env.get("LITELLM_MASTER_KEY", "")
         if master_key:
             profile_env["PROXY_API_KEY"] = master_key
 
@@ -746,7 +792,11 @@ def run(args: argparse.Namespace) -> int:
             )
         else:
             if run_as_me:
-                eprint(f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring.")
-            return run_local(profile_env, args.agent_args, acquired_tools=acquired_tools)
+                eprint(
+                    f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring."
+                )
+            return run_local(
+                profile_env, args.agent_args, acquired_tools=acquired_tools
+            )
 
     return acquire_and_run(session_id, tools, profile_name, _run)

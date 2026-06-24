@@ -147,8 +147,8 @@ def main() -> None:
         setup_sub,
         "init",
         aliases=["i"],
-        help="Initialize CodeFreedom config via recipes",
-        description="Initialize CodeFreedom configuration via recipes. Without flags, installs the _default base recipe.",
+        help="Initialize CodeFreedom config via a recipe",
+        description="Initialize CodeFreedom configuration via a recipe.",
     )
     _build_init_args(init_parser)
 
@@ -330,6 +330,7 @@ def main() -> None:
 
 
 def _build_init_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("recipe", type=str, metavar="RECIPE", help="Recipe name to install (e.g., costeffective-coding)")
     group = p.add_mutually_exclusive_group()
     group.add_argument("-p", "--plan", type=str, metavar="NAME", help="Preview a recipe: generate .patch files without applying")
     group.add_argument("-a", "--apply", type=str, metavar="PLAN_ID", help="Apply a previously generated plan by ID")
@@ -413,7 +414,7 @@ def _dispatch_init(args) -> None:
         sys.exit(plan_recipe(args.plan, store=store, staging=staging))
 
     from codefreedom.cli.setup.recipe import init_recipe
-    sys.exit(init_recipe("_default", store=store, staging=staging))
+    sys.exit(init_recipe(args.recipe, store=store, staging=staging))
 
 
 def _dispatch_deinit(args) -> None:

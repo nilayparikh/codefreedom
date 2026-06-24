@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import yaml
 
@@ -12,6 +12,7 @@ from codefreedom.admin import backup as cf_backup
 from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
 from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.core.interpolate import interpolate_all_strings
+from codefreedom.core.settings import resolve_config_value
 from codefreedom.log import dim, eprint, green, red, tag, yellow
 from codefreedom.schemas.recipe import RecipeConfig
 from pydantic import ValidationError
@@ -109,6 +110,7 @@ def apply_plan(plan_id: str) -> int:
             dst.write_text(content, encoding="utf-8")
         if dst.suffix == ".sh":
             import stat
+
             dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         label = "CREATE" if action == "create" else "REPLACE"
         print(f"  [{label}] {target}")
@@ -142,6 +144,7 @@ def _install_recipe_files(
     manifest: Dict[str, Any],
     files: Dict[str, str],
     cf_dir: Path,
+    vars_dict: Optional[Dict[str, str]] = None,
 ) -> int:
     """Install or merge each recipe file into ``~/.codefreedom/``.
 
@@ -173,9 +176,118 @@ def _install_recipe_files(
         src_path = entry.get("path", "")
         target_path = entry.get("target", src_path)
         merge_mode = entry.get("merge", "auto")
+        split_key = entry.get("split_by_key")
+        copy_dir = entry.get("copy_dir", False)
+
+        if copy_dir:
+            # Copy entire directory recursively
+
+            # Find the source directory
+            src_dir = None
+            for key in files:
+                if key.startswith(src_path) or key == src_path.rstrip("/"):
+                    # This is a directory entry - files dict has all files under this path
+                    src_dir = src_path.rstrip("/")
+                    break
+
+            if src_dir is None:
+                continue
+
+            # Get all files under this directory from the files dict
+            dir_files = {k: v for k, v in files.items() if k.startswith(src_dir + "/") or k.startswith(src_dir)}
+
+            for file_key, file_content in dir_files.items():
+                # Calculate relative path
+                if file_key.startswith(src_dir + "/"):
+                    rel_path = file_key[len(src_dir) + 1 :]
+                else:
+                    rel_path = file_key
+
+                if not rel_path:
+                    continue
+
+                if target_path.endswith("/"):
+                    dst = cf_dir / target_path / rel_path
+                else:
+                    dst = cf_dir / target_path / rel_path
+
+                dst.parent.mkdir(parents=True, exist_ok=True)
+
+                if vars_dict:
+                    import os
+                    import re
+
+                    def _replace_var(match: re.Match) -> str:
+                        var_name = match.group(1)
+                        default = match.group(2) if match.group(2) is not None else ""
+                        return vars_dict.get(var_name, os.environ.get(var_name, default))
+
+                    file_content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, file_content)
+
+                if dst.exists():
+                    new_count = _merge_file(dst, file_content, merge_mode, str(dst.relative_to(cf_dir)))
+                else:
+                    dst.write_text(file_content, encoding="utf-8")
+                    if dst.suffix == ".sh":
+                        import stat
+                        dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                    print(f"  {tag('CREATE')} {dst.relative_to(cf_dir)}")
+                    new_count = 1
+
+                count += new_count
+            continue
 
         content = files.get(target_path) or files.get(src_path)
         if content is None:
+            continue
+
+        if vars_dict:
+            import os
+            import re
+
+            def _replace_var(match: re.Match) -> str:
+                var_name = match.group(1)
+                default = match.group(2) if match.group(2) is not None else ""
+                return vars_dict.get(var_name, os.environ.get(var_name, default))
+
+            content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, content)
+
+        if split_key:
+            data = yaml.safe_load(content)
+            if not isinstance(data, dict):
+                continue
+
+            common = data.get("common", {})
+            section = data.get(split_key, {})
+
+            for name, profile_data in section.items():
+                merged = {**common, **profile_data}
+
+                if target_path.endswith("/"):
+                    individual_target = f"{target_path}{name}.yaml"
+                else:
+                    individual_target = f"{target_path}/{name}.yaml"
+
+                if individual_target in _TOOL_PROFILE_PATHS:
+                    dst = tool_home / individual_target
+                else:
+                    dst = cf_dir / individual_target
+                dst.parent.mkdir(parents=True, exist_ok=True)
+
+                merged_content = yaml.dump(
+                    merged, default_flow_style=False, sort_keys=False
+                )
+
+                if dst.exists():
+                    new_count = _merge_file(
+                        dst, merged_content, merge_mode, individual_target
+                    )
+                else:
+                    dst.write_text(merged_content, encoding="utf-8")
+                    print(f"  {tag('CREATE')} {individual_target}")
+                    new_count = 1
+
+                count += new_count
             continue
 
         # Tool profiles always land in ~/.codefreedom/, everything else
@@ -193,7 +305,10 @@ def _install_recipe_files(
             dst.write_text(content, encoding="utf-8")
             if dst.suffix == ".sh":
                 import stat
-                dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+                dst.chmod(
+                    dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                )
             print(f"  {tag('CREATE')} {target_path}")
             new_count = 1
 
@@ -304,7 +419,11 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
         if missing_count:
             print()
             first_var = required[0].get("var", "?")
-            tip1 = "Tip: as machine env var use CF_CLI_<NAME> (e.g. CF_CLI_" + first_var + "),"
+            tip1 = (
+                "Tip: as machine env var use CF_CLI_<NAME> (e.g. CF_CLI_"
+                + first_var
+                + "),"
+            )
             print(f"  {dim(tip1)}")
             print(f"  {dim('     or use the bare name in a .env.*.secrets file.')}")
             tip3 = "     Machine env vars take priority over secrets files."
@@ -344,7 +463,9 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     # ── Dynamic next steps ────────────────────────────────────────────
     if missing_count:
         print()
-        print(f"  {red(f'{missing_count} secret(s) missing — set them before starting the proxy.')}")
+        print(
+            f"  {red(f'{missing_count} secret(s) missing — set them before starting the proxy.')}"
+        )
     else:
         print()
         print(f"  {green('All secrets configured.')} Ready to start:")
@@ -365,37 +486,12 @@ def _resolve_secret(
       3. ``NAME=`` in .env.user (user-managed overrides)
       4. ``NAME=`` in the provided env_files (ignoring CHANGE_ME)
     """
-    import os
-
-    cf_cli = f"CF_CLI_{name}"
-    if cf_cli in os.environ and os.environ[cf_cli]:
-        return os.environ[cf_cli], "CF_CLI_* override"
-
-    if name in os.environ and os.environ[name]:
-        return os.environ[name], "machine env"
-
-    if cf_dir:
-        user_env = cf_dir / ".env.user"
-        if user_env.exists():
-            content = user_env.read_text(encoding="utf-8")
-            for line in content.splitlines():
-                stripped = line.strip()
-                if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
-                    val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
-                    if val and val != "CHANGE_ME":
-                        return val, ".env.user"
-
-    for env_file in env_files:
-        if env_file.exists():
-            content = env_file.read_text(encoding="utf-8")
-            for line in content.splitlines():
-                stripped = line.strip()
-                if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
-                    val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
-                    if val and val != "CHANGE_ME":
-                        return val, env_file.name
-
-    return None, None
+    workspace_dir = Path.cwd()
+    return resolve_config_value(
+        name,
+        workspace_dir=workspace_dir,
+        extra_env_files=env_files,
+    )
 
 
 def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None:

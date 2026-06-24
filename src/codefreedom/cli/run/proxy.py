@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.settings import load_codefreedom_settings
 from codefreedom.docker.pull import pull_if_stale
 from codefreedom.log import eprint, tag
 from codefreedom.env_loader import get_env, load_dotenv
@@ -124,6 +125,10 @@ def _build_proxy_env() -> Dict[str, str]:
             "POSTGRES_HOST_DATA_DIR": str(cf_dir / "pg" / "data"),
         },
     )
+    settings = load_codefreedom_settings(Path.cwd())
+    merged["LITELLM_BIND_HOST"] = settings.proxy.bind_host
+    merged["LITELLM_PORT"] = str(settings.proxy.bind_port)
+    merged.setdefault("PROXY_PUBLIC_BASE_URL", settings.proxy.public_base_url)
     return merged
 
 
@@ -229,7 +234,9 @@ def _ensure_web_bridge_image() -> int:
                 check=False,
             )
             if result.returncode != 0:
-                eprint(f"{tag('PROXY')} Failed to build {image}. Check docker output above.")
+                eprint(
+                    f"{tag('PROXY')} Failed to build {image}. Check docker output above."
+                )
                 return 1
             eprint(f"{tag('PROXY')} Built {image}.")
             return 0

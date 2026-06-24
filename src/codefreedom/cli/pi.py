@@ -31,10 +31,10 @@ from codefreedom.core.config import (
     get_codefreedom_dir,
     resolve_pi_profiles_path,
 )
+from codefreedom.core.settings import resolve_agent_runtime
 from codefreedom.core.profiles import (
     list_profiles,
 )
-from codefreedom.env_loader import load_env_chain
 from codefreedom.log import eprint, tag
 from codefreedom.sandbox.signals import forward_signal
 from codefreedom.tools.registry import generate_session_id
@@ -643,7 +643,12 @@ def run(args: argparse.Namespace) -> int:
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()
     eprint(f"{tag('ENV')} Loading configuration...")
-    base_env = load_env_chain(workspace_dir, component="pi")
+    runtime = resolve_agent_runtime(
+        "pi-code",
+        workspace_dir=workspace_dir,
+        profile_name=args.profile or "default",
+        mode="local",
+    )
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
@@ -652,14 +657,14 @@ def run(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_with_tools
 
     profile_env, _sandbox_images, tools, exit_code = load_profile_with_tools(
-        profile_name, profiles_path, base_env, "local"
+        profile_name, profiles_path, runtime.base_env, "local"
     )
     if exit_code != 0:
         return 1
 
     # ── Ensure proxy API key is available ──────────────────────────────
     if not profile_env.get("PROXY_API_KEY"):
-        master_key = base_env.get("LITELLM_MASTER_KEY", "")
+        master_key = runtime.base_env.get("LITELLM_MASTER_KEY", "")
         if master_key:
             profile_env["PROXY_API_KEY"] = master_key
 
