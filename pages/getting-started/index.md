@@ -114,6 +114,7 @@ cf r ag cc
 | MiMo Code | `cf r ag mc` | `mc` |
 | OpenCode | `cf r ag oc` | `oc` |
 | Pi Code | `cf r ag pc` | `pc` |
+| Codex | `cf r ag cx` | `cx` |
 
 ## Quick Reference
 

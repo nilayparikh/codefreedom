@@ -13,6 +13,7 @@ Agents are the coding assistants CodeFreedom orchestrates. Each agent runs eithe
 | [MiMo Code](mimo-code.md) | `mimo-code` | `mc` | Xiaomi's coding agent — 0-click proxy config with model auto-discovery |
 | [OpenCode](open-code.md) | `open-code` | `oc` | Terminal-native AI coding agent — 0-click proxy config with model auto-discovery |
 | [Pi Code](pi-code.md) | `pi-code` | `pc` | Earendil's AI coding agent — extension-based dynamic model discovery |
+| [Codex](codex-code.md) | `codex-code` | `cx` | OpenAI's coding agent — 0-click proxy config with model catalog generation |
 
 ## Quick Reference
 
@@ -21,6 +22,7 @@ cf run agent claude-code          # Launch Claude Code
 cf run agent mimo-code            # Launch MiMo Code
 cf run agent open-code            # Launch OpenCode
 cf run agent pi-code              # Launch Pi Code
+cf run agent codex-code           # Launch Codex
 cf run agent list                 # List all available agents
 ```
 
@@ -31,6 +33,7 @@ cf r ag cc                       # Claude Code
 cf r ag mc                       # MiMo Code
 cf r ag oc                       # OpenCode
 cf r ag pc                       # Pi Code
+cf r ag cx                       # Codex
 cf r ag list                     # List agents
 ```
 

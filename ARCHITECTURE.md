@@ -51,6 +51,8 @@ Each layer calls only the layer below it. No cross-layer or sideways calls.
 | `claude`          | `src/codefreedom/cli/claude.py`             | `cf run agent claude-code` — init, profiles, sandbox/native launch              |
 | `mimo`            | `src/codefreedom/cli/mimo.py`               | `cf run agent mimo-code` — 0-click proxy config, sandbox/native                 |
 | `opencode`        | `src/codefreedom/cli/opencode.py`           | `cf run agent open-code` — 0-click proxy config, sandbox/native                 |
+| `pi`              | `src/codefreedom/cli/pi.py`                 | `cf run agent pi-code` — extension-based model discovery, LSP config            |
+| `codex`           | `src/codefreedom/cli/codex.py`              | `cf run agent codex-code` — 0-click proxy config, model catalog generation     |
 | `proxy`           | `src/codefreedom/cli/run/proxy.py`          | `cf run proxy` — start/stop/status/validate via Docker Compose                  |
 | `tools`           | `src/codefreedom/cli/run/tools.py`          | `cf run tools` — CLI layer delegates to `tools/registry.py`                     |
 | `docker_utils`    | `src/codefreedom/cli/docker_utils.py`       | `start_tool_container()`, image checks, tool metadata                           |
@@ -94,6 +96,8 @@ Each layer calls only the layer below it. No cross-layer or sideways calls.
 | `plan`          | `src/codefreedom/recipe/plan.py`            | Recipe plan generation, secrets status, `_find_env_secrets_targets()`          |
 | `merge`         | `src/codefreedom/recipe/merge.py`           | File merge logic for recipe application                                       |
 | `apply`         | `src/codefreedom/recipe/apply.py`           | `_print_summary()`, `_resolve_secret()`, apply execution                      |
+| `generated_artifacts` | `src/codefreedom/recipe/generated_artifacts.py` | Setup script generation for recipes                                  |
+| `materialize`   | `src/codefreedom/recipe/materialize.py`     | Recipe file materialization and directory creation                             |
 
 ### Admin (backup/restore)
 
@@ -135,6 +139,8 @@ cli/main.py                                                                  -> 
 cli/claude.py                                                                -> core/settings, log, profiles, tool_registry, sandbox/launcher
 cli/mimo.py                                                                  -> core/settings, log, profiles, tool_registry, sandbox/launcher
 cli/opencode.py                                                              -> core/settings, log, profiles, tool_registry, sandbox/launcher
+cli/pi.py                                                                    -> core/settings, log, profiles, tool_registry, sandbox/launcher
+cli/codex.py                                                                 -> core/settings, log, profiles, tool_registry, sandbox/launcher
 cli/run/agent.py                                                             -> log (dynamic import of agent modules)
 cli/run/tools.py                                                             -> log, tools/registry (delegates lifecycle)
 cli/run/proxy.py                                                             -> core/config, log, env_loader

@@ -9,7 +9,7 @@ Recipes define which providers, secrets, profiles, and proxy configuration are d
 
 ### `costeffective-coding`
 
-Cloud-only inference. Routes through Azure Foundry, OpenCode Zen, and OpenRouter via the LiteLLM proxy.
+Cloud-only inference. Routes through Azure Foundry, OpenCode Zen, OpenRouter, and DeepSeek via the LiteLLM proxy.
 
 **Required secrets:** `LITELLM_MASTER_KEY`, `MICROSOFT_FOUNDRY_API_KEY`, `OPENCODE_ZEN_API_KEY`, `OPENROUTER_API_KEY`, `GITHUB_PERSONAL_ACCESS_TOKEN`
 
