@@ -105,14 +105,18 @@ def materialize_recipe(
         target = file_entry.get("target", src_path)
         merge_mode = file_entry.get("merge", "auto")
         content = files.get(target) or files.get(src_path) or ""
-        entries.append(
-            {
-                "type": "static",
-                "target": target,
-                "content": content,
-                "merge": merge_mode,
-            }
-        )
+        entry: dict[str, Any] = {
+            "type": "static",
+            "target": target,
+            "content": content,
+            "merge": merge_mode,
+        }
+        if file_entry.get("split_by_key"):
+            entry["split_by_key"] = file_entry["split_by_key"]
+        if file_entry.get("copy_dir"):
+            entry["copy_dir"] = file_entry["copy_dir"]
+            entry["path"] = src_path
+        entries.append(entry)
         managed_targets.add(target)
 
     # Resolve common_blocks into required_secrets before generating artifacts

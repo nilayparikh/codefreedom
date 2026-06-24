@@ -129,11 +129,31 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         static_entries = [e for e in result["entries"] if e["type"] == "static"]
         generated_entries = [e for e in result["entries"] if e["type"] == "generated"]
 
-        static_manifest = {**manifest, "files": [
-            {"path": e["target"], "target": e["target"], "merge": e["merge"]}
-            for e in static_entries
-        ]}
-        static_files = {e["target"]: e["content"] for e in static_entries}
+        rebuilt_files: list[dict[str, Any]] = []
+        for e in static_entries:
+            entry: dict[str, Any] = {
+                "path": e.get("path", e["target"]),
+                "target": e["target"],
+                "merge": e["merge"],
+            }
+            if e.get("split_by_key"):
+                entry["split_by_key"] = e["split_by_key"]
+            if e.get("copy_dir"):
+                entry["copy_dir"] = e["copy_dir"]
+            rebuilt_files.append(entry)
+
+        static_manifest = {**manifest, "files": rebuilt_files}
+        static_files: dict[str, str] = {}
+        for e in static_entries:
+            if e.get("copy_dir"):
+                # For copy_dir entries, include all individual files from
+                # the original files dict that fall under this directory.
+                src_dir = (e.get("path") or e["target"]).rstrip("/")
+                for fk, fv in files.items():
+                    if fk.startswith(src_dir + "/") or fk == src_dir:
+                        static_files[fk] = fv
+            else:
+                static_files[e["target"]] = e["content"]
         _install_recipe_files(static_manifest, static_files, cf_dir, vars_dict=vars_dict)
 
         for entry in generated_entries:
