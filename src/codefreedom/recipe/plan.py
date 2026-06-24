@@ -483,14 +483,21 @@ def _generate_plan_id() -> str:
 
 
 def _load_recipe_vars(manifest: Dict[str, Any]) -> Dict[str, str]:
-    """Load vars from the recipe's vars file if declared in the manifest."""
-    vars_file = manifest.get("vars")
-    if not vars_file:
+    """Load vars from the recipe manifest.
+
+    The ``vars`` field can be either:
+    - A **string** — path to a YAML file relative to the recipe directory.
+    - A **dict** — inline key/value variables used directly.
+    """
+    raw = manifest.get("vars")
+    if not raw:
         return {}
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
     recipe_dir = manifest.get("_recipe_dir")
     if not recipe_dir:
         return {}
-    vars_path = Path(recipe_dir) / vars_file
+    vars_path = Path(recipe_dir) / raw
     if not vars_path.exists():
         return {}
     with open(vars_path, encoding="utf-8") as f:

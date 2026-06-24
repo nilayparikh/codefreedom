@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Union
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -75,7 +75,10 @@ class RecipeConfig(BaseModel, extra="forbid"):
     description: Optional[str] = None
     version: Optional[int] = Field(default=None, ge=1)
     extends: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]+$")
-    vars: Optional[str] = Field(default=None, description="Path to recipe.vars.yaml file")
+    vars: Optional[Union[str, Dict[str, str]]] = Field(
+        default=None,
+        description="Path to recipe.vars.yaml file, or inline vars dict",
+    )
     files: List[FileEntry]
     dirs: Optional[List[str]] = None
     required_secrets: Optional[List[SecretEntry]] = None
