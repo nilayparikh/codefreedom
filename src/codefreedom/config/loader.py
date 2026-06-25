@@ -288,32 +288,6 @@ def _build_context(merged: dict, vars: Dict[str, str] | None = None) -> Dict[str
     return context
 
 
-def _build_provenance(
-    merged: dict, resolved: dict
-) -> Dict[str, str]:
-    """Build a provenance map showing where each value came from.
-
-    This is best-effort — it compares original vs. resolved values
-    to determine which env vars were substituted.
-    """
-    provenance: Dict[str, str] = {}
-    _walk_provenance(merged, resolved, provenance, "")
-    return provenance
-
-
-def _walk_provenance(
-    original: Any, resolved: Any, prov: Dict[str, str], prefix: str
-) -> None:
-    """Recursively walk original → resolved to build provenance."""
-    if isinstance(original, dict) and isinstance(resolved, dict):
-        for key in original:
-            new_prefix = f"{prefix}.{key}" if prefix else key
-            _walk_provenance(original[key], resolved.get(key), prov, new_prefix)
-    elif isinstance(original, str) and original != resolved:
-        # This value was interpolated
-        prov[prefix] = f"interpolated: {original} → {resolved}"
-
-
 # ── Public API ──────────────────────────────────────────────────────────
 
 def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
@@ -360,6 +334,12 @@ def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
     # Step 2: Full structural merge (later wins)
     merged = _merge_deep(base, recipe)
     merged = _merge_deep(merged, override)
+
+    # Ensure common section exists with defaults so ${VAR} refs are interpolated.
+    # CommonSection.suffix_id defaults to "${SUFFIX_ID:-0000}" — if the merged dict
+    # has no common section (or an empty one), seed it so interpolation can resolve.
+    merged.setdefault("common", {})
+    merged["common"].setdefault("suffix_id", "${SUFFIX_ID:-0000}")
 
     # Step 3: Build resolution context from config layers + CF_CLI_*
     context = _build_context(merged, vars=all_vars)

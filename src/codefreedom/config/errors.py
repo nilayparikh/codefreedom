@@ -25,3 +25,7 @@ class SchemaValidationError(ConfigError):
 
 class MergeError(ConfigError):
     """Failed to merge configuration layers."""
+
+
+class ProfileError(ConfigError):
+    """Raised when a profile cannot be loaded or is invalid."""

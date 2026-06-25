@@ -25,11 +25,10 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from codefreedom.config.runtime import apply_cf_cli_overrides, load_codefreedom_settings
 from codefreedom.core.config import get_codefreedom_dir, get_config_dir
-from codefreedom.core.settings import load_codefreedom_settings
 from codefreedom.docker.pull import pull_if_stale
 from codefreedom.log import eprint, tag
-from codefreedom.env_loader import get_env
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 
@@ -121,14 +120,9 @@ def _build_proxy_env() -> Dict[str, str]:
     directory, even when customised.
     """
     cf_dir = get_codefreedom_dir()
-    merged = get_env(
-        Path.cwd(),
-        component="proxy",
-        verbose=False,
-        extra_injections={
-            "POSTGRES_HOST_DATA_DIR": str(cf_dir / "pg" / "data"),
-        },
-    )
+    merged = dict(os.environ)
+    merged.setdefault("POSTGRES_HOST_DATA_DIR", str(cf_dir / "pg" / "data"))
+    merged = apply_cf_cli_overrides(merged)
     settings = load_codefreedom_settings(Path.cwd())
     merged["LITELLM_BIND_HOST"] = settings.proxy.bind_host
     merged["LITELLM_PORT"] = str(settings.proxy.bind_port)

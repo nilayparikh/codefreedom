@@ -58,7 +58,7 @@ def _print_version() -> None:
 
     deps = [
         "PyYAML", "deepdiff", "pydantic", "GitPython",
-        "python-dotenv", "httpx", "docker",
+        "httpx", "docker",
     ]
     for dep in deps:
         try:

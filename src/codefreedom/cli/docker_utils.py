@@ -17,9 +17,9 @@ from typing import Any, Dict
 import yaml
 from pydantic import BaseModel
 
-from codefreedom.core.interpolate import interpolate_all_strings
+from codefreedom.config.interpolation import interpolate_all
+from codefreedom.config.runtime import apply_cf_cli_overrides
 from codefreedom.docker.pull import pull_if_stale
-from codefreedom.env_loader import apply_cf_cli_overrides
 from codefreedom.log import eprint
 
 # ── Tool metadata ────────────────────────────────────────────────────────────
@@ -652,7 +652,7 @@ def load_tool_profile(
     common_section = raw.get("common", {})
     if isinstance(common_section, dict):
         ctx.update(_flatten_dict(common_section, prefix="common"))
-    interpolate_all_strings(tools_section, context=ctx)
+    interpolate_all(tools_section, context=ctx)
 
     cfg = tools_section.get(tool_key, {})
     if not isinstance(cfg, dict):

@@ -15,8 +15,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import yaml
 
+from codefreedom.config.runtime import apply_cf_cli_overrides
 from codefreedom.core.http_client import HTTPError, HTTPStatusError
-from codefreedom.env_loader import get_env
 from codefreedom.log import eprint, tag
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -166,9 +166,7 @@ def _resolve_master_key() -> Optional[str]:
     This is a convenience wrapper; ``cmd_vscode_proxy_config`` accesses
     the key directly from ``get_env()``.
     """
-    from codefreedom.env_loader import get_env
-
-    merged = get_env(Path.cwd(), component="proxy", verbose=False)
+    merged = apply_cf_cli_overrides(dict(os.environ))
     key = merged.get("LITELLM_MASTER_KEY", "").strip()
     return key if key else None
 
@@ -373,7 +371,7 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     eprint(
         f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}..."
     )
-    base_env = get_env(workspace_dir, component="proxy", verbose=False)
+    base_env = apply_cf_cli_overrides(dict(os.environ))
 
     eprint(f"{tag('VSCODE')} Probing proxy at {_proxy_health_url(host, port)} ...")
     if not _check_proxy_live(host, port):

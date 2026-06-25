@@ -235,3 +235,89 @@ class TestConfigLoading:
         tool = config.for_tool("chrome")
         assert tool.port == 9999
         assert tool.env["CUSTOM"] == "yes"
+
+    def test_vars_priority_profiles_wins(self, tmp_path):
+        """vars from profiles.yaml are used when no recipe/override."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_profiles"},
+            "common": {"suffix_id": "${MY_VAR:-default}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "from_profiles"
+
+    def test_vars_priority_recipe_overrides_profiles(self, tmp_path):
+        """vars from recipe.yaml override vars from profiles.yaml."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_profiles"},
+            "common": {"suffix_id": "${MY_VAR:-default}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        recipe = tmp_path / "recipe.yaml"
+        recipe.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_recipe"},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "from_recipe"
+
+    def test_vars_priority_override_overrides_recipe(self, tmp_path):
+        """vars from override.yaml override vars from recipe.yaml."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_profiles"},
+            "common": {"suffix_id": "${MY_VAR:-default}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        recipe = tmp_path / "recipe.yaml"
+        recipe.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_recipe"},
+        }))
+        override = tmp_path / "override.yaml"
+        override.write_text(yaml.dump({
+            "comment": "user overrides",
+            "vars": {"MY_VAR": "from_override"},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "from_override"
+
+    def test_vars_priority_cflcli_overrides_all(self, tmp_path, monkeypatch):
+        """CF_CLI_* env vars override all config layers."""
+        monkeypatch.setenv("CF_CLI_MY_VAR", "from_cflcli")
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_profiles"},
+            "common": {"suffix_id": "${MY_VAR:-default}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        recipe = tmp_path / "recipe.yaml"
+        recipe.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_recipe"},
+        }))
+        override = tmp_path / "override.yaml"
+        override.write_text(yaml.dump({
+            "comment": "user overrides",
+            "vars": {"MY_VAR": "from_override"},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "from_cflcli"
+
+    def test_override_comment_field_does_not_break_validation(self, tmp_path):
+        """override.yaml 'comment' field is stripped before validation."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        override = tmp_path / "override.yaml"
+        override.write_text(yaml.dump({
+            "comment": "User overrides",
+            "vars": {"SUFFIX_ID": "test123"},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "test123"

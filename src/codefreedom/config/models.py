@@ -39,6 +39,14 @@ class CommonSection(BaseModel, extra="forbid"):
     suffix_id: str = "${SUFFIX_ID:-0000}"
 
 
+class SandboxImages(BaseModel, extra="forbid"):
+    """Sandbox images keyed by GPU type."""
+    default: Optional[str] = None
+    unified: Optional[str] = None
+    cuda: Optional[str] = None
+    rocm: Optional[str] = None
+
+
 # ── Mode-specific overrides ─────────────────────────────────────────────
 
 class ModeEnv(BaseModel, extra="forbid"):
@@ -187,12 +195,23 @@ class ConfigModel(BaseModel, extra="forbid"):
     @model_validator(mode="before")
     @classmethod
     def _normalize_legacy_format(cls, data: Any) -> Any:
-        """Convert legacy ``profiles:`` → ``agents:`` automatically."""
+        """Convert legacy ``profiles:`` → ``agents:`` automatically.
+
+        Also strips known non-schema keys (``comment``, ``vars``) that
+        appear in override.yaml but are not part of the config model.
+        """
         if not isinstance(data, dict):
             return data
 
+        # Strip non-schema keys from override.yaml
+        data.pop("comment", None)
+        data.pop("vars", None)
+
         # If the file already uses the new format, keep it as-is.
+        # Also strip stray "profiles" key that may have been merged
+        # from override.yaml (override has "profiles:", base has "agents:").
         if "agents" in data:
+            data.pop("profiles", None)
             return data
 
         # Detect legacy format: top-level "profiles" key exists

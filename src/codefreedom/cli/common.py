@@ -15,7 +15,7 @@ import argparse
 from pathlib import Path
 from typing import Any, Callable
 
-from codefreedom.core.settings import resolve_agent_runtime
+from codefreedom.config.runtime import resolve_agent_runtime
 from codefreedom.log import eprint
 
 # ── Profile display ─────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ def load_profile_env_only(
         Tuple of (profile_env, exit_code) where exit_code is 0 on success,
         1 on error.
     """
-    from codefreedom.core.profiles import ProfileError
+    from codefreedom.config.errors import ProfileError
 
     profile_env: dict[str, str] = {}
 
@@ -221,7 +221,7 @@ def load_profile_with_tools(
         Tuple of (profile_env, sandbox_images, tools, exit_code)
         exit_code is 0 on success, 1 on error.
     """
-    from codefreedom.core.profiles import ProfileError
+    from codefreedom.config.errors import ProfileError
 
     profile_env: dict[str, str] = {}
     sandbox_images: dict[str, str] = {}

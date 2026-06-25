@@ -29,14 +29,11 @@ from pathlib import Path
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from codefreedom.config.runtime import list_profiles, resolve_agent_runtime
 from codefreedom.core.config import (
     get_codefreedom_dir,
     resolve_opencode_profiles_path,
 )
-from codefreedom.core.profiles import (
-    list_profiles,
-)
-from codefreedom.core.settings import resolve_agent_runtime
 from codefreedom.log import eprint
 from codefreedom.tools.registry import generate_session_id
 from codefreedom.sandbox.signals import forward_signal

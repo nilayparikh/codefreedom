@@ -34,7 +34,7 @@ from codefreedom.cli.docker_utils import (
     load_tool_profile,
 )
 from codefreedom.core.config import get_codefreedom_dir, get_config_dir
-from codefreedom.core.settings import resolve_config_value
+from codefreedom.config.runtime import resolve_config_value
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Check result types

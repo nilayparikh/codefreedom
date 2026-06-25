@@ -10,7 +10,7 @@ import yaml
 
 from codefreedom.admin import backup as cf_backup
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.core.settings import resolve_config_value
+from codefreedom.config.runtime import resolve_config_value
 from codefreedom.log import dim, eprint, green, red, tag, yellow
 from codefreedom.schemas.recipe import RecipeConfig
 from pydantic import ValidationError

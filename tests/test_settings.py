@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 from codefreedom.cli.run import proxy as proxy_module
-from codefreedom.core.settings import (
+from codefreedom.config.runtime import (
     load_codefreedom_settings,
     resolve_agent_runtime,
     resolve_config_value,
@@ -91,7 +91,6 @@ def test_resolve_agent_runtime_uses_agent_component(
         "mimo-code", workspace_dir=tmp_path, profile_name="default", mode="local"
     )
 
-    assert runtime.component == "mimo"
     assert runtime.profile_env["SEEN_COMPONENT"] == "from_mimo"
     assert runtime.tools == ["github"]
     assert runtime.sandbox_images == {"default": "docker.io/example/image:latest"}

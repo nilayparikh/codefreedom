@@ -27,13 +27,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from codefreedom.config.runtime import list_profiles, resolve_agent_runtime
 from codefreedom.core.config import (
     get_codefreedom_dir,
     resolve_pi_profiles_path,
-)
-from codefreedom.core.settings import resolve_agent_runtime
-from codefreedom.core.profiles import (
-    list_profiles,
 )
 from codefreedom.log import eprint, tag
 from codefreedom.sandbox.signals import forward_signal

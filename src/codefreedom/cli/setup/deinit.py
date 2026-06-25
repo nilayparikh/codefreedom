@@ -75,17 +75,12 @@ def _stop_proxy(cf_dir: Path) -> int:
     # Use the canonical get_env() chain to resolve all proxy env vars
     # (including SUFFIX_ID, POSTGRES_HOST_* paths, and os.environ).
     try:
-        from codefreedom.env_loader import get_env
+        from codefreedom.config.runtime import apply_cf_cli_overrides
 
-        compose_env = get_env(
-            Path.cwd(),
-            component="proxy",
-            verbose=False,
-            extra_injections={
-                "POSTGRES_HOST_DATA_DIR": str(cf_dir / "pg" / "data"),
-                "POSTGRES_HOST_BACKUP_DIR": str(cf_dir / "pg" / "backup"),
-            },
-        )
+        compose_env = dict(os.environ)
+        compose_env.setdefault("POSTGRES_HOST_DATA_DIR", str(cf_dir / "pg" / "data"))
+        compose_env.setdefault("POSTGRES_HOST_BACKUP_DIR", str(cf_dir / "pg" / "backup"))
+        compose_env = apply_cf_cli_overrides(compose_env)
     except Exception:
         # Fallback: minimal env for docker compose (shouldn't happen)
         compose_env = dict(os.environ)

@@ -423,10 +423,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args())
         assert result == 0
@@ -494,10 +491,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args(profile="ultra"))
         assert result == 0
@@ -528,10 +522,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args(host="proxy.lan", port=5000))
         assert result == 0
@@ -563,10 +554,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         out_file = tmp_path / "fragment.json"
         result = cmd_vscode_claude_config(_args(out=str(out_file)))
@@ -586,10 +574,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: missing,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args())
         assert result == 1
@@ -616,13 +601,10 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         def boom(*_a, **_kw):
-            from codefreedom.core.profiles import ProfileError
+            from codefreedom.config.errors import ProfileError
 
             raise ProfileError("nope")
 
@@ -655,10 +637,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args())
         assert result == 0

@@ -26,13 +26,10 @@ import shutil
 import signal
 import subprocess
 from pathlib import Path
+from codefreedom.config.runtime import list_profiles, resolve_agent_runtime
 from codefreedom.core.config import (
     get_codefreedom_dir,
     resolve_codex_profiles_path,
-)
-from codefreedom.core.settings import resolve_agent_runtime
-from codefreedom.core.profiles import (
-    list_profiles,
 )
 from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import generate_session_id

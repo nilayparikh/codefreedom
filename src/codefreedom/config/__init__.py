@@ -21,6 +21,7 @@ from codefreedom.config.errors import (
     CrossReferenceError,
     MergeError,
     MissingSecretError,
+    ProfileError,
     SchemaValidationError,
     UnresolvedReferenceError,
 )
@@ -36,7 +37,20 @@ from codefreedom.config.models import (
     AgentDefinition,
     CommonSection,
     ProfileEntry,
+    SandboxImages,
     ToolDefinition,
+)
+from codefreedom.config.runtime import (
+    AgentRuntimeConfig,
+    CodeFreedomSettings,
+    ProxySettings,
+    ResolvedValue,
+    apply_cf_cli_overrides,
+    list_profiles,
+    load_codefreedom_settings,
+    load_profile_env,
+    resolve_agent_runtime,
+    resolve_config_value,
 )
 
 __all__ = [
@@ -49,14 +63,27 @@ __all__ = [
     # Models
     "AgentDefinition",
     "ProfileEntry",
+    "SandboxImages",
     "ToolDefinition",
     "CommonSection",
+    # Runtime
+    "AgentRuntimeConfig",
+    "CodeFreedomSettings",
+    "ProxySettings",
+    "ResolvedValue",
+    "resolve_agent_runtime",
+    "resolve_config_value",
+    "load_codefreedom_settings",
+    "apply_cf_cli_overrides",
+    "list_profiles",
+    "load_profile_env",
     # Interpolation
     "resolve_var",
     "resolve_dict",
     "interpolate_all",
     # Errors
     "ConfigError",
+    "ProfileError",
     "SchemaValidationError",
     "CrossReferenceError",
     "MergeError",

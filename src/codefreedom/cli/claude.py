@@ -12,13 +12,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from codefreedom.config.runtime import list_profiles, resolve_agent_runtime
 from codefreedom.core.config import resolve_profiles_path
-from codefreedom.core.settings import resolve_agent_runtime
 from codefreedom.log import eprint, tag
 from codefreedom.launcher import run_docker, run_local
-from codefreedom.core.profiles import (
-    list_profiles,
-)
 from codefreedom.tools.registry import generate_session_id
 
 

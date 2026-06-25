@@ -1,7 +1,6 @@
-"""Backward-compatible re-exports — settings now live in codefreedom.config.
+"""Agent runtime resolution — config loading for CLI entrypoints.
 
-.. deprecated::
-    Import from ``codefreedom.config`` directly instead.
+Migrated from ``core/settings.py`` (deprecated module).
 """
 
 from __future__ import annotations
@@ -9,6 +8,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -34,14 +34,13 @@ class ProxySettings(BaseModel):
 class AgentRuntimeConfig:
     """Resolved runtime configuration for an agent entrypoint."""
     agent: str
-    component: str
     workspace_dir: Path
     profiles_path: Path
     base_env: dict[str, str]
     profile_env: dict[str, str]
     tools: list[str]
     sandbox_images: dict[str, str]
-    settings: "CodeFreedomSettings"
+    settings: CodeFreedomSettings
 
 
 class CodeFreedomSettings:
@@ -59,7 +58,6 @@ class CodeFreedomSettings:
         except ConfigError:
             pass
 
-        # CF_CLI_* always wins (already resolved in for_component via context)
         cf_cli_host = os.environ.get("CF_CLI_LITELLM_BIND_HOST")
         if cf_cli_host:
             self.proxy_bind_host = cf_cli_host
@@ -115,21 +113,6 @@ def resolve_config_value(
     return None, None
 
 
-_AGENT_TO_COMPONENT = {
-    "claude-code": "claude",
-    "mimo-code": "mimo",
-    "open-code": "open",
-    "pi-code": "pi",
-    "codex-code": "codex",
-}
-
-
-def _resolve_component_for_agent(agent: str) -> str:
-    if agent not in _AGENT_TO_COMPONENT:
-        raise ValueError(f"Unknown agent: {agent}")
-    return _AGENT_TO_COMPONENT[agent]
-
-
 def load_codefreedom_settings(workspace_dir: Path) -> CodeFreedomSettings:
     _ = workspace_dir
     return CodeFreedomSettings()
@@ -143,10 +126,9 @@ def resolve_agent_runtime(
     mode: str = "local",
     validate_profile: bool = True,
 ) -> AgentRuntimeConfig:
-    """Resolve agent runtime via the new config system."""
+    """Resolve agent runtime via the config system."""
     from codefreedom.core.config import get_config_dir
 
-    component = _resolve_component_for_agent(agent)
     config_dir = get_config_dir()
 
     try:
@@ -154,7 +136,6 @@ def resolve_agent_runtime(
     except ConfigError:
         return AgentRuntimeConfig(
             agent=agent,
-            component=component,
             workspace_dir=workspace_dir,
             profiles_path=config_dir / "profiles.yaml",
             base_env=dict(os.environ),
@@ -167,7 +148,6 @@ def resolve_agent_runtime(
     if not validate_profile:
         return AgentRuntimeConfig(
             agent=agent,
-            component=component,
             workspace_dir=workspace_dir,
             profiles_path=config_dir / "profiles.yaml",
             base_env=dict(os.environ),
@@ -199,7 +179,6 @@ def resolve_agent_runtime(
 
     return AgentRuntimeConfig(
         agent=agent,
-        component=component,
         workspace_dir=workspace_dir,
         profiles_path=config_dir / "profiles.yaml",
         base_env=dict(os.environ),
@@ -208,3 +187,80 @@ def resolve_agent_runtime(
         sandbox_images=agent_cfg.sandbox_images,
         settings=CodeFreedomSettings(),
     )
+
+
+def apply_cf_cli_overrides(env: dict[str, str]) -> dict[str, str]:
+    """Apply ``CF_CLI_*`` machine env vars as final overrides."""
+    for key, val in os.environ.items():
+        if key.startswith("CF_CLI_"):
+            real_key = key[len("CF_CLI_"):]
+            env[real_key] = val
+    return env
+
+
+def list_profiles(
+    profiles_path: Path, agent: str | None = None
+) -> list[dict[str, Any]]:
+    """List available profiles with metadata.
+
+    Args:
+        profiles_path: Path to the profiles.yaml file.
+        agent: Optional agent name to filter by.
+
+    Returns:
+        List of profile dicts with name, description, env_keys, tools, etc.
+    """
+    try:
+        config = load_config(profiles_path.parent)
+    except ConfigError:
+        return []
+
+    result = []
+    for agent_name, agent_def in config.agents.items():
+        if agent and agent_name != agent:
+            continue
+        for profile_name in agent_def.profiles:
+            resolved = agent_def.resolve_profile(profile_name)
+            result.append({
+                "name": profile_name,
+                "description": resolved.description or "No description",
+                "env_keys": list(resolved.env.keys()),
+                "tools": resolved.tools or [],
+                "standalone": profile_name in ("default", "bare"),
+            })
+    return result
+
+
+def load_profile_env(
+    profile_name: str,
+    profiles_path: Path,
+) -> dict[str, str]:
+    """Load profile env (backward compat wrapper).
+
+    Args:
+        profile_name: Profile name to load.
+        profiles_path: Path to profiles.yaml.
+
+    Returns:
+        Resolved profile environment dict.
+
+    Raises:
+        ProfileError: If loading fails.
+    """
+    from codefreedom.config.errors import ProfileError
+
+    try:
+        config = load_config(profiles_path.parent)
+        agent_name = _detect_agent(config, profile_name)
+        agent_cfg = config.for_agent(agent_name, profile=profile_name)
+        return agent_cfg.env
+    except ConfigError as e:
+        raise ProfileError(str(e)) from e
+
+
+def _detect_agent(config, profile_name: str) -> str:
+    """Find the first agent that has the given profile."""
+    for agent_name, agent_def in config.agents.items():
+        if profile_name in agent_def.profiles:
+            return agent_name
+    return "claude-code"
