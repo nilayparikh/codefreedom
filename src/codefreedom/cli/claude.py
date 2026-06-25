@@ -119,6 +119,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         profiles_path,
         base_env,
         error_prefix="codefreedom run agent claude-code init",
+        agent="claude-code",
     )
     if exit_code != 0:
         return 1
@@ -185,7 +186,7 @@ def run(args: argparse.Namespace) -> int:
         from codefreedom.cli.common import display_profiles
 
         profiles_path = resolve_profiles_path()
-        profiles = list_profiles(profiles_path)
+        profiles = list_profiles(profiles_path, agent="claude-code")
         return display_profiles(profiles_path, profiles)
 
     # ── Load env chain ─────────────────────────────────────────────────────
@@ -213,7 +214,8 @@ def run(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_with_tools
 
     profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
-        profile_name, profiles_path, runtime.base_env, mode
+        profile_name, profiles_path, runtime.base_env, mode,
+        agent="claude-code",
     )
     if exit_code != 0:
         return 1

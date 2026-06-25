@@ -635,7 +635,7 @@ def run(args: argparse.Namespace) -> int:
         from codefreedom.cli.common import display_profiles
 
         profiles_path = resolve_pi_profiles_path()
-        profiles = list_profiles(profiles_path)
+        profiles = list_profiles(profiles_path, agent="pi-code")
         return display_profiles(
             profiles_path, profiles, show_env_keys=False, show_tools=True
         )
@@ -657,7 +657,8 @@ def run(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_with_tools
 
     profile_env, _sandbox_images, tools, exit_code = load_profile_with_tools(
-        profile_name, profiles_path, runtime.base_env, "local"
+        profile_name, profiles_path, runtime.base_env, "local",
+        agent="pi-code",
     )
     if exit_code != 0:
         return 1

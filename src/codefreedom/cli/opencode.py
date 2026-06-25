@@ -501,7 +501,8 @@ def cmd_config(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_env_only
 
     profile_env, exit_code = load_profile_env_only(
-        profile_name, profiles_path, base_env, error_prefix="cf run proxy start"
+        profile_name, profiles_path, base_env, error_prefix="cf run proxy start",
+        agent="open-code",
     )
     if exit_code != 0 and profile_name != "default":
         return 1
@@ -616,7 +617,7 @@ def run(args: argparse.Namespace) -> int:
         from codefreedom.cli.common import display_profiles
 
         profiles_path = resolve_opencode_profiles_path()
-        profiles = list_profiles(profiles_path)
+        profiles = list_profiles(profiles_path, agent="open-code")
         return display_profiles(
             profiles_path, profiles, show_env_keys=False, show_tools=True
         )
@@ -644,7 +645,8 @@ def run(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_with_tools
 
     profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
-        profile_name, profiles_path, runtime.base_env, mode
+        profile_name, profiles_path, runtime.base_env, mode,
+        agent="open-code",
     )
     if exit_code != 0:
         return 1

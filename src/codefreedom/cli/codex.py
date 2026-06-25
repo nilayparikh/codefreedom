@@ -678,6 +678,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         profiles_path,
         base_env,
         error_prefix="cf run agent codex-code config",
+        agent="codex-code",
     )
     if exit_code != 0 and profile_name != "default":
         return 1
@@ -727,7 +728,7 @@ def run(args: argparse.Namespace) -> int:
         from codefreedom.cli.common import display_profiles
 
         profiles_path = resolve_codex_profiles_path()
-        profiles = list_profiles(profiles_path)
+        profiles = list_profiles(profiles_path, agent="codex-code")
         return display_profiles(
             profiles_path, profiles, show_env_keys=False, show_tools=True
         )
@@ -752,7 +753,8 @@ def run(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_with_tools
 
     profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
-        profile_name, profiles_path, runtime.base_env, mode
+        profile_name, profiles_path, runtime.base_env, mode,
+        agent="codex-code",
     )
     if exit_code != 0:
         return 1

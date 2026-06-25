@@ -171,7 +171,7 @@ def resolve_agent_runtime(
     profiles_path = _resolve_profiles_path_for_agent(agent)
     settings = load_codefreedom_settings(workspace_dir)
     base_env = get_env(workspace_dir, component=component, verbose=False)
-    profiles = load_profiles(profiles_path)
+    profiles = load_profiles(profiles_path, agent=agent)
     if validate_profile:
         profile_env = load_profile_env(
             profile_name,

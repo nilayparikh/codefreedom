@@ -79,6 +79,7 @@ def load_profile_env_only(
     profiles_path: Path,
     base_env: dict[str, str],
     error_prefix: str = "codefreedom setup init",
+    agent: str = "",
 ) -> tuple[dict[str, str], int]:
     """Load profile env without tools or sandbox images.
 
@@ -90,6 +91,8 @@ def load_profile_env_only(
         profiles_path: Path to the profiles file
         base_env: Base environment from load_env_chain()
         error_prefix: Prefix for error messages (e.g. "codefreedom setup init")
+        agent: Canonical agent name (e.g. "claude-code").  When empty it is
+            inferred from the profiles filename.
 
     Returns:
         Tuple of (profile_env, exit_code) where exit_code is 0 on success,
@@ -109,9 +112,9 @@ def load_profile_env_only(
         return profile_env, 1
 
     try:
-        agent = _agent_name_from_profiles_path(profiles_path)
+        resolved_agent = agent or _agent_name_from_profiles_path(profiles_path)
         runtime = resolve_agent_runtime(
-            agent,
+            resolved_agent,
             workspace_dir=Path.cwd(),
             profile_name=profile_name,
             mode="local",
@@ -199,6 +202,7 @@ def load_profile_with_tools(
     base_env: dict[str, str],
     mode: str,
     show_errors: bool = True,
+    agent: str = "",
 ) -> tuple[dict[str, str], dict[str, str], list[str], int]:
     """Load profile env, sandbox images, and tools in one call.
 
@@ -210,6 +214,8 @@ def load_profile_with_tools(
         base_env: Base environment from load_env_chain()
         mode: "sandbox" or "local"
         show_errors: Whether to print error messages (default True)
+        agent: Canonical agent name (e.g. "claude-code").  When empty it is
+            inferred from the profiles filename.
 
     Returns:
         Tuple of (profile_env, sandbox_images, tools, exit_code)
@@ -233,9 +239,9 @@ def load_profile_with_tools(
         return profile_env, sandbox_images, tools, 0
 
     try:
-        agent = _agent_name_from_profiles_path(profiles_path)
+        resolved_agent = agent or _agent_name_from_profiles_path(profiles_path)
         runtime = resolve_agent_runtime(
-            agent,
+            resolved_agent,
             workspace_dir=Path.cwd(),
             profile_name=profile_name,
             mode=mode,
@@ -261,6 +267,7 @@ def _agent_name_from_profiles_path(profiles_path: Path) -> str:
         "open-code.yaml": "open-code",
         "pi-code.yaml": "pi-code",
         "codex-code.yaml": "codex-code",
+        "profiles.yaml": "",  # unified format — agent resolved separately
     }
     if name not in mapping:
         raise ValueError(f"Unknown profiles path: {profiles_path}")

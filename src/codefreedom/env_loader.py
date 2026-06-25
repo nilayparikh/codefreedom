@@ -180,6 +180,23 @@ def load_env_chain(
             if verbose:
                 eprint(f"  [ENV] Loaded {label} from {path}")
 
+    # ── override.yaml vars (highest config priority — above .env.user) ────
+    override_path = codefreedom_dir / "config" / "override.yaml"
+    if override_path.exists():
+        try:
+            import yaml
+
+            with open(override_path, encoding="utf-8") as f:
+                override_data = yaml.safe_load(f)
+            if isinstance(override_data, dict):
+                override_vars = override_data.get("vars", {})
+                if isinstance(override_vars, dict):
+                    merged.update({k: str(v) for k, v in override_vars.items()})
+                    if verbose:
+                        eprint(f"  [ENV] Loaded override.yaml vars from {override_path}")
+        except Exception:
+            pass
+
     # Process environment (highest precedence — machine-level overrides)
     for key, val in os.environ.items():
         merged[key] = val

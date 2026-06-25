@@ -15,18 +15,53 @@ from pydantic import ValidationError
 
 from codefreedom.log import eprint
 from codefreedom.core.interpolate import resolve_env_vars
-from codefreedom.schemas.profiles import ClaudeCodeProfiles
+from codefreedom.schemas.profiles import ClaudeCodeProfiles, ProfilesConfig
+
+# Canonical agent names used in unified profiles.yaml
+_AGENT_NAMES = frozenset({
+    "claude-code", "mimo-code", "open-code", "pi-code", "codex-code",
+})
 
 
 class ProfileError(Exception):
     """Raised when a profile cannot be loaded or is invalid."""
 
 
-def load_profiles(profiles_path: Path) -> Dict[str, Any]:
+def _is_unified_format(profiles_dict: Dict[str, Any]) -> bool:
+    """Detect whether profiles dict uses the unified nested format.
+
+    Unified format: ``profiles.<agent>.profiles.<name>``
+    Legacy format:  ``profiles.<name>``
+
+    Returns True if *every* top-level key is a known agent name whose value
+    contains a nested ``profiles`` key.
+    """
+    if not profiles_dict:
+        return False
+    for key in profiles_dict:
+        val = profiles_dict[key]
+        if not isinstance(val, dict):
+            return False
+        if key not in _AGENT_NAMES:
+            return False
+        if "profiles" not in val or not isinstance(val["profiles"], dict):
+            return False
+    return True
+
+
+def load_profiles(profiles_path: Path, agent: str | None = None) -> Dict[str, Any]:
     """Load and validate the profiles YAML file, with override.yaml merge.
 
     Loads profiles.yaml and merges any overrides from override.yaml.
     Override values take precedence over profiles.yaml values.
+
+    When *agent* is provided and the file uses the unified format
+    (``profiles.<agent>.profiles.<name>``), extracts and returns only that
+    agent's profile entries as a flat dict.  When the file uses the legacy
+    flat format, *agent* is ignored.
+
+    Returns a flat dict mapping profile names to profile definitions
+    (e.g. ``{"default": {"env": {...}}, "bare": {"env": {...}}}``).
     """
     if not profiles_path.exists():
         eprint(f"[ERROR] Profiles file not found: {profiles_path}")
@@ -45,6 +80,24 @@ def load_profiles(profiles_path: Path) -> Dict[str, Any]:
         )
         raise ProfileError(f"Expected a mapping in {profiles_path}")
 
+    raw_profiles = data.get("profiles", {})
+
+    # Detect unified format: profiles.<agent>.profiles.<name>
+    is_unified = _is_unified_format(raw_profiles)
+
+    if is_unified:
+        # Validate with ProfilesConfig (unified-aware schema)
+        try:
+            ProfilesConfig.model_validate(data, strict=False)
+        except ValidationError as exc:
+            eprint(f"[WARN] Profiles validation issue in {profiles_path}: {exc}")
+    else:
+        # Validate with ClaudeCodeProfiles (legacy flat schema)
+        try:
+            ClaudeCodeProfiles.model_validate(data, strict=False)
+        except ValidationError as exc:
+            eprint(f"[WARN] Profiles validation issue in {profiles_path}: {exc}")
+
     # Merge override.yaml values if it exists
     override_path = profiles_path.parent / "override.yaml"
     if override_path.exists():
@@ -52,21 +105,38 @@ def load_profiles(profiles_path: Path) -> Dict[str, Any]:
             with open(override_path, encoding="utf-8") as f:
                 override_data = yaml.safe_load(f)
             if isinstance(override_data, dict):
-                # Merge profiles section
                 override_profiles = override_data.get("profiles", {})
                 if override_profiles:
-                    if "profiles" not in data:
-                        data["profiles"] = {}
-                    for profile_name, profile_overrides in override_profiles.items():
-                        if profile_name not in data["profiles"]:
-                            data["profiles"][profile_name] = {}
-                        # Merge env section
-                        if isinstance(profile_overrides, dict):
+                    if is_unified and agent:
+                        # Unified format: merge overrides into agent's nested profiles
+                        agent_block = raw_profiles.get(agent, {})
+                        agent_profiles = agent_block.get("profiles", {})
+                        for profile_name, profile_overrides in override_profiles.items():
+                            if not isinstance(profile_overrides, dict):
+                                continue
+                            env_overrides = profile_overrides.get("env", {})
+                            if not env_overrides:
+                                continue
+                            if profile_name not in agent_profiles:
+                                agent_profiles[profile_name] = {}
+                            if "env" not in agent_profiles[profile_name]:
+                                agent_profiles[profile_name]["env"] = {}
+                            agent_profiles[profile_name]["env"].update(env_overrides)
+                    elif not is_unified:
+                        # Legacy format: merge overrides into flat profiles
+                        if "profiles" not in data:
+                            data["profiles"] = {}
+                        raw_profiles = data["profiles"]
+                        for profile_name, profile_overrides in override_profiles.items():
+                            if not isinstance(profile_overrides, dict):
+                                continue
+                            if profile_name not in raw_profiles:
+                                raw_profiles[profile_name] = {}
                             env_overrides = profile_overrides.get("env", {})
                             if env_overrides:
-                                if "env" not in data["profiles"][profile_name]:
-                                    data["profiles"][profile_name]["env"] = {}
-                                data["profiles"][profile_name]["env"].update(env_overrides)
+                                if "env" not in raw_profiles[profile_name]:
+                                    raw_profiles[profile_name]["env"] = {}
+                                raw_profiles[profile_name]["env"].update(env_overrides)
         except yaml.YAMLError as e:
             eprint(f"[WARN] Invalid YAML in {override_path}: {e}")
 
@@ -77,13 +147,20 @@ def load_profiles(profiles_path: Path) -> Dict[str, Any]:
     # handled downstream by load_profile_env's resolve_env() which receives
     # the fully-resolved base_env context.
 
-    # Validate with Pydantic (non-fatal — warn on failure, allow extra fields)
-    try:
-        ClaudeCodeProfiles.model_validate(data, strict=False)
-    except ValidationError as exc:
-        eprint(f"[WARN] Profiles validation issue in {profiles_path}: {exc}")
+    # Extract agent-specific profiles from unified format
+    if is_unified:
+        if agent and agent in raw_profiles:
+            profiles = raw_profiles[agent].get("profiles", {})
+        else:
+            # No agent specified — return first agent's profiles as fallback
+            first_key = next(iter(raw_profiles), None)
+            if first_key:
+                profiles = raw_profiles[first_key].get("profiles", {})
+            else:
+                profiles = {}
+    else:
+        profiles = raw_profiles
 
-    profiles = data.get("profiles", {})
     if not profiles:
         eprint("[ERROR] No profiles defined in profiles file.")
         raise ProfileError("No profiles defined in profiles file.")
@@ -249,13 +326,13 @@ def get_profile_tools(
     return merged
 
 
-def list_profiles(profiles_path: Path) -> List[Dict[str, Any]]:
+def list_profiles(profiles_path: Path, agent: str | None = None) -> List[Dict[str, Any]]:
     """Return a list of profile metadata for display."""
     if not profiles_path.exists():
         eprint(f"[PROFILES] No profiles file at {profiles_path}")
         return []
 
-    profiles = load_profiles(profiles_path)
+    profiles = load_profiles(profiles_path, agent=agent)
     result = []
     for name in sorted(profiles.keys()):
         info = profiles[name]
