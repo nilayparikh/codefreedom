@@ -888,23 +888,24 @@ def _check_opencode_binary() -> CheckResult:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def run(verbose: bool = False) -> int:
+def run(verbose: bool = False, show_config: bool = True) -> int:
     """Run the full doctor diagnostic suite.
 
     Args:
         verbose: Show detail messages for all checks (not just failures).
+        show_config: Show resolved configuration tree after checks.
 
     Returns:
         Exit code: 0 if all checks pass, 1 if any failures, 2 if any failures
         plus warnings.
     """
+    from codefreedom.log import bold, cyan, green, red, yellow
+
     print()
     print(f"  CodeFreedom Doctor — {get_codefreedom_dir()}")
     print("  " + "=" * 55)
 
     passed, failed, warned = _run_checks(verbose=verbose)
-
-    from codefreedom.log import bold, green, red, yellow
 
     print()
     if failed == 0 and warned == 0:
@@ -917,6 +918,22 @@ def run(verbose: bool = False) -> int:
         print(
             f"  {red(bold(f'[FAIL] {failed} failure(s), {warned} warning(s), {passed} passed.'))}"
         )
+
+    # ── Resolved Configuration ────────────────────────────────────────────
+    if show_config:
+        try:
+            from codefreedom.config.display import format_resolved_config
+
+            print()
+            print(f"  {cyan(bold('[Resolved Configuration]'))}")
+            config_dir = get_config_dir()
+            config_str = format_resolved_config(config_dir, show_source=True)
+            for line in config_str.splitlines():
+                print(f"  {line}")
+        except Exception as e:
+            print()
+            print(f"  {yellow('[WARN] Could not load resolved configuration:')}")
+            print(f"         {e}")
 
     print()
     return 0 if failed == 0 else (2 if warned > 0 else 1)

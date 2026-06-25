@@ -25,6 +25,8 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from codefreedom.config import load_config
+from codefreedom.config.errors import ConfigError
 from codefreedom.config.runtime import apply_cf_cli_overrides, load_codefreedom_settings
 from codefreedom.core.config import get_codefreedom_dir, get_config_dir
 from codefreedom.docker.pull import pull_if_stale
@@ -127,6 +129,16 @@ def _build_proxy_env() -> Dict[str, str]:
     merged["LITELLM_BIND_HOST"] = settings.proxy.bind_host
     merged["LITELLM_PORT"] = str(settings.proxy.bind_port)
     merged.setdefault("PROXY_PUBLIC_BASE_URL", settings.proxy.public_base_url)
+
+    # Inject SUFFIX_ID from config system so container/project names reflect
+    # the user's override.yaml vars (e.g. SUFFIX_ID: "windemo").
+    try:
+        config = load_config()
+        proxy_component = config.for_component("proxy")
+        merged.setdefault("SUFFIX_ID", proxy_component.get("SUFFIX_ID", "0000"))
+    except (ConfigError, Exception):
+        merged.setdefault("SUFFIX_ID", "0000")
+
     return merged
 
 

@@ -340,6 +340,9 @@ def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
     # has no common section (or an empty one), seed it so interpolation can resolve.
     merged.setdefault("common", {})
     merged["common"].setdefault("suffix_id", "${SUFFIX_ID:-0000}")
+    merged["common"].setdefault("postgres", {})
+    merged["common"]["postgres"].setdefault("host_port", "${POSTGRES_HOST_PORT:-5433}")
+    merged["common"]["postgres"].setdefault("password", "${POSTGRES_PASSWORD:-pgpassword}")
 
     # Step 3: Build resolution context from config layers + CF_CLI_*
     context = _build_context(merged, vars=all_vars)

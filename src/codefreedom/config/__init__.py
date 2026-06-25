@@ -16,6 +16,12 @@ Usage::
 
 from __future__ import annotations
 
+from codefreedom.config.display import (
+    format_resolved_config,
+    is_secret_key,
+    redact_value,
+    resolve_value_source,
+)
 from codefreedom.config.errors import (
     ConfigError,
     CrossReferenceError,
@@ -60,6 +66,11 @@ __all__ = [
     "AgentConfig",
     "ToolConfig",
     "ConfigModel",
+    # Display
+    "format_resolved_config",
+    "is_secret_key",
+    "redact_value",
+    "resolve_value_source",
     # Models
     "AgentDefinition",
     "ProfileEntry",
