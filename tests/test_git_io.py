@@ -37,15 +37,18 @@ def git_repo(tmp_path):
     subprocess.run(["git", "init"], capture_output=True, cwd=str(tmp_path))
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        capture_output=True, cwd=str(tmp_path),
+        capture_output=True,
+        cwd=str(tmp_path),
     )
     subprocess.run(
         ["git", "config", "user.name", "Test"],
-        capture_output=True, cwd=str(tmp_path),
+        capture_output=True,
+        cwd=str(tmp_path),
     )
     subprocess.run(
         ["git", "config", "commit.gpgsign", "false"],
-        capture_output=True, cwd=str(tmp_path),
+        capture_output=True,
+        cwd=str(tmp_path),
     )
     return tmp_path
 

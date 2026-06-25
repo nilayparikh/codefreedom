@@ -68,13 +68,13 @@ def _resolve_recipe_branch() -> str:
 
 def _raw_base(branch: str) -> str:
     return (
-        f"https://raw.githubusercontent.com/"
-        f"{RECIPE_OWNER}/{RECIPE_REPO}/{branch}"
+        f"https://raw.githubusercontent.com/" f"{RECIPE_OWNER}/{RECIPE_REPO}/{branch}"
     )
 
 
 def _github_api_base(branch: str) -> str:
     return f"https://api.github.com/repos/{RECIPE_OWNER}/{RECIPE_REPO}"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Exceptions
@@ -526,8 +526,8 @@ def _read_local_files(
             # Read all files in the directory recursively
             for item in file_path.rglob("*"):
                 if item.is_file():
-                    rel_path = item.relative_to(file_path)
-                    file_key = f"{src_path}/{rel_path}" if src_path else str(rel_path)
+                    rel_path = item.relative_to(file_path).as_posix()
+                    file_key = f"{src_path}/{rel_path}" if src_path else rel_path
                     try:
                         files[file_key] = item.read_text(encoding="utf-8")
                     except (UnicodeDecodeError, OSError):

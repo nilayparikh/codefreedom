@@ -232,7 +232,11 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
                 for file_key, file_content in fdict.items():
                     if not (file_key.startswith(prefix) or file_key == src_dir):
                         continue
-                    rel_path = file_key[len(src_dir) + 1:] if file_key.startswith(prefix) else file_key
+                    rel_path = (
+                        file_key[len(src_dir) + 1 :]
+                        if file_key.startswith(prefix)
+                        else file_key
+                    )
                     if not rel_path:
                         continue
                     if target.endswith("/"):
@@ -350,7 +354,7 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
 
         if not dst.exists():
             diff = _make_diff("", entry["content"], entry["target"], from_devnull=True)
-            safe_name = entry["target"].replace("/", "-")
+            safe_name = entry["target"].replace("/", "-").replace("\\", "-")
             patch_name = f"create-{safe_name}.diff"
             (plans_dir / patch_name).write_text(diff, encoding="utf-8")
             # Also store full content for reliable apply
@@ -383,7 +387,7 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
 
         # REPLACE — write diff for review + full content for reliable apply
         diff = _make_diff(existing, entry["content"], entry["target"])
-        safe_name = entry["target"].replace("/", "-")
+        safe_name = entry["target"].replace("/", "-").replace("\\", "-")
         diff_name = f"replace-{safe_name}.diff"
         (plans_dir / diff_name).write_text(diff, encoding="utf-8")
         content_name = f"replace-{safe_name}.content"

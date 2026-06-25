@@ -32,7 +32,6 @@ from codefreedom.cli.docker_utils import (
     get_codefreedom_container_ports,
     is_port_available,
     load_tool_profile,
-    tool_home,
 )
 from codefreedom.core.config import get_codefreedom_dir, get_config_dir
 from codefreedom.core.settings import resolve_config_value
@@ -535,30 +534,33 @@ def _check_github_profile() -> CheckResult:
 
 
 def _check_tool_profile(name: str, label: str) -> CheckResult:
-    cf_dir = get_codefreedom_dir()
-    profile_file = cf_dir / "profiles" / f"{name}.json"
-    if not profile_file.exists():
-        profile_file = cf_dir / "profiles" / f"{name}.yaml"
+    from codefreedom.core.config import get_config_dir
 
-    if not profile_file.exists():
+    config_dir = get_config_dir()
+    profiles_path = config_dir / "profiles.yaml"
+
+    if not profiles_path.exists():
         return _warn(
-            f"{label} profile not found",
-            f"Run 'cf run tools {name} init' or 'cf s i' to create it",
+            f"{label} profile not found (no profiles.yaml)",
+            "Run 'cf s i' to install a recipe",
         )
 
     try:
-        import json
         import yaml
 
-        if profile_file.suffix == ".json":
-            with open(profile_file, encoding="utf-8") as f:
-                json.load(f)
-        else:
-            with open(profile_file, encoding="utf-8") as f:
-                yaml.safe_load(f)
-        return _ok(f"{label} profile is valid ({profile_file.name})")
-    except (json.JSONDecodeError, yaml.YAMLError) as e:
-        return _fail(f"{label} profile has parse errors: {e}")
+        with open(profiles_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            return _fail("profiles.yaml is not a valid mapping")
+        tools = data.get("tools", {})
+        if name in tools:
+            return _ok(f"{label} profile found in profiles.yaml (tools.{name})")
+        return _warn(
+            f"{label} profile not found in profiles.yaml",
+            f"Run 'cf s i' to install a recipe with {name} config",
+        )
+    except (yaml.YAMLError, OSError) as e:
+        return _fail(f"profiles.yaml has parse errors: {e}")
 
 
 # ── Section: Env Vars (Proxy) ──────────────────────────────────────────────
@@ -686,23 +688,35 @@ def _check_sandbox_dir() -> CheckResult:
 
 @_section("Sandbox")
 def _check_sandbox_profiles() -> CheckResult:
-    cf_dir = get_codefreedom_dir()
-    profile_file = cf_dir / "profiles" / "claude-code.json"
-    if not profile_file.exists():
-        return _skip("(no claude-code profile to check sandbox settings)")
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    profiles_path = config_dir / "profiles.yaml"
+    if not profiles_path.exists():
+        return _skip("(no profiles.yaml to check sandbox settings)")
 
     try:
-        import json
+        import yaml
 
-        with open(profile_file, encoding="utf-8") as f:
-            profiles = json.load(f)
-        profiles_list = profiles.get("profiles", {})
-        for pname, pdata in profiles_list.items():
-            if isinstance(pdata, dict) and "sandbox_images" in pdata:
-                return _ok(f"Profile '{pname}' has sandbox image configuration")
+        with open(profiles_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            return _skip("(could not read profiles.yaml)")
+        profiles_section = data.get("profiles", {})
+        if isinstance(profiles_section, dict):
+            for aname, agent_data in profiles_section.items():
+                if not isinstance(agent_data, dict):
+                    continue
+                agent_profiles = agent_data.get("profiles", {})
+                if isinstance(agent_profiles, dict):
+                    for pname, pdata in agent_profiles.items():
+                        if isinstance(pdata, dict) and "sandbox_images" in pdata:
+                            return _ok(
+                                f"Profile '{aname}.{pname}' has sandbox image configuration"
+                            )
         return _skip("(no sandbox images configured in profiles)")
-    except (json.JSONDecodeError, OSError):
-        return _skip("(could not read profile)")
+    except (yaml.YAMLError, OSError):
+        return _skip("(could not read profiles.yaml)")
 
 
 # ── Section: Proxy Status ──────────────────────────────────────────────────
@@ -773,7 +787,7 @@ def _check_web_bridge_running() -> CheckResult:
 def _check_chrome_cdp_port() -> CheckResult:
     settings = _get_chrome_settings()
     port = settings["port"]
-    hint = f"{tool_home()}/profiles/chrome.yaml (chrome.port)"
+    hint = f"{get_config_dir()}/profiles.yaml (tools.chrome.port)"
     return _check_port(port, "Chrome CDP", hint)
 
 
@@ -781,7 +795,7 @@ def _check_chrome_cdp_port() -> CheckResult:
 def _check_chrome_mcp_port() -> CheckResult:
     settings = _get_chrome_settings()
     port = settings.get("mcp_port", 9223)
-    hint = f"{tool_home()}/profiles/chrome.yaml (chrome.mcp_port)"
+    hint = f"{get_config_dir()}/profiles.yaml (tools.chrome.mcp_port)"
     return _check_port(port, "Chrome MCP", hint)
 
 
@@ -789,7 +803,7 @@ def _check_chrome_mcp_port() -> CheckResult:
 def _check_web_port() -> CheckResult:
     settings = _get_web_settings()
     port = settings["port"]
-    hint = f"{tool_home()}/profiles/web.yaml (web.port)"
+    hint = f"{get_config_dir()}/profiles.yaml (tools.web.port)"
     return _check_port(port, "Web search (Camoufox)", hint)
 
 

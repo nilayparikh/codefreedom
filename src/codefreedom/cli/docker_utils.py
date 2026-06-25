@@ -548,24 +548,27 @@ def tool_data_dir(tool_name: str) -> str:
 
 
 def tool_profile_path(tool_filename: str) -> Path:
-    """Return the tool profile path (~/.codefreedom/profiles/<filename>)."""
-    return tool_home() / "profiles" / tool_filename
+    """Return the unified profiles.yaml path (tool configs live under tools:)."""
+    from codefreedom.core.config import get_config_dir
+
+    return get_config_dir() / "profiles.yaml"
 
 
 def init_tool_redirect(tool_filename: str) -> int:
     """Redirect tool init to the recipe system.
 
     Standard init handler for all tools — points users to ``cf setup init``.
+    Checks if the unified profiles.yaml exists (tools live under tools: key).
     """
-    profile_path = tool_home() / "profiles" / tool_filename
+    from codefreedom.core.config import get_config_dir
+
+    profile_path = get_config_dir() / "profiles.yaml"
     if profile_path.exists():
         tool_label = tool_filename.replace(".yaml", "")
-        eprint(
-            f"[{tool_label}] Profile already exists at ~/.codefreedom/profiles/{tool_filename}."
-        )
+        eprint(f"[{tool_label}] Unified profiles.yaml found at {profile_path}.")
         return 0
     eprint(
-        f"[{tool_label}] No profile found."
+        f"[{tool_label}] No profiles.yaml found."
         " Run 'cf s i' to install the default recipe."
     )
     label = tool_filename.replace(".yaml", "")
@@ -796,11 +799,13 @@ def status_tool_container(settings: dict, label: str, extra_info: str = "") -> i
 
 
 def start_tool_init_gate(profile_filename: str, label: str) -> bool:
-    """Check that the tool profile exists.  Prints help if missing.
+    """Check that the tool profile exists in unified profiles.yaml.
 
-    Returns True if profile exists, False otherwise.
+    Returns True if profiles.yaml exists, False otherwise.
     """
-    profile_path = tool_home() / "profiles" / profile_filename
+    from codefreedom.core.config import get_config_dir
+
+    profile_path = get_config_dir() / "profiles.yaml"
     if profile_path.exists():
         return True
 
