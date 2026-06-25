@@ -22,15 +22,27 @@ def _tool_home() -> Path:
 
 
 def _write_tool_profile(tool, data):
-    """Write a tool profile YAML to the tool home test dir.
+    """Write tool profile to unified profiles.yaml in config directory."""
+    from codefreedom.core.config import get_config_dir
 
-    Tool profiles live under ``CODEFREEDOM_TOOL_HOME`` (set by
-    conftest.py to the same session-scoped temp directory).
-    """
-    profiles = _tool_home() / "profiles"
-    profiles.mkdir(parents=True, exist_ok=True)
-    with open(profiles / f"{tool}.yaml", "w") as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+    config_dir = get_config_dir()
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load existing profiles.yaml or create new one
+    profiles_path = config_dir / "profiles.yaml"
+    if profiles_path.exists():
+        with open(profiles_path, encoding="utf-8") as f:
+            existing = yaml.safe_load(f) or {}
+    else:
+        existing = {}
+
+    # Merge tools section
+    if "tools" not in existing:
+        existing["tools"] = {}
+    existing["tools"].update(data)
+
+    with open(profiles_path, "w", encoding="utf-8") as f:
+        yaml.dump(existing, f, default_flow_style=False, sort_keys=False)
 
 
 class TestLoadToolMcpEndpoints:

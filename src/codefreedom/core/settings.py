@@ -22,7 +22,7 @@ from codefreedom.core.profiles import (
     load_profile_env,
     load_profiles,
 )
-from codefreedom.env_loader import get_env, load_dotenv
+from codefreedom.env_loader import get_env
 
 
 @dataclass(frozen=True)
@@ -134,42 +134,20 @@ def resolve_config_value(
 ) -> tuple[str | None, str | None]:
     """Resolve a config or secret value through the common module.
 
+    All secrets must come from machine environment variables with CF_CLI_* prefix.
+    No .env.* files are read for secrets.
+
     Priority:
-      1. ``CF_CLI_<NAME>`` in machine env
-      2. ``NAME`` in machine env
-      3. ``.env.user`` in CodeFreedom home
-      4. extra env files passed by caller
-      5. canonical merged env chain via get_env()
+      1. ``CF_CLI_<NAME>`` in machine env (only source for secrets)
+      2. ``NAME`` in machine env (for non-secret config values)
     """
+    # Only CF_CLI_* machine env vars are allowed for secrets
     cf_cli = f"CF_CLI_{name}"
     if cf_cli in os.environ and os.environ[cf_cli]:
         return os.environ[cf_cli], "CF_CLI_* override"
 
     if name in os.environ and os.environ[name]:
         return os.environ[name], "machine env"
-
-    user_env_path = (
-        Path(os.environ.get("CODEFREEDOM_HOME", "")).expanduser() / ".env.user"
-    )
-    if os.environ.get("CODEFREEDOM_HOME"):
-        if user_env_path.exists():
-            user_env = load_dotenv(user_env_path)
-            value = user_env.get(name)
-            if value and value != "CHANGE_ME":
-                return value, ".env.user"
-
-    if extra_env_files:
-        for env_file in extra_env_files:
-            if env_file.exists():
-                parsed = load_dotenv(env_file)
-                value = parsed.get(name)
-                if value and value != "CHANGE_ME":
-                    return value, env_file.name
-
-    merged = get_env(workspace_dir, component=component, verbose=False)
-    value = merged.get(name)
-    if value:
-        return value, "merged env chain"
 
     return None, None
 

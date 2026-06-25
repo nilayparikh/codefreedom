@@ -58,12 +58,12 @@ def test_resolve_agent_runtime_uses_agent_component(
     monkeypatch, tmp_path: Path
 ) -> None:
     cf_dir = tmp_path / ".codefreedom"
-    profiles_dir = cf_dir / "profiles"
-    profiles_dir.mkdir(parents=True)
+    config_dir = cf_dir / "config"
+    config_dir.mkdir(parents=True)
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_dir))
 
     (cf_dir / ".env.mimo").write_text("SPECIAL_COMPONENT=from_mimo\n", encoding="utf-8")
-    (profiles_dir / "mimo-code.yaml").write_text(
+    (config_dir / "profiles.yaml").write_text(
         yaml.safe_dump(
             {
                 "profiles": {
@@ -97,23 +97,26 @@ def test_resolve_config_value_uses_common_precedence(
     cf_dir = tmp_path / ".codefreedom"
     cf_dir.mkdir(parents=True)
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_dir))
-    (cf_dir / ".env.user").write_text("MY_VAR=user-value\n", encoding="utf-8")
-    env_file = tmp_path / ".env.test"
-    env_file.write_text("MY_VAR=file-value\n", encoding="utf-8")
 
     value, source = resolve_config_value(
         "MY_VAR",
         workspace_dir=tmp_path,
-        extra_env_files=[env_file],
     )
-    assert value == "user-value"
-    assert source == ".env.user"
+    assert value is None
+    assert source is None
+
+    monkeypatch.setenv("MY_VAR", "direct-value")
+    value, source = resolve_config_value(
+        "MY_VAR",
+        workspace_dir=tmp_path,
+    )
+    assert value == "direct-value"
+    assert source == "machine env"
 
     monkeypatch.setenv("CF_CLI_MY_VAR", "cf-cli-value")
     value, source = resolve_config_value(
         "MY_VAR",
         workspace_dir=tmp_path,
-        extra_env_files=[env_file],
     )
     assert value == "cf-cli-value"
     assert source == "CF_CLI_* override"

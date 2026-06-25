@@ -25,26 +25,30 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir, get_config_dir
 from codefreedom.core.settings import load_codefreedom_settings
 from codefreedom.docker.pull import pull_if_stale
 from codefreedom.log import eprint, tag
-from codefreedom.env_loader import get_env, load_dotenv
+from codefreedom.env_loader import get_env
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 
 
 def _find_compose_file() -> Optional[Path]:
-    """Find the LiteLLM docker-compose file in ~/.codefreedom/proxy/."""
-    candidate = get_codefreedom_dir() / "proxy" / "docker-compose.yaml"
+    """Find the LiteLLM docker-compose file in ~/.codefreedom/config/proxy/."""
+
+    config_dir = get_config_dir()
+    candidate = config_dir / "proxy" / "docker-compose.yaml"
     if candidate.exists():
         return candidate
     return None
 
 
 def _find_config_file() -> Optional[Path]:
-    """Find the LiteLLM config.yaml in ~/.codefreedom/proxy/config/."""
-    candidate = get_codefreedom_dir() / "proxy" / "config" / "config.yaml"
+    """Find the LiteLLM config.yaml in ~/.codefreedom/config/proxy/config/."""
+
+    config_dir = get_config_dir()
+    candidate = config_dir / "proxy" / "config" / "config.yaml"
     if candidate.exists():
         return candidate
     return None
@@ -79,22 +83,22 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _load_proxy_env_files() -> Dict[str, str]:
-    """Load proxy env files only (no os.environ, no CF_CLI_*).
+    """Load proxy env from machine environment variables only.
 
-    Used by ``_validate()`` which needs to inspect raw file contents.
+    All secrets must come from CF_CLI_* machine environment variables.
+    No .env.* files are read for secrets.
+
+    Used by ``_validate()`` which needs to inspect env values.
     All other callers should use :func:`_build_proxy_env` which goes
     through the full :func:`get_env` chain.
-
-    Returns a merged dict where later files override earlier ones.
     """
+    import os
+
     merged: Dict[str, str] = {}
-    for env_path in [
-        get_codefreedom_dir() / ".env.proxy",
-        get_codefreedom_dir() / ".env.proxy.secrets",
-        get_codefreedom_dir() / ".env.user",
-    ]:
-        if env_path.exists():
-            merged.update(load_dotenv(env_path))
+    # Only load from os.environ (CF_CLI_* vars are already resolved)
+    for key, value in os.environ.items():
+        if value:
+            merged[key] = value
     return merged
 
 

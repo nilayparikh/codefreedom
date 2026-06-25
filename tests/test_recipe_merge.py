@@ -273,7 +273,7 @@ class TestInstallRecipeFiles:
             ".env.test": "TEST=hello\n",
         }
 
-        count = _install_recipe_files(manifest, files, tmp_path)
+        count = _install_recipe_files(manifest, files, tmp_path, config_dir=tmp_path)
         assert count == 2
         assert (tmp_path / "config" / "config.yaml").exists()
         assert (tmp_path / ".env.test").exists()
@@ -289,7 +289,7 @@ class TestInstallRecipeFiles:
             "cfg.yaml": yaml.dump({"keep": "this", "update": "new", "add": "extra"}),
         }
 
-        count = _install_recipe_files(manifest, files, tmp_path)
+        count = _install_recipe_files(manifest, files, tmp_path, config_dir=tmp_path)
         assert count == 1
         parsed = yaml.safe_load((tmp_path / "cfg.yaml").read_text())
         assert parsed["keep"] == "this"
@@ -305,7 +305,7 @@ class TestInstallRecipeFiles:
         (tmp_path / ".env").write_text("EXISTING=stays\n")
         files = {".env": "EXISTING=changes\nNEW=added\n"}
 
-        count = _install_recipe_files(manifest, files, tmp_path)
+        count = _install_recipe_files(manifest, files, tmp_path, config_dir=tmp_path)
         assert count == 1
         content = (tmp_path / ".env").read_text()
         assert "EXISTING=stays" in content
@@ -319,7 +319,7 @@ class TestInstallRecipeFiles:
         }
         (tmp_path / ".env.proxy").write_text("EXISTING=kept\n")
         files = {".env.proxy": "NEW_VAR=val\n"}
-        count = _install_recipe_files(manifest, files, tmp_path)
+        count = _install_recipe_files(manifest, files, tmp_path, config_dir=tmp_path)
         assert count == 1
         content = (tmp_path / ".env.proxy").read_text()
         assert "EXISTING=kept" in content
@@ -333,7 +333,7 @@ class TestInstallRecipeFiles:
         }
         (tmp_path / "settings.yaml").write_text(yaml.dump({"keep": 1}))
         files = {"settings.yaml": yaml.dump({"keep": 1, "add": 2})}
-        count = _install_recipe_files(manifest, files, tmp_path)
+        count = _install_recipe_files(manifest, files, tmp_path, config_dir=tmp_path)
         assert count == 1
         parsed = yaml.safe_load((tmp_path / "settings.yaml").read_text())
         assert parsed == {"keep": 1, "add": 2}

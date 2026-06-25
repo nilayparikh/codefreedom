@@ -23,7 +23,11 @@ class ProfileError(Exception):
 
 
 def load_profiles(profiles_path: Path) -> Dict[str, Any]:
-    """Load and validate the profiles YAML file."""
+    """Load and validate the profiles YAML file, with override.yaml merge.
+
+    Loads profiles.yaml and merges any overrides from override.yaml.
+    Override values take precedence over profiles.yaml values.
+    """
     if not profiles_path.exists():
         eprint(f"[ERROR] Profiles file not found: {profiles_path}")
         raise ProfileError(f"Profiles file not found: {profiles_path}")
@@ -40,6 +44,31 @@ def load_profiles(profiles_path: Path) -> Dict[str, Any]:
             f"[ERROR] Expected a mapping in {profiles_path}, got {type(data).__name__}"
         )
         raise ProfileError(f"Expected a mapping in {profiles_path}")
+
+    # Merge override.yaml values if it exists
+    override_path = profiles_path.parent / "override.yaml"
+    if override_path.exists():
+        try:
+            with open(override_path, encoding="utf-8") as f:
+                override_data = yaml.safe_load(f)
+            if isinstance(override_data, dict):
+                # Merge profiles section
+                override_profiles = override_data.get("profiles", {})
+                if override_profiles:
+                    if "profiles" not in data:
+                        data["profiles"] = {}
+                    for profile_name, profile_overrides in override_profiles.items():
+                        if profile_name not in data["profiles"]:
+                            data["profiles"][profile_name] = {}
+                        # Merge env section
+                        if isinstance(profile_overrides, dict):
+                            env_overrides = profile_overrides.get("env", {})
+                            if env_overrides:
+                                if "env" not in data["profiles"][profile_name]:
+                                    data["profiles"][profile_name]["env"] = {}
+                                data["profiles"][profile_name]["env"].update(env_overrides)
+        except yaml.YAMLError as e:
+            eprint(f"[WARN] Invalid YAML in {override_path}: {e}")
 
     # NOTE: Do NOT interpolate ${VAR} references here.  load_profiles() runs
     # BEFORE the env chain (load_env_chain) has resolved CF_CLI_* overrides,

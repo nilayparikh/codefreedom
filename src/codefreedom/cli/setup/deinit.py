@@ -26,7 +26,7 @@ import subprocess
 import os
 from pathlib import Path
 
-from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir, get_config_dir
 from codefreedom.log import eprint, tag
 
 
@@ -66,7 +66,8 @@ def _stop_and_remove_container(name: str) -> None:
 
 def _stop_proxy(cf_dir: Path) -> int:
     """Stop the CodeFreedom proxy via docker compose down, if compose file exists."""
-    compose_file = cf_dir / "proxy" / "docker-compose.yaml"
+    config_dir = get_config_dir()
+    compose_file = config_dir / "proxy" / "docker-compose.yaml"
     if not compose_file.exists():
         return 0
 
@@ -136,29 +137,42 @@ def _stop_tools() -> int:
 def _remove_codefreedom_dir(cf_dir: Path) -> None:
     """Remove all contents of the CodeFreedom home directory.
 
-    Preserves ``.env.user`` — it's a user-managed override file that should
+    Preserves ``config/override.yaml`` — it's a user-managed override file that should
     survive a full teardown. Prints a message telling the user where it is.
     Removes contents rather than the directory itself to avoid Windows
     ``WinError 32`` (directory held open by another process).
     """
     if not cf_dir.exists():
-        eprint(f"{tag('DEINIT')} Directory '{cf_dir}' does not exist — nothing to remove.")
+        eprint(
+            f"{tag('DEINIT')} Directory '{cf_dir}' does not exist — nothing to remove."
+        )
         return
 
-    # Preserve .env.user — user-managed override, never auto-created by recipes
-    user_env = cf_dir / ".env.user"
+    config_dir = cf_dir / "config"
+
+    # Preserve override.yaml in config directory — user-managed override
+    override_path = config_dir / "override.yaml"
     preserved = None
-    if user_env.exists():
+    if override_path.exists():
         try:
-            preserved = user_env.read_text(encoding="utf-8")
+            preserved = override_path.read_text(encoding="utf-8")
         except OSError:
             pass
 
-    eprint(f"{tag('DEINIT')} Removing contents of '{cf_dir}' (preserving .env.user)...")
+    eprint(
+        f"{tag('DEINIT')} Removing contents of '{cf_dir}' (preserving config/override.yaml)..."
+    )
 
     errors: list[str] = []
     for item in sorted(cf_dir.iterdir(), key=lambda p: p.name):
-        if item.name == ".env.user":
+        # Skip agent home dirs (claude-code/, mimo-code/, etc.) - not managed by CLI
+        if item.name in (
+            "claude-code",
+            "mimo-code",
+            "open-code",
+            "codex-code",
+            "pi-code",
+        ):
             continue
         try:
             if item.is_dir():
@@ -171,21 +185,24 @@ def _remove_codefreedom_dir(cf_dir: Path) -> None:
     if errors:
         for line in errors:
             eprint(line)
-        eprint(f"{tag('DEINIT')} Some items could not be removed (files may be in use).")
+        eprint(
+            f"{tag('DEINIT')} Some items could not be removed (files may be in use)."
+        )
     else:
         eprint(f"{tag('DEINIT')} Contents removed.")
 
-    # Restore .env.user if it was deleted (shouldn't be, but defensive)
-    if preserved is not None and not user_env.exists():
+    # Restore override.yaml if it was deleted (shouldn't be, but defensive)
+    if preserved is not None and not override_path.exists():
         try:
-            user_env.write_text(preserved, encoding="utf-8")
-            eprint(f"{tag('DEINIT')} Restored '{user_env}' (user overrides).")
+            config_dir.mkdir(parents=True, exist_ok=True)
+            override_path.write_text(preserved, encoding="utf-8")
+            eprint(f"{tag('DEINIT')} Restored '{override_path}' (user overrides).")
         except OSError as exc:
-            eprint(f"   {tag('WARN')} Could not restore .env.user: {exc}")
+            eprint(f"   {tag('WARN')} Could not restore override.yaml: {exc}")
     elif preserved is not None:
-        eprint(f"{tag('DEINIT')} Preserved '{user_env}' (user overrides).")
+        eprint(f"{tag('DEINIT')} Preserved '{override_path}' (user overrides).")
 
-    # If no .env.user was preserved, remove the now-empty directory itself
+    # If no override.yaml was preserved, remove the now-empty directory itself
     if preserved is None:
         try:
             cf_dir.rmdir()
@@ -377,7 +394,9 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Step 6: Confirm and remove CodeFreedom home directory ────────────
     if not cf_dir.exists():
-        eprint(f"{tag('DEINIT')} Directory '{cf_dir}' does not exist — nothing more to do.")
+        eprint(
+            f"{tag('DEINIT')} Directory '{cf_dir}' does not exist — nothing more to do."
+        )
         eprint(f"{tag('DEINIT')} Teardown complete.")
         return 0
 

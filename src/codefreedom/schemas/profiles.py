@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -39,12 +39,18 @@ class ProfileEntry(BaseModel, extra="forbid"):
     lsp_servers: Optional[Dict[str, List[str]]] = None
 
 
-class ClaudeCodeProfiles(BaseModel, extra="forbid"):
-    """Schema for claude-code-profiles.yaml."""
+class ClaudeCodeProfiles(BaseModel, extra="ignore"):
+    """Schema for profiles.yaml — unified profiles file.
+
+    Accepts 'common' and 'tools' fields that are used during recipe
+    installation but not needed for agent profile loading.
+    """
 
     description: Optional[str] = None
     notes: Optional[List[str]] = None
+    common: Optional[Dict[str, Any]] = None
     profiles: Dict[str, ProfileEntry]
+    tools: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_yaml(cls, path: Path) -> "ClaudeCodeProfiles":

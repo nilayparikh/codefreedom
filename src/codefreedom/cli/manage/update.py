@@ -35,7 +35,7 @@ from codefreedom.core.http_client import (
     get_json,
     get_response,
 )
-from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.config import get_config_dir
 from codefreedom.log import eprint
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -309,7 +309,7 @@ def discover_images() -> list[dict[str, str]]:
     if not pulled:
         return []
 
-    cf_dir = get_codefreedom_dir()
+    config_dir = get_config_dir()
     images: list[dict[str, str]] = []
     seen: set[str] = set()
 
@@ -333,43 +333,28 @@ def discover_images() -> list[dict[str, str]]:
         if norm not in profile_images:
             profile_images[norm] = (img, source, service)
 
-    # 1. claude-code.yaml profiles
-    data = _read_yaml(cf_dir / "profiles" / "claude-code.yaml")
-    if data:
-        for pname, pdef in data.get("profiles", {}).items():
+    # 1. Unified profiles.yaml — extract sandbox_images and tools
+    profiles_data = _read_yaml(config_dir / "profiles.yaml")
+    if profiles_data:
+        profiles_section = profiles_data.get("profiles", {})
+        for pname, pdef in profiles_section.items():
+            if not isinstance(pdef, dict):
+                continue
             for stype, img in pdef.get("sandbox_images", {}).items():
                 if isinstance(img, str):
+                    _add_profile(img, "profiles.yaml", f"{pname} sandbox ({stype})")
+        tools_section = profiles_data.get("tools", {})
+        if isinstance(tools_section, dict):
+            for tname, tdef in tools_section.items():
+                if isinstance(tdef, dict):
                     _add_profile(
-                        img, f"claude-code.yaml ({pname})", f"sandbox ({stype})"
+                        tdef.get("image", ""),
+                        "profiles.yaml",
+                        tname,
                     )
 
-    # 2. chrome.yaml profile
-    chrome_data = _read_yaml(cf_dir / "profiles" / "chrome.yaml")
-    if chrome_data:
-        _add_profile(
-            chrome_data.get("chrome", {}).get("image", ""),
-            "profiles/chrome.yaml",
-            "chrome",
-        )
-
-    # 3. web.yaml profile
-    web_data = _read_yaml(cf_dir / "profiles" / "web.yaml")
-    if web_data:
-        _add_profile(
-            web_data.get("web", {}).get("image", ""), "profiles/web.yaml", "web"
-        )
-
-    # 4. github.yaml profile
-    github_data = _read_yaml(cf_dir / "profiles" / "github.yaml")
-    if github_data:
-        _add_profile(
-            github_data.get("github", {}).get("image", ""),
-            "profiles/github.yaml",
-            "github",
-        )
-
-    # 5. proxy docker-compose.yaml
-    compose_path = cf_dir / "proxy" / "docker-compose.yaml"
+    # 2. proxy docker-compose.yaml
+    compose_path = config_dir / "proxy" / "docker-compose.yaml"
     if compose_path.exists():
         try:
             text = compose_path.read_text(encoding="utf-8")
@@ -556,7 +541,9 @@ def check_pypi() -> dict[str, Any] | None:
     if remote_parsed > local_parsed:
         is_prerelease = re.search(r"(rc|alpha|beta|a|b)\d+", remote_version)
         if is_prerelease:
-            uv_cmd = f"uv tool upgrade {PYPI_PACKAGE}=={remote_version} --prerelease=allow"
+            uv_cmd = (
+                f"uv tool upgrade {PYPI_PACKAGE}=={remote_version} --prerelease=allow"
+            )
         else:
             uv_cmd = f"uv tool upgrade {PYPI_PACKAGE}=={remote_version}"
         pip_cmd = f"pip install --upgrade {PYPI_PACKAGE}=={remote_version}"

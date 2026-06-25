@@ -34,7 +34,7 @@ from codefreedom.cli.docker_utils import (
     load_tool_profile,
     tool_home,
 )
-from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir, get_config_dir
 from codefreedom.core.settings import resolve_config_value
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -177,8 +177,10 @@ def _check_cf_dir_exists() -> CheckResult:
 
 @_section("CodeFreedom Home")
 def _check_recipe_instruction() -> CheckResult:
-    cf_dir = get_codefreedom_dir()
-    recipe_file = cf_dir / "RECIPE.md"
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    recipe_file = config_dir / "RECIPE.md"
     if recipe_file.exists():
         content = recipe_file.read_text(encoding="utf-8")
         # Extract recipe name from the first line
@@ -202,19 +204,21 @@ def _check_cf_dir_permissions() -> CheckResult:
 
 @_section("CodeFreedom Home")
 def _check_cf_dir_structure() -> CheckResult:
-    """Check that key subdirectories exist."""
-    cf_dir = get_codefreedom_dir()
-    expected_dirs = ["profiles", "proxy", "proxy/config"]
+    """Check that key subdirectories exist in config directory."""
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    expected_dirs = ["proxy", "proxy/config"]
     missing = []
     for sub in expected_dirs:
-        if not (cf_dir / sub).is_dir():
+        if not (config_dir / sub).is_dir():
             missing.append(sub)
     if missing:
         return _warn(
-            f"Missing subdirectories: {', '.join(missing)}",
+            f"Missing config subdirectories: {', '.join(missing)}",
             "Run 'cf s i' to create them",
         )
-    return _ok("All key subdirectories present")
+    return _ok("All config subdirectories present")
 
 
 # ── Section: Docker ────────────────────────────────────────────────────────
@@ -365,10 +369,7 @@ def _get_web_bridge_settings() -> dict:
 
 
 ESSENTIAL_PROFILE_FILES = [
-    "chrome.yaml",
-    "web.yaml",
-    "github.yaml",
-    "web-bridge.yaml",
+    "profiles.yaml",  # Unified profiles file
 ]
 
 ESSENTIAL_PROXY_FILES = [
@@ -379,13 +380,10 @@ ESSENTIAL_PROXY_FILES = [
 
 @_section("Config Files")
 def _check_profile_files() -> CheckResult:
-    tool_home = _resolve_tool_home()
-    profiles_dir = tool_home / "profiles"
-    discovered = (
-        sorted(p.name for p in profiles_dir.glob("*.yaml") if p.is_file())
-        if profiles_dir.is_dir()
-        else []
-    )
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    discovered = sorted(p.name for p in config_dir.glob("*.yaml") if p.is_file())
     missing = [f for f in ESSENTIAL_PROFILE_FILES if f not in discovered]
     if missing:
         return _warn(
@@ -399,10 +397,10 @@ def _check_profile_files() -> CheckResult:
 
 @_section("Config Files")
 def _check_proxy_config_files() -> CheckResult:
-    cf_dir = get_codefreedom_dir()
+    config_dir = get_config_dir()
     missing = []
     for rel_path, label in ESSENTIAL_PROXY_FILES:
-        if not (cf_dir / rel_path).exists():
+        if not (config_dir / rel_path).exists():
             missing.append(f"{label} ({rel_path})")
     if missing:
         return _fail(
@@ -414,19 +412,19 @@ def _check_proxy_config_files() -> CheckResult:
 
 @_section("Config Files")
 def _check_claude_code_profile() -> CheckResult:
-    """Check claude-code profile (legacy .json or new .yaml name)."""
-    cf_dir = get_codefreedom_dir()
+    """Check claude-code profile (unified profiles.yaml)."""
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
     candidates = [
-        cf_dir / "profiles" / "claude-code.json",
-        cf_dir / "profiles" / "claude-code.yaml",
-        cf_dir / "profiles" / "claude-code-profiles.yaml",
+        config_dir / "profiles.yaml",
     ]
     found = [p for p in candidates if p.exists()]
     if found:
         return _ok(f"Claude Code profile found: {found[0].name}")
     return _warn(
         "No Claude Code profile file found",
-        "Looked for: claude-code.json, claude-code.yaml, claude-code-profiles.yaml",
+        "Run 'cf s i' to install a recipe",
     )
 
 
@@ -568,59 +566,54 @@ def _check_tool_profile(name: str, label: str) -> CheckResult:
 
 def _resolve_env_var_value(
     name: str,
-    env_files: Optional[List[Path]] = None,
+    env_files: list[Path] | None = None,
 ) -> Tuple[Optional[str], Optional[str]]:
-    """Resolve an env var value across all sources.
+    """Resolve an env var value from machine environment variables only.
+
+    All secrets must come from machine environment variables with CF_CLI_* prefix.
+    No .env.* files are read for secrets.
 
     Checks (in priority order):
-    1. ``CF_CLI_<NAME>`` in ``os.environ`` (highest priority machine override)
-    2. ``NAME`` directly in ``os.environ``
-    3. ``NAME=`` in ``~/.codefreedom/.env.user``
-    4. ``NAME=`` in the provided *env_files*
+    1. ``CF_CLI_<NAME>`` in ``os.environ`` (only source for secrets)
+    2. ``NAME`` directly in ``os.environ`` (for non-secret config)
 
-    Returns ``(value, source_description)`` or ``(None, None)`` if not found
-    in any source.
+    Returns ``(value, source_description)`` or ``(None, None)`` if not found.
     """
     return resolve_config_value(
         name,
         workspace_dir=Path.cwd(),
-        extra_env_files=env_files,
     )
 
 
 @_section("Environment Variables (Proxy)")
 def _check_litellm_master_key() -> CheckResult:
     return _check_env_var(
-        "LITELLM_MASTER_KEY", "Proxy master key", ".env.proxy.secrets"
+        "LITELLM_MASTER_KEY", "Proxy master key", "CF_CLI_LITELLM_MASTER_KEY"
     )
 
 
 def _check_env_var(name: str, label: str, source_hint: str) -> CheckResult:
-    """Check that an env var is set across all sources (env, CF_CLI_*, files).
+    """Check that an env var is set from machine environment variables only.
 
     Uses :func:`_resolve_env_var_value` for a single code path that considers
-    ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
+    ``CF_CLI_*`` machine overrides and direct ``os.environ``.
     """
-    cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.proxy.secrets"]
-    value, source = _resolve_env_var_value(name, env_files=env_files)
+    value, source = _resolve_env_var_value(name)
     if value is not None:
         return _ok(f"{name} is set ({label})")
     return _fail(
         f"{name} is not set ({label})",
-        f"Set it in {source_hint} or export CF_CLI_{name}=... in your shell",
+        f"Export CF_CLI_{name}=... in your shell",
     )
 
 
 def _check_env_var_optional(name: str, label: str, _source_hint: str) -> CheckResult:
-    """Check an optional env var across all sources (env, CF_CLI_*, files).
+    """Check an optional env var from machine environment variables only.
 
     Uses :func:`_resolve_env_var_value` for a single code path that considers
-    ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
+    ``CF_CLI_*`` machine overrides and direct ``os.environ``.
     """
-    cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.proxy.secrets"]
-    value, source = _resolve_env_var_value(name, env_files=env_files)
+    value, source = _resolve_env_var_value(name)
     if value is not None:
         return _ok(f"{name} is set ({label})")
     return _skip(f"{name} is not set (optional — {label})")
@@ -633,25 +626,26 @@ def _load_claude_profile_env() -> dict[str, str]:
     """Load env vars from the Claude Code profile's default profile.
 
     Returns the ``env`` dict from the ``default`` profile in
-    ``profiles/claude-code.yaml``, or an empty dict if not found.
+    ``profiles.yaml``, or an empty dict if not found.
     """
     import yaml
 
-    cf_dir = get_codefreedom_dir()
-    for name in ("claude-code.yaml", "claude-code-profiles.yaml"):
-        path = cf_dir / "profiles" / name
-        if path.exists():
-            try:
-                with open(path, encoding="utf-8") as f:
-                    data = yaml.safe_load(f)
-                if isinstance(data, dict):
-                    profiles = data.get("profiles", {})
-                    default = profiles.get("default", {})
-                    env = default.get("env", {})
-                    if isinstance(env, dict):
-                        return {k: str(v) for k, v in env.items()}
-            except Exception:
-                pass
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    path = config_dir / "profiles.yaml"
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict):
+                profiles = data.get("profiles", {})
+                default = profiles.get("default", {})
+                env = default.get("env", {})
+                if isinstance(env, dict):
+                    return {k: str(v) for k, v in env.items()}
+        except Exception:
+            pass
     return {}
 
 
@@ -666,21 +660,13 @@ def _check_anthropic_auth_token() -> CheckResult:
 
 
 def _check_claude_env_var(name: str, label: str) -> CheckResult:
-    """Check a Claude env var across profiles, env, CF_CLI_*, and files.
+    """Check a Claude env var from machine environment variables only.
 
     Resolution order:
-    1. Claude Code profile (``profiles/claude-code.yaml`` → default → env)
-    2. ``CF_CLI_<NAME>`` machine override
-    3. ``NAME`` directly in ``os.environ``
-    4. ``.env.claude.secrets`` file
+    1. ``CF_CLI_<NAME>`` machine override (only source for secrets)
+    2. ``NAME`` directly in ``os.environ`` (for non-secret config)
     """
-    profile_env = _load_claude_profile_env()
-    if name in profile_env and profile_env[name]:
-        return _ok(f"{name} is set ({label}, from Claude Code profile)")
-
-    cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.claude.secrets"]
-    value, source = _resolve_env_var_value(name, env_files=env_files)
+    value, source = _resolve_env_var_value(name)
     if value is not None:
         return _ok(f"{name} is set ({label})")
     return _skip(f"{name} is not set (optional — {label})")

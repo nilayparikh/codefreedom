@@ -525,13 +525,9 @@ def get_codefreedom_container_ports() -> set[int]:
 
 # ── Shared tool helpers ─────────────────────────────────────────────────────
 
-# Tool profile files always go to ~/.codefreedom/ (shared across projects).
-_TOOL_PROFILE_PATHS: set[str] = {
-    "profiles/chrome.yaml",
-    "profiles/web.yaml",
-    "profiles/github.yaml",
-    "profiles/web-bridge.yaml",
-}
+# Tool profiles are now loaded from unified profiles.yaml in config directory.
+# This constant is kept for backward compatibility but is no longer used
+# for determining installation paths.
 
 
 def tool_home() -> Path:
@@ -596,11 +592,10 @@ def load_tool_profile(
     extra_keys: list[str] | None = None,
     label: str | None = None,
 ) -> dict[str, Any]:
-    """Load a tool profile from ~/.codefreedom/profiles/<filename>.
+    """Load a tool profile from ~/.codefreedom/config/profiles.yaml.
 
-    Shared loader used by all tool modules.  Handles YAML reading,
-    ``${VAR}`` interpolation, Pydantic validation (non-fatal), and
-    merging of profile values over hardcoded defaults.
+    Shared loader used by all tool modules.  Reads the unified profiles.yaml,
+    extracts the 'tools' section, then gets the specific tool config.
 
     Args:
         tool_key: Key in the YAML dict for this tool (e.g. ``"chrome"``).
@@ -615,8 +610,12 @@ def load_tool_profile(
     """
     from pydantic import ValidationError
 
+    from codefreedom.core.config import get_config_dir
+
     tag = (label or tool_key).upper()
-    profile_path = tool_home() / "profiles" / profile_filename
+
+    # Load from unified profiles.yaml in config directory
+    profile_path = get_config_dir() / "profiles.yaml"
 
     if not profile_path.exists():
         return defaults
@@ -632,19 +631,26 @@ def load_tool_profile(
         eprint(f"[{tag}] Warning: invalid profile format in {profile_path}")
         return defaults
 
+    # Extract tools section from unified profiles.yaml
+    tools_section = raw.get("tools", {})
+    if not isinstance(tools_section, dict):
+        return defaults
+
     # Interpolate ${VAR} references in env values.
     # Include CF_CLI_* overrides so machine-level env vars like
     # CF_CLI_GITHUB_PERSONAL_ACCESS_TOKEN resolve correctly.
-    interpolate_all_strings(raw, context=apply_cf_cli_overrides(dict(os.environ)))
+    interpolate_all_strings(
+        tools_section, context=apply_cf_cli_overrides(dict(os.environ))
+    )
 
     # Validate with Pydantic (non-fatal — warn on failure)
     if schema_class is not None:
         try:
-            schema_class.model_validate(raw, strict=False)
+            schema_class.model_validate(tools_section, strict=False)
         except ValidationError as exc:
             eprint(f"[{tag}] Warning: validation issue in profile: {exc}")
 
-    cfg = raw.get(tool_key, {})
+    cfg = tools_section.get(tool_key, {})
     if not isinstance(cfg, dict):
         return defaults
 
@@ -859,7 +865,15 @@ def start_tool_container(settings: dict, label: str, docker_args: list[str]) -> 
     if not start_tool_ensure_image(settings, label):
         return 1
 
-    cmd = ["docker", "run", "-d", "--name", container_name, "--restart", "unless-stopped"]
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--restart",
+        "unless-stopped",
+    ]
     for key, val in env_vars.items():
         cmd.extend(["-e", f"{key}={val}"])
     cmd.extend(docker_args)

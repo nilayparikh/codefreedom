@@ -26,7 +26,7 @@ from pathlib import Path
 
 
 def get_codefreedom_dir() -> Path:
-    """Return the CodeFreedom config directory.
+    """Return the CodeFreedom home directory.
 
     Precedence:
     1. ``CODEFREEDOM_HOME`` environment variable (if set and non-empty)
@@ -38,69 +38,84 @@ def get_codefreedom_dir() -> Path:
     return Path.home() / ".codefreedom"
 
 
+def get_config_dir() -> Path:
+    """Return the managed config directory under CodeFreedom home.
+
+    This is the single folder managed by CLI. Contains:
+    - profiles.yaml (agent & tool YAML configs)
+    - override.yaml (user-managed overrides)
+    - proxy/ (LiteLLM config, docker-compose)
+    - scripts/ (setup helper scripts)
+    - .env.* (env files)
+
+    Agent home dirs (claude-code/, mimo-code/, etc.) are NOT managed by CLI.
+    """
+    return get_codefreedom_dir() / "config"
+
+
 def get_backup_dir() -> Path:
     """Return the default backup directory under CodeFreedom home."""
     return get_codefreedom_dir() / "backup"
 
 
 def resolve_profiles_path() -> Path:
-    """Return the Claude Code profiles path (test-patchable).
+    """Return the unified profiles path (test-patchable).
 
     Checks ``CODEFREEDOM_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/profiles/claude-code.yaml``.
+    ``~/.codefreedom/config/profiles.yaml``.
     """
     override = os.environ.get("CODEFREEDOM_PROFILES_FILE")
     if override:
         return Path(override)
-    return get_codefreedom_dir() / "profiles" / "claude-code.yaml"
+    return get_config_dir() / "profiles.yaml"
 
 
 def resolve_mimo_profiles_path() -> Path:
     """Return the MiMoCode profiles path (test-patchable).
 
     Checks ``MIMOCODE_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/profiles/mimo-code.yaml``.
+    ``~/.codefreedom/config/profiles.yaml``.
     """
     override = os.environ.get("MIMOCODE_PROFILES_FILE")
     if override:
         return Path(override)
-    return get_codefreedom_dir() / "profiles" / "mimo-code.yaml"
+    return get_config_dir() / "profiles.yaml"
 
 
 def resolve_opencode_profiles_path() -> Path:
     """Return the OpenCode profiles path (test-patchable).
 
     Checks ``OPENCODE_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/profiles/opencode.yaml``.
+    ``~/.codefreedom/config/profiles.yaml``.
     """
     override = os.environ.get("OPENCODE_PROFILES_FILE")
     if override:
         return Path(override)
-    return get_codefreedom_dir() / "profiles" / "opencode.yaml"
+    return get_config_dir() / "profiles.yaml"
 
 
 def resolve_pi_profiles_path() -> Path:
     """Return the Pi Code profiles path (test-patchable).
 
     Checks ``PI_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/profiles/pi-code.yaml``.
+    ``~/.codefreedom/config/profiles.yaml``.
     """
     override = os.environ.get("PI_PROFILES_FILE")
     if override:
         return Path(override)
-    return get_codefreedom_dir() / "profiles" / "pi-code.yaml"
+    return get_config_dir() / "profiles.yaml"
 
 
 def resolve_codex_profiles_path() -> Path:
     """Return the Codex profiles path (test-patchable).
 
     Checks ``CODEX_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/profiles/codex-code.yaml``.
+    ``~/.codefreedom/config/profiles.yaml``.
     """
     override = os.environ.get("CODEX_PROFILES_FILE")
     if override:
         return Path(override)
-    return get_codefreedom_dir() / "profiles" / "codex-code.yaml"
+    return get_config_dir() / "profiles.yaml"
 
 
 def resolve_agent_config(
