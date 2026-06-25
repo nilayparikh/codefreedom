@@ -11,13 +11,20 @@ import re
 
 _VAR_REF_RE = re.compile(r"\$\{(\w+)(?::-([^}]*))?\}")
 
+# Sentinel used to temporarily protect $$ (escaped literal $) from regex
+_ESCAPE_SENTINEL = "\x00ESCAPED_DOLLAR\x00"
+
 
 def resolve_env_vars(value: str, context: dict[str, str] | None = None) -> str:
     """Resolve ${VAR} and ${VAR:-default} in a single string value.
 
     Resolution order: context dict → os.environ → default → empty string.
     Empty-string values in context or os.environ are valid overrides.
+    Use ``$$`` to produce a literal ``$`` (e.g. ``$${type}`` → ``${type}``).
     """
+
+    # 1. Protect $$ with a sentinel so the regex never sees it
+    protected = value.replace("$$", _ESCAPE_SENTINEL)
 
     def _sub(m: re.Match) -> str:
         varname = m.group(1)
@@ -32,7 +39,9 @@ def resolve_env_vars(value: str, context: dict[str, str] | None = None) -> str:
             return resolved
         return default if default is not None else ""
 
-    return _VAR_REF_RE.sub(_sub, value)
+    result = _VAR_REF_RE.sub(_sub, protected)
+    # 2. Restore sentinel back to literal $
+    return result.replace(_ESCAPE_SENTINEL, "$")
 
 
 def resolve_env_dict(

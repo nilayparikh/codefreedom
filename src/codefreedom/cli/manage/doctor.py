@@ -287,11 +287,10 @@ def _resolve_tool_home() -> Path:
 
 def _load_tool_settings(
     tool_key: str,
-    profile_filename: str,
     defaults: dict,
     extra_keys: list[str] | None = None,
 ) -> dict:
-    """Load tool settings from profile, falling back to defaults.
+    """Load tool settings from unified profiles.yaml, falling back to defaults.
 
     Uses the same ``load_tool_profile()`` that tool modules use, so
     doctor checks always reflect the actual configured values.
@@ -300,7 +299,6 @@ def _load_tool_settings(
         return load_tool_profile(
             tool_key,
             defaults,
-            profile_filename,
             extra_keys=extra_keys,
         )
     except Exception:
@@ -310,7 +308,6 @@ def _load_tool_settings(
 def _get_chrome_settings() -> dict:
     return _load_tool_settings(
         "chrome",
-        "chrome.yaml",
         {
             "image": "docker.io/nilayparikh/codefreedom:chrome-latest",
             "container_name": "codefreedom-chrome",
@@ -328,7 +325,6 @@ def _get_chrome_settings() -> dict:
 def _get_web_settings() -> dict:
     return _load_tool_settings(
         "web",
-        "web.yaml",
         {
             "image": "docker.io/nilayparikh/codefreedom:web-latest",
             "container_name": "codefreedom-web",
@@ -342,7 +338,6 @@ def _get_web_settings() -> dict:
 def _get_github_settings() -> dict:
     return _load_tool_settings(
         "github",
-        "github.yaml",
         {
             "image": "docker.io/nilayparikh/codefreedom:github-latest",
             "container_name": "codefreedom-tools-github",
@@ -355,8 +350,7 @@ def _get_github_settings() -> dict:
 
 def _get_web_bridge_settings() -> dict:
     return _load_tool_settings(
-        "web_bridge",
-        "web-bridge.yaml",
+        "web-bridge",
         {
             "image": "docker.io/nilayparikh/codefreedom:web-bridge-latest",
             "container_name": "codefreedom-web-bridge",

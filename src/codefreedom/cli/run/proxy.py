@@ -8,7 +8,7 @@ Usage:
     codefreedom run proxy validate             Validate configuration
 
 The proxy is always run via `docker compose` against
-`~/.codefreedom/proxy/docker-compose.yaml`. The LiteLLM process runs inside
+`~/.codefreedom/config/proxy/docker-compose.yaml`. The LiteLLM process runs inside
 the `codefreedom:litellm-latest` image (see docker/litellm/Dockerfile.LiteLLM)
 which bakes in the WebSearch count display patch.  The web-bridge is now a
 standalone tool (``cf run tools web-bridge``) — start it separately before the
@@ -286,7 +286,7 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(
-            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/docker-compose.yaml"
         )
         eprint("   Run: cf s i")
         return 1
@@ -379,7 +379,7 @@ def _stop() -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(
-            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/docker-compose.yaml"
         )
         eprint("   Run: cf s i")
         return 1
@@ -411,7 +411,7 @@ def _restart() -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(
-            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/docker-compose.yaml"
         )
         eprint("   Run: cf s i")
         return 1
@@ -451,7 +451,7 @@ def _status() -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(
-            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/docker-compose.yaml"
         )
         eprint("   Run: cf s i")
         return 1
@@ -527,7 +527,9 @@ def _validate() -> int:
     """Validate the LiteLLM configuration."""
     config_file = _find_config_file()
     if not config_file:
-        eprint(f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/config/config.yaml")
+        eprint(
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/config/config.yaml"
+        )
         eprint("   Run: cf s i")
         return 1
 

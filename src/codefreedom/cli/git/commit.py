@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -18,9 +19,24 @@ from codefreedom.cli.git.config import (
 from codefreedom.log import eprint, tag
 
 _CONVENTIONAL_TYPES = [
-    "feat", "fix", "chore", "docs", "style",
-    "refactor", "perf", "test", "build", "ci", "revert",
+    "feat",
+    "fix",
+    "chore",
+    "docs",
+    "style",
+    "refactor",
+    "perf",
+    "test",
+    "build",
+    "ci",
+    "revert",
 ]
+
+_VALID_MSG_RE = re.compile(
+    r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
+    r"(?:\([a-zA-Z0-9_\-/]+\))?:\s+.+$"
+)
+_MAX_RETRIES = 2
 
 
 def _build_commit_system_prompt(
@@ -45,20 +61,18 @@ def _build_commit_system_prompt(
             parts.append("Output format (no scope):")
             parts.append("TYPE: DESCRIPTION")
             parts.append("")
-            parts.append(
-                f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}"
-            )
+            parts.append(f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}")
         else:
             parts.append("Output format:")
             parts.append("TYPE(SCOPE): DESCRIPTION")
             parts.append("")
-            parts.append(
-                f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}"
-            )
+            parts.append(f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}")
             parts.append("SCOPE is the module/area affected.")
 
         parts.append("")
-        parts.append("DESCRIPTION should be a short imperative description (max 72 chars).")
+        parts.append(
+            "DESCRIPTION should be a short imperative description (max 72 chars)."
+        )
         parts.append("Output ONLY the commit message, nothing else.")
     else:
         parts.append("Generate a short, clear commit message describing the changes.")
@@ -127,7 +141,9 @@ def run_commit(args: object) -> int:
             eprint(f"{tag('WARN')} No changes to commit.")
             return 0
         if unstaged:
-            eprint(f"{tag('INFO')} Unstaged files (not staging in dry-run): {', '.join(unstaged)}")
+            eprint(
+                f"{tag('INFO')} Unstaged files (not staging in dry-run): {', '.join(unstaged)}"
+            )
         if not staged:
             staged_diff = "\n".join(
                 f"diff --git a/{f} b/{f}\nnew file mode 100644\n--- /dev/null\n+++ b/{f}"
@@ -144,7 +160,9 @@ def run_commit(args: object) -> int:
                 return 1
             staged = git_ops.get_staged_files(work_dir)
         if not staged:
-            eprint(f"{tag('WARN')} No staged changes. Use 'git add' first or run without --stage-only.")
+            eprint(
+                f"{tag('WARN')} No staged changes. Use 'git add' first or run without --stage-only."
+            )
             return 0
         staged_diff = git_ops.get_staged_diff(work_dir)
     else:
@@ -174,16 +192,46 @@ def run_commit(args: object) -> int:
         user_prompt = f"Files changed:\n{files_list}\n\nDiff:\n\n{staged_diff}"
 
         eprint(f"{tag('COMMIT')} Generating commit message via {model}...")
-        response = llm.generate_message(model, system_prompt, user_prompt, max_tokens=16000, work_dir=work_dir)
-        if response is None:
-            return 1
+        commit_msg = None
 
-        parsed = llm.parse_commit_response(response)
-        template = get_template(config, "commit_message")
-        commit_msg = templates.render_template(template, parsed)
+        for attempt in range(_MAX_RETRIES + 1):
+            response = llm.generate_message(
+                model,
+                system_prompt,
+                user_prompt,
+                max_tokens=16000,
+                work_dir=work_dir,
+            )
+            if response is None:
+                return 1
 
-        if no_scope:
-            commit_msg = templates.strip_scope(commit_msg)
+            parsed = llm.parse_commit_response(response)
+            template = get_template(config, "commit_message")
+            candidate = templates.render_template(template, parsed)
+
+            if no_scope:
+                candidate = templates.strip_scope(candidate)
+
+            if _VALID_MSG_RE.match(candidate):
+                commit_msg = candidate
+                break
+
+            if attempt < _MAX_RETRIES:
+                eprint(
+                    f"{tag('WARN')} Malformed commit message "
+                    f"(attempt {attempt + 1}/{_MAX_RETRIES + 1}), retrying..."
+                )
+                user_prompt = (
+                    f"Your previous response was malformed:\n{candidate}\n\n"
+                    "Follow the required format exactly.\n\n"
+                    f"{user_prompt}"
+                )
+            else:
+                eprint(
+                    f"{tag('WARN')} LLM produced malformed message after "
+                    f"{_MAX_RETRIES + 1} attempts — using as-is."
+                )
+                commit_msg = candidate
 
     eprint(f"{tag('COMMIT')} Generated message:\n  {commit_msg}")
 

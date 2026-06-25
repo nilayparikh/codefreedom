@@ -547,31 +547,27 @@ def tool_data_dir(tool_name: str) -> str:
     return str(tool_home() / "tools" / tool_name)
 
 
-def tool_profile_path(tool_filename: str) -> Path:
-    """Return the unified profiles.yaml path (tool configs live under tools:)."""
+def get_profiles_path() -> Path:
+    """Return the unified profiles.yaml path."""
     from codefreedom.core.config import get_config_dir
 
     return get_config_dir() / "profiles.yaml"
 
 
-def init_tool_redirect(tool_filename: str) -> int:
+def init_tool_redirect(label: str) -> int:
     """Redirect tool init to the recipe system.
 
     Standard init handler for all tools — points users to ``cf setup init``.
-    Checks if the unified profiles.yaml exists (tools live under tools: key).
+    Checks if the unified profiles.yaml exists.
     """
-    from codefreedom.core.config import get_config_dir
-
-    profile_path = get_config_dir() / "profiles.yaml"
+    profile_path = get_profiles_path()
     if profile_path.exists():
-        tool_label = tool_filename.replace(".yaml", "")
-        eprint(f"[{tool_label}] Unified profiles.yaml found at {profile_path}.")
+        eprint(f"[{label.upper()}] Unified profiles.yaml found at {profile_path}.")
         return 0
     eprint(
-        f"[{tool_label}] No profiles.yaml found."
+        f"[{label.upper()}] No profiles.yaml found."
         " Run 'cf s i' to install the default recipe."
     )
-    label = tool_filename.replace(".yaml", "")
     print_help_section(
         f"{label} init",
         [
@@ -589,7 +585,6 @@ def init_tool_redirect(tool_filename: str) -> int:
 def load_tool_profile(
     tool_key: str,
     defaults: dict[str, Any],
-    profile_filename: str,
     schema_class: type[BaseModel] | None = None,
     env_port_var: str | None = None,
     extra_keys: list[str] | None = None,
@@ -603,7 +598,6 @@ def load_tool_profile(
     Args:
         tool_key: Key in the YAML dict for this tool (e.g. ``"chrome"``).
         defaults: Dict of hardcoded defaults (mutated in place).
-        profile_filename: Profile filename (e.g. ``"chrome.yaml"``).
         schema_class: Optional Pydantic model for validation (non-fatal).
         env_port_var: Env var name for port override (e.g. ``"CODEFREEDOM_CHROME_PORT"``).
         extra_keys: Extra dict-key names to transfer from profile to settings.
@@ -613,12 +607,10 @@ def load_tool_profile(
     """
     from pydantic import ValidationError
 
-    from codefreedom.core.config import get_config_dir
-
     tag = (label or tool_key).upper()
 
-    # Load from unified profiles.yaml in config directory
-    profile_path = get_config_dir() / "profiles.yaml"
+    # Load from unified profiles.yaml
+    profile_path = get_profiles_path()
 
     if not profile_path.exists():
         return defaults
@@ -646,16 +638,20 @@ def load_tool_profile(
         tools_section, context=apply_cf_cli_overrides(dict(os.environ))
     )
 
-    # Validate with Pydantic (non-fatal — warn on failure)
-    if schema_class is not None:
-        try:
-            schema_class.model_validate(tools_section, strict=False)
-        except ValidationError as exc:
-            eprint(f"[{tag}] Warning: validation issue in profile: {exc}")
-
     cfg = tools_section.get(tool_key, {})
     if not isinstance(cfg, dict):
         return defaults
+
+    # Validate with Pydantic (non-fatal — warn on failure).
+    # Wrap the tool-specific section under the schema's expected field name
+    # (e.g. {"chrome": cfg}) so we only validate THIS tool, not the entire
+    # tools dict which would trigger "Extra inputs are not permitted".
+    if schema_class is not None:
+        schema_key = tool_key.replace("-", "_")
+        try:
+            schema_class.model_validate({schema_key: cfg}, strict=False)
+        except ValidationError as exc:
+            eprint(f"[{tag}] Warning: validation issue in profile: {exc}")
 
     # Standard keys
     for key in ("image", "container_name", "data_dir"):
@@ -798,14 +794,12 @@ def status_tool_container(settings: dict, label: str, extra_info: str = "") -> i
     return 1
 
 
-def start_tool_init_gate(profile_filename: str, label: str) -> bool:
+def start_tool_init_gate(label: str) -> bool:
     """Check that the tool profile exists in unified profiles.yaml.
 
     Returns True if profiles.yaml exists, False otherwise.
     """
-    from codefreedom.core.config import get_config_dir
-
-    profile_path = get_config_dir() / "profiles.yaml"
+    profile_path = get_profiles_path()
     if profile_path.exists():
         return True
 

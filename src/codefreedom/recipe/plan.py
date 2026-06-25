@@ -292,8 +292,15 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
 
                 def _replace_var(match: re.Match) -> str:
                     var_name = match.group(1)
-                    default = match.group(2) if match.group(2) is not None else ""
-                    return vars_dict.get(var_name, os.environ.get(var_name, default))
+                    has_default = match.group(2) is not None
+                    default = str(match.group(2)) if has_default else ""
+                    if var_name in vars_dict:
+                        return vars_dict[var_name]
+                    if var_name in os.environ:
+                        return os.environ[var_name]
+                    if has_default:
+                        return default
+                    return str(match.group(0))
 
                 content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, content)
             plan_entries.append(

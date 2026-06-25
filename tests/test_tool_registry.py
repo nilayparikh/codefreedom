@@ -160,7 +160,7 @@ class TestWebBridgeToolMcpEndpoint:
         _write_tool_profile(
             "web-bridge",
             {
-                "web_bridge": {
+                "web-bridge": {
                     "image": "codefreedom:web-bridge",
                     "container_name": "codefreedom-web-bridge",
                     "port": 9999,
