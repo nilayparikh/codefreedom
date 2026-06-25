@@ -92,7 +92,8 @@ User (CLI)
   |
 cli/          — command dispatch, user-facing logic
   |
-core/         — env, profiles, config, interpolation
+config/       — YAML loading, ${VAR} interpolation, schema validation
+core/         — env helpers, profiles re-exports
   |
 sandbox/      — container lifecycle, signals, terminal
 docker/       — Docker client helpers
@@ -149,10 +150,11 @@ cf manage   (m)   doctor (dr) | update (up) | admin (adm/ad)
 | Utility | Defined In | Import From |
 |---|---|---|
 | `eprint()` | `env_loader.py` | `from codefreedom.env_loader import eprint` |
-| `_VAR_REF_RE` | `core/interpolate.py` | `from codefreedom.core.interpolate import _VAR_REF_RE` |
-| `resolve_env_vars()` / `resolve_env_dict()` | `core/interpolate.py` | `from codefreedom.core.interpolate import ...` |
+| `_VAR_REF_RE` | `config/interpolation.py` | `from codefreedom.config.interpolation import _VAR_REF_RE` |
+| `resolve_var()` / `resolve_dict()` / `interpolate_all()` | `config/interpolation.py` | `from codefreedom.config.interpolation import ...` |
 | `tag()` | `log.py` | `from codefreedom.log import tag` |
 | `get_codefreedom_dir()` | `core/config.py` | `from codefreedom.core.config import get_codefreedom_dir` |
+| `load_config()` | `config/loader.py` | `from codefreedom.config import load_config` |
 
 **Do not duplicate** any of these in other modules.
 
@@ -307,17 +309,12 @@ pytest tests/test_admin_helpers.py::TestCategorize -q
 
 Priority (lowest to highest):
 
-1. Component config (`.env.claude` / `.env.proxy`)
-2. Shared config (`.env`)
-3. Workspace config (`{workspace}/.env`)
-4. Component secrets (`.env.claude.secrets` / `.env.proxy.secrets`)
-5. Shared secrets (`.env.secrets`)
-6. Workspace secrets (`{workspace}/.env.secrets`)
-7. User overrides (`.env.user`)
-8. System env (`os.environ`)
-9. `CF_CLI_*` overrides (absolute highest)
+1. `profiles.yaml` — recipe-managed defaults with `${VAR:-default}`
+2. `recipe.yaml` — recipe vars (override profiles)
+3. `override.yaml` — user overrides (same schema)
+4. `CF_CLI_*` — secrets from machine env (prefix stripped, highest priority)
 
-All layers support `${VAR}` and `${VAR:-default}` interpolation. Empty-string env vars are valid overrides.
+All layers support `${VAR}` and `${VAR:-default}` interpolation. Empty-string values in `CF_CLI_*` are valid overrides (do NOT fall through to default). No `.env` files are read — all configuration comes from YAML + `CF_CLI_*` env vars.
 
 ### Tool Module Pattern
 

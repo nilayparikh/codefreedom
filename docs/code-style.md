@@ -8,9 +8,15 @@ Internal coding conventions for the CodeFreedom CLI project.
 src/codefreedom/
 ├── __init__.py          # __version__ from importlib.metadata
 ├── __main__.py          # python -m entry point
-├── env_loader.py        # .env chain loading, eprint(), get_env()
+├── env_loader.py        # Backward-compat re-exports (deprecated)
 ├── log.py               # tag() colored output helper
 ├── launcher.py          # Docker sandbox and native local execution
+├── config/              # Configuration module (single source of truth)
+│   ├── __init__.py      # Public API: load_config(), resolve_var(), models
+│   ├── errors.py        # ConfigError, MissingSecretError, etc.
+│   ├── interpolation.py # ${VAR} resolution — resolve_var(), interpolate_all()
+│   ├── loader.py        # load_config(), ResolvedConfig, AgentConfig, ToolConfig
+│   └── models.py        # Pydantic schema: ConfigModel, ProfileEntry, etc.
 ├── cli/
 │   ├── main.py          # Top-level parser, dispatch
 │   ├── common.py        # Shared CLI utilities
@@ -30,8 +36,9 @@ src/codefreedom/
 │   └── git/             # Git operations
 ├── core/
 │   ├── config.py        # CODEFREEDOM_HOME resolution
-│   ├── interpolate.py   # ${VAR} interpolation (shared regex)
-│   └── profiles.py      # Profile YAML loading, inheritance
+│   ├── interpolate.py   # Backward-compat re-exports (deprecated)
+│   ├── profiles.py      # Backward-compat re-exports (deprecated)
+│   └── settings.py      # Backward-compat re-exports (deprecated)
 ├── sandbox/
 │   └── launcher.py      # Container lifecycle management
 ├── docker/
@@ -54,7 +61,7 @@ src/codefreedom/
 │   ├── plan.py          # Recipe planning
 │   └── apply.py         # Recipe application
 └── schemas/
-    └── profiles.py      # Pydantic validation models
+    └── profiles.py      # Backward-compat re-exports (deprecated)
 ```
 
 ## 2. Shared Utilities
@@ -71,23 +78,33 @@ from codefreedom.env_loader import eprint
 
 ### `_VAR_REF_RE` Regex
 
-Defined once in `core/interpolate.py`. All modules import from there:
+Defined once in `config/interpolation.py`. All modules import from there:
 
 ```python
-from codefreedom.core.interpolate import _VAR_REF_RE
+from codefreedom.config.interpolation import _VAR_REF_RE
 ```
 
 **Do not** duplicate this regex in other modules.
 
-### `resolve_env_vars()` / `resolve_env_dict()`
+### `resolve_var()` / `resolve_dict()` / `interpolate_all()`
 
-Defined in `core/interpolate.py`. Use these for all `${VAR}` resolution:
+Defined in `config/interpolation.py`. Use these for all `${VAR}` resolution:
 
 ```python
-from codefreedom.core.interpolate import resolve_env_vars, resolve_env_dict
+from codefreedom.config.interpolation import resolve_var, resolve_dict, interpolate_all
 ```
 
 **Do not** inline regex substitution in other modules.
+
+### `load_config()`
+
+Single entry point for all configuration. Defined in `config/loader.py`:
+
+```python
+from codefreedom.config import load_config
+```
+
+**Do not** read YAML files directly — always go through `load_config()`.
 
 ### `tag()`
 

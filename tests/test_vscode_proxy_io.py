@@ -29,28 +29,15 @@ class TestResolveMasterKey:
     def _clean_cf_cli(monkeypatch):
         monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
 
-    def test_from_os_environ_wins(self, monkeypatch, tmp_path: Path):
+    def test_from_cf_cli_env_wins(self, monkeypatch, tmp_path: Path):
         self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
-        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
-        (tmp_path / ".env.proxy.secrets").write_text(
-            "LITELLM_MASTER_KEY=sk-from-file\n"
-        )
-        assert _resolve_master_key() == "sk-from-env"
+        monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-from-cf-cli")
+        assert _resolve_master_key() == "sk-from-cf-cli"
 
-    def test_from_secrets_file_when_env_missing(self, monkeypatch, tmp_path: Path):
+    def test_missing_returns_none(self, monkeypatch, tmp_path: Path):
         self._clean_cf_cli(monkeypatch)
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
-        monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
-        (tmp_path / ".env.proxy.secrets").write_text(
-            "LITELLM_MASTER_KEY=sk-from-file\n"
-        )
-        assert _resolve_master_key() == "sk-from-file"
-
-    def test_missing_in_both(self, monkeypatch, tmp_path: Path):
-        self._clean_cf_cli(monkeypatch)
-        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
-        monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
         assert _resolve_master_key() is None
 
     def test_empty_string_in_env_treated_as_set(self, monkeypatch, tmp_path: Path):

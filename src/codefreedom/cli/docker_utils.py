@@ -582,6 +582,18 @@ def init_tool_redirect(label: str) -> int:
     return 0
 
 
+def _flatten_dict(d: dict, prefix: str = "") -> dict[str, str]:
+    """Flatten a nested dict into dotted-key entries for interpolation context."""
+    items: dict[str, str] = {}
+    for key, val in d.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(val, dict):
+            items.update(_flatten_dict(val, full_key))
+        elif isinstance(val, str):
+            items[full_key] = val
+    return items
+
+
 def load_tool_profile(
     tool_key: str,
     defaults: dict[str, Any],
@@ -634,9 +646,13 @@ def load_tool_profile(
     # Interpolate ${VAR} references in env values.
     # Include CF_CLI_* overrides so machine-level env vars like
     # CF_CLI_GITHUB_PERSONAL_ACCESS_TOKEN resolve correctly.
-    interpolate_all_strings(
-        tools_section, context=apply_cf_cli_overrides(dict(os.environ))
-    )
+    # Also include YAML common: section flattened with dotted keys
+    # (e.g. common.tool_images.base) so ${common.tool_images.base} resolves.
+    ctx = apply_cf_cli_overrides(dict(os.environ))
+    common_section = raw.get("common", {})
+    if isinstance(common_section, dict):
+        ctx.update(_flatten_dict(common_section, prefix="common"))
+    interpolate_all_strings(tools_section, context=ctx)
 
     cfg = tools_section.get(tool_key, {})
     if not isinstance(cfg, dict):

@@ -11,29 +11,23 @@ Internal patterns and conventions used throughout the CodeFreedom codebase.
 
 ## 2. Environment Variable Chain
 
-Component-specific env files are loaded only for the matching subcommand.
+No `.env` files. All configuration comes from YAML + `CF_CLI_*` env vars.
 
-The project goal is that **all configuration and secret resolution flows through one common module**. Runtime consumers should resolve values through `src/codefreedom/core/settings.py` and `src/codefreedom/env_loader.py` rather than implementing their own precedence logic.
+**Resolution order (lowest → highest):**
 
-**Priority (lowest to highest):**
+1. `profiles.yaml` — recipe-managed defaults with `${VAR:-default}`
+2. `recipe.yaml` — recipe vars (override profiles)
+3. `override.yaml` — user overrides (same schema)
+4. `CF_CLI_*` — secrets from machine env (prefix stripped, highest priority)
 
-1. Component config (`.env.claude` / `.env.proxy`)
-2. Shared config (`.env`)
-3. Workspace config (`{workspace}/.env`)
-4. Component secrets (`.env.claude.secrets` / `.env.proxy.secrets`)
-5. Shared secrets (`.env.secrets`)
-6. Workspace secrets (`{workspace}/.env.secrets`)
-7. User overrides (`.env.user`)
-8. System env (`os.environ`)
-9. `CF_CLI_*` overrides (absolute highest)
-
-All layers support `${VAR}` and `${VAR:-default}` interpolation. **Empty-string env vars are valid overrides.**
+`${VAR}` interpolation happens at runtime on every `load_config()` call. Files are stored with literal `${VAR}` placeholders — no install-time baking. Empty-string values in `CF_CLI_*` are valid overrides (do NOT fall through to default).
 
 ### Common Module Rule
 
-- `src/codefreedom/core/settings.py` owns runtime configuration and secret resolution seams.
-- `src/codefreedom/env_loader.py` is the low-level loader used by that seam.
-- CLI commands, VS Code helpers, recipe summary code, and diagnostics must not implement separate config or secret precedence rules.
+- `config/loader.py` owns the single `load_config()` entry point.
+- `config/interpolation.py` owns `resolve_var()`, `resolve_dict()`, `interpolate_all()`.
+- `config/models.py` owns Pydantic schema (`ConfigModel`, `ProfileEntry`, etc.).
+- CLI commands, VS Code helpers, recipe code, and diagnostics must not implement separate config or secret precedence rules.
 - Recipes declare metadata and presets only; they do not define independent configuration logic.
 
 ## 3. Tools are Shared Infrastructure
@@ -66,10 +60,12 @@ Tools (chrome, web, github, web-bridge) are **shared** — once started they kee
 
 ## 6. Configuration Management
 
-- `core/settings.py` is the single source of truth for runtime configuration.
-- Recipes declare metadata and `generated_artifacts`; CodeFreedom generates setup scripts, env templates, and summary metadata at install time.
-- Generated artifacts replace static script files — recipes no longer ship hardcoded setup scripts.
-- Static script files in recipes remain as fallback during migration; once all recipes declare `generated_artifacts`, static copies will be removed.
+- `config/loader.py` is the single source of truth — `load_config()` loads all configuration.
+- `config/models.py` owns the unified schema (`ConfigModel`, `ProfileEntry`, `AgentDefinition`).
+- `config/interpolation.py` owns `${VAR}` resolution — single pass, runtime only.
+- Recipes declare `vars:` (dynamic key-value pairs) and `required_secrets` / `config_vars`.
+- No `.env` files — secrets come exclusively from `CF_CLI_*` machine env vars.
+- `override.yaml` mirrors the full `profiles.yaml` schema — any value can be overridden, not just `env`.
 
 ## 7. Version Source of Truth
 

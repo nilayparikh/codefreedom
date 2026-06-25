@@ -10,7 +10,6 @@ import yaml
 
 from codefreedom.admin import backup as cf_backup
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.core.interpolate import interpolate_all_strings
 from codefreedom.core.settings import resolve_config_value
 from codefreedom.log import dim, eprint, green, red, tag, yellow
 from codefreedom.schemas.recipe import RecipeConfig
@@ -161,8 +160,8 @@ def _install_recipe_files(
     from codefreedom.core.config import get_config_dir
     from codefreedom.recipe.merge import _merge_file
 
-    # Interpolate ${VAR} references in manifest before validation
-    interpolate_all_strings(manifest)
+    # No install-time interpolation — all ${VAR} references resolve at
+    # runtime via load_config(). Files are installed exactly as-is.
 
     # Validate manifest with Pydantic (non-fatal — warn on failure)
     try:

@@ -123,30 +123,28 @@ def resolve_agent_config(
     profile_name: str = "default",
     workspace_dir: Path | None = None,
 ) -> dict:
-    """Resolve complete configuration for an agent launch.
+    """Resolve complete configuration for an agent launch via the new config system."""
+    from codefreedom.config import load_config
+    from codefreedom.config.loader import AgentConfig
 
-    Returns a dict with:
-        - env: merged environment variables
-        - profiles_path: path to the profiles YAML
-        - profile: loaded profile data
-        - tools: list of tools from the profile
-        - sandbox_images: sandbox image configuration
-
-    This is the canonical config seam for agent entrypoints.
-    """
-    from codefreedom.core.settings import resolve_agent_runtime
-
-    runtime = resolve_agent_runtime(
-        agent,
-        workspace_dir=workspace_dir or Path.cwd(),
-        profile_name=profile_name,
-        mode="local",
-    )
+    _ = workspace_dir  # No longer used — env chain removed
+    try:
+        config = load_config()
+        agent_cfg = config.for_agent(agent, profile=profile_name)
+    except Exception:
+        agent_cfg = AgentConfig(
+            agent=agent,
+            profile_name=profile_name,
+            env={},
+            tools=[],
+            sandbox_images={},
+            sandbox_env={},
+        )
 
     return {
-        "env": runtime.profile_env,
-        "profiles_path": runtime.profiles_path,
+        "env": agent_cfg.env,
+        "profiles_path": get_config_dir() / "profiles.yaml",
         "profile": {},
-        "tools": runtime.tools,
-        "sandbox_images": runtime.sandbox_images,
+        "tools": agent_cfg.tools,
+        "sandbox_images": agent_cfg.sandbox_images,
     }

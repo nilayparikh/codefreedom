@@ -1,8 +1,7 @@
-"""Profile management for model selection and routing across code agents.
+"""Backward-compatible re-exports from codefreedom.config.
 
-Profiles are defined in claude-code-profiles.yaml. Each profile sets
-environment variables that control model selection, API endpoint, and auth.
-All profiles live in ~/.codefreedom/profiles/.
+.. deprecated::
+    Import from ``codefreedom.config`` directly instead.
 """
 
 from __future__ import annotations
@@ -10,167 +9,57 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-import yaml
-from pydantic import ValidationError
-
-from codefreedom.log import eprint
-from codefreedom.core.interpolate import resolve_env_vars
-from codefreedom.schemas.profiles import ClaudeCodeProfiles, ProfilesConfig
-
-# Canonical agent names used in unified profiles.yaml
-_AGENT_NAMES = frozenset({
-    "claude-code", "mimo-code", "open-code", "pi-code", "codex-code",
-})
+from codefreedom.config import (
+    ConfigError,
+    load_config,
+)
 
 
 class ProfileError(Exception):
     """Raised when a profile cannot be loaded or is invalid."""
 
 
-def _is_unified_format(profiles_dict: Dict[str, Any]) -> bool:
-    """Detect whether profiles dict uses the unified nested format.
-
-    Unified format: ``profiles.<agent>.profiles.<name>``
-    Legacy format:  ``profiles.<name>``
-
-    Returns True if *every* top-level key is a known agent name whose value
-    contains a nested ``profiles`` key.
-    """
-    if not profiles_dict:
-        return False
-    for key in profiles_dict:
-        val = profiles_dict[key]
-        if not isinstance(val, dict):
-            return False
-        if key not in _AGENT_NAMES:
-            return False
-        if "profiles" not in val or not isinstance(val["profiles"], dict):
-            return False
-    return True
-
-
 def load_profiles(profiles_path: Path, agent: str | None = None) -> Dict[str, Any]:
-    """Load and validate the profiles YAML file, with override.yaml merge.
+    """Load profiles via new config system (backward compat wrapper).
 
-    Loads profiles.yaml and merges any overrides from override.yaml.
-    Override values take precedence over profiles.yaml values.
-
-    When *agent* is provided and the file uses the unified format
-    (``profiles.<agent>.profiles.<name>``), extracts and returns only that
-    agent's profile entries as a flat dict.  When the file uses the legacy
-    flat format, *agent* is ignored.
-
-    Returns a flat dict mapping profile names to profile definitions
-    (e.g. ``{"default": {"env": {...}}, "bare": {"env": {...}}}``).
+    .. deprecated::
+        Use ``load_config().for_agent(...)`` instead.
     """
-    if not profiles_path.exists():
-        eprint(f"[ERROR] Profiles file not found: {profiles_path}")
-        raise ProfileError(f"Profiles file not found: {profiles_path}")
-
+    # This is a minimal compat shim — callers should migrate to
+    # load_config().for_agent() directly.
     try:
-        with open(profiles_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-    except yaml.YAMLError as e:
-        eprint(f"[ERROR] Invalid YAML in {profiles_path}: {e}")
-        raise ProfileError(f"Invalid YAML in {profiles_path}: {e}") from e
+        config = load_config(profiles_path.parent)
+    except ConfigError as e:
+        raise ProfileError(str(e)) from e
 
-    if not isinstance(data, dict):
-        eprint(
-            f"[ERROR] Expected a mapping in {profiles_path}, got {type(data).__name__}"
-        )
-        raise ProfileError(f"Expected a mapping in {profiles_path}")
-
-    raw_profiles = data.get("profiles", {})
-
-    # Detect unified format: profiles.<agent>.profiles.<name>
-    is_unified = _is_unified_format(raw_profiles)
-
-    if is_unified:
-        # Validate with ProfilesConfig (unified-aware schema)
+    if agent:
         try:
-            ProfilesConfig.model_validate(data, strict=False)
-        except ValidationError as exc:
-            eprint(f"[WARN] Profiles validation issue in {profiles_path}: {exc}")
-    else:
-        # Validate with ClaudeCodeProfiles (legacy flat schema)
-        try:
-            ClaudeCodeProfiles.model_validate(data, strict=False)
-        except ValidationError as exc:
-            eprint(f"[WARN] Profiles validation issue in {profiles_path}: {exc}")
+            agent_cfg = config.for_agent(agent)
+            return {
+                "default": {"env": agent_cfg.env, "tools": agent_cfg.tools},
+            }
+        except ConfigError:
+            pass
 
-    # Merge override.yaml values if it exists
-    override_path = profiles_path.parent / "override.yaml"
-    if override_path.exists():
-        try:
-            with open(override_path, encoding="utf-8") as f:
-                override_data = yaml.safe_load(f)
-            if isinstance(override_data, dict):
-                override_profiles = override_data.get("profiles", {})
-                if override_profiles:
-                    if is_unified and agent:
-                        # Unified format: merge overrides into agent's nested profiles
-                        agent_block = raw_profiles.get(agent, {})
-                        agent_profiles = agent_block.get("profiles", {})
-                        for profile_name, profile_overrides in override_profiles.items():
-                            if not isinstance(profile_overrides, dict):
-                                continue
-                            env_overrides = profile_overrides.get("env", {})
-                            if not env_overrides:
-                                continue
-                            if profile_name not in agent_profiles:
-                                agent_profiles[profile_name] = {}
-                            if "env" not in agent_profiles[profile_name]:
-                                agent_profiles[profile_name]["env"] = {}
-                            agent_profiles[profile_name]["env"].update(env_overrides)
-                    elif not is_unified:
-                        # Legacy format: merge overrides into flat profiles
-                        if "profiles" not in data:
-                            data["profiles"] = {}
-                        raw_profiles = data["profiles"]
-                        for profile_name, profile_overrides in override_profiles.items():
-                            if not isinstance(profile_overrides, dict):
-                                continue
-                            if profile_name not in raw_profiles:
-                                raw_profiles[profile_name] = {}
-                            env_overrides = profile_overrides.get("env", {})
-                            if env_overrides:
-                                if "env" not in raw_profiles[profile_name]:
-                                    raw_profiles[profile_name]["env"] = {}
-                                raw_profiles[profile_name]["env"].update(env_overrides)
-        except yaml.YAMLError as e:
-            eprint(f"[WARN] Invalid YAML in {override_path}: {e}")
-
-    # NOTE: Do NOT interpolate ${VAR} references here.  load_profiles() runs
-    # BEFORE the env chain (load_env_chain) has resolved CF_CLI_* overrides,
-    # so variables like ${LITELLM_MASTER_KEY} would resolve to empty because
-    # only CF_CLI_LITELLM_MASTER_KEY is in os.environ.  Interpolation is
-    # handled downstream by load_profile_env's resolve_env() which receives
-    # the fully-resolved base_env context.
-
-    # Extract agent-specific profiles from unified format
-    if is_unified:
-        if agent and agent in raw_profiles:
-            profiles = raw_profiles[agent].get("profiles", {})
-        else:
-            # No agent specified — return first agent's profiles as fallback
-            first_key = next(iter(raw_profiles), None)
-            if first_key:
-                profiles = raw_profiles[first_key].get("profiles", {})
-            else:
-                profiles = {}
-    else:
-        profiles = raw_profiles
-
-    if not profiles:
-        eprint("[ERROR] No profiles defined in profiles file.")
-        raise ProfileError("No profiles defined in profiles file.")
-
-    return profiles
+    # Fallback: return raw profile entries
+    result: Dict[str, Any] = {}
+    for agent_name, agent_def in config.agents.items():
+        for profile_name in agent_def.profiles:
+            resolved = agent_def.resolve_profile(profile_name)
+            result[profile_name] = {
+                "env": resolved.env,
+                "tools": resolved.tools or [],
+                "description": resolved.description,
+                "sandbox": {"env": resolved.sandbox.env if resolved.sandbox else {}},
+                "local": {"env": resolved.local.env if resolved.local else {}},
+            }
+    return result
 
 
 def resolve_env(env_def: Dict[str, str], context: Dict[str, str]) -> Dict[str, str]:
-    """Resolve ${VAR} references in env values using a context dict."""
-    return {key: resolve_env_vars(val, context) for key, val in env_def.items()}
+    """Resolve ${VAR} in env values."""
+    from codefreedom.config import resolve_dict
+    return resolve_dict(env_def, context)
 
 
 def load_profile_env(
@@ -180,86 +69,30 @@ def load_profile_env(
     mode: str | None = None,
     profiles: Dict[str, Any] | None = None,
 ) -> Dict[str, str]:
-    """Load a named profile's env vars, resolving ${VAR} references from base_env.
+    """Load profile env (backward compat wrapper).
 
-    If *mode* is provided ("sandbox" | "local"), mode-specific env overrides
-    (profile.{mode}.env) are merged on top of the base env with inheritance.
-
-    If *profiles* is provided, it is used directly — avoids re-reading the
-    profiles file when the caller has already loaded it.
-
-    Returns the merged env dict for the profile.
+    .. deprecated::
+        Use ``load_config().for_agent(...).env`` instead.
     """
-    if profiles is None:
-        profiles = load_profiles(profiles_path)
-
-    if profile_name not in profiles:
-        eprint(f"[ERROR] Profile '{profile_name}' not found in {profiles_path}.")
-        eprint("   Available profiles:")
-        for name, info in profiles.items():
-            desc = info.get("description", "No description")
-            eprint(f"     - {name}: {desc}")
-        raise ProfileError(f"Profile '{profile_name}' not found.")
-
-    profile_def = profiles[profile_name]
-    env_def = profile_def.get("env", {})
-
-    # Inheritance: bare and default are standalone; everything else inherits from default
-    if profile_name in ("default", "bare"):
-        eprint(f"[PROFILE] Loading '{profile_name}' (standalone)...")
-        merged = resolve_env(env_def, base_env)
-    else:
-        eprint(f"[PROFILE] Loading '{profile_name}' (inherits from 'default')...")
-        default_def = profiles.get("default", {}).get("env", {})
-        merged = resolve_env(default_def, base_env)
-        overrides = resolve_env(env_def, {**base_env, **merged})
-        merged.update(overrides)
-
-    # Apply mode-specific overrides (sandbox or local)
-    if mode is not None:
-        _merge_mode_env(merged, profile_def, profiles, profile_name, mode, base_env)
-
-    # Log what was loaded (masking sensitive values)
-    for key in sorted(merged.keys()):
-        val = merged[key]
-        display = val
-        if any(
-            s in key.upper() for s in ("TOKEN", "KEY", "SECRET", "AUTH", "PASSWORD")
-        ):
-            if len(val) > 2:
-                display = val[:1] + "*" * min(len(val) - 2, 64) + val[-1:]
-            elif val:
-                display = "****"
-        eprint(f"     {key}={display}")
-
-    return merged
+    try:
+        config = load_config(profiles_path.parent)
+        agent_cfg = config.for_agent(
+            _detect_agent(config, profile_name),
+            profile=profile_name,
+            mode=mode,
+        )
+        return agent_cfg.env
+    except ConfigError as e:
+        raise ProfileError(str(e)) from e
 
 
-def _merge_mode_env(
-    merged: Dict[str, str],
-    profile_def: dict,
-    profiles: dict,
-    profile_name: str,
-    mode: str,
-    base_env: Dict[str, str],
-) -> None:
-    """Merge {mode}.env overrides on top of *merged* with inheritance."""
-    mode_env_def = profile_def.get(mode, {}).get("env", {})
-
-    if profile_name in ("default", "bare"):
-        # Standalone: only this profile's mode env
-        if mode_env_def:
-            eprint(f"[PROFILE] Applying '{mode}' overrides for '{profile_name}'...")
-            merged.update(resolve_env(mode_env_def, {**base_env, **merged}))
-    else:
-        # Inherited: default's mode env first, then profile's overrides
-        default_mode_env = profiles.get("default", {}).get(mode, {}).get("env", {})
-        if default_mode_env:
-            eprint(f"[PROFILE] Applying '{mode}' overrides from 'default'...")
-            merged.update(resolve_env(default_mode_env, {**base_env, **merged}))
-        if mode_env_def:
-            eprint(f"[PROFILE] Applying '{mode}' overrides for '{profile_name}'...")
-            merged.update(resolve_env(mode_env_def, {**base_env, **merged}))
+def _detect_agent(config, profile_name: str) -> str:
+    """Find the first agent that has the given profile."""
+    for agent_name, agent_def in config.agents.items():
+        if profile_name in agent_def.profiles:
+            return agent_name
+    # Fallback to claude-code
+    return "claude-code"
 
 
 def get_profile_sandbox_images(
@@ -267,30 +100,16 @@ def get_profile_sandbox_images(
     profiles_path: Path,
     profiles: Dict[str, Any] | None = None,
 ) -> Dict[str, str]:
-    """Get the sandbox_images mapping for a profile, respecting inheritance.
-
-    Returns a dict mapping image type (\"default\", \"cuda\", \"rocm\") to image
-    references.  Child profiles inherit from 'default' and can override
-    individual entries. Returns an empty dict if nothing is configured.
-    """
-    if profiles is None:
-        profiles = load_profiles(profiles_path)
-
-    if profile_name not in profiles:
+    """Get sandbox images (backward compat wrapper)."""
+    try:
+        config = load_config(profiles_path.parent)
+        agent_cfg = config.for_agent(
+            _detect_agent(config, profile_name),
+            profile=profile_name,
+        )
+        return agent_cfg.sandbox_images
+    except ConfigError:
         return {}
-
-    profile_def = profiles[profile_name]
-    images = profile_def.get("sandbox_images", {})
-
-    # Inheritance: merge default's sandbox_images, then profile overrides
-    if profile_name not in ("default", "bare"):
-        default_def = profiles.get("default", {})
-        default_images = default_def.get("sandbox_images", {})
-        merged = dict(default_images)
-        merged.update(images)
-        return merged
-
-    return dict(images)
 
 
 def get_profile_tools(
@@ -298,56 +117,36 @@ def get_profile_tools(
     profiles_path: Path,
     profiles: Dict[str, Any] | None = None,
 ) -> List[str]:
-    """Get the tools list for a profile, respecting inheritance.
-
-    Merges default's tools with the child profile's tools (deduplicated,
-    order-preserving).  'bare' is standalone — does not inherit from default.
-    Returns an empty list if no tools are declared.
-    """
-    if profiles is None:
-        profiles = load_profiles(profiles_path)
-
-    if profile_name not in profiles:
+    """Get profile tools (backward compat wrapper)."""
+    try:
+        config = load_config(profiles_path.parent)
+        agent_cfg = config.for_agent(
+            _detect_agent(config, profile_name),
+            profile=profile_name,
+        )
+        return agent_cfg.tools
+    except ConfigError:
         return []
-
-    profile_def = profiles[profile_name]
-    tools: List[str] = list(profile_def.get("tools", []))
-
-    if profile_name in ("default", "bare"):
-        return tools
-
-    # Inherit default's tools, then append profile's own (deduplicated)
-    default_def = profiles.get("default", {})
-    default_tools: List[str] = list(default_def.get("tools", []))
-    merged = list(default_tools)
-    for t in tools:
-        if t not in merged:
-            merged.append(t)
-    return merged
 
 
 def list_profiles(profiles_path: Path, agent: str | None = None) -> List[Dict[str, Any]]:
-    """Return a list of profile metadata for display."""
-    if not profiles_path.exists():
-        eprint(f"[PROFILES] No profiles file at {profiles_path}")
+    """List profiles (backward compat wrapper)."""
+    try:
+        config = load_config(profiles_path.parent)
+    except ConfigError:
         return []
 
-    profiles = load_profiles(profiles_path, agent=agent)
     result = []
-    for name in sorted(profiles.keys()):
-        info = profiles[name]
-        env_keys = list(info.get("env", {}).keys())
-        sandbox_keys = list(info.get("sandbox", {}).get("env", {}).keys())
-        local_keys = list(info.get("local", {}).get("env", {}).keys())
-        result.append(
-            {
-                "name": name,
-                "description": info.get("description", "No description"),
-                "env_keys": env_keys,
-                "sandbox_env_keys": sandbox_keys,
-                "local_env_keys": local_keys,
-                "tools": info.get("tools", []),
-                "standalone": name in ("default", "bare"),
-            }
-        )
+    for agent_name, agent_def in config.agents.items():
+        if agent and agent_name != agent:
+            continue
+        for profile_name in agent_def.profiles:
+            resolved = agent_def.resolve_profile(profile_name)
+            result.append({
+                "name": profile_name,
+                "description": resolved.description or "No description",
+                "env_keys": list(resolved.env.keys()),
+                "tools": resolved.tools or [],
+                "standalone": profile_name in ("default", "bare"),
+            })
     return result
