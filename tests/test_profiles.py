@@ -54,6 +54,80 @@ class TestConfigLoading:
         config = load_config(tmp_path)
         assert len(config.agents) == 0
 
+    def test_recipe_manifest_keys_stripped(self, tmp_path):
+        """Recipe.yaml metadata (name, description, etc.) leaks into merged dict but is stripped."""
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"KEY": "val"}}}}}
+        })
+        _write_recipe(tmp_path, {
+            "name": "test-recipe",
+            "description": "A test recipe",
+            "version": 1,
+            "files": [{"path": "profiles.yaml", "target": "profiles.yaml"}],
+            "dirs": [],
+            "generated_artifacts": [],
+            "required_secrets": [],
+            "config_vars": [],
+            "advice": "Run setup",
+            "vars": {"SUFFIX_ID": "test"},
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["KEY"] == "val"
+        assert config.common.suffix_id == "test"
+
+    def test_legacy_common_keys_stripped(self, tmp_path):
+        """Legacy common.proxy_env/tools/tool_images are stripped without error."""
+        _write(tmp_path, {
+            "common": {
+                "proxy_env": {"PROXY_BASE_URL": "http://localhost:4000"},
+                "tools": ["chrome", "web"],
+                "tool_images": {"base": "docker.io/test", "tag": "latest"},
+            },
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"KEY": "val"}}}}},
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["KEY"] == "val"
+
+    def test_mixed_format_override_merge(self, tmp_path):
+        """Override with flat profiles: + base with agent-keyed profiles: merges correctly."""
+        _write(tmp_path, {
+            "profiles": {
+                "claude-code": {"profiles": {"default": {"env": {"A": "1"}}}},
+                "mimo-code": {"profiles": {"default": {"env": {"B": "2"}}}},
+            }
+        })
+        _write_override(tmp_path, {
+            "profiles": {"default": {"env": {"A": "override"}}},
+        })
+        config = load_config(tmp_path)
+        claude_cfg = config.for_agent("claude-code")
+        mimo_cfg = config.for_agent("mimo-code")
+        assert claude_cfg.env["A"] == "override"
+        assert mimo_cfg.env["B"] == "2"
+
+    def test_recipe_manifest_and_legacy_keys(self, tmp_path):
+        """Full scenario: recipe manifest + legacy common keys + new format agents."""
+        _write(tmp_path, {
+            "common": {
+                "proxy_env": {"PROXY_BASE_URL": "http://localhost:4000"},
+                "tools": ["chrome"],
+                "tool_images": {"base": "docker.io/test", "tag": "latest"},
+            },
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"KEY": "val"}}}}},
+        })
+        _write_recipe(tmp_path, {
+            "name": "test-recipe",
+            "description": "Test",
+            "version": 1,
+            "vars": {"SUFFIX_ID": "test"},
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["KEY"] == "val"
+        assert config.common.suffix_id == "test"
+
     def test_override_merges_into_profiles(self, tmp_path):
         _write(tmp_path, {
             "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1"}}}}}
@@ -242,6 +316,13 @@ def _write(tmp_path: Path, data: dict) -> Path:
 
 def _write_override(tmp_path: Path, data: dict) -> Path:
     path = tmp_path / "override.yaml"
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+    return path
+
+
+def _write_recipe(tmp_path: Path, data: dict) -> Path:
+    path = tmp_path / "recipe.yaml"
     with open(path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     return path
