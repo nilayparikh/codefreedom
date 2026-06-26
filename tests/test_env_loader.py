@@ -3,7 +3,6 @@
 Replaces the old env_loader tests which tested the now-removed .env chain.
 """
 
-import os
 
 import pytest
 import yaml
@@ -71,8 +70,8 @@ class TestConfigLoading:
         agent_cfg = config.for_agent("claude-code")
         assert agent_cfg.env["KEY"] == "value"
 
-    def test_interpolation_in_profiles(self, tmp_path):
-        os.environ["CF_CLI_TEST_INTERP"] = "resolved"
+    def test_interpolation_in_profiles(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CF_CLI_TEST_INTERP", "resolved")
         profiles = tmp_path / "profiles.yaml"
         profiles.write_text(yaml.dump({
             "agents": {
@@ -86,7 +85,6 @@ class TestConfigLoading:
         config = load_config(tmp_path)
         agent_cfg = config.for_agent("claude-code")
         assert agent_cfg.env["RESULT"] == "resolved"
-        del os.environ["CF_CLI_TEST_INTERP"]
 
     def test_var_with_default_in_profile(self, tmp_path):
         profiles = tmp_path / "profiles.yaml"

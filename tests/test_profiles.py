@@ -1,6 +1,5 @@
 """Tests for config profiles — loading, inheritance, ${VAR} resolution."""
 
-import os
 from pathlib import Path
 
 import pytest
@@ -179,15 +178,14 @@ class TestProfileEnv:
 class TestVarResolution:
     """Tests for ${VAR} resolution in profile env."""
 
-    def test_resolves_from_context(self, tmp_path):
-        os.environ["CF_CLI_FROM_OS"] = "resolved"
+    def test_resolves_from_context(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CF_CLI_FROM_OS", "resolved")
         _write(tmp_path, {
             "agents": {"claude-code": {"profiles": {"default": {"env": {"RESULT": "${FROM_OS}"}}}}}
         })
         config = load_config(tmp_path)
         agent_cfg = config.for_agent("claude-code")
         assert agent_cfg.env["RESULT"] == "resolved"
-        del os.environ["CF_CLI_FROM_OS"]
 
     def test_default_fallback(self, tmp_path):
         _write(tmp_path, {

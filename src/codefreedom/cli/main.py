@@ -109,7 +109,7 @@ def _expand_pa_flag() -> None:
             return
 
 
-def main() -> None:
+def main() -> int:
     _expand_pa_flag()
     parser = argparse.ArgumentParser(
         prog="codefreedom",
@@ -322,6 +322,8 @@ def main() -> None:
     else:
         parser.print_help()
         sys.exit(0)
+
+    return 0  # unreachable — every branch calls sys.exit()
 
 
 # ══════════════════════════════════════════════════════════════════════════════

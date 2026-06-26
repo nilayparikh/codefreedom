@@ -100,4 +100,10 @@ __all__ = [
     "MergeError",
     "MissingSecretError",
     "UnresolvedReferenceError",
+    # YAML utilities
+    "safe_load",
+    "safe_load_or_warn",
+    "safe_dump",
 ]
+
+from codefreedom.config.yaml_utils import safe_load, safe_load_or_warn, safe_dump  # noqa: E402
