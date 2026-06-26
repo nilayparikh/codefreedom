@@ -21,14 +21,18 @@ DOCKER_HUB_AUTH = "https://auth.docker.io/token"
 DOCKER_HUB_REGISTRY = "registry-1.docker.io"
 
 
-def _normalize_ref(image: str) -> str:
+def normalize_ref(image: str) -> str:
     """Strip the default ``docker.io/`` prefix."""
     if image.startswith("docker.io/"):
         return image[len("docker.io/"):]
     return image
 
 
-def _parse_image_ref(image: str) -> tuple[str, str, str, str]:
+# Backward-compat alias
+_normalize_ref = normalize_ref
+
+
+def parse_image_ref(image: str) -> tuple[str, str, str, str]:
     """Parse an image reference into (registry, namespace, repo, tag)."""
     rest = image
     registry = ""
@@ -52,9 +56,13 @@ def _parse_image_ref(image: str) -> tuple[str, str, str, str]:
     return registry, namespace, repo, tag
 
 
-def _get_local_digest(image: str) -> str | None:
+# Backward-compat alias
+_parse_image_ref = parse_image_ref
+
+
+def get_local_digest(image: str) -> str | None:
     """Get the locally cached manifest digest for an image."""
-    normalized = _normalize_ref(image)
+    normalized = normalize_ref(image)
     result = subprocess.run(
         ["docker", "image", "inspect", normalized, "--format", "{{json .RepoDigests}}"],
         capture_output=True,
@@ -72,6 +80,10 @@ def _get_local_digest(image: str) -> str | None:
     except (json.JSONDecodeError, IndexError, AttributeError):
         pass
     return None
+
+
+# Backward-compat alias
+_get_local_digest = get_local_digest
 
 
 def _get_remote_digest(image: str) -> str | None:

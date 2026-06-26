@@ -36,6 +36,7 @@ from codefreedom.core.http_client import (
     get_response,
 )
 from codefreedom.core.config import get_config_dir
+from codefreedom.docker.pull import get_local_digest, normalize_ref, parse_image_ref
 from codefreedom.log import eprint
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -97,17 +98,6 @@ def _parse_compose_image(value: str) -> str | None:
     return value
 
 
-def _normalize_ref(image: str) -> str:
-    """Strip the default ``docker.io/`` prefix.
-
-    Docker stores ``docker.io/nilayparikh/codefreedom:name`` locally as
-    just ``nilayparikh/codefreedom:name``.
-    """
-    if image.startswith("docker.io/"):
-        return image[len("docker.io/") :]
-    return image
-
-
 def _local_images() -> list[str]:
     """Return locally-pulled CodeFreedom images.
 
@@ -135,39 +125,13 @@ def _local_images() -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _get_local_digest(image: str) -> str | None:
-    """Get the locally cached manifest digest for an image.
-
-    Normalizes the reference (strips ``docker.io/``) so Docker's local
-    naming matches.
-    """
-    normalized = _normalize_ref(image)
-    result = subprocess.run(
-        ["docker", "image", "inspect", normalized, "--format", "{{json .RepoDigests}}"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
-    if result.returncode != 0:
-        return None
-    try:
-        digests = json.loads(result.stdout.strip())
-        for d in digests:
-            if "@sha256:" in d:
-                return d.split("@sha256:")[1]
-    except (json.JSONDecodeError, IndexError, AttributeError):
-        pass
-    return None
-
-
 def _image_exists_locally(image: str) -> bool:
     """Check if a Docker image exists in the local cache.
 
     Normalizes the reference (strips ``docker.io/``) so Docker's local
     naming matches.
     """
-    normalized = _normalize_ref(image)
+    normalized = normalize_ref(image)
     result = subprocess.run(
         ["docker", "image", "inspect", normalized],
         capture_output=True,
@@ -183,7 +147,7 @@ def _get_remote_digest(image: str) -> str | None:
 
     Returns the SHA256 digest string or None on failure.
     """
-    registry, namespace, repo, tag = _parse_image_ref(image)
+    registry, namespace, repo, tag = parse_image_ref(image)
 
     # Bare references (no registry prefix) - skip remote check
     if not registry:
@@ -247,35 +211,6 @@ def _get_docker_hub_token(namespace: str, repo: str) -> str | None:
     return None
 
 
-def _parse_image_ref(image: str) -> tuple[str, str, str, str]:
-    """Parse an image reference into (registry, namespace, repo, tag).
-
-    Returns:
-        (registry, namespace, repo, tag)
-        Registry may be empty for bare references like ``codefreedom:chrome``.
-    """
-    rest = image
-    registry = ""
-    if "/" in image:
-        parts = image.split("/", 1)
-        if "." in parts[0] or ":" in parts[0] or parts[0] in ("docker.io",):
-            registry = parts[0]
-            rest = parts[1]
-
-    if ":" in rest:
-        rest_part, tag = rest.rsplit(":", 1)
-    else:
-        rest_part, tag = rest, "latest"
-
-    if "/" in rest_part:
-        namespace, repo = rest_part.split("/", 1)
-    else:
-        namespace = ""
-        repo = rest_part
-
-    return registry, namespace, repo, tag
-
-
 def _is_latest_tag(tag: str) -> bool:
     """Return True if the tag is a ``-latest`` variant."""
     return tag == "latest" or tag.endswith("-latest")
@@ -328,7 +263,7 @@ def discover_images() -> list[dict[str, str]]:
         """Register a profile image, normalizing its key for Docker matching."""
         if not img or not _is_managed_image(img):
             return
-        norm = _normalize_ref(img)
+        norm = normalize_ref(img)
         # Only register the first source for each normalized image
         if norm not in profile_images:
             profile_images[norm] = (img, source, service)
@@ -425,10 +360,10 @@ def check_image(image_ref: dict[str, str]) -> dict[str, Any]:
         }
 
     # Image must exist locally (discover_images already guarantees this)
-    tag = _parse_image_ref(image)[3]
+    tag = parse_image_ref(image)[3]
     is_latest = _is_latest_tag(tag)
 
-    local_digest = _get_local_digest(image)
+    local_digest = get_local_digest(image)
     if local_digest is None:
         return {
             "image": image,
