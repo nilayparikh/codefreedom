@@ -10,6 +10,7 @@ for per-test isolation when needed.
 from __future__ import annotations
 
 import os
+import subprocess
 
 import pytest
 
@@ -36,3 +37,28 @@ def _codefreedom_test_home(tmp_path):  # type: ignore[misc]
         os.environ["CODEFREEDOM_TOOL_HOME"] = saved_tool
     else:
         os.environ.pop("CODEFREEDOM_TOOL_HOME", None)
+
+
+# ── Shared fixtures ─────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def git_repo(tmp_path):
+    """Create a temporary git repository with basic config."""
+    subprocess.run(["git", "init"], capture_output=True, cwd=str(tmp_path))
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        capture_output=True, cwd=str(tmp_path),
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        capture_output=True, cwd=str(tmp_path),
+    )
+    subprocess.run(
+        ["git", "config", "commit.gpgsign", "false"],
+        capture_output=True, cwd=str(tmp_path),
+    )
+    return tmp_path
+
+
+

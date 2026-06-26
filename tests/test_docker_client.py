@@ -137,3 +137,4 @@ class TestListContainers:
                 {"name": "cf-chrome", "status": "running"},
                 {"name": "cf-web", "status": "exited"},
             ]
+pytestmark = pytest.mark.integration

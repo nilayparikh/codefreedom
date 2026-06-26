@@ -31,7 +31,7 @@ class TestSandboxImagesSchema:
     """Verify SandboxImages schema supports unified key."""
 
     def test_unified_field_accepted(self):
-        from codefreedom.schemas.profiles import SandboxImages
+        from codefreedom.config.models import SandboxImages
 
         images = SandboxImages(
             default="test:latest",
@@ -42,13 +42,13 @@ class TestSandboxImagesSchema:
         assert images.unified == "custom:latest"
 
     def test_unified_field_optional(self):
-        from codefreedom.schemas.profiles import SandboxImages
+        from codefreedom.config.models import SandboxImages
 
         images = SandboxImages(default="test:latest")
         assert images.unified is None
 
     def test_all_fields_together(self):
-        from codefreedom.schemas.profiles import SandboxImages
+        from codefreedom.config.models import SandboxImages
 
         images = SandboxImages(
             default="default:latest",

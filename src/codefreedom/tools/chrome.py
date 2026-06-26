@@ -6,17 +6,15 @@ Part of the unified tool group.  All tools are managed together:
     cf run tools restart   Restart all tools
     cf run tools status    Show status of all tools
 
-Settings are loaded from ~/.codefreedom/profiles/chrome.yaml.
-Use `cf s i` to initialize.
+Settings are loaded from the unified ~/.codefreedom/config/profiles.yaml.
 """
 
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
-from codefreedom.log import eprint
-from codefreedom.cli.docker_utils import (
+from codefreedom.log import eprint, tag
+from codefreedom.core.container import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
@@ -28,7 +26,6 @@ from codefreedom.cli.docker_utils import (
     start_tool_init_gate,
     stop_tool_container,
     tool_data_dir,
-    tool_profile_path,
 )
 
 from codefreedom.tools.schemas.chrome import ChromeConfig
@@ -40,16 +37,11 @@ _DEFAULT_CONTAINER_NAME = "codefreedom-chrome"
 _DEFAULT_PORT = 9222
 
 
-def _profile_path() -> Path:
-    """Return the chrome tool profile path (~/.codefreedom/profiles/chrome.yaml)."""
-    return tool_profile_path("chrome.yaml")
-
-
 # ── Profile loader ────────────────────────────────────────────────────────────
 
 
 def _load_profile() -> dict:
-    """Load chrome tool profile from ~/.codefreedom/profiles/chrome.yaml.
+    """Load chrome tool settings from the unified profiles.yaml.
 
     Returns a flat dict with keys: image, container_name, port, data_dir, env.
     Any missing key falls back to the hardcoded default above.
@@ -67,10 +59,13 @@ def _load_profile() -> dict:
     return load_tool_profile(
         "chrome",
         settings,
-        "chrome.yaml",
         schema_class=ChromeConfig,
         env_port_var="CODEFREEDOM_CHROME_PORT",
         extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port"],
+        env_port_vars={
+            "mcp_port": "CODEFREEDOM_CHROME_MCP_PORT",
+            "cdp_proxy_port": "CODEFREEDOM_CHROME_CDP_PROXY_PORT",
+        },
     )
 
 
@@ -79,7 +74,7 @@ def _load_profile() -> dict:
 
 def init_tool() -> int:
     """Initialize the chrome tool profile via recipes."""
-    return init_tool_redirect("chrome.yaml")
+    return init_tool_redirect("chrome")
 
 
 # ── Actions ────────────────────────────────────────────────────────────────────
@@ -87,7 +82,7 @@ def init_tool() -> int:
 
 def start(settings: dict) -> int:
     """Start the Chrome browser container. Returns exit code."""
-    if not start_tool_init_gate("chrome.yaml", "chrome"):
+    if not start_tool_init_gate("chrome"):
         return 1
 
     print_tool_notice("chrome")
@@ -97,7 +92,7 @@ def start(settings: dict) -> int:
     env_vars = settings.get("env", {})
 
     if container_is_running(container_name):
-        eprint(f"[CHROME] Container '{container_name}' is already running.")
+        eprint(f"{tag('CHROME')} Container '{container_name}' is already running.")
         return 0
 
     if not start_tool_docker_guard("CHROME"):
@@ -115,13 +110,16 @@ def start(settings: dict) -> int:
         settings["env"]["CDP_PROXY_PORT"] = str(cdp_proxy_port)
 
     resolved_data = resolve_data_dir(settings["data_dir"])
-    eprint(f"[CHROME]   CDP port: {port}  MCP port: {mcp_port}")
+    eprint(f"{tag('CHROME')}   CDP port: {port}  MCP port: {mcp_port}")
 
     docker_args = [
         "--shm-size=512m",
-        "-p", f"0.0.0.0:{port}:{cdp_proxy_port}",
-        "-p", f"0.0.0.0:{mcp_port}:{mcp_port}",
-        "-v", f"{resolved_data}:/data/chrome",
+        "-p",
+        f"0.0.0.0:{port}:{cdp_proxy_port}",
+        "-p",
+        f"0.0.0.0:{mcp_port}:{mcp_port}",
+        "-v",
+        f"{resolved_data}:/data/chrome",
     ]
 
     rc = start_tool_container(settings, "CHROME", docker_args)
@@ -174,7 +172,7 @@ def url(settings: dict) -> int:
     port = settings["port"]
 
     if not container_is_running(container_name):
-        eprint("[CHROME] Chrome container is not running.")
+        eprint(f"{tag('CHROME')} Chrome container is not running.")
         eprint("   Use: cf run tools start.")
         return 1
 

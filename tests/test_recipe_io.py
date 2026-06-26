@@ -185,6 +185,8 @@ class TestSummary:
 class TestRecipeApply:
     def test_first_recipe_then_second_merge(self, tmp_path):
         cf_dir = tmp_path / ".codefreedom"
+        config_dir = tmp_path / ".codefreedom" / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
 
         recipe1 = {
             "files": [
@@ -202,7 +204,7 @@ class TestRecipeApply:
             ),
             ".env": "BASE_URL=http://localhost:4000\n",
         }
-        count1 = _install_recipe_files(recipe1, files1, cf_dir)
+        count1 = _install_recipe_files(recipe1, files1, cf_dir, config_dir=config_dir)
         assert count1 == 2
 
         recipe2 = {
@@ -228,20 +230,20 @@ class TestRecipeApply:
         if "codefreedom.cli.setup.recipe" in sys.modules:
             pass
 
-        count2 = _install_recipe_files(recipe2, files2, cf_dir)
+        count2 = _install_recipe_files(recipe2, files2, cf_dir, config_dir=config_dir)
         assert count2 == 3
 
-        cfg = yaml.safe_load((cf_dir / "cfg.yaml").read_text())
+        cfg = yaml.safe_load((config_dir / "cfg.yaml").read_text())
         assert cfg["model"] == "ultra"
         assert cfg["retries"] == 3
         assert cfg["features"]["streaming"] is True
         assert cfg["features"]["logging"] is True
 
-        env_content = (cf_dir / ".env").read_text()
+        env_content = (config_dir / ".env").read_text()
         assert "BASE_URL=http://localhost:4000" in env_content
         assert "NEW_KEY=value" in env_content
 
-        extra = yaml.safe_load((cf_dir / "extra.yaml").read_text())
+        extra = yaml.safe_load((config_dir / "extra.yaml").read_text())
         assert extra["added"] is True
 
 
@@ -354,7 +356,11 @@ class TestGeneratedArtifacts:
         manifest = {
             "name": "gen-recipe",
             "files": [
-                {"path": "proxy/config/config.yaml", "target": "proxy/config/config.yaml", "merge": "deepdiff"},
+                {
+                    "path": "proxy/config/config.yaml",
+                    "target": "proxy/config/config.yaml",
+                    "merge": "deepdiff",
+                },
             ],
             "required_secrets": [
                 {"var": "MY_API_KEY", "prompt": "Enter your API key"},
@@ -365,7 +371,12 @@ class TestGeneratedArtifacts:
         }
         files = {"proxy/config/config.yaml": "key: val\n"}
 
-        monkeypatch.setattr("codefreedom.recipe.plan.get_codefreedom_dir", lambda: cf_dir)
+        monkeypatch.setattr(
+            "codefreedom.recipe.plan.get_codefreedom_dir", lambda: cf_dir
+        )
+        monkeypatch.setattr(
+            "codefreedom.recipe.plan.get_config_dir", lambda: cf_dir / "config"
+        )
         monkeypatch.setattr(
             "codefreedom.recipe.plan._resolve_store",
             lambda store, branch=None: tmp_path / "store",
@@ -392,7 +403,7 @@ class TestGeneratedArtifacts:
         rc = init_recipe("gen-recipe")
         assert rc == 0
 
-        setup_script = cf_dir / "scripts" / "setup.sh"
+        setup_script = cf_dir / "config" / "scripts" / "setup.sh"
         assert setup_script.exists()
         content = setup_script.read_text()
         assert "#!/usr/bin/env bash" in content
@@ -405,7 +416,11 @@ class TestGeneratedArtifacts:
         manifest = {
             "name": "gen-recipe",
             "files": [
-                {"path": "proxy/config/config.yaml", "target": "proxy/config/config.yaml", "merge": "deepdiff"},
+                {
+                    "path": "proxy/config/config.yaml",
+                    "target": "proxy/config/config.yaml",
+                    "merge": "deepdiff",
+                },
             ],
             "required_secrets": [
                 {"var": "MY_API_KEY", "prompt": "Enter your API key"},
@@ -416,7 +431,9 @@ class TestGeneratedArtifacts:
         }
         files = {"proxy/config/config.yaml": "key: val\n"}
 
-        monkeypatch.setattr("codefreedom.recipe.plan.get_codefreedom_dir", lambda: cf_dir)
+        monkeypatch.setattr(
+            "codefreedom.recipe.plan.get_codefreedom_dir", lambda: cf_dir
+        )
         monkeypatch.setattr(
             "codefreedom.recipe.plan._resolve_store",
             lambda store, branch=None: tmp_path / "store",
@@ -498,7 +515,9 @@ class TestVarsInterpolation:
         files = {"test.yaml": "proxy_url: ${PROXY_BASE_URL}\n"}
         vars_dict = {"PROXY_BASE_URL": "http://localhost:4000"}
 
-        count = _install_recipe_files(manifest, files, tmp_path, vars_dict=vars_dict)
+        count = _install_recipe_files(
+            manifest, files, tmp_path, vars_dict=vars_dict, config_dir=tmp_path
+        )
         assert count == 1
 
         content = (tmp_path / "test.yaml").read_text()
@@ -506,113 +525,6 @@ class TestVarsInterpolation:
         assert "${PROXY_BASE_URL}" not in content
 
 
-class TestSplitByKey:
-    def test_install_recipe_files_splits_by_key(self, tmp_path):
-        from codefreedom.recipe.apply import _install_recipe_files
-
-        manifest = {
-            "files": [
-                {
-                    "path": "coding-agents.yaml",
-                    "target": "profiles/",
-                    "merge": "deepdiff",
-                    "split_by_key": "profiles",
-                }
-            ]
-        }
-
-        combined_content = yaml.dump(
-            {
-                "common": {"tools": ["chrome", "web"]},
-                "profiles": {
-                    "claude-code": {
-                        "description": "Claude Code",
-                        "profiles": {
-                            "default": {"env": {"MODEL": "claude"}},
-                        },
-                    },
-                    "mimo-code": {
-                        "description": "MiMo Code",
-                        "profiles": {
-                            "default": {"env": {"MODEL": "mimo"}},
-                        },
-                    },
-                },
-            },
-            default_flow_style=False,
-        )
-
-        files = {"coding-agents.yaml": combined_content}
-
-        count = _install_recipe_files(manifest, files, tmp_path)
-        assert count == 2
-
-        assert (tmp_path / "profiles" / "claude-code.yaml").exists()
-        assert (tmp_path / "profiles" / "mimo-code.yaml").exists()
-
-        claude_content = (tmp_path / "profiles" / "claude-code.yaml").read_text()
-        assert "chrome" in claude_content
-
-        mimo_data = yaml.safe_load((tmp_path / "profiles" / "mimo-code.yaml").read_text())
-        assert mimo_data["tools"] == ["chrome", "web"]
-        assert mimo_data["description"] == "MiMo Code"
-
-    def test_split_by_key_handles_no_common_section(self, tmp_path):
-        from codefreedom.recipe.apply import _install_recipe_files
-
-        manifest = {
-            "files": [
-                {
-                    "path": "agents.yaml",
-                    "target": "agents/",
-                    "split_by_key": "agents",
-                }
-            ]
-        }
-
-        combined_content = yaml.dump(
-            {
-                "agents": {
-                    "agent-a": {"cmd": "start-a"},
-                    "agent-b": {"cmd": "start-b"},
-                },
-            },
-            default_flow_style=False,
-        )
-
-        files = {"agents.yaml": combined_content}
-
-        count = _install_recipe_files(manifest, files, tmp_path)
-        assert count == 2
-
-        a_data = yaml.safe_load((tmp_path / "agents" / "agent-a.yaml").read_text())
-        assert a_data["cmd"] == "start-a"
-
-        b_data = yaml.safe_load((tmp_path / "agents" / "agent-b.yaml").read_text())
-        assert b_data["cmd"] == "start-b"
-
-    def test_split_by_key_skips_non_dict_yaml(self, tmp_path):
-        from codefreedom.recipe.apply import _install_recipe_files
-
-        manifest = {
-            "files": [
-                {
-                    "path": "list.yaml",
-                    "target": "output/",
-                    "split_by_key": "items",
-                }
-            ]
-        }
-
-        files = {"list.yaml": "- item1\n- item2\n"}
-
-        count = _install_recipe_files(manifest, files, tmp_path)
-        assert count == 0
-        assert not (tmp_path / "output").exists()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Plan Recipe — split_by_key
 # ═══════════════════════════════════════════════════════════════════════════════
 
 

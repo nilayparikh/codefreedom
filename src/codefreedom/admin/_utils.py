@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from codefreedom import __version__
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 # ── Optional cryptography ─────────────────────────────────────────────────────
 
@@ -363,7 +363,7 @@ def _find_litellm_container() -> Optional[str]:
 def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
     container = _find_litellm_container()
     if container is None:
-        eprint("[ADMIN] No running LiteLLM container found — skipping PostgreSQL dump.")
+        eprint(f"{tag('ADMIN')} No running LiteLLM container found — skipping PostgreSQL dump.")
         return None
 
     pg_backup_dir.mkdir(parents=True, exist_ok=True)
@@ -373,7 +373,7 @@ def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
     dump_filename = f"{_PG_DUMP_PREFIX}-{timestamp}.dump"
     container_dump_path = f"/var/lib/postgresql/backup/{dump_filename}"
 
-    eprint(f"[ADMIN] Dumping PostgreSQL database from container '{container}'...")
+    eprint(f"{tag('ADMIN')} Dumping PostgreSQL database from container '{container}'...")
 
     try:
         result = subprocess.run(
@@ -398,7 +398,7 @@ def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
         if result.returncode != 0:
             stderr = result.stderr.strip()
             if stderr:
-                eprint(f"[ADMIN] Warning: pg_dump failed: {stderr}")
+                eprint(f"{tag('ADMIN')} Warning: pg_dump failed: {stderr}")
             else:
                 eprint(
                     f"[ADMIN] Warning: pg_dump failed (exit code {result.returncode})."
@@ -443,7 +443,7 @@ def _dump_postgresql(pg_backup_dir: Path) -> Optional[Path]:
         return None
 
     except (OSError, subprocess.TimeoutExpired) as exc:
-        eprint(f"[ADMIN] Warning: could not dump PostgreSQL: {exc}.")
+        eprint(f"{tag('ADMIN')} Warning: could not dump PostgreSQL: {exc}.")
         return None
 
 

@@ -8,7 +8,7 @@ Usage:
     codefreedom run proxy validate             Validate configuration
 
 The proxy is always run via `docker compose` against
-`~/.codefreedom/proxy/docker-compose.yaml`. The LiteLLM process runs inside
+`~/.codefreedom/config/proxy/docker-compose.yaml`. The LiteLLM process runs inside
 the `codefreedom:litellm-latest` image (see docker/litellm/Dockerfile.LiteLLM)
 which bakes in the WebSearch count display patch.  The web-bridge is now a
 standalone tool (``cf run tools web-bridge``) — start it separately before the
@@ -25,26 +25,34 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.core.settings import load_codefreedom_settings
+# get_codefreedom_dir is re-imported (and otherwise unused here) so that tests
+# can monkeypatch ``codefreedom.cli.run.proxy.get_codefreedom_dir`` to redirect
+# ~/.codefreedom at a tmp_path. Proxy env resolution now lives in
+# :mod:`codefreedom.core.proxy_env`, but the import keeps the historical test
+# patch surface stable.
+from codefreedom.core.config import get_codefreedom_dir  # noqa: F401
+from codefreedom.core.config import get_config_dir
 from codefreedom.docker.pull import pull_if_stale
 from codefreedom.log import eprint, tag
-from codefreedom.env_loader import get_env, load_dotenv
 
 # ── Path resolution ──────────────────────────────────────────────────────────
 
 
 def _find_compose_file() -> Optional[Path]:
-    """Find the LiteLLM docker-compose file in ~/.codefreedom/proxy/."""
-    candidate = get_codefreedom_dir() / "proxy" / "docker-compose.yaml"
+    """Find the LiteLLM docker-compose file in ~/.codefreedom/config/proxy/."""
+
+    config_dir = get_config_dir()
+    candidate = config_dir / "proxy" / "docker-compose.yaml"
     if candidate.exists():
         return candidate
     return None
 
 
 def _find_config_file() -> Optional[Path]:
-    """Find the LiteLLM config.yaml in ~/.codefreedom/proxy/config/."""
-    candidate = get_codefreedom_dir() / "proxy" / "config" / "config.yaml"
+    """Find the LiteLLM config.yaml in ~/.codefreedom/config/proxy/config/."""
+
+    config_dir = get_config_dir()
+    candidate = config_dir / "proxy" / "config" / "config.yaml"
     if candidate.exists():
         return candidate
     return None
@@ -72,64 +80,52 @@ def run(args: argparse.Namespace) -> int:
     # subcommand -- see codefreedom.cli.vscode.
     else:
         eprint(
-            "[PROXY] No action specified."
+            f"{tag('PROXY')} No action specified."
             " Use start, stop, restart, status, or validate."
         )
         return 1
 
 
 def _load_proxy_env_files() -> Dict[str, str]:
-    """Load proxy env files only (no os.environ, no CF_CLI_*).
+    """Load proxy env from machine environment variables only.
 
-    Used by ``_validate()`` which needs to inspect raw file contents.
+    All secrets must come from CF_CLI_* machine environment variables.
+    No .env.* files are read for secrets.
+
+    Used by ``_validate()`` which needs to inspect env values.
     All other callers should use :func:`_build_proxy_env` which goes
     through the full :func:`get_env` chain.
-
-    Returns a merged dict where later files override earlier ones.
     """
+    import os
+
     merged: Dict[str, str] = {}
-    for env_path in [
-        get_codefreedom_dir() / ".env.proxy",
-        get_codefreedom_dir() / ".env.proxy.secrets",
-        get_codefreedom_dir() / ".env.user",
-    ]:
-        if env_path.exists():
-            merged.update(load_dotenv(env_path))
+    # Only load from os.environ (CF_CLI_* vars are already resolved)
+    for key, value in os.environ.items():
+        if value:
+            merged[key] = value
     return merged
 
 
 def _build_proxy_env() -> Dict[str, str]:
-    """Build merged proxy environment via the canonical :func:`get_env` chain.
+    """Build the merged environment for a ``docker compose`` proxy invocation.
 
-    Resolution order (standard — later wins):
-      1. .env.proxy (config, skip if missing)
-      2. .env (shared config, skip if missing)
-      3. workspace .env (skip if missing)
-      4. .env.proxy.secrets (secrets, skip if missing)
-      5. .env.secrets (shared secrets, skip if missing)
-      6. workspace .env.secrets (skip if missing)
-      7. .env.user (user overrides, skip if missing)
-      8. os.environ (machine env — always wins)
-      9. CF_CLI_* overrides (absolute highest)
+    Thin wrapper around :func:`codefreedom.core.proxy_env.build_proxy_run_env` —
+    the shared helper is the single source of truth used by both the
+    ``run/proxy`` (start/stop/restart/status) and ``setup/deinit`` (proxy
+    teardown) code paths. See that module's docstring for the precedence
+    chain (``CF_CLI_*`` > ``override.yaml`` vars > bare ``os.environ``) and
+    why we no longer ``setdefault`` against :data:`os.environ`.
 
-    Also injects ``POSTGRES_HOST_DATA_DIR`` from ``CODEFREEDOM_HOME``
-    so the embedded PostgreSQL always lands inside the correct CodeFreedom
-    directory, even when customised.
+    Previously a stray ``SUFFIX_ID`` exported in the shell silently won
+    over the user's ``override.yaml`` value, producing
+    ``litellm-codefreedom-0000`` even when ``SUFFIX_ID: "windemo"`` was
+    configured. Proxy start now derives ``SUFFIX_ID`` and
+    ``COMPOSE_PROJECT_NAME`` from the resolved config first, then applies
+    ``CF_CLI_*`` overrides last.
     """
-    cf_dir = get_codefreedom_dir()
-    merged = get_env(
-        Path.cwd(),
-        component="proxy",
-        verbose=False,
-        extra_injections={
-            "POSTGRES_HOST_DATA_DIR": str(cf_dir / "pg" / "data"),
-        },
-    )
-    settings = load_codefreedom_settings(Path.cwd())
-    merged["LITELLM_BIND_HOST"] = settings.proxy.bind_host
-    merged["LITELLM_PORT"] = str(settings.proxy.bind_port)
-    merged.setdefault("PROXY_PUBLIC_BASE_URL", settings.proxy.public_base_url)
-    return merged
+    from codefreedom.core.proxy_env import build_proxy_run_env
+
+    return build_proxy_run_env()
 
 
 # ── Start ────────────────────────────────────────────────────────────────────
@@ -198,7 +194,7 @@ def _ensure_web_bridge_image() -> int:
         check=False,
     )
     if check.returncode != 0:
-        eprint(f"[PROXY] Web-bridge image '{image}' not found locally, pulling...")
+        eprint(f"{tag('PROXY')} Web-bridge image '{image}' not found locally, pulling...")
         pull = subprocess.run(
             ["docker", "pull", image],
             capture_output=True,
@@ -215,7 +211,7 @@ def _ensure_web_bridge_image() -> int:
                 )
                 return 1
             eprint(
-                f"[PROXY] Web-bridge image '{image}' not found locally."
+                f"{tag('PROXY')} Web-bridge image '{image}' not found locally."
                 " Building from source tree..."
             )
             eprint("   This is a one-time build (may take ~30 s).")
@@ -282,7 +278,7 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(
-            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/docker-compose.yaml"
         )
         eprint("   Run: cf s i")
         return 1
@@ -308,13 +304,15 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         if getattr(args, "host", None):
             merged_env["LITELLM_BIND_HOST"] = args.host
 
-    # Use SUFFIX_ID from .env.proxy to create deterministic container/project
-    # names.  Docker becomes the single source of truth — no /proc needed.
-    suffix = merged_env.get("SUFFIX_ID", "0000")
-    litellm_base = merged_env.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
-    litellm_name = f"{litellm_base}-{suffix}"
+    # Derive the LiteLLM container name. SUFFIX_ID and COMPOSE_PROJECT_NAME
+    # are already resolved by ``_build_proxy_env`` (and hence
+    # ``for_component("proxy")`` → ``common.suffix_id``); we only need to
+    # append the suffix to the base container name. Re-deriving
+    # COMPOSE_PROJECT_NAME here would overwrite the already-resolved value.
+    from codefreedom.core.proxy_env import litellm_container_name
+
+    litellm_name = litellm_container_name(merged_env)
     merged_env["LITELLM_CONTAINER_NAME"] = litellm_name
-    merged_env["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
 
     # Ensure the shared `codefreedom` bridge network exists (external network
     # referenced by docker-compose.yaml).  All proxy instances share this
@@ -341,9 +339,10 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         check=False,
     )
     if result.returncode == 0:
+        host = merged_env.get("LITELLM_BIND_HOST", "127.0.0.1")
         port = merged_env.get("LITELLM_PORT", "4000")
         eprint(
-            f"{tag('PROXY')} Proxy started at http://localhost:{port}"
+            f"{tag('PROXY')} Proxy started at http://{host}:{port}"
             f" ({litellm_name})"
         )
     else:
@@ -357,14 +356,12 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
 def _build_compose_env() -> dict[str, str]:
     """Build the environment dict for docker compose subprocess calls.
 
-    Loads proxy env files (same as ``_build_proxy_env``) and extracts
-    ``COMPOSE_PROJECT_NAME`` from ``SUFFIX_ID`` so that ``stop``, ``restart``,
-    and other compose commands target the same project that ``start`` created.
+    ``_build_proxy_env`` (via :func:`for_component("proxy")`) already bakes in
+    ``COMPOSE_PROJECT_NAME`` from the resolved ``common.suffix_id``, so
+    ``stop`` / ``restart`` / ``status`` target the same project that
+    ``start`` created without any local re-derivation of the suffix.
     """
-    merged = _build_proxy_env()
-    suffix = merged.get("SUFFIX_ID", "0000")
-    merged["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
-    return merged
+    return _build_proxy_env()
 
 
 # ── Stop ─────────────────────────────────────────────────────────────────────
@@ -375,7 +372,7 @@ def _stop() -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(
-            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/docker-compose.yaml"
         )
         eprint("   Run: cf s i")
         return 1
@@ -407,7 +404,7 @@ def _restart() -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(
-            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/docker-compose.yaml"
         )
         eprint("   Run: cf s i")
         return 1
@@ -430,10 +427,11 @@ def _restart() -> int:
         check=False,
     )
     if result.returncode == 0:
-        # Read port from env (resolved at build time, not /proc)
+        # Read host/port from env (resolved at build time, not /proc)
         merged_env = _build_proxy_env()
+        host = merged_env.get("LITELLM_BIND_HOST", "127.0.0.1")
         port = merged_env.get("LITELLM_PORT", "4000")
-        eprint(f"{tag('PROXY')} Proxy restarted at http://localhost:{port}")
+        eprint(f"{tag('PROXY')} Proxy restarted at http://{host}:{port}")
     else:
         eprint(f"{tag('PROXY')} Failed to restart. Check docker logs.")
     return result.returncode
@@ -447,7 +445,7 @@ def _status() -> int:
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(
-            f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/docker-compose.yaml"
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/docker-compose.yaml"
         )
         eprint("   Run: cf s i")
         return 1
@@ -503,7 +501,7 @@ def _warn_database_url(
 
     if using_codefreedom_image:
         eprint(
-            "[PROXY] database_url not required — embedded PG in"
+            f"{tag('PROXY')} database_url not required — embedded PG in"
             " nilayparikh/codefreedom:litellm image auto-sets it."
         )
     else:
@@ -519,11 +517,77 @@ def _warn_database_url(
 # ── Validate ─────────────────────────────────────────────────────────────────
 
 
+def _validate_providers(
+    config: dict, config_file: Path, proxy_env: dict, errors: list[str]
+) -> None:
+    """Validate provider include files and their model api_key references."""
+    import yaml
+
+    includes = config.get("include", [])
+    if not includes:
+        eprint(f"  {tag('WARN')}  No provider includes found in config.yaml")
+        return
+
+    config_dir = config_file.parent
+    for inc in includes:
+        provider_file = config_dir / inc
+        if provider_file.exists():
+            eprint(f"  {tag('OK')}  {inc}")
+            try:
+                with open(provider_file, encoding="utf-8") as f:
+                    provider_config = yaml.safe_load(f)
+                if provider_config is None:
+                    eprint(f"    {tag('SKIP')}  (empty/commented out)")
+                    continue
+                models = provider_config.get("model_list", [])
+                for m in models:
+                    name = m.get("model_name", "?")
+                    params = m.get("litellm_params", {})
+                    api_key_ref = params.get("api_key", "")
+                    if api_key_ref.startswith("os.environ/"):
+                        env_var = api_key_ref[len("os.environ/") :]
+                        if not _env_is_set(env_var, proxy_env):
+                            eprint(
+                                f"    [WARN]  {name}: env var {env_var} is not set"
+                            )
+                        else:
+                            eprint(
+                                f"    {tag('OK')}  {name} (auth: {env_var} {tag('OK')})"
+                            )
+                    else:
+                        eprint(f"    {tag('OK')}  {name}")
+            except yaml.YAMLError as e:
+                eprint(f"    {tag('FAIL')}  {inc}: YAML error -- {e}")
+                errors.append(f"YAML error in {inc}: {e}")
+        else:
+            eprint(f"  {tag('FAIL')}  {inc} -- file not found")
+            errors.append(f"Missing provider file: {inc}")
+
+
+def _validate_settings(config: dict, proxy_env: dict, errors: list[str]) -> None:
+    """Validate general_settings and router_settings."""
+    general = config.get("general_settings", {})
+    database_url_in_config = general.get("database_url")
+    database_url_in_env = _env_is_set("DATABASE_URL", proxy_env)
+    _warn_database_url(database_url_in_config, database_url_in_env, proxy_env)
+
+    router = config.get("router_settings", {})
+    aliases = router.get("model_group_alias", {})
+    if aliases:
+        eprint(f"  {tag('OK')}  Model aliases: {len(aliases)} defined")
+        for alias, model in aliases.items():
+            eprint(f"       {alias} -> {model}")
+    else:
+        eprint(f"  {tag('WARN')}  No model_group_alias defined")
+
+
 def _validate() -> int:
     """Validate the LiteLLM configuration."""
     config_file = _find_config_file()
     if not config_file:
-        eprint(f"{tag('ERROR')} Could not find ~/.codefreedom/proxy/config/config.yaml")
+        eprint(
+            f"{tag('ERROR')} Could not find ~/.codefreedom/config/proxy/config/config.yaml"
+        )
         eprint("   Run: cf s i")
         return 1
 
@@ -532,7 +596,6 @@ def _validate() -> int:
     eprint(f"{tag('PROXY')} Validating {config_file}...")
     eprint()
 
-    # Load proxy env files so we can check api_key references against them
     proxy_env = _load_proxy_env_files()
 
     try:
@@ -558,58 +621,8 @@ def _validate() -> int:
         eprint(f"  {tag('FAIL')}  Config must be a YAML dictionary.")
         return 1
 
-    includes = config.get("include", [])
-    if not includes:
-        eprint(f"  {tag('WARN')}  No provider includes found in config.yaml")
-    else:
-        config_dir = config_file.parent
-        for inc in includes:
-            provider_file = config_dir / inc
-            if provider_file.exists():
-                eprint(f"  {tag('OK')}  {inc}")
-                try:
-                    with open(provider_file, encoding="utf-8") as f:
-                        provider_config = yaml.safe_load(f)
-                    if provider_config is None:
-                        eprint(f"    {tag('SKIP')}  (empty/commented out)")
-                        continue
-                    models = provider_config.get("model_list", [])
-                    for m in models:
-                        name = m.get("model_name", "?")
-                        params = m.get("litellm_params", {})
-                        api_key_ref = params.get("api_key", "")
-                        if api_key_ref.startswith("os.environ/"):
-                            env_var = api_key_ref[len("os.environ/") :]
-                            if not _env_is_set(env_var, proxy_env):
-                                eprint(
-                                    f"    [WARN]  {name}: env var {env_var} is not set"
-                                )
-                            else:
-                                eprint(
-                                    f"    {tag('OK')}  {name} (auth: {env_var} {tag('OK')})"
-                                )
-                        else:
-                            eprint(f"    {tag('OK')}  {name}")
-                except yaml.YAMLError as e:
-                    eprint(f"    {tag('FAIL')}  {inc}: YAML error -- {e}")
-                    errors.append(f"YAML error in {inc}: {e}")
-            else:
-                eprint(f"  {tag('FAIL')}  {inc} -- file not found")
-                errors.append(f"Missing provider file: {inc}")
-
-    general = config.get("general_settings", {})
-    database_url_in_config = general.get("database_url")
-    database_url_in_env = _env_is_set("DATABASE_URL", proxy_env)
-    _warn_database_url(database_url_in_config, database_url_in_env, proxy_env)
-
-    router = config.get("router_settings", {})
-    aliases = router.get("model_group_alias", {})
-    if aliases:
-        eprint(f"  {tag('OK')}  Model aliases: {len(aliases)} defined")
-        for alias, model in aliases.items():
-            eprint(f"       {alias} -> {model}")
-    else:
-        eprint(f"  {tag('WARN')}  No model_group_alias defined")
+    _validate_providers(config, config_file, proxy_env, errors)
+    _validate_settings(config, proxy_env, errors)
 
     eprint()
     _print_validation_result(errors)

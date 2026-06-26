@@ -43,7 +43,7 @@ All Docker workflows are manual trigger only (`workflow_dispatch`).
 
 ## Docker Compose
 
-The proxy always runs via `docker compose` against `~/.codefreedom/proxy/docker-compose.yaml`. No host-side `litellm` install is required.
+The proxy always runs via `docker compose` against `~/.codefreedom/config/proxy/docker-compose.yaml`. No host-side `litellm` install is required.
 
 ## Patches
 

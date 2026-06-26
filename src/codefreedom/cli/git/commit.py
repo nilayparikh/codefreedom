@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -18,9 +19,24 @@ from codefreedom.cli.git.config import (
 from codefreedom.log import eprint, tag
 
 _CONVENTIONAL_TYPES = [
-    "feat", "fix", "chore", "docs", "style",
-    "refactor", "perf", "test", "build", "ci", "revert",
+    "feat",
+    "fix",
+    "chore",
+    "docs",
+    "style",
+    "refactor",
+    "perf",
+    "test",
+    "build",
+    "ci",
+    "revert",
 ]
+
+_VALID_MSG_RE = re.compile(
+    r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
+    r"(?:\([a-zA-Z0-9_\-/]+\))?:\s+.+$"
+)
+_MAX_RETRIES = 2
 
 
 def _build_commit_system_prompt(
@@ -45,20 +61,18 @@ def _build_commit_system_prompt(
             parts.append("Output format (no scope):")
             parts.append("TYPE: DESCRIPTION")
             parts.append("")
-            parts.append(
-                f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}"
-            )
+            parts.append(f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}")
         else:
             parts.append("Output format:")
             parts.append("TYPE(SCOPE): DESCRIPTION")
             parts.append("")
-            parts.append(
-                f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}"
-            )
+            parts.append(f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}")
             parts.append("SCOPE is the module/area affected.")
 
         parts.append("")
-        parts.append("DESCRIPTION should be a short imperative description (max 72 chars).")
+        parts.append(
+            "DESCRIPTION should be a short imperative description (max 72 chars)."
+        )
         parts.append("Output ONLY the commit message, nothing else.")
     else:
         parts.append("Generate a short, clear commit message describing the changes.")
@@ -93,41 +107,27 @@ def _open_editor(initial_text: str) -> str | None:
         tmp_path.unlink(missing_ok=True)
 
 
-def run_commit(args: object) -> int:
-    """Execute the commit workflow."""
-    work_dir = Path.cwd()
+def _prepare_staged_diff(
+    args: object, work_dir: Path, changed: list[str]
+) -> tuple[str, int]:
+    """Stage files and return the staged diff.
 
-    if not git_ops.is_git_repo(work_dir):
-        eprint(f"{tag('ERROR')} Not a git repository.")
-        return 1
-
-    explicit_message = getattr(args, "message", None)
-    auto_yes = getattr(args, "yes", False)
-    no_scope = getattr(args, "no_scope", False)
-    force_signed = getattr(args, "signed", None)
-    no_sign = getattr(args, "no_sign", False)
+    Returns (staged_diff, exit_code). exit_code != 0 means bail early.
+    """
     dry_run = getattr(args, "dry_run", False)
     stage_only = getattr(args, "stage_only", False)
     files = getattr(args, "files", None)
-
-    config = load_git_config(work_dir)
-    use_signed = is_signed_commit(config) if not no_sign else False
-    if force_signed:
-        use_signed = True
-
-    changed = git_ops.get_changed_files(work_dir)
-    if not changed:
-        eprint(f"{tag('WARN')} No changes to commit.")
-        return 0
 
     if dry_run:
         staged = git_ops.get_staged_files(work_dir)
         unstaged = [f for f in changed if f not in staged]
         if not staged and not unstaged:
             eprint(f"{tag('WARN')} No changes to commit.")
-            return 0
+            return "", 0
         if unstaged:
-            eprint(f"{tag('INFO')} Unstaged files (not staging in dry-run): {', '.join(unstaged)}")
+            eprint(
+                f"{tag('INFO')} Unstaged files (not staging in dry-run): {', '.join(unstaged)}"
+            )
         if not staged:
             staged_diff = "\n".join(
                 f"diff --git a/{f} b/{f}\nnew file mode 100644\n--- /dev/null\n+++ b/{f}"
@@ -141,49 +141,99 @@ def run_commit(args: object) -> int:
             ok = git_ops.stage_files(files, cwd=work_dir)
             if not ok:
                 eprint(f"{tag('ERROR')} Failed to stage files.")
-                return 1
+                return "", 1
             staged = git_ops.get_staged_files(work_dir)
         if not staged:
-            eprint(f"{tag('WARN')} No staged changes. Use 'git add' first or run without --stage-only.")
-            return 0
+            eprint(
+                f"{tag('WARN')} No staged changes. Use 'git add' first or run without --stage-only."
+            )
+            return "", 0
         staged_diff = git_ops.get_staged_diff(work_dir)
     else:
         if files:
             ok = git_ops.stage_files(files, cwd=work_dir)
-            if not ok:
-                eprint(f"{tag('ERROR')} Failed to stage files.")
-                return 1
         else:
             ok = git_ops.stage_files(cwd=work_dir)
-            if not ok:
-                eprint(f"{tag('ERROR')} Failed to stage files.")
-                return 1
+        if not ok:
+            eprint(f"{tag('ERROR')} Failed to stage files.")
+            return "", 1
         staged_diff = git_ops.get_staged_diff(work_dir)
 
     if not staged_diff.strip():
         eprint(f"{tag('WARN')} No staged changes to commit.")
-        return 0
+        return "", 0
+
+    return staged_diff, -1
+
+
+def _generate_commit_message(
+    args: object, config: dict, work_dir: Path, staged_diff: str
+) -> tuple[str, int]:
+    """Generate or retrieve the commit message.
+
+    Returns (commit_msg, exit_code). exit_code != 0 means bail early.
+    """
+    explicit_message = getattr(args, "message", None)
+    no_scope = getattr(args, "no_scope", False)
 
     if explicit_message:
-        commit_msg = explicit_message
-    else:
-        model = get_model(config)
-        system_prompt = _build_commit_system_prompt(config, no_scope)
-        staged_files = git_ops.get_staged_files(work_dir)
-        files_list = "\n".join(f"- {f}" for f in staged_files)
-        user_prompt = f"Files changed:\n{files_list}\n\nDiff:\n\n{staged_diff}"
+        return explicit_message, -1
 
-        eprint(f"{tag('COMMIT')} Generating commit message via {model}...")
-        response = llm.generate_message(model, system_prompt, user_prompt, max_tokens=16000, work_dir=work_dir)
+    model = get_model(config)
+    system_prompt = _build_commit_system_prompt(config, no_scope)
+    staged_files = git_ops.get_staged_files(work_dir)
+    files_list = "\n".join(f"- {f}" for f in staged_files)
+    user_prompt = f"Files changed:\n{files_list}\n\nDiff:\n\n{staged_diff}"
+
+    eprint(f"{tag('COMMIT')} Generating commit message via {model}...")
+
+    for attempt in range(_MAX_RETRIES + 1):
+        response = llm.generate_message(
+            model,
+            system_prompt,
+            user_prompt,
+            max_tokens=16000,
+            work_dir=work_dir,
+        )
         if response is None:
-            return 1
+            return "", 1
 
         parsed = llm.parse_commit_response(response)
         template = get_template(config, "commit_message")
-        commit_msg = templates.render_template(template, parsed)
+        candidate = templates.render_template(template, parsed)
 
         if no_scope:
-            commit_msg = templates.strip_scope(commit_msg)
+            candidate = templates.strip_scope(candidate)
+
+        if _VALID_MSG_RE.match(candidate):
+            return candidate, -1
+
+        if attempt < _MAX_RETRIES:
+            eprint(
+                f"{tag('WARN')} Malformed commit message "
+                f"(attempt {attempt + 1}/{_MAX_RETRIES + 1}), retrying..."
+            )
+            user_prompt = (
+                f"Your previous response was malformed:\n{candidate}\n\n"
+                "Follow the required format exactly.\n\n"
+                f"{user_prompt}"
+            )
+        else:
+            eprint(
+                f"{tag('WARN')} LLM produced malformed message after "
+                f"{_MAX_RETRIES + 1} attempts — using as-is."
+            )
+            return candidate, -1
+
+    return "", 1
+
+
+def _execute_commit(
+    args: object, work_dir: Path, commit_msg: str, use_signed: bool
+) -> int:
+    """Execute the commit (and optionally push). Returns exit code."""
+    auto_yes = getattr(args, "yes", False)
+    dry_run = getattr(args, "dry_run", False)
 
     eprint(f"{tag('COMMIT')} Generated message:\n  {commit_msg}")
 
@@ -224,3 +274,35 @@ def run_commit(args: object) -> int:
     else:
         eprint(f"{tag('ERROR')} Commit failed:\n{output}")
         return 1
+
+
+def run_commit(args: object) -> int:
+    """Execute the commit workflow."""
+    work_dir = Path.cwd()
+
+    if not git_ops.is_git_repo(work_dir):
+        eprint(f"{tag('ERROR')} Not a git repository.")
+        return 1
+
+    no_sign = getattr(args, "no_sign", False)
+    force_signed = getattr(args, "signed", None)
+
+    config = load_git_config(work_dir)
+    use_signed = is_signed_commit(config) if not no_sign else False
+    if force_signed:
+        use_signed = True
+
+    changed = git_ops.get_changed_files(work_dir)
+    if not changed:
+        eprint(f"{tag('WARN')} No changes to commit.")
+        return 0
+
+    staged_diff, rc = _prepare_staged_diff(args, work_dir, changed)
+    if rc != -1:
+        return rc
+
+    commit_msg, rc = _generate_commit_message(args, config, work_dir, staged_diff)
+    if rc != -1:
+        return rc
+
+    return _execute_commit(args, work_dir, commit_msg, use_signed)

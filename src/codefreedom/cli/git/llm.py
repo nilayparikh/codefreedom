@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -15,12 +16,12 @@ def _load_proxy_settings(work_dir: Path | None = None) -> tuple[str, str]:
 
     Returns (proxy_url, api_key).
     """
-    from codefreedom.env_loader import get_env
+    from codefreedom.config.runtime import apply_cf_cli_overrides
 
     if work_dir is None:
         work_dir = Path.cwd()
 
-    env = get_env(work_dir, component=None, verbose=False)
+    env = apply_cf_cli_overrides(dict(os.environ))
 
     proxy_url = env.get("LITELLM_BASE_URL", "http://localhost:4000")
     api_key = env.get("LITELLM_MASTER_KEY", "")

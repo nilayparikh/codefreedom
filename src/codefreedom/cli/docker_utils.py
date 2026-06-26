@@ -17,10 +17,10 @@ from typing import Any, Dict
 import yaml
 from pydantic import BaseModel
 
-from codefreedom.core.interpolate import interpolate_all_strings
+from codefreedom.config.interpolation import interpolate_all
+from codefreedom.config.runtime import apply_cf_cli_overrides
 from codefreedom.docker.pull import pull_if_stale
-from codefreedom.env_loader import apply_cf_cli_overrides
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 # ── Tool metadata ────────────────────────────────────────────────────────────
 
@@ -133,7 +133,7 @@ def accept_tool_prompt(tool_name: str) -> bool:
     """
     info = TOOL_INFO.get(tool_name)
     if not info:
-        eprint(f"[INIT] Unknown tool: {tool_name}.")
+        eprint(f"{tag('INIT')} Unknown tool: {tool_name}.")
         return False
 
     eprint()
@@ -153,13 +153,13 @@ def accept_tool_prompt(tool_name: str) -> bool:
         response = input("Continue? [y/N]: ").strip()
     except (EOFError, KeyboardInterrupt):
         eprint()
-        eprint("[INIT] Init aborted.")
+        eprint(f"{tag('INIT')} Init aborted.")
         return False
 
     if response.lower() == "y":
         return True
 
-    eprint("[INIT] Init aborted.")
+    eprint(f"{tag('INIT')} Init aborted.")
     return False
 
 
@@ -314,7 +314,7 @@ def ensure_image(
             eprint(f"[{label}] Image pulled.")
             return True
 
-        eprint(f"[ERROR] Failed to pull image '{image}'.")
+        eprint(f"{tag('ERROR')} Failed to pull image '{image}'.")
         if pull.stderr:
             eprint(f"   {pull.stderr.strip()}")
         eprint("")
@@ -525,13 +525,9 @@ def get_codefreedom_container_ports() -> set[int]:
 
 # ── Shared tool helpers ─────────────────────────────────────────────────────
 
-# Tool profile files always go to ~/.codefreedom/ (shared across projects).
-_TOOL_PROFILE_PATHS: set[str] = {
-    "profiles/chrome.yaml",
-    "profiles/web.yaml",
-    "profiles/github.yaml",
-    "profiles/web-bridge.yaml",
-}
+# Tool profiles are now loaded from unified profiles.yaml in config directory.
+# This constant is kept for backward compatibility but is no longer used
+# for determining installation paths.
 
 
 def tool_home() -> Path:
@@ -551,28 +547,27 @@ def tool_data_dir(tool_name: str) -> str:
     return str(tool_home() / "tools" / tool_name)
 
 
-def tool_profile_path(tool_filename: str) -> Path:
-    """Return the tool profile path (~/.codefreedom/profiles/<filename>)."""
-    return tool_home() / "profiles" / tool_filename
+def get_profiles_path() -> Path:
+    """Return the unified profiles.yaml path."""
+    from codefreedom.core.config import get_config_dir
+
+    return get_config_dir() / "profiles.yaml"
 
 
-def init_tool_redirect(tool_filename: str) -> int:
+def init_tool_redirect(label: str) -> int:
     """Redirect tool init to the recipe system.
 
     Standard init handler for all tools — points users to ``cf setup init``.
+    Checks if the unified profiles.yaml exists.
     """
-    profile_path = tool_home() / "profiles" / tool_filename
+    profile_path = get_profiles_path()
     if profile_path.exists():
-        tool_label = tool_filename.replace(".yaml", "")
-        eprint(
-            f"[{tool_label}] Profile already exists at ~/.codefreedom/profiles/{tool_filename}."
-        )
+        eprint(f"[{label.upper()}] Unified profiles.yaml found at {profile_path}.")
         return 0
     eprint(
-        f"[{tool_label}] No profile found."
+        f"[{label.upper()}] No profiles.yaml found."
         " Run 'cf s i' to install the default recipe."
     )
-    label = tool_filename.replace(".yaml", "")
     print_help_section(
         f"{label} init",
         [
@@ -587,74 +582,180 @@ def init_tool_redirect(tool_filename: str) -> int:
     return 0
 
 
+def _flatten_dict(d: dict, prefix: str = "") -> dict[str, str]:
+    """Flatten a nested dict into dotted-key entries for interpolation context."""
+    items: dict[str, str] = {}
+    for key, val in d.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(val, dict):
+            items.update(_flatten_dict(val, full_key))
+        elif isinstance(val, str):
+            items[full_key] = val
+    return items
+
+
+def _merge_deep(base: dict, overlay: dict) -> dict:
+    """Deep-merge ``overlay`` into ``base`` (overlay wins) and return ``base``.
+
+    Mirrors :func:`codefreedom.config.loader._merge_deep` for the local
+    tool-profile layering (we don't import that one to avoid a ``cli`` →
+    ``config`` private-API dependency).
+    """
+    for key, val in overlay.items():
+        if isinstance(val, dict) and isinstance(base.get(key), dict):
+            _merge_deep(base[key], val)
+        else:
+            base[key] = val
+    return base
+
+
+def _coerce_int(val: Any) -> int | None:
+    """Coerce a YAML/interpolated port value to ``int`` (None if impossible)."""
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, int):
+        return val
+    if isinstance(val, str):
+        try:
+            return int(val.strip())
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _layer_profiles_yaml() -> tuple[dict, dict]:
+    """Read ``profiles.yaml`` with ``override.yaml`` layered on top.
+
+    Returns ``(merged_raw, interpolation_ctx)`` where ``merged_raw`` already has
+    override's ``tools`` / ``common`` deep-merged into the profiles dict (so a
+    user setting ``tools.chrome.mcp_port`` in ``override.yaml`` actually wins),
+    and ``interpolation_ctx`` is the context used for ``${VAR}`` resolution
+    with: ``os.environ`` < flattened ``common`` < ``override.yaml`` ``vars``
+    < ``CF_CLI_*`` (highest).
+
+    Previously tool loaders read *only* ``profiles.yaml`` and ignored
+    ``override.yaml`` entirely, which meant the seeded
+    ``tools: {chrome: {}}`` block in ``override.yaml`` (from ``cf setup init``)
+    was decorative — tool overrides written there silently did nothing.
+    """
+    profile_path = get_profiles_path()
+    if not profile_path.exists():
+        return {}, {}
+
+    try:
+        with open(profile_path, encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+    except (yaml.YAMLError, OSError) as exc:
+        eprint(f"{tag('TOOLS')} Warning: failed to read {profile_path}: {exc}")
+        return {}, {}
+
+    if not isinstance(raw, dict):
+        eprint(f"{tag('TOOLS')} Warning: invalid profile format in {profile_path}")
+        return {}, {}
+
+    override_path = profile_path.parent / "override.yaml"
+    override_vars: dict[str, Any] = {}
+    if override_path.exists():
+        try:
+            with open(override_path, encoding="utf-8") as f:
+                override = yaml.safe_load(f) or {}
+        except (yaml.YAMLError, OSError) as exc:
+            eprint(f"{tag('TOOLS')} Warning: failed to read {override_path}: {exc}")
+            override = {}
+        if isinstance(override, dict):
+            override_vars = override.get("vars", {}) or {}
+            if isinstance(override_vars, list):
+                merged: dict[str, Any] = {}
+                for item in override_vars:
+                    if isinstance(item, dict):
+                        merged.update(item)
+                override_vars = merged
+            if not isinstance(override_vars, dict):
+                override_vars = {}
+            for section in ("common", "tools"):
+                if isinstance(override.get(section), dict):
+                    base = raw.setdefault(section, {})
+                    if isinstance(base, dict):
+                        _merge_deep(base, override[section])
+                    else:
+                        raw[section] = override[section]
+
+    # Build interpolation context. Order matters:
+    #   os.environ < common.* flatten < override.yaml vars < CF_CLI_* (max).
+    ctx = dict(os.environ)
+    common_section = raw.get("common", {})
+    if isinstance(common_section, dict):
+        ctx.update(_flatten_dict(common_section, prefix="common"))
+    ctx.update(override_vars)
+    ctx = apply_cf_cli_overrides(ctx)
+    return raw, ctx
+
+
 def load_tool_profile(
     tool_key: str,
     defaults: dict[str, Any],
-    profile_filename: str,
     schema_class: type[BaseModel] | None = None,
     env_port_var: str | None = None,
     extra_keys: list[str] | None = None,
     label: str | None = None,
+    env_port_vars: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Load a tool profile from ~/.codefreedom/profiles/<filename>.
+    """Load a tool profile from ``profiles.yaml`` + ``override.yaml``.
 
-    Shared loader used by all tool modules.  Handles YAML reading,
-    ``${VAR}`` interpolation, Pydantic validation (non-fatal), and
-    merging of profile values over hardcoded defaults.
+    Shared loader used by all tool modules. Reads the unified
+    ``profiles.yaml`` *and* layers ``override.yaml`` on top (tools/common and
+    vars), interpolates ``${VAR}`` references, then extracts the tool config.
 
     Args:
         tool_key: Key in the YAML dict for this tool (e.g. ``"chrome"``).
         defaults: Dict of hardcoded defaults (mutated in place).
-        profile_filename: Profile filename (e.g. ``"chrome.yaml"``).
         schema_class: Optional Pydantic model for validation (non-fatal).
-        env_port_var: Env var name for port override (e.g. ``"CODEFREEDOM_CHROME_PORT"``).
+        env_port_var: Env var name for ``port`` override
+            (e.g. ``"CODEFREEDOM_CHROME_PORT"``).
         extra_keys: Extra dict-key names to transfer from profile to settings.
         label: Log prefix label (defaults to *tool_key* upper).
+        env_port_vars: Optional mapping of ``setting_name -> env_var_name`` for
+            additional numeric-port overrides (used by chrome for
+            ``mcp_port``/``cdp_proxy_port``). Env var values win over the
+            YAML-derived values; ``CF_CLI_*``-prefixed names are also honoured
+            because :func:`apply_cf_cli_overrides` was applied to the context.
 
     Returns *defaults* (the same dict, mutated).
     """
     from pydantic import ValidationError
 
-    tag = (label or tool_key).upper()
-    profile_path = tool_home() / "profiles" / profile_filename
+    log_tag = (label or tool_key).upper()
 
-    if not profile_path.exists():
+    raw, ctx = _layer_profiles_yaml()
+    if not raw:
         return defaults
 
-    try:
-        with open(profile_path, encoding="utf-8") as f:
-            raw = yaml.safe_load(f)
-    except (yaml.YAMLError, OSError) as exc:
-        eprint(f"[{tag}] Warning: failed to read {profile_path}: {exc}")
+    tools_section = raw.get("tools", {}) or {}
+    if not isinstance(tools_section, dict):
         return defaults
 
-    if not isinstance(raw, dict):
-        eprint(f"[{tag}] Warning: invalid profile format in {profile_path}")
-        return defaults
+    interpolate_all(tools_section, context=ctx)
 
-    # Interpolate ${VAR} references in env values.
-    # Include CF_CLI_* overrides so machine-level env vars like
-    # CF_CLI_GITHUB_PERSONAL_ACCESS_TOKEN resolve correctly.
-    interpolate_all_strings(raw, context=apply_cf_cli_overrides(dict(os.environ)))
-
-    # Validate with Pydantic (non-fatal — warn on failure)
-    if schema_class is not None:
-        try:
-            schema_class.model_validate(raw, strict=False)
-        except ValidationError as exc:
-            eprint(f"[{tag}] Warning: validation issue in profile: {exc}")
-
-    cfg = raw.get(tool_key, {})
+    cfg = tools_section.get(tool_key, {}) or {}
     if not isinstance(cfg, dict):
         return defaults
 
-    # Standard keys
+    if schema_class is not None:
+        schema_key = tool_key.replace("-", "_")
+        try:
+            schema_class.model_validate({schema_key: cfg}, strict=False)
+        except ValidationError as exc:
+            eprint(f"[{log_tag}] Warning: validation issue in profile: {exc}")
+
+    # Standard keys (image/container_name/data_dir are strings; port coerced
+    # so interpolated "${VAR:-9222}" → "9222" is accepted as int 9222).
     for key in ("image", "container_name", "data_dir"):
-        if isinstance(cfg.get(key), str) and cfg[key]:
-            defaults[key] = cfg[key]
-    if isinstance(cfg.get("port"), int) and cfg["port"] > 0:
-        defaults["port"] = cfg["port"]
-    # Machine env var override for port
+        val = cfg.get(key)
+        if isinstance(val, str) and val:
+            defaults[key] = val
+    port_val = _coerce_int(cfg.get("port"))
+    if port_val is not None and port_val > 0:
+        defaults["port"] = port_val
     if env_port_var:
         env_port = os.environ.get(env_port_var)
         if env_port is not None:
@@ -665,7 +766,6 @@ def load_tool_profile(
     if isinstance(cfg.get("env"), dict):
         defaults["env"] = cfg["env"]
 
-    # Extra keys specific to the tool
     for key in extra_keys or []:
         val = cfg.get(key)
         if key == "port":
@@ -673,12 +773,10 @@ def load_tool_profile(
         if key == "mcp_path":
             if isinstance(val, str) and val:
                 defaults[key] = val
-        elif key == "mcp_port":
-            if isinstance(val, int) and val > 0:
-                defaults[key] = val
-        elif key == "cdp_proxy_port":
-            if isinstance(val, int) and val > 0:
-                defaults[key] = val
+        elif key in ("mcp_port", "cdp_proxy_port"):
+            coerced = _coerce_int(val)
+            if coerced is not None and coerced > 0:
+                defaults[key] = coerced
         elif key == "search_engines":
             if isinstance(val, dict):
                 defaults[key] = val
@@ -690,6 +788,22 @@ def load_tool_profile(
                 defaults[key] = float(val)
         elif isinstance(val, (str, int, float)) and val:
             defaults[key] = val
+
+    # Numeric-port env overrides (highest precedence — beats YAML/CF_CLI_* vars
+    # explicitly because they are agent-machine-level overrides too).
+    if env_port_vars:
+        for setting_name, env_var in env_port_vars.items():
+            env_val = os.environ.get(env_var)
+            if env_val is None:
+                continue
+            try:
+                coerced = int(env_val)
+            except (ValueError, TypeError):
+                continue
+            if setting_name == "search_cooldown_seconds":
+                defaults[setting_name] = float(coerced)
+            else:
+                defaults[setting_name] = coerced
 
     return defaults
 
@@ -759,7 +873,7 @@ def restart_tool_container(settings: dict, label: str) -> int:
         check=False,
     )
     if result.returncode != 0:
-        eprint(f"[ERROR] Failed to restart {label} container.")
+        eprint(f"{tag('ERROR')} Failed to restart {label} container.")
         if result.stderr:
             eprint(f"   {result.stderr.strip()}")
         return 1
@@ -789,12 +903,12 @@ def status_tool_container(settings: dict, label: str, extra_info: str = "") -> i
     return 1
 
 
-def start_tool_init_gate(profile_filename: str, label: str) -> bool:
-    """Check that the tool profile exists.  Prints help if missing.
+def start_tool_init_gate(label: str) -> bool:
+    """Check that the tool profile exists in unified profiles.yaml.
 
-    Returns True if profile exists, False otherwise.
+    Returns True if profiles.yaml exists, False otherwise.
     """
-    profile_path = tool_home() / "profiles" / profile_filename
+    profile_path = get_profiles_path()
     if profile_path.exists():
         return True
 
@@ -859,7 +973,15 @@ def start_tool_container(settings: dict, label: str, docker_args: list[str]) -> 
     if not start_tool_ensure_image(settings, label):
         return 1
 
-    cmd = ["docker", "run", "-d", "--name", container_name, "--restart", "unless-stopped"]
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--restart",
+        "unless-stopped",
+    ]
     for key, val in env_vars.items():
         cmd.extend(["-e", f"{key}={val}"])
     cmd.extend(docker_args)
@@ -869,11 +991,11 @@ def start_tool_container(settings: dict, label: str, docker_args: list[str]) -> 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     except (subprocess.TimeoutExpired, OSError):
-        eprint(f"[ERROR] Failed to start {label} container: timeout or OS error.")
+        eprint(f"{tag('ERROR')} Failed to start {label} container: timeout or OS error.")
         return 1
 
     if result.returncode != 0:
-        eprint(f"[ERROR] Failed to start {label} container.")
+        eprint(f"{tag('ERROR')} Failed to start {label} container.")
         if result.stderr:
             eprint(f"   {result.stderr.strip()}")
         return 1

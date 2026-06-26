@@ -2,6 +2,7 @@
 
 import inspect
 
+import pytest
 from unittest import mock
 
 from codefreedom.cli.docker_utils import (
@@ -226,3 +227,4 @@ class TestCheckDockerAvailable:
         mock_run.return_value.returncode = 127
         monkeypatch.setattr("codefreedom.cli.docker_utils.subprocess.run", mock_run)
         assert check_docker_available() is False
+pytestmark = pytest.mark.integration

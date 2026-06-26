@@ -1,4 +1,5 @@
 """CodeFreedom -- Single wrapper for all code agents with simple LLM routing, sandboxing, and profile management."""
+from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version as _version
 

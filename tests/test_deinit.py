@@ -5,6 +5,8 @@
 import argparse
 import subprocess
 
+import pytest
+
 
 from codefreedom.cli.setup.deinit import (
     _find_codefreedom_containers,
@@ -76,9 +78,7 @@ class TestFindCodefreedomContainers:
         monkeypatch.setattr(
             "codefreedom.cli.docker_utils.find_containers_by_base",
             lambda base_name: (
-                ["codefreedom-a1b2"]
-                if base_name == "codefreedom"
-                else []
+                ["codefreedom-a1b2"] if base_name == "codefreedom" else []
             ),
         )
         result = _find_codefreedom_containers()
@@ -130,10 +130,14 @@ class TestStopProxy:
 
     def test_runs_compose_down_when_compose_exists(self, tmp_path, monkeypatch):
         """Runs docker compose down when compose file exists."""
-        proxy_dir = tmp_path / "proxy"
-        proxy_dir.mkdir()
+        config_dir = tmp_path / "config"
+        proxy_dir = config_dir / "proxy"
+        proxy_dir.mkdir(parents=True)
         compose_file = proxy_dir / "docker-compose.yaml"
         compose_file.write_text("version: '3'\n")
+        monkeypatch.setattr(
+            "codefreedom.cli.setup.deinit.get_config_dir", lambda: config_dir
+        )
 
         calls = []
 
@@ -194,33 +198,40 @@ class TestRemoveCodefreedomDir:
         assert not test_dir.exists()
 
     def test_preserves_env_user(self, tmp_path):
-        """Preserves .env.user by recreating it after rmtree."""
+        """Preserves override.yaml by recreating it after rmtree."""
+        import yaml
+
         test_dir = tmp_path / ".codefreedom"
         test_dir.mkdir()
-        (test_dir / "profiles").mkdir()
-        (test_dir / "profiles" / "test.yaml").write_text("key: val\n")
-        (test_dir / ".env.user").write_text("MY_SECRET=abc123\n")
+        (test_dir / "config").mkdir()
+        (test_dir / "config" / "profiles.yaml").write_text("key: val\n")
+        override_content = {"comment": "test", "vars": {"SUFFIX_ID": "1234"}}
+        (test_dir / "config" / "override.yaml").write_text(
+            yaml.dump(override_content, default_flow_style=False)
+        )
 
         _remove_codefreedom_dir(test_dir)
 
-        # Directory should be recreated with .env.user
+        # Directory should be recreated with override.yaml
         assert test_dir.exists()
-        assert (test_dir / ".env.user").exists()
-        assert (test_dir / ".env.user").read_text() == "MY_SECRET=abc123\n"
+        assert (test_dir / "config" / "override.yaml").exists()
+        content = yaml.safe_load((test_dir / "config" / "override.yaml").read_text())
+        assert content["vars"]["SUFFIX_ID"] == "1234"
         # Everything else should be gone
-        assert not (test_dir / "profiles").exists()
+        assert not (test_dir / "config" / "profiles").exists()
 
     def test_preserves_env_user_empty_content(self, tmp_path):
-        """Handles an empty .env.user gracefully."""
+        """Handles an empty override.yaml gracefully."""
         test_dir = tmp_path / ".codefreedom"
         test_dir.mkdir()
-        (test_dir / ".env.user").write_text("")
+        (test_dir / "config").mkdir()
+        (test_dir / "config" / "override.yaml").write_text("")
 
         _remove_codefreedom_dir(test_dir)
 
         assert test_dir.exists()
-        assert (test_dir / ".env.user").exists()
-        assert (test_dir / ".env.user").read_text() == ""
+        assert (test_dir / "config" / "override.yaml").exists()
+        assert (test_dir / "config" / "override.yaml").read_text() == ""
 
     def test_noop_when_not_exists(self, tmp_path, capsys):
         """Does nothing when directory does not exist."""
@@ -260,9 +271,7 @@ class TestListCodefreedomImages:
         monkeypatch.setattr(
             subprocess,
             "run",
-            lambda *a, **kw: type(
-                "Proc", (object,), {"returncode": 1, "stdout": ""}
-            )(),
+            lambda *a, **kw: type("Proc", (object,), {"returncode": 1, "stdout": ""})(),
         )
         assert _list_codefreedom_images() == []
 
@@ -318,9 +327,7 @@ class TestRemoveCodefreedomImages:
         monkeypatch.setattr(
             subprocess,
             "run",
-            lambda *a, **kw: type(
-                "Proc", (object,), {"returncode": 0, "stdout": ""}
-            )(),
+            lambda *a, **kw: type("Proc", (object,), {"returncode": 0, "stdout": ""})(),
         )
         _remove_codefreedom_images()  # should not raise
 
@@ -395,9 +402,7 @@ class TestPruneDanglingImages:
         monkeypatch.setattr(
             subprocess,
             "run",
-            lambda *a, **kw: type(
-                "Proc", (object,), {"returncode": 1, "stdout": ""}
-            )(),
+            lambda *a, **kw: type("Proc", (object,), {"returncode": 1, "stdout": ""})(),
         )
         _prune_dangling_images()  # should not raise
 
@@ -595,3 +600,4 @@ class TestRun:
         exit_code = run(args)
         assert exit_code == 0
         assert not cleanup_called
+pytestmark = pytest.mark.integration

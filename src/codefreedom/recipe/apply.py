@@ -9,10 +9,8 @@ from typing import Any, Dict, Optional
 import yaml
 
 from codefreedom.admin import backup as cf_backup
-from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
 from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.core.interpolate import interpolate_all_strings
-from codefreedom.core.settings import resolve_config_value
+from codefreedom.config.runtime import resolve_config_value
 from codefreedom.log import dim, eprint, green, red, tag, yellow
 from codefreedom.schemas.recipe import RecipeConfig
 from pydantic import ValidationError
@@ -56,7 +54,9 @@ def apply_plan(plan_id: str) -> int:
         eprint(f"{tag('RECIPE')} Warning: Backup failed: {e}")
         print(f"{tag('RECIPE')} Continuing without backup...")
 
-    tool_home = Path.home() / ".codefreedom"
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
     eprint(f"{tag('RECIPE')} Applying plan {plan_id}...")
     count = 0
 
@@ -65,12 +65,8 @@ def apply_plan(plan_id: str) -> int:
         action = pf.get("action", "")
         content_name = pf.get("content_file")
 
-        # Tool profiles always land in ~/.codefreedom/, everything else
-        # respects CODEFREEDOM_HOME.
-        if target in _TOOL_PROFILE_PATHS:
-            dst = tool_home / target
-        else:
-            dst = cf_dir / target
+        # All files install into config directory
+        dst = config_dir / target
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         if action == "same":
@@ -140,184 +136,171 @@ def apply_plan(plan_id: str) -> int:
     return 0
 
 
-def _install_recipe_files(
-    manifest: Dict[str, Any],
-    files: Dict[str, str],
-    cf_dir: Path,
-    vars_dict: Optional[Dict[str, str]] = None,
+def _interpolate_vars(content: str, vars_dict: dict[str, str]) -> str:
+    """Replace ${VAR} and ${VAR:-default} references in content."""
+    import os
+    import re
+
+    def _replace_var(match: re.Match) -> str:
+        var_name = match.group(1)
+        has_default = match.group(2) is not None
+        default = str(match.group(2)) if has_default else ""
+        if var_name in vars_dict:
+            return vars_dict[var_name]
+        if var_name in os.environ:
+            return os.environ[var_name]
+        if has_default:
+            return default
+        return str(match.group(0))
+
+    return re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", _replace_var, content)
+
+
+def _install_copy_dir_entry(
+    entry: dict,
+    files: dict,
+    config_dir: Path,
+    vars_dict: dict[str, str] | None,
 ) -> int:
-    """Install or merge each recipe file into ``~/.codefreedom/``.
-
-    Decision per file:
-      - Target does **not** exist → create from recipe.
-      - Target **does** exist → merge (DeepDiff for YAML/JSON,
-        key-merge for .env, overwrite for everything else).
-
-    Tool profiles (chrome.yaml, web.yaml, github.yaml) are always
-    written to ``~/.codefreedom/`` regardless of ``CODEFREEDOM_HOME``.
-    """
+    """Install a copy_dir recipe entry — recursively copy all files under src."""
     from codefreedom.recipe.merge import _merge_file
 
-    # Interpolate ${VAR} references in manifest before validation
-    interpolate_all_strings(manifest)
+    src_path = entry.get("path", "")
+    target_path = entry.get("target", src_path)
+    merge_mode = entry.get("merge", "auto")
 
-    # Validate manifest with Pydantic (non-fatal — warn on failure)
-    try:
-        validation_data = {k: v for k, v in manifest.items() if k != "_recipe_dir"}
-        RecipeConfig.model_validate(validation_data, strict=False)
-    except ValidationError as exc:
-        eprint(f"{tag('RECIPE')} Warning: Recipe validation issue: {exc}")
+    src_dir = None
+    for key in files:
+        if key.startswith(src_path) or key == src_path.rstrip("/"):
+            src_dir = src_path.rstrip("/")
+            break
 
-    tool_home = Path.home() / ".codefreedom"
-    file_entries = manifest.get("files", [])
+    if src_dir is None:
+        return 0
+
+    dir_files = {
+        k: v
+        for k, v in files.items()
+        if k.startswith(src_dir + "/") or k.startswith(src_dir)
+    }
+
     count = 0
-
-    for entry in file_entries:
-        src_path = entry.get("path", "")
-        target_path = entry.get("target", src_path)
-        merge_mode = entry.get("merge", "auto")
-        split_key = entry.get("split_by_key")
-        copy_dir = entry.get("copy_dir", False)
-
-        if copy_dir:
-            # Copy entire directory recursively
-
-            # Find the source directory
-            src_dir = None
-            for key in files:
-                if key.startswith(src_path) or key == src_path.rstrip("/"):
-                    # This is a directory entry - files dict has all files under this path
-                    src_dir = src_path.rstrip("/")
-                    break
-
-            if src_dir is None:
-                continue
-
-            # Get all files under this directory from the files dict
-            dir_files = {k: v for k, v in files.items() if k.startswith(src_dir + "/") or k.startswith(src_dir)}
-
-            for file_key, file_content in dir_files.items():
-                # Calculate relative path
-                if file_key.startswith(src_dir + "/"):
-                    rel_path = file_key[len(src_dir) + 1 :]
-                else:
-                    rel_path = file_key
-
-                if not rel_path:
-                    continue
-
-                if target_path.endswith("/"):
-                    dst = cf_dir / target_path / rel_path
-                else:
-                    dst = cf_dir / target_path / rel_path
-
-                dst.parent.mkdir(parents=True, exist_ok=True)
-
-                if vars_dict:
-                    import os
-                    import re
-
-                    def _replace_var(match: re.Match) -> str:
-                        var_name = match.group(1)
-                        default = match.group(2) if match.group(2) is not None else ""
-                        return vars_dict.get(var_name, os.environ.get(var_name, default))
-
-                    file_content = re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", _replace_var, file_content)
-
-                if dst.exists():
-                    new_count = _merge_file(dst, file_content, merge_mode, str(dst.relative_to(cf_dir)))
-                else:
-                    dst.write_text(file_content, encoding="utf-8")
-                    if dst.suffix == ".sh":
-                        import stat
-                        dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-                    print(f"  {tag('CREATE')} {dst.relative_to(cf_dir)}")
-                    new_count = 1
-
-                count += new_count
-            continue
-
-        content = files.get(target_path) or files.get(src_path)
-        if content is None:
-            continue
-
-        if vars_dict:
-            import os
-            import re
-
-            def _replace_var(match: re.Match) -> str:
-                var_name = match.group(1)
-                default = match.group(2) if match.group(2) is not None else ""
-                return vars_dict.get(var_name, os.environ.get(var_name, default))
-
-            content = re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", _replace_var, content)
-
-        if split_key:
-            data = yaml.safe_load(content)
-            if not isinstance(data, dict):
-                continue
-
-            common = data.get("common", {})
-            section = data.get(split_key, {})
-
-            for name, profile_data in section.items():
-                merged = {**common, **profile_data}
-
-                if target_path.endswith("/"):
-                    individual_target = f"{target_path}{name}.yaml"
-                else:
-                    individual_target = f"{target_path}/{name}.yaml"
-
-                if individual_target in _TOOL_PROFILE_PATHS:
-                    dst = tool_home / individual_target
-                else:
-                    dst = cf_dir / individual_target
-                dst.parent.mkdir(parents=True, exist_ok=True)
-
-                merged_content = yaml.dump(
-                    merged, default_flow_style=False, sort_keys=False
-                )
-
-                if dst.exists():
-                    new_count = _merge_file(
-                        dst, merged_content, merge_mode, individual_target
-                    )
-                else:
-                    dst.write_text(merged_content, encoding="utf-8")
-                    print(f"  {tag('CREATE')} {individual_target}")
-                    new_count = 1
-
-                count += new_count
-            continue
-
-        # Tool profiles always land in ~/.codefreedom/, everything else
-        # respects CODEFREEDOM_HOME.
-        if target_path in _TOOL_PROFILE_PATHS:
-            dst = tool_home / target_path
+    for file_key, file_content in dir_files.items():
+        if file_key.startswith(src_dir + "/"):
+            rel_path = file_key[len(src_dir) + 1 :]
         else:
-            dst = cf_dir / target_path
+            rel_path = file_key
 
+        if not rel_path:
+            continue
+
+        dst = config_dir / target_path / rel_path
         dst.parent.mkdir(parents=True, exist_ok=True)
 
+        if vars_dict:
+            file_content = _interpolate_vars(file_content, vars_dict)
+
         if dst.exists():
-            new_count = _merge_file(dst, content, merge_mode, target_path)
+            new_count = _merge_file(
+                dst, file_content, merge_mode, target_path + rel_path
+            )
         else:
-            dst.write_text(content, encoding="utf-8")
+            dst.write_text(file_content, encoding="utf-8")
             if dst.suffix == ".sh":
                 import stat
 
                 dst.chmod(
                     dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
                 )
-            print(f"  {tag('CREATE')} {target_path}")
+            print(f"  {tag('CREATE')} {target_path}{rel_path}")
             new_count = 1
 
         count += new_count
 
-    # ── Create mountable directories ────────────────────────────────────
+    return count
+
+
+def _install_single_file(
+    entry: dict,
+    files: dict,
+    config_dir: Path,
+    vars_dict: dict[str, str] | None,
+) -> int:
+    """Install a single recipe file entry — create or merge."""
+    from codefreedom.recipe.merge import _merge_file
+
+    src_path = entry.get("path", "")
+    target_path = entry.get("target", src_path)
+    merge_mode = entry.get("merge", "auto")
+
+    content = files.get(target_path) or files.get(src_path)
+    if content is None:
+        return 0
+
+    is_profiles = target_path == "profiles.yaml"
+    if vars_dict and not is_profiles:
+        content = _interpolate_vars(content, vars_dict)
+
+    dst = config_dir / target_path
+    dst.parent.mkdir(parents=True, exist_ok=True)
+
+    if dst.exists():
+        new_count = _merge_file(dst, content, merge_mode, target_path)
+    else:
+        dst.write_text(content, encoding="utf-8")
+        if dst.suffix == ".sh":
+            import stat
+
+            dst.chmod(
+                dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+            )
+        print(f"  {tag('CREATE')} {target_path}")
+        new_count = 1
+
+    return new_count
+
+
+def _install_recipe_files(
+    manifest: Dict[str, Any],
+    files: Dict[str, str],
+    cf_dir: Path,
+    vars_dict: Optional[Dict[str, str]] = None,
+    config_dir: Optional[Path] = None,
+) -> int:
+    """Install or merge each recipe file into ``~/.codefreedom/config/``.
+
+    Decision per file:
+      - Target does **not** exist → create from recipe.
+      - Target **does** exist → merge (DeepDiff for YAML/JSON,
+        key-merge for .env, overwrite for everything else).
+
+    All recipe files are installed into the config directory.
+    Agent home dirs (claude-code/, mimo-code/, etc.) are NOT managed by CLI.
+
+    Args:
+        config_dir: Optional override for config directory (for testing).
+                    If None, uses get_config_dir().
+    """
+    from codefreedom.core.config import get_config_dir
     from codefreedom.recipe.plan import _create_recipe_dirs
 
-    _create_recipe_dirs(manifest, cf_dir)
+    try:
+        validation_data = {k: v for k, v in manifest.items() if k != "_recipe_dir"}
+        RecipeConfig.model_validate(validation_data, strict=False)
+    except ValidationError as exc:
+        eprint(f"{tag('RECIPE')} Warning: Recipe validation issue: {exc}")
+
+    if config_dir is None:
+        config_dir = get_config_dir()
+
+    count = 0
+    for entry in manifest.get("files", []):
+        if entry.get("copy_dir", False):
+            count += _install_copy_dir_entry(entry, files, config_dir, vars_dict)
+        else:
+            count += _install_single_file(entry, files, config_dir, vars_dict)
+
+    _create_recipe_dirs(manifest, config_dir)
 
     if count:
         print(f"\n  Recipe applied — {count} file(s) created/updated.")
@@ -333,19 +316,21 @@ def _remove_orphans(
 ) -> None:
     """Delete files that are not managed by the current recipe.
 
-    Scans each directory that contains a managed file and deletes any
-    sibling file that isn't in ``managed_targets``. This handles the
-    common case of switching from one recipe to another where each
-    recipe has its own provider config (e.g. ``opencode.yaml`` vs
-    ``local.yaml`` in ``proxy/config/providers/``).
+    Only scans within the config directory (~/.codefreedom/config/) to
+    delete orphaned files. This handles switching from one recipe to
+    another where each recipe has its own provider config.
 
-    Skips the root ``~/.codefreedom/`` directory to avoid deleting
-    user-created files at the top level.
+    Agent home dirs (claude-code/, mimo-code/, etc.) are NOT managed
+    by CLI and are never cleaned up.
     """
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
     orphan_dirs: set[Path] = set()
     for target in managed_targets:
-        parent = (cf_dir / target).parent
-        if parent != cf_dir:
+        # Only scan within config directory
+        parent = (config_dir / target).parent
+        if parent != config_dir:
             orphan_dirs.add(parent)
 
     deleted = 0
@@ -355,7 +340,8 @@ def _remove_orphans(
         for child in sorted(parent_dir.iterdir()):
             if not child.is_file():
                 continue
-            rel = child.relative_to(cf_dir).as_posix()
+            # Compute relative path within config directory
+            rel = child.relative_to(config_dir).as_posix()
             if rel not in managed_targets:
                 child.unlink()
                 print(f"  {tag('DELETE')} {rel}")
@@ -432,7 +418,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     # ── Validate config vars ──────────────────────────────────────────
     if config_vars:
         print()
-        print("  Configuration (set in ~/.codefreedom/.env.user):")
+        print("  Configuration (set in ~/.codefreedom/config/override.yaml):")
         for cfg in config_vars:
             var = cfg.get("var", "?")
             prompt = cfg.get("prompt", "")
@@ -495,7 +481,7 @@ def _resolve_secret(
 
 
 def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None:
-    """Generate a persistent ``~/.codefreedom/RECIPE.md`` instruction file.
+    """Generate a persistent RECIPE.md instruction file in the config directory.
 
     This file records what recipe was installed, what files were created,
     and what tools are available. The doctor command (``cf manage doctor``) uses
@@ -543,7 +529,9 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
         lines.append("")
         step += 1
     if config_vars:
-        lines.append(f"{step}. Set configuration in `~/.codefreedom/.env.user`:")
+        lines.append(
+            f"{step}. Set configuration in `~/.codefreedom/config/override.yaml`:"
+        )
         for c in config_vars:
             lines.append(f"   - `{c.get('var', '?')}`")
         lines.append("")

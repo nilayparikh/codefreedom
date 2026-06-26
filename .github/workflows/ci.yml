@@ -40,10 +40,10 @@ jobs:
     name: Lint configs (workflows + Dockerfiles)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Lint GitHub Actions workflows (actionlint)
-        uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d  # v1.2.0
+        uses: reviewdog/action-actionlint@6fb7acc99f4a1008869fa8a0f09cfca740837d9d # v1.2.0
 
       - name: Lint Dockerfiles (hadolint)
         run: |
@@ -67,10 +67,10 @@ jobs:
           - "3.11"
           - "3.12"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -104,10 +104,10 @@ jobs:
         python-version:
           - "3.12"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -129,10 +129,8 @@ jobs:
           codefreedom setup init costeffective-coding
 
           test -f ~/.codefreedom/.env.user || { echo "MISSING: .env.user"; exit 1; }
-          test -f ~/.codefreedom/proxy/config/config.yaml || { echo "MISSING: proxy config"; exit 1; }
-          test -f ~/.codefreedom/proxy/docker-compose.yaml || { echo "MISSING: compose"; exit 1; }
-          test -f ~/.codefreedom/profiles/claude-code.yaml || { echo "MISSING: claude-code profile"; exit 1; }
-          test -f ~/.codefreedom/profiles/mimo-code.yaml || { echo "MISSING: mimo-code profile"; exit 1; }
-          test -f ~/.codefreedom/profiles/chrome.yaml || { echo "MISSING: chrome profile"; exit 1; }
+          test -f ~/.codefreedom/config/proxy/config/config.yaml || { echo "MISSING: proxy config"; exit 1; }
+          test -f ~/.codefreedom/config/proxy/docker-compose.yaml || { echo "MISSING: compose"; exit 1; }
+          test -f ~/.codefreedom/config/profiles.yaml || { echo "MISSING: profiles.yaml"; exit 1; }
 
           codefreedom run agent claude-code --list-profiles

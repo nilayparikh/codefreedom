@@ -226,7 +226,7 @@ class TestCmdVscodeGenerate:
                 {"model_name": "DeepSeek-V4-Flash"},
             ],
         )
-        config_dir = tmp_path / "proxy" / "config"
+        config_dir = tmp_path / "config" / "proxy" / "config"
         config_dir.mkdir(parents=True)
         (config_dir / "config.yaml").write_text(
             yaml.safe_dump(
@@ -269,7 +269,7 @@ class TestCmdVscodeGenerate:
                 {"model_name": "Qwen3.7-Max"},
             ],
         )
-        config_dir = tmp_path / "proxy" / "config"
+        config_dir = tmp_path / "config" / "proxy" / "config"
         config_dir.mkdir(parents=True)
         (config_dir / "config.yaml").write_text(
             yaml.safe_dump(

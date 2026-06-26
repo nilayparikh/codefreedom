@@ -1,122 +1,248 @@
-"""Tests for profiles — loading, inheritance, ${VAR} resolution."""
+"""Tests for config profiles — loading, inheritance, ${VAR} resolution."""
 
-import os
 from pathlib import Path
 
 import pytest
 import yaml
 
-from codefreedom.core.profiles import (
-    ProfileError,
-    load_profiles,
-    load_profile_env,
-    resolve_env,
-)
+from codefreedom.config import load_config
+from codefreedom.config.errors import ConfigError
+from codefreedom.config.models import AgentDefinition, ProfileEntry
 
 
-class TestLoadProfiles:
-    """Unit tests for load_profiles."""
+class TestConfigLoading:
+    """Tests for load_config — the single config entry point."""
 
-    def test_loads_valid_yaml(self, tmp_path):
-        path = _write_profiles(
-            tmp_path, {"profiles": {"test": {"description": "test"}}}
-        )
-        profiles = load_profiles(path)
-        assert "test" in profiles
+    def test_loads_valid_new_format(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"KEY": "val"}}}}}
+        })
+        config = load_config(tmp_path)
+        assert config.agents["claude-code"] is not None
+
+    def test_loads_legacy_flat_format(self, tmp_path):
+        """Legacy profiles: {default: {env: {}}} is converted to agents:."""
+        _write(tmp_path, {
+            "profiles": {"default": {"description": "test", "env": {"KEY": "val"}}}
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["KEY"] == "val"
+
+    def test_loads_legacy_unified_format(self, tmp_path):
+        """Legacy profiles: {agent: {profiles: {}}} is auto-converted."""
+        _write(tmp_path, {
+            "profiles": {
+                "claude-code": {"profiles": {"default": {"env": {"KEY": "val"}}}}
+            }
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["KEY"] == "val"
 
     def test_missing_file(self, tmp_path):
-        with pytest.raises(ProfileError):
-            load_profiles(tmp_path / "nonexistent.yaml")
+        with pytest.raises(ConfigError):
+            load_config(tmp_path / "nonexistent")
 
     def test_invalid_yaml(self, tmp_path):
-        path = tmp_path / "bad.yaml"
-        path.write_text(": not: valid: yaml")
-        with pytest.raises(ProfileError):
-            load_profiles(path)
+        (tmp_path / "profiles.yaml").write_text(": not: valid: yaml")
+        with pytest.raises(ConfigError):
+            load_config(tmp_path)
 
-    def test_no_profiles_key(self, tmp_path):
-        path = _write_profiles(tmp_path, {})
-        with pytest.raises(ProfileError):
-            load_profiles(path)
+    def test_empty_profiles(self, tmp_path):
+        _write(tmp_path, {"agents": {}})
+        config = load_config(tmp_path)
+        assert len(config.agents) == 0
 
+    def test_override_merges_into_profiles(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1"}}}}}
+        })
+        _write_override(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "override"}}}}}
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "override"
 
-class TestResolveEnv:
-    """Unit tests for resolve_env — ${VAR} substitution."""
-
-    def test_no_var_references(self):
-        env_def = {"KEY": "value"}
-        result = resolve_env(env_def, {})
-        assert result == {"KEY": "value"}
-
-    def test_resolves_from_context(self):
-        env_def = {"RESULT": "${BASE}"}
-        result = resolve_env(env_def, {"BASE": "resolved"})
-        assert result == {"RESULT": "resolved"}
-
-    def test_resolves_from_os_environ(self):
-        os.environ["FROM_OS"] = "system_value"
-        env_def = {"RESULT": "${FROM_OS}"}
-        result = resolve_env(env_def, {})
-        assert result == {"RESULT": "system_value"}
-        del os.environ["FROM_OS"]
-
-    def test_default_fallback(self):
-        env_def = {"RESULT": "${MISSING:-fallback}"}
-        result = resolve_env(env_def, {})
-        assert result == {"RESULT": "fallback"}
-
-    def test_missing_no_default(self):
-        env_def = {"RESULT": "${MISSING}"}
-        result = resolve_env(env_def, {})
-        assert result == {"RESULT": ""}
+    def test_override_does_not_remove_base_keys(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1", "B": "2"}}}}}
+        })
+        _write_override(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"B": "override"}}}}}
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "1"
+        assert agent_cfg.env["B"] == "override"
 
 
-class TestLoadProfileEnv:
-    """Integration tests for load_profile_env."""
+class TestProfileEnv:
+    """Tests for profile env resolution with ${VAR} interpolation."""
 
     def test_loads_standalone_profile(self, tmp_path):
-        path = _write_profiles(
-            tmp_path,
-            {
-                "profiles": {
-                    "bare": {"description": "standalone", "env": {"KEY": "bare_value"}}
-                }
-            },
-        )
-        env = load_profile_env("bare", path, {})
-        assert env["KEY"] == "bare_value"
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"bare": {"env": {"KEY": "bare_value"}}}}}
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code", profile="bare")
+        assert agent_cfg.env["KEY"] == "bare_value"
 
     def test_inherits_from_default(self, tmp_path):
-        path = _write_profiles(
-            tmp_path,
-            {
-                "profiles": {
-                    "default": {
-                        "description": "base",
-                        "env": {"BASE": "from_default", "SHARED": "default_val"},
-                    },
-                    "ultra": {
-                        "description": "inherits",
-                        "env": {"SHARED": "ultra_val"},
-                    },
+        _write(tmp_path, {
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"BASE": "from_default", "SHARED": "default_val"}},
+                        "ultra": {"env": {"SHARED": "ultra_val"}},
+                    }
                 }
-            },
-        )
-        env = load_profile_env("ultra", path, {})
-        assert env["BASE"] == "from_default"  # inherited
-        assert env["SHARED"] == "ultra_val"  # overridden
+            }
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code", profile="ultra")
+        assert agent_cfg.env["BASE"] == "from_default"
+        assert agent_cfg.env["SHARED"] == "ultra_val"
 
-    def test_unknown_profile_exits(self, tmp_path):
-        path = _write_profiles(tmp_path, {"profiles": {"default": {"env": {}}}})
-        with pytest.raises(ProfileError):
-            load_profile_env("nope", path, {})
+    def test_bare_does_not_inherit(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"BASE": "should_not_inherit"}},
+                        "bare": {"env": {"KEY": "bare_only"}},
+                    }
+                }
+            }
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code", profile="bare")
+        assert agent_cfg.env.get("KEY") == "bare_only"
+        assert "BASE" not in agent_cfg.env
+
+    def test_unknown_profile_raises_error(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}}
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code", profile="nope")
+        # Profile "nope" doesn't exist, resolve_profile returns empty
+        assert agent_cfg.env == {}
+
+    def test_unknown_agent_raises_error(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}}
+        })
+        config = load_config(tmp_path)
+        with pytest.raises(ConfigError):
+            config.for_agent("unknown-agent")
+
+    def test_sandbox_mode_env(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {
+                            "env": {"BASE": "val"},
+                            "sandbox": {"env": {"SANDBOX_KEY": "sandbox_val"}},
+                        }
+                    }
+                }
+            }
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code", mode="sandbox")
+        assert agent_cfg.env["BASE"] == "val"
+        assert agent_cfg.env["SANDBOX_KEY"] == "sandbox_val"
+
+    def test_local_mode_env(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {
+                            "env": {"BASE": "val"},
+                            "local": {"env": {"LOCAL_KEY": "local_val"}},
+                        }
+                    }
+                }
+            }
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code", mode="local")
+        assert agent_cfg.env["BASE"] == "val"
+        assert agent_cfg.env["LOCAL_KEY"] == "local_val"
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+class TestVarResolution:
+    """Tests for ${VAR} resolution in profile env."""
+
+    def test_resolves_from_context(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CF_CLI_FROM_OS", "resolved")
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"RESULT": "${FROM_OS}"}}}}}
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["RESULT"] == "resolved"
+
+    def test_default_fallback(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"RESULT": "${MISSING:-fallback}"}}}}}
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["RESULT"] == "fallback"
+
+    def test_missing_no_default(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"RESULT": "${MISSING}"}}}}}
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["RESULT"] == ""
 
 
-def _write_profiles(tmp_path: Path, data: dict) -> Path:
+class TestAgentDefinition:
+    """Unit tests for AgentDefinition.resolve_profile."""
+
+    def test_merge_simple(self):
+        ad = AgentDefinition(profiles={
+            "default": ProfileEntry(env={"A": "1", "B": "2"}),
+            "child": ProfileEntry(env={"B": "child_b", "C": "3"}),
+        })
+        result = ad.resolve_profile("child")
+        assert result.env == {"A": "1", "B": "child_b", "C": "3"}
+
+    def test_merge_tools_dedup(self):
+        ad = AgentDefinition(profiles={
+            "default": ProfileEntry(tools=["chrome", "web"]),
+            "child": ProfileEntry(tools=["web", "github"]),
+        })
+        result = ad.resolve_profile("child")
+        assert result.tools == ["chrome", "web", "github"]
+
+    def test_standalone_bare(self):
+        ad = AgentDefinition(profiles={
+            "default": ProfileEntry(env={"A": "1"}),
+            "bare": ProfileEntry(env={"B": "2"}),
+        })
+        result = ad.resolve_profile("bare")
+        assert "A" not in result.env
+        assert result.env["B"] == "2"
+
+
+def _write(tmp_path: Path, data: dict) -> Path:
     path = tmp_path / "profiles.yaml"
     with open(path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     return path
+
+
+def _write_override(tmp_path: Path, data: dict) -> Path:
+    path = tmp_path / "override.yaml"
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+    return path
+pytestmark = pytest.mark.unit

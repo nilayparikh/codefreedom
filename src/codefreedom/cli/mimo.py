@@ -21,25 +21,20 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import secrets
 import shutil
 import signal
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from codefreedom.config.runtime import list_profiles, resolve_agent_runtime
 from codefreedom.core.config import (
     get_codefreedom_dir,
     resolve_mimo_profiles_path,
 )
-from codefreedom.core.profiles import (
-    list_profiles,
-)
-from codefreedom.core.settings import resolve_agent_runtime
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import generate_session_id
 from codefreedom.sandbox.signals import forward_signal
-from codefreedom.sandbox.terminal import terminal_size
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:
@@ -86,49 +81,25 @@ def find_mimo_binary() -> Optional[str]:
     return shutil.which("mimo")
 
 
-def _detect_proxy_url(base_env: Dict[str, str]) -> str:
-    """Detect the proxy URL from environment or use default.
-
-    Checks (in order):
-    1. PROXY_BASE_URL in the merged env
-    2. PROXY_BASE_URL in os.environ
-    3. LITELLM_BASE_URL (legacy) in the merged env
-    4. LITELLM_BASE_URL (legacy) in os.environ
-    5. Default http://localhost:4000
-    """
-    return (
-        base_env.get("PROXY_BASE_URL")
-        or os.environ.get("PROXY_BASE_URL")
-        or base_env.get("LITELLM_BASE_URL")
-        or os.environ.get("LITELLM_BASE_URL")
-        or "http://localhost:4000"
-    )
+# Backward-compat shim: tests import ``cli.mimo._detect_proxy_url`` directly.
+# The implementation lives in :mod:`codefreedom.core.agent_runtime`; this alias
+# avoids the per-call function-body indirection that the previous wrapper had.
+from codefreedom.core.agent_runtime import detect_proxy_url as _detect_proxy_url  # noqa: E402
 
 
 def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> List[Dict[str, Any]]:
     """Fetch the model list from the LiteLLM proxy ``/v1/models`` endpoint.
 
-    If *api_key* is provided it is sent as a ``Bearer`` token so the
-    call succeeds even when the proxy requires authentication.
-
-    Returns a list of model dicts (with at least an ``id`` key).
-    Returns an empty list if the proxy is unreachable or returns an error.
+    Thin wrapper over :func:`codefreedom.core.agent_runtime.fetch_proxy_models`.
     """
-    from codefreedom.core.http_client import get_json, HTTPError, HTTPStatusError
+    from codefreedom.core.agent_runtime import fetch_proxy_models
 
-    models_url = f"{proxy_url.rstrip('/')}/v1/models"
-    try:
-        data = get_json(models_url, timeout=5, bearer=api_key)
-        return data.get("data", [])
-    except HTTPStatusError as exc:
-        if exc.status_code in (401, 403):
-            eprint(
-                f"[MIMO] Proxy returned {exc.status_code} — is LITELLM_MASTER_KEY set "
-                f"in ~/.codefreedom/.env.claude.secrets?"
-            )
-        return []
-    except (HTTPError, json.JSONDecodeError):
-        return []
+    return fetch_proxy_models(
+        proxy_url,
+        api_key=api_key,
+        label="MIMO",
+        secrets_hint="~/.codefreedom/.env.claude.secrets",
+    )
 
 
 def _build_provider_models(
@@ -136,34 +107,11 @@ def _build_provider_models(
 ) -> Dict[str, Dict[str, Any]]:
     """Build a provider models dict from the proxy model list.
 
-    Each model gets a minimal capability profile — just ``tool_call: True``
-    and a display name.  Context limits and reasoning support are discovered
-    by MiMoCode at runtime; the proxy handles the actual routing.
+    Thin wrapper over :func:`codefreedom.core.agent_runtime.build_provider_models`.
     """
-    provider_models: Dict[str, Dict[str, Any]] = {}
+    from codefreedom.core.agent_runtime import build_provider_models
 
-    for m in proxy_models:
-        model_id = m.get("id", "")
-        if not model_id:
-            continue
-
-        model_id_lower = model_id.lower()
-
-        # Skip internal LiteLLM models and provider-prefixed helpers
-        if model_id_lower.startswith("azure/") or model_id_lower in (
-            "gpt-3.5-turbo",
-            "custom",
-        ):
-            continue
-
-        display_name = model_id.split("/")[-1] if "/" in model_id else model_id
-
-        provider_models[model_id] = {
-            "name": display_name,
-            "tool_call": True,
-        }
-
-    return provider_models
+    return build_provider_models(proxy_models)
 
 
 def _generate_mimo_config(
@@ -179,7 +127,7 @@ def _generate_mimo_config(
 
     Returns the config dict ready to be serialised to JSON.
     """
-    eprint(f"[MIMO] Detecting proxy at {proxy_url}...")
+    eprint(f"{tag('MIMO')} Detecting proxy at {proxy_url}...")
     api_key = profile_env.get("PROXY_API_KEY", "")
     proxy_models = _fetch_proxy_models(proxy_url, api_key=api_key)
 
@@ -243,7 +191,7 @@ def _generate_mimo_config(
         if "/" not in default_model:
             default_model = f"codefreedom/{default_model}"
         config["model"] = default_model
-        eprint(f"[MIMO] Default model set to '{default_model}' from profile.")
+        eprint(f"{tag('MIMO')} Default model set to '{default_model}' from profile.")
 
     return config
 
@@ -261,7 +209,7 @@ def _write_mimo_config(
     config_path = config_dir / MIMOCODE_CONFIG_NAME
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
     config_path.chmod(0o600)
-    eprint(f"[MIMO] Generated proxy config at {config_path}")
+    eprint(f"{tag('MIMO')} Generated proxy config at {config_path}")
     return config_path
 
 
@@ -301,7 +249,7 @@ def run_local(
         )
         return 1
 
-    eprint("[LOCAL] Running MiMoCode natively...")
+    eprint(f"{tag('LOCAL')} Running MiMoCode natively...")
 
     env = {**os.environ}
     env.update(profile_env)
@@ -323,7 +271,7 @@ def run_local(
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
-        eprint(f"[ERROR] MiMoCode binary not found at {mimo_bin}.")
+        eprint(f"{tag('ERROR')} MiMoCode binary not found at {mimo_bin}.")
         return 1
     except KeyboardInterrupt:
         return 130
@@ -342,23 +290,16 @@ def run_docker(
 
     Delegates container lifecycle to the shared sandbox launcher.
     """
-    from codefreedom.sandbox.launcher import run_sandbox
+    from codefreedom.sandbox.launcher import prepare_sandbox, run_sandbox
 
-    sandbox_images = sandbox_images or {}
-
-    if gpu_type:
-        image = (
-            sandbox_images.get(gpu_type)
-            or f"docker.io/nilayparikh/codefreedom:{gpu_type}-latest"
-        )
-        eprint(f"[GPU] Selected '{gpu_type}' sandbox image: {image}.")
-    else:
-        image = sandbox_images.get("default") or DEFAULT_MIMO_IMAGE
-
-    container_name = f"{_CONTAINER_PREFIX}{secrets.token_hex(2)}"
-
-    eprint(f"[IMAGE] Using sandbox image: {image}.")
-    eprint(f"[CONTAINER] Name: {container_name}.")
+    prep = prepare_sandbox(
+        profile_env=profile_env,
+        sandbox_images=sandbox_images or {},
+        default_image=DEFAULT_MIMO_IMAGE,
+        container_prefix=_CONTAINER_PREFIX,
+        run_as_me=run_as_me,
+        gpu_type=gpu_type,
+    )
 
     # ── Generate proxy config first ────────────────────────────────────────────
     proxy_url = _detect_proxy_url(profile_env)
@@ -366,81 +307,53 @@ def run_docker(
     mimo_home_dir, config_dir = _ensure_mimo_sandbox_dir(profile_name)
     config_path = _write_mimo_config(config, config_dir)
 
-    # ── Build env flags ───────────────────────────────────────────────────────
-    env_flags: List[str] = []
-    for key in sorted(profile_env.keys()):
-        val = profile_env[key]
-        if val is not None:
-            env_flags.extend(["-e", f"{key}={val}"])
-
-    cols, lines = terminal_size()
-    env_flags.extend(["-e", f"COLUMNS={cols}", "-e", f"LINES={lines}"])
-
-    # ── Container identity ────────────────────────────────────────────────────
-    if run_as_me and hasattr(os, "getuid"):
-        host_uid = os.getuid()
-        host_gid = os.getgid()
-        container_home = f"/home/{Path.home().name}"
-        container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
-        eprint(
-            f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}"
-        )
-    else:
-        if run_as_me:
-            eprint(
-                "[SANDBOX] --run-as-me not supported on Windows; running as default user."
-            )
-        container_home = "/home/codefreedom"
-        container_user_flag = []
-        eprint("[SANDBOX] Running as default container user 'codefreedom' (uid 1000).")
-
     # ── Docker run base options ───────────────────────────────────────────────
     base_opts = [
         "--network",
         "host",
-        *container_user_flag,
+        *prep.container_user_flag,
         "--ipc=host",
         "-v",
         f"{workspace_dir}:/workspace",
         "-w",
         "/workspace",
         "-v",
-        f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
+        f"{Path.home() / '.gitconfig'}:{prep.container_home}/.gitconfig:ro",
         "-v",
-        f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
+        f"{Path.home() / '.ssh'}:{prep.container_home}/.ssh:ro",
         "-v",
-        f"{mimo_home_dir}:{container_home}/.local/share/mimocode",
+        f"{mimo_home_dir}:{prep.container_home}/.local/share/mimocode",
         "-v",
-        f"{config_path}:{container_home}/.config/mimocode/mimocode.json:ro",
+        f"{config_path}:{prep.container_home}/.config/mimocode/mimocode.json:ro",
         "-e",
-        f"HOME={container_home}",
+        f"HOME={prep.container_home}",
         "-e",
-        f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+        f"MIMOCODE_CONFIG={prep.container_home}/.config/mimocode/mimocode.json",
         "-e",
         "IS_SANDBOX=1",
         "-e",
-        "MIMOCODE_DISABLE_AUTOUPDATE=1",
+        "MIMOCODE_DISABLE_AUTO_UPDATE=1",
     ]
 
     # ── Exec command ──────────────────────────────────────────────────────────
     exec_image_cmd = (
         ["docker", "exec", "-it"]
-        + container_user_flag
-        + ["-e", f"HOME={container_home}"]
-        + [container_name, "mimo"]
+        + prep.container_user_flag
+        + ["-e", f"HOME={prep.container_home}"]
+        + [prep.container_name, "mimo"]
         + mimo_args
     )
 
     exec_extra_env = [
         "-e",
-        f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+        f"MIMOCODE_CONFIG={prep.container_home}/.config/mimocode/mimocode.json",
     ]
 
     return run_sandbox(
-        image=image,
-        container_name=container_name,
+        image=prep.image,
+        container_name=prep.container_name,
         base_opts=base_opts,
-        env_flags=env_flags,
+        env_flags=prep.env_flags,
         exec_image_cmd=exec_image_cmd,
         exec_extra_env=exec_extra_env,
     )
@@ -485,7 +398,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     generates a complete ``mimocode.json`` and outputs it.
     """
     workspace_dir = Path.cwd()
-    eprint("[ENV] Loading configuration...")
+    eprint(f"{tag('ENV')} Loading configuration...")
     runtime = resolve_agent_runtime(
         "mimo-code",
         workspace_dir=workspace_dir,
@@ -500,7 +413,8 @@ def cmd_config(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_env_only
 
     profile_env, exit_code = load_profile_env_only(
-        profile_name, profiles_path, base_env, error_prefix="cf run proxy start"
+        profile_name, profiles_path, base_env, error_prefix="cf run proxy start",
+        agent="mimo-code",
     )
     if exit_code != 0 and profile_name != "default":
         return 1
@@ -568,7 +482,7 @@ def _update_mimocode_mcp(tools: List[str]) -> None:
         try:
             existing = json.loads(config_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
-            eprint(f"[MIMO] Could not parse {config_path} — starting fresh.")
+            eprint(f"{tag('MIMO')} Could not parse {config_path} — starting fresh.")
             existing = {}
 
     existing.setdefault("mcp", {})
@@ -587,7 +501,9 @@ def _update_mimocode_mcp(tools: List[str]) -> None:
         if not path.startswith("/"):
             path = "/" + path
 
-        url = f"http://127.0.0.1:{port}{path}"
+        from codefreedom.core.urls import build_endpoint_url
+
+        url = build_endpoint_url(port, path)
         existing["mcp"][tool.mcp_server_name] = {
             "type": "remote",
             "url": url,
@@ -603,7 +519,7 @@ def _update_mimocode_mcp(tools: List[str]) -> None:
             f"[MIMO] Registered MCP in {config_path}:" f" {', '.join(sorted(added))}"
         )
     else:
-        eprint("[MIMO] All MCP servers already registered.")
+        eprint(f"{tag('MIMO')} All MCP servers already registered.")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -614,7 +530,7 @@ def run(args: argparse.Namespace) -> int:
         from codefreedom.cli.common import display_profiles
 
         profiles_path = resolve_mimo_profiles_path()
-        profiles = list_profiles(profiles_path)
+        profiles = list_profiles(profiles_path, agent="mimo-code")
         return display_profiles(
             profiles_path, profiles, show_env_keys=False, show_tools=True
         )
@@ -626,7 +542,7 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()
-    eprint("[ENV] Loading configuration...")
+    eprint(f"{tag('ENV')} Loading configuration...")
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
@@ -642,7 +558,8 @@ def run(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import load_profile_with_tools
 
     profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
-        profile_name, profiles_path, runtime.base_env, mode
+        profile_name, profiles_path, runtime.base_env, mode,
+        agent="mimo-code",
     )
     if exit_code != 0:
         return 1
@@ -690,7 +607,7 @@ def run(args: argparse.Namespace) -> int:
             )
         else:
             if run_as_me:
-                eprint("[WARN] --run-as-me is only valid with --sandbox; ignoring.")
+                eprint(f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring.")
             return run_local(profile_env, args.agent_args)
 
     return acquire_and_run(session_id, tools, profile_name, _run)

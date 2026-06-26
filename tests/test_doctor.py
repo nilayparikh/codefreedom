@@ -5,6 +5,8 @@
 from pathlib import Path
 from typing import Dict
 
+import pytest
+
 
 from codefreedom.cli.manage.doctor import (
     CheckResult,
@@ -180,12 +182,12 @@ class TestConfigFileChecks:
         self._setup_cf_dir(
             tmp_path,
             {
-                "proxy/docker-compose.yaml": "services: {}\n",
-                "proxy/config/config.yaml": "general_settings: {}\n",
+                "config/proxy/docker-compose.yaml": "services: {}\n",
+                "config/proxy/config/config.yaml": "general_settings: {}\n",
             },
         )
         monkeypatch.setattr(
-            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_config_dir", lambda: tmp_path / "config"
         )
         _clear_checks()
 
@@ -201,7 +203,7 @@ class TestConfigFileChecks:
     def test_proxy_config_files_missing_fails(self, monkeypatch, tmp_path):
         self._setup_cf_dir(tmp_path, {})
         monkeypatch.setattr(
-            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.manage.doctor.get_config_dir", lambda: tmp_path / "config"
         )
         _clear_checks()
 
@@ -215,14 +217,18 @@ class TestConfigFileChecks:
         assert failed >= 1
 
     def test_recipe_instruction_found(self, monkeypatch, tmp_path):
+        config_dir = tmp_path / "config"
         self._setup_cf_dir(
             tmp_path,
             {
-                "RECIPE.md": "# CodeFreedom Recipe: _default\n\nInstalled: 2025-01-01\n",
+                "config/RECIPE.md": "# CodeFreedom Recipe: _default\n\nInstalled: 2025-01-01\n",
             },
         )
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.manage.doctor.get_config_dir", lambda: config_dir
         )
         _clear_checks()
 
@@ -343,9 +349,8 @@ class TestEnvVarChecks:
         assert passed >= 1
 
     def test_litellm_master_key_in_env_file_passes(self, monkeypatch, tmp_path):
-        """Key set in .env.proxy.secrets should be detected."""
-        secrets_file = tmp_path / ".env.proxy.secrets"
-        secrets_file.write_text("LITELLM_MASTER_KEY=sk-from-file\n")
+        """Key set via machine env should be detected."""
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
@@ -432,36 +437,26 @@ class TestResolveEnvVarValue:
         assert value == "cf-cli-value"
         assert source == "CF_CLI_* override"
 
-    def test_finds_in_env_file(self, tmp_path):
-        """Value in an env file should be found."""
+    def test_finds_in_env_file(self, monkeypatch):
+        """Value in machine env should be found (no .env file reading)."""
+        monkeypatch.setenv("MY_VAR", "env-value")
+        value, source = _resolve_env_var_value("MY_VAR")
+        assert value == "env-value"
+        assert source == "machine env"
+
+    def test_env_file_ignored(self, tmp_path, monkeypatch):
+        """.env files are no longer read — only machine env vars."""
         env_file = tmp_path / ".env.test"
         env_file.write_text("MY_VAR=file-value\n")
-        value, source = _resolve_env_var_value("MY_VAR", env_files=[env_file])
-        assert value == "file-value"
-        assert source == ".env.test"
-
-    def test_env_file_ignored_when_change_me(self, tmp_path):
-        """CHANGE_ME placeholder values should be treated as unset."""
-        env_file = tmp_path / ".env.test"
-        env_file.write_text("MY_VAR=CHANGE_ME\n")
-        value, source = _resolve_env_var_value("MY_VAR", env_files=[env_file])
+        value, source = _resolve_env_var_value("MY_VAR")
         assert value is None
         assert source is None
 
-    def test_env_file_ignored_when_empty(self, tmp_path):
-        """Empty values in env files should be treated as unset."""
-        env_file = tmp_path / ".env.test"
-        env_file.write_text("MY_VAR=\n")
-        value, source = _resolve_env_var_value("MY_VAR", env_files=[env_file])
-        assert value is None
-        assert source is None
-
-    def test_cf_cli_wins_over_env_file(self, monkeypatch, tmp_path):
-        """CF_CLI_* should take priority over an env file."""
+    def test_cf_cli_wins_over_env(self, monkeypatch):
+        """CF_CLI_* should take priority over direct env."""
         monkeypatch.setenv("CF_CLI_MY_VAR", "override-value")
-        env_file = tmp_path / ".env.test"
-        env_file.write_text("MY_VAR=file-value\n")
-        value, source = _resolve_env_var_value("MY_VAR", env_files=[env_file])
+        monkeypatch.setenv("MY_VAR", "direct-value")
+        value, source = _resolve_env_var_value("MY_VAR")
         assert value == "override-value"
         assert source == "CF_CLI_* override"
 
@@ -497,3 +492,4 @@ class TestRun:
 
         result = run(verbose=True)
         assert result in (0, 1, 2)
+pytestmark = pytest.mark.integration

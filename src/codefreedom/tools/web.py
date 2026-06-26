@@ -10,8 +10,7 @@ The container runs an MCP-only server with two tools:
     web_search(query) — search configured engines
     web_fetch(url)    — fetch a page (bypasses anti-bot)
 
-Settings are loaded from ~/.codefreedom/profiles/web.yaml.
-Use `cf s i` to initialize.
+Settings are loaded from the unified ~/.codefreedom/config/profiles.yaml.
 
 Search engines are configured in the profile's 'search_engines' field
 (each entry: {url, parser}) and passed to the container as the SEARCH_ENGINES
@@ -22,10 +21,9 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 
-from codefreedom.log import eprint
-from codefreedom.cli.docker_utils import (
+from codefreedom.log import eprint, tag
+from codefreedom.core.container import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
@@ -37,7 +35,6 @@ from codefreedom.cli.docker_utils import (
     start_tool_init_gate,
     stop_tool_container,
     tool_data_dir,
-    tool_profile_path,
 )
 
 from codefreedom.tools.schemas.web import WebConfig
@@ -50,16 +47,11 @@ _DEFAULT_PORT = 8420
 _DEFAULT_SEARCH_COOLDOWN_SECONDS = 10.0
 
 
-def _profile_path() -> Path:
-    """Return the web tool profile path (~/.codefreedom/profiles/web.yaml)."""
-    return tool_profile_path("web.yaml")
-
-
 # ── Profile loader ───────────────────────────────────────────────────────
 
 
 def _load_profile() -> dict:
-    """Load web tool profile from ~/.codefreedom/profiles/web.yaml.
+    """Load web tool settings from the unified profiles.yaml.
 
     Returns a flat dict with keys: image, container_name, port, data_dir, env,
     search_engines, parser_registry.
@@ -79,7 +71,6 @@ def _load_profile() -> dict:
     return load_tool_profile(
         "web",
         settings,
-        "web.yaml",
         schema_class=WebConfig,
         env_port_var="CODEFREEDOM_WEB_PORT",
         extra_keys=[
@@ -96,14 +87,14 @@ def _load_profile() -> dict:
 
 def init_tool() -> int:
     """Initialize the web tool profile via recipes."""
-    return init_tool_redirect("web.yaml")
+    return init_tool_redirect("web")
 
 
 # ── Actions ──────────────────────────────────────────────────────────────
 
 
 def start(settings: dict) -> int:
-    if not start_tool_init_gate("web.yaml", "web"):
+    if not start_tool_init_gate("web"):
         return 1
 
     print_tool_notice("web")
@@ -112,7 +103,7 @@ def start(settings: dict) -> int:
     port = settings["port"]
 
     if container_is_running(container_name):
-        eprint(f"[WEB] Container '{container_name}' is already running.")
+        eprint(f"{tag('WEB')} Container '{container_name}' is already running.")
         return 0
 
     if not start_tool_docker_guard("WEB"):
@@ -131,18 +122,22 @@ def start(settings: dict) -> int:
     resolved_data = resolve_data_dir(settings["data_dir"])
     docker_args = [
         "--shm-size=192m",
-        "-m", "2g",
-        "--memory-swap", "2g",
-        "-p", f"{port}:8420",
-        "-v", f"{resolved_data}:/userdata",
+        "-m",
+        "2g",
+        "--memory-swap",
+        "2g",
+        "-p",
+        f"{port}:8420",
+        "-v",
+        f"{resolved_data}:/userdata",
     ]
 
     rc = start_tool_container(settings, "WEB", docker_args)
     if rc != 0:
         return 1
 
-    eprint("[WEB] Container started.")
-    eprint(f"[WEB] MCP endpoint: http://127.0.0.1:{port}/mcp")
+    eprint(f"{tag('WEB')} Container started.")
+    eprint(f"{tag('WEB')} MCP endpoint: http://127.0.0.1:{port}/mcp")
     return 0
 
 
@@ -154,7 +149,7 @@ def restart(settings: dict) -> int:
     rc = restart_tool_container(settings, "WEB")
     if rc == 0:
         port = settings["port"]
-        eprint(f"[WEB] MCP endpoint: http://127.0.0.1:{port}/mcp")
+        eprint(f"{tag('WEB')} MCP endpoint: http://127.0.0.1:{port}/mcp")
     return rc
 
 

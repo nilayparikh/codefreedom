@@ -10,8 +10,7 @@ The container runs a Python bridge that wraps github-mcp-server stdio with an
 HTTP MCP endpoint on port 8082.  Coding agents connect via
 http://127.0.0.1:8082/mcp just like the chrome and web tools.
 
-Settings are loaded from ~/.codefreedom/profiles/github.yaml.
-Use `cf s i` to initialize.
+Settings are loaded from the unified ~/.codefreedom/config/profiles.yaml.
 """
 
 from __future__ import annotations
@@ -20,10 +19,9 @@ import argparse
 import random
 import socket
 import subprocess
-from pathlib import Path
 
-from codefreedom.log import eprint
-from codefreedom.cli.docker_utils import (
+from codefreedom.log import eprint, tag
+from codefreedom.core.container import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
@@ -35,7 +33,6 @@ from codefreedom.cli.docker_utils import (
     start_tool_init_gate,
     stop_tool_container,
     tool_data_dir,
-    tool_profile_path,
 )
 
 from codefreedom.tools.schemas.github import GithubConfig
@@ -83,16 +80,11 @@ def _get_mapped_port(container_name: str) -> int | None:
     return None
 
 
-def _profile_path() -> Path:
-    """Return the github tool profile path (~/.codefreedom/profiles/github.yaml)."""
-    return tool_profile_path("github.yaml")
-
-
 # ── Profile loader ────────────────────────────────────────────────────────────
 
 
 def _load_profile() -> dict:
-    """Load github tool profile from ~/.codefreedom/profiles/github.yaml.
+    """Load github tool settings from the unified profiles.yaml.
 
     Returns a flat dict with keys: image, container_name, port, data_dir, env.
     Any missing key falls back to the hardcoded default above.
@@ -107,7 +99,6 @@ def _load_profile() -> dict:
     return load_tool_profile(
         "github",
         settings,
-        "github.yaml",
         schema_class=GithubConfig,
         env_port_var="CODEFREEDOM_GITHUB_PORT",
     )
@@ -118,7 +109,7 @@ def _load_profile() -> dict:
 
 def init_tool() -> int:
     """Initialize the github tool profile via recipes."""
-    return init_tool_redirect("github.yaml")
+    return init_tool_redirect("github")
 
 
 # ── Actions ────────────────────────────────────────────────────────────────────
@@ -126,7 +117,7 @@ def init_tool() -> int:
 
 def start(settings: dict) -> int:
     """Start the GitHub MCP container. Returns exit code."""
-    if not start_tool_init_gate("github.yaml", "github"):
+    if not start_tool_init_gate("github"):
         return 1
 
     print_tool_notice("github")
@@ -136,15 +127,15 @@ def start(settings: dict) -> int:
 
     token = env_vars.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
     if not token:
-        eprint("[ERROR] GITHUB_PERSONAL_ACCESS_TOKEN is not set.")
+        eprint(f"{tag('ERROR')} GITHUB_PERSONAL_ACCESS_TOKEN is not set.")
         eprint("   Set it in ~/.codefreedom/profiles/github.yaml under env:")
         eprint('     "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..." }')
         return 1
 
     if container_is_running(container_name):
         port = _get_mapped_port(container_name) or settings["port"]
-        eprint(f"[GITHUB] Container '{container_name}' is already running.")
-        eprint(f"[GITHUB]   MCP endpoint: http://127.0.0.1:{port}/mcp")
+        eprint(f"{tag('GITHUB')} Container '{container_name}' is already running.")
+        eprint(f"{tag('GITHUB')}   MCP endpoint: http://127.0.0.1:{port}/mcp")
         return 0
 
     if not start_tool_docker_guard("GITHUB"):
@@ -154,11 +145,13 @@ def start(settings: dict) -> int:
     if host_port == 0:
         host_port = _find_free_port()
 
-    eprint(f"[GITHUB]   HTTP MCP port: {host_port}")
+    eprint(f"{tag('GITHUB')}   HTTP MCP port: {host_port}")
 
     docker_args = [
-        "-p", f"0.0.0.0:{host_port}:8082",
-        "-v", f"{resolve_data_dir(settings['data_dir'])}:/data",
+        "-p",
+        f"0.0.0.0:{host_port}:8082",
+        "-v",
+        f"{resolve_data_dir(settings['data_dir'])}:/data",
     ]
 
     rc = start_tool_container(settings, "GITHUB", docker_args)

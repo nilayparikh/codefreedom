@@ -1,41 +1,27 @@
-import sys
-from io import StringIO
+"""Tests for log.py — stderr logging utilities."""
+
+import pytest
 
 from codefreedom.log import eprint
 
-
-def test_eprint_outputs_to_stderr():
-    captured_stderr = StringIO()
-    old_stderr = sys.stderr
-    sys.stderr = captured_stderr
-    try:
-        eprint("test message")
-        assert "test message" in captured_stderr.getvalue()
-    finally:
-        sys.stderr = old_stderr
+pytestmark = pytest.mark.unit
 
 
-def test_eprint_with_multiple_args():
-    captured_stderr = StringIO()
-    old_stderr = sys.stderr
-    sys.stderr = captured_stderr
-    try:
-        eprint("arg1", "arg2", "arg3")
-        output = captured_stderr.getvalue()
-        assert "arg1" in output
-        assert "arg2" in output
-        assert "arg3" in output
-    finally:
-        sys.stderr = old_stderr
+def test_eprint_outputs_to_stderr(capsys):
+    eprint("test message")
+    captured = capsys.readouterr()
+    assert "test message" in captured.err
 
 
-def test_eprint_with_kwargs():
-    captured_stderr = StringIO()
-    old_stderr = sys.stderr
-    sys.stderr = captured_stderr
-    try:
-        eprint("no newline", end="")
-        output = captured_stderr.getvalue()
-        assert output == "no newline"
-    finally:
-        sys.stderr = old_stderr
+def test_eprint_with_multiple_args(capsys):
+    eprint("arg1", "arg2", "arg3")
+    captured = capsys.readouterr()
+    assert "arg1" in captured.err
+    assert "arg2" in captured.err
+    assert "arg3" in captured.err
+
+
+def test_eprint_with_kwargs(capsys):
+    eprint("no newline", end="")
+    captured = capsys.readouterr()
+    assert captured.err == "no newline"

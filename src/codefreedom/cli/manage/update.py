@@ -35,8 +35,9 @@ from codefreedom.core.http_client import (
     get_json,
     get_response,
 )
-from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.log import eprint
+from codefreedom.core.config import get_config_dir
+from codefreedom.docker.pull import get_local_digest, normalize_ref, parse_image_ref
+from codefreedom.log import eprint, tag
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -97,17 +98,6 @@ def _parse_compose_image(value: str) -> str | None:
     return value
 
 
-def _normalize_ref(image: str) -> str:
-    """Strip the default ``docker.io/`` prefix.
-
-    Docker stores ``docker.io/nilayparikh/codefreedom:name`` locally as
-    just ``nilayparikh/codefreedom:name``.
-    """
-    if image.startswith("docker.io/"):
-        return image[len("docker.io/") :]
-    return image
-
-
 def _local_images() -> list[str]:
     """Return locally-pulled CodeFreedom images.
 
@@ -135,39 +125,13 @@ def _local_images() -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _get_local_digest(image: str) -> str | None:
-    """Get the locally cached manifest digest for an image.
-
-    Normalizes the reference (strips ``docker.io/``) so Docker's local
-    naming matches.
-    """
-    normalized = _normalize_ref(image)
-    result = subprocess.run(
-        ["docker", "image", "inspect", normalized, "--format", "{{json .RepoDigests}}"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
-    if result.returncode != 0:
-        return None
-    try:
-        digests = json.loads(result.stdout.strip())
-        for d in digests:
-            if "@sha256:" in d:
-                return d.split("@sha256:")[1]
-    except (json.JSONDecodeError, IndexError, AttributeError):
-        pass
-    return None
-
-
 def _image_exists_locally(image: str) -> bool:
     """Check if a Docker image exists in the local cache.
 
     Normalizes the reference (strips ``docker.io/``) so Docker's local
     naming matches.
     """
-    normalized = _normalize_ref(image)
+    normalized = normalize_ref(image)
     result = subprocess.run(
         ["docker", "image", "inspect", normalized],
         capture_output=True,
@@ -183,7 +147,7 @@ def _get_remote_digest(image: str) -> str | None:
 
     Returns the SHA256 digest string or None on failure.
     """
-    registry, namespace, repo, tag = _parse_image_ref(image)
+    registry, namespace, repo, tag = parse_image_ref(image)
 
     # Bare references (no registry prefix) - skip remote check
     if not registry:
@@ -231,7 +195,7 @@ def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
             f"[UPDATE] Warning: Hub manifest check failed ({exc.status_code}): {url}."
         )
     except HTTPError as exc:
-        eprint(f"[UPDATE] Warning: Hub unreachable ({exc}): {url}.")
+        eprint(f"{tag('UPDATE')} Warning: Hub unreachable ({exc}): {url}.")
     return None
 
 
@@ -243,37 +207,8 @@ def _get_docker_hub_token(namespace: str, repo: str) -> str | None:
         data = get_json(url, timeout=10.0)
         return data.get("token")
     except (HTTPError, json.JSONDecodeError) as exc:
-        eprint(f"[UPDATE] Warning: Docker Hub auth failed: {exc}.")
+        eprint(f"{tag('UPDATE')} Warning: Docker Hub auth failed: {exc}.")
     return None
-
-
-def _parse_image_ref(image: str) -> tuple[str, str, str, str]:
-    """Parse an image reference into (registry, namespace, repo, tag).
-
-    Returns:
-        (registry, namespace, repo, tag)
-        Registry may be empty for bare references like ``codefreedom:chrome``.
-    """
-    rest = image
-    registry = ""
-    if "/" in image:
-        parts = image.split("/", 1)
-        if "." in parts[0] or ":" in parts[0] or parts[0] in ("docker.io",):
-            registry = parts[0]
-            rest = parts[1]
-
-    if ":" in rest:
-        rest_part, tag = rest.rsplit(":", 1)
-    else:
-        rest_part, tag = rest, "latest"
-
-    if "/" in rest_part:
-        namespace, repo = rest_part.split("/", 1)
-    else:
-        namespace = ""
-        repo = rest_part
-
-    return registry, namespace, repo, tag
 
 
 def _is_latest_tag(tag: str) -> bool:
@@ -309,7 +244,7 @@ def discover_images() -> list[dict[str, str]]:
     if not pulled:
         return []
 
-    cf_dir = get_codefreedom_dir()
+    config_dir = get_config_dir()
     images: list[dict[str, str]] = []
     seen: set[str] = set()
 
@@ -328,48 +263,33 @@ def discover_images() -> list[dict[str, str]]:
         """Register a profile image, normalizing its key for Docker matching."""
         if not img or not _is_managed_image(img):
             return
-        norm = _normalize_ref(img)
+        norm = normalize_ref(img)
         # Only register the first source for each normalized image
         if norm not in profile_images:
             profile_images[norm] = (img, source, service)
 
-    # 1. claude-code.yaml profiles
-    data = _read_yaml(cf_dir / "profiles" / "claude-code.yaml")
-    if data:
-        for pname, pdef in data.get("profiles", {}).items():
+    # 1. Unified profiles.yaml — extract sandbox_images and tools
+    profiles_data = _read_yaml(config_dir / "profiles.yaml")
+    if profiles_data:
+        profiles_section = profiles_data.get("profiles", {})
+        for pname, pdef in profiles_section.items():
+            if not isinstance(pdef, dict):
+                continue
             for stype, img in pdef.get("sandbox_images", {}).items():
                 if isinstance(img, str):
+                    _add_profile(img, "profiles.yaml", f"{pname} sandbox ({stype})")
+        tools_section = profiles_data.get("tools", {})
+        if isinstance(tools_section, dict):
+            for tname, tdef in tools_section.items():
+                if isinstance(tdef, dict):
                     _add_profile(
-                        img, f"claude-code.yaml ({pname})", f"sandbox ({stype})"
+                        tdef.get("image", ""),
+                        "profiles.yaml",
+                        tname,
                     )
 
-    # 2. chrome.yaml profile
-    chrome_data = _read_yaml(cf_dir / "profiles" / "chrome.yaml")
-    if chrome_data:
-        _add_profile(
-            chrome_data.get("chrome", {}).get("image", ""),
-            "profiles/chrome.yaml",
-            "chrome",
-        )
-
-    # 3. web.yaml profile
-    web_data = _read_yaml(cf_dir / "profiles" / "web.yaml")
-    if web_data:
-        _add_profile(
-            web_data.get("web", {}).get("image", ""), "profiles/web.yaml", "web"
-        )
-
-    # 4. github.yaml profile
-    github_data = _read_yaml(cf_dir / "profiles" / "github.yaml")
-    if github_data:
-        _add_profile(
-            github_data.get("github", {}).get("image", ""),
-            "profiles/github.yaml",
-            "github",
-        )
-
-    # 5. proxy docker-compose.yaml
-    compose_path = cf_dir / "proxy" / "docker-compose.yaml"
+    # 2. proxy docker-compose.yaml
+    compose_path = config_dir / "proxy" / "docker-compose.yaml"
     if compose_path.exists():
         try:
             text = compose_path.read_text(encoding="utf-8")
@@ -440,10 +360,10 @@ def check_image(image_ref: dict[str, str]) -> dict[str, Any]:
         }
 
     # Image must exist locally (discover_images already guarantees this)
-    tag = _parse_image_ref(image)[3]
+    tag = parse_image_ref(image)[3]
     is_latest = _is_latest_tag(tag)
 
-    local_digest = _get_local_digest(image)
+    local_digest = get_local_digest(image)
     if local_digest is None:
         return {
             "image": image,
@@ -556,7 +476,9 @@ def check_pypi() -> dict[str, Any] | None:
     if remote_parsed > local_parsed:
         is_prerelease = re.search(r"(rc|alpha|beta|a|b)\d+", remote_version)
         if is_prerelease:
-            uv_cmd = f"uv tool upgrade {PYPI_PACKAGE}=={remote_version} --prerelease=allow"
+            uv_cmd = (
+                f"uv tool upgrade {PYPI_PACKAGE}=={remote_version} --prerelease=allow"
+            )
         else:
             uv_cmd = f"uv tool upgrade {PYPI_PACKAGE}=={remote_version}"
         pip_cmd = f"pip install --upgrade {PYPI_PACKAGE}=={remote_version}"

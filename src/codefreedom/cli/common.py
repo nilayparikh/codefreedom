@@ -15,8 +15,8 @@ import argparse
 from pathlib import Path
 from typing import Any, Callable
 
-from codefreedom.core.settings import resolve_agent_runtime
-from codefreedom.log import eprint
+from codefreedom.config.runtime import resolve_agent_runtime
+from codefreedom.log import eprint, tag
 
 # ── Profile display ─────────────────────────────────────────────────────────
 
@@ -42,10 +42,10 @@ def display_profiles(
         0 on success
     """
     if not profiles:
-        eprint("[PROFILES] No profiles found.")
+        eprint(f"{tag('PROFILES')} No profiles found.")
         return 0
 
-    eprint(f"[PROFILES] Available profiles ({profiles_path}):\n")
+    eprint(f"{tag('PROFILES')} Available profiles ({profiles_path}):\n")
     for p in profiles:
         override_word = "override" if len(p["env_keys"]) == 1 else "overrides"
         inheritance = (
@@ -79,6 +79,7 @@ def load_profile_env_only(
     profiles_path: Path,
     base_env: dict[str, str],
     error_prefix: str = "codefreedom setup init",
+    agent: str = "",
 ) -> tuple[dict[str, str], int]:
     """Load profile env without tools or sandbox images.
 
@@ -90,12 +91,14 @@ def load_profile_env_only(
         profiles_path: Path to the profiles file
         base_env: Base environment from load_env_chain()
         error_prefix: Prefix for error messages (e.g. "codefreedom setup init")
+        agent: Canonical agent name (e.g. "claude-code").  When empty it is
+            inferred from the profiles filename.
 
     Returns:
         Tuple of (profile_env, exit_code) where exit_code is 0 on success,
         1 on error.
     """
-    from codefreedom.core.profiles import ProfileError
+    from codefreedom.config.errors import ProfileError
 
     profile_env: dict[str, str] = {}
 
@@ -105,24 +108,24 @@ def load_profile_env_only(
         )
         return profile_env, 1
     elif not profiles_path.exists():
-        eprint(f"[ERROR] No profiles file found. Run `{error_prefix}` first.")
+        eprint(f"{tag('ERROR')} No profiles file found. Run `{error_prefix}` first.")
         return profile_env, 1
 
     try:
-        agent = _agent_name_from_profiles_path(profiles_path)
+        resolved_agent = agent or _agent_name_from_profiles_path(profiles_path)
         runtime = resolve_agent_runtime(
-            agent,
+            resolved_agent,
             workspace_dir=Path.cwd(),
             profile_name=profile_name,
             mode="local",
         )
         profile_env = runtime.profile_env
     except (ProfileError, ValueError) as exc:
-        eprint(f"[ERROR] {exc}")
+        eprint(f"{tag('ERROR')} {exc}")
         return profile_env, 1
 
     if not profile_env:
-        eprint("[ERROR] Profile resolved to an empty environment.")
+        eprint(f"{tag('ERROR')} Profile resolved to an empty environment.")
         return profile_env, 1
 
     return profile_env, 0
@@ -199,6 +202,7 @@ def load_profile_with_tools(
     base_env: dict[str, str],
     mode: str,
     show_errors: bool = True,
+    agent: str = "",
 ) -> tuple[dict[str, str], dict[str, str], list[str], int]:
     """Load profile env, sandbox images, and tools in one call.
 
@@ -210,12 +214,14 @@ def load_profile_with_tools(
         base_env: Base environment from load_env_chain()
         mode: "sandbox" or "local"
         show_errors: Whether to print error messages (default True)
+        agent: Canonical agent name (e.g. "claude-code").  When empty it is
+            inferred from the profiles filename.
 
     Returns:
         Tuple of (profile_env, sandbox_images, tools, exit_code)
         exit_code is 0 on success, 1 on error.
     """
-    from codefreedom.core.profiles import ProfileError
+    from codefreedom.config.errors import ProfileError
 
     profile_env: dict[str, str] = {}
     sandbox_images: dict[str, str] = {}
@@ -229,13 +235,13 @@ def load_profile_with_tools(
         return profile_env, sandbox_images, tools, 1
     elif not profiles_path.exists():
         if show_errors:
-            eprint("[PROFILE] No profiles file found. Using defaults only.")
+            eprint(f"{tag('PROFILE')} No profiles file found. Using defaults only.")
         return profile_env, sandbox_images, tools, 0
 
     try:
-        agent = _agent_name_from_profiles_path(profiles_path)
+        resolved_agent = agent or _agent_name_from_profiles_path(profiles_path)
         runtime = resolve_agent_runtime(
-            agent,
+            resolved_agent,
             workspace_dir=Path.cwd(),
             profile_name=profile_name,
             mode=mode,
@@ -245,7 +251,7 @@ def load_profile_with_tools(
         tools = runtime.tools
     except (ProfileError, ValueError) as e:
         if show_errors:
-            eprint(f"[ERROR] {e}")
+            eprint(f"{tag('ERROR')} {e}")
         return profile_env, sandbox_images, tools, 1
 
     return profile_env, sandbox_images, tools, 0
@@ -261,6 +267,7 @@ def _agent_name_from_profiles_path(profiles_path: Path) -> str:
         "open-code.yaml": "open-code",
         "pi-code.yaml": "pi-code",
         "codex-code.yaml": "codex-code",
+        "profiles.yaml": "",  # unified format — agent resolved separately
     }
     if name not in mapping:
         raise ValueError(f"Unknown profiles path: {profiles_path}")
@@ -294,10 +301,10 @@ def acquire_and_run(
 
     acquired_tools: list[str] = []
     if tools:
-        eprint(f"[TOOLS] Profile '{profile_name}' declares tools: {', '.join(tools)}")
+        eprint(f"{tag('TOOLS')} Profile '{profile_name}' declares tools: {', '.join(tools)}")
         acquired_tools = acquire_tools(session_id, tools, profile_name)
         if acquired_tools:
-            eprint(f"[TOOLS] Running: {', '.join(acquired_tools)}")
+            eprint(f"{tag('TOOLS')} Running: {', '.join(acquired_tools)}")
 
     try:
         return run_fn(acquired_tools)
@@ -346,7 +353,7 @@ def run_tool_action(
         valid_actions = ["start", "stop", "restart", "status"]
         if url_fn:
             valid_actions.append("url")
-        eprint(f"[ERROR] Unknown action: {action}.")
+        eprint(f"{tag('ERROR')} Unknown action: {action}.")
         eprint(f"   Valid actions: {', '.join(valid_actions)}.")
         return 1
 

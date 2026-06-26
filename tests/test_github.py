@@ -2,6 +2,8 @@
 
 import argparse
 
+import pytest
+
 from codefreedom.tools.github import restart, run
 
 
@@ -74,3 +76,4 @@ class TestRunDispatch:
         assert run(argparse.Namespace(action="restart", port=0)) == 0
         assert len(called) == 1
         assert called[0]["container_name"] == "codefreedom-tools-github"
+pytestmark = pytest.mark.integration

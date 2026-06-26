@@ -1,188 +1,322 @@
-"""Tests for env_loader — .env parsing, secrets, priority, ${VAR} resolution."""
+"""Tests for config module — interpolation and config loading.
 
-import os
-import tempfile
-from pathlib import Path
+Replaces the old env_loader tests which tested the now-removed .env chain.
+"""
+
 
 import pytest
+import yaml
 
-from codefreedom.env_loader import load_dotenv, load_env_chain
-
-
-class TestLoadDotenv:
-    """Unit tests for load_dotenv — parses .env-style files."""
-
-    def test_basic_key_value(self):
-        path = _write_temp("KEY=value\nOTHER=123\n")
-        env = load_dotenv(path)
-        assert env == {"KEY": "value", "OTHER": "123"}
-
-    def test_quoted_values(self):
-        path = _write_temp("KEY=\"value with spaces\"\nSINGLE='single quoted'\n")
-        env = load_dotenv(path)
-        assert env["KEY"] == "value with spaces"
-        assert env["SINGLE"] == "single quoted"
-
-    def test_comments_and_blanks(self):
-        path = _write_temp("# comment\nKEY=value\n\n# another\nOTHER=123\n")
-        env = load_dotenv(path)
-        assert env == {"KEY": "value", "OTHER": "123"}
-
-    def test_var_reference_from_env(self):
-        os.environ["TEST_REF"] = "resolved"
-        path = _write_temp("RESULT=${TEST_REF}\n")
-        env = load_dotenv(path)
-        assert env == {"RESULT": "resolved"}
-        del os.environ["TEST_REF"]
-
-    def test_var_reference_with_default(self):
-        path = _write_temp("RESULT=${MISSING:-fallback}\n")
-        env = load_dotenv(path)
-        assert env == {"RESULT": "fallback"}
-
-    def test_var_reference_missing_no_default(self):
-        path = _write_temp("RESULT=${MISSING}\n")
-        env = load_dotenv(path)
-        assert env == {"RESULT": ""}
-
-    def test_var_reference_from_previously_parsed(self):
-        path = _write_temp("BASE=hello\nRESULT=${BASE}\n")
-        env = load_dotenv(path)
-        assert env == {"BASE": "hello", "RESULT": "hello"}
-
-    def test_missing_file(self):
-        env = load_dotenv(Path("/nonexistent/.env"))
-        assert env == {}
-
-    def test_no_equals_sign(self):
-        path = _write_temp("INVALID_LINE\nKEY=val\n")
-        env = load_dotenv(path)
-        assert env == {"KEY": "val"}
+from codefreedom.config import load_config, resolve_var
 
 
-class TestLoadEnvChain:
-    """Integration tests for load_env_chain — layered home → workspace → system."""
+class TestInterpolation:
+    """Tests for resolve_var — ${VAR} and ${VAR:-default} resolution."""
 
-    @pytest.fixture(autouse=True)
-    def _redirect_home(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """Redirect CODEFREEDOM_HOME -> tmp_path so .env tests are isolated."""
-        cf_home = tmp_path / ".codefreedom"
-        cf_home.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    def test_basic_var(self):
+        ctx = {"TEST_KEY": "value"}
+        assert resolve_var("hello ${TEST_KEY}", ctx) == "hello value"
 
-    def test_home_env_loaded(self, tmp_path):
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_home\n")
-        merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_home"
+    def test_var_with_default_fallback(self):
+        assert resolve_var("${MISSING:-default}") == "default"
 
-    def test_workspace_overrides_home(self, tmp_path):
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_home\n")
-        _write(tmp_path / ".env", "KEY=from_workspace\n")
-        merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_workspace"
+    def test_var_missing_no_default(self):
+        assert resolve_var("${MISSING}") == ""
 
-    def test_home_secrets_override_home_env(self, tmp_path):
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_env\n")
-        _write(tmp_path / ".codefreedom" / ".env.secrets", "KEY=from_secrets\n")
-        merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_secrets"
+    def test_var_from_context(self):
+        ctx = {"MY_VAR": "from_context"}
+        assert resolve_var("${MY_VAR}", ctx) == "from_context"
 
-    def test_system_env_overrides_all(self, tmp_path):
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_home\n")
-        _write(tmp_path / ".env", "KEY=from_workspace\n")
-        os.environ["KEY"] = "from_system"
-        merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_system"
-        del os.environ["KEY"]
+    def test_cf_cli_highest_priority(self):
+        """CF_CLI_* in context overrides other context values."""
+        ctx = {"TEST_KEY": "base_val", "CF_CLI_TEST_KEY": "cli_override"}
+        assert resolve_var("${TEST_KEY}", ctx) == "base_val"
+        # CF_CLI_* is injected into context by _build_context with prefix stripped
+        ctx2 = {"TEST_KEY": "cli_override"}
+        assert resolve_var("${TEST_KEY}", ctx2) == "cli_override"
 
-    def test_missing_home_env_uses_workspace(self, tmp_path):
-        _write(tmp_path / ".env", "KEY=from_workspace\n")
-        merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_workspace"
+    def test_context_overrides_default(self):
+        ctx = {"KEY": "from_context"}
+        assert resolve_var("${KEY:-default}", ctx) == "from_context"
 
-    def test_missing_all_files_ok(self, tmp_path):
-        os.environ["KEY"] = "from_system"
-        merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_system"
-        del os.environ["KEY"]
+    def test_escaped_dollar(self):
+        assert resolve_var("$${NOT_A_VAR}") == "${NOT_A_VAR}"
 
-    def test_secrets_adds_new_keys(self, tmp_path):
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env", "A=1\n")
-        _write(tmp_path / ".codefreedom" / ".env.secrets", "B=2\n")
-        merged = load_env_chain(tmp_path)
-        assert merged["A"] == "1"
-        assert merged["B"] == "2"
+    def test_dotted_key_from_context(self):
+        ctx = {"common.proxy.bind_host": "0.0.0.0"}
+        assert resolve_var("http://${common.proxy.bind_host}:4000", ctx) == "http://0.0.0.0:4000"
 
-    def test_workspace_secrets_override_home(self, tmp_path):
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env.secrets", "KEY=from_home_secrets\n")
-        _write(tmp_path / ".env.secrets", "KEY=from_workspace_secrets\n")
-        merged = load_env_chain(tmp_path)
-        assert merged["KEY"] == "from_workspace_secrets"
-
-    def test_component_env_loaded(self, tmp_path):
-        """Component-specific env files are only loaded for their component."""
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env.claude", "CLAUDE_VAR=claude_val\n")
-        _write(tmp_path / ".codefreedom" / ".env.proxy", "PROXY_VAR=proxy_val\n")
-
-        # Without component, neither should load
-        merged_no_component = load_env_chain(tmp_path)
-        assert "CLAUDE_VAR" not in merged_no_component
-        assert "PROXY_VAR" not in merged_no_component
-
-        # With component="claude", only claude envs load
-        merged_claude = load_env_chain(tmp_path, component="claude")
-        assert merged_claude["CLAUDE_VAR"] == "claude_val"
-        assert "PROXY_VAR" not in merged_claude
-
-        # With component="proxy", only proxy envs load
-        merged_proxy = load_env_chain(tmp_path, component="proxy")
-        assert merged_proxy["PROXY_VAR"] == "proxy_val"
-        assert "CLAUDE_VAR" not in merged_proxy
-
-    def test_component_secrets_override_component_env(self, tmp_path):
-        """Component-specific secrets override component-specific env."""
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env.proxy", "API_KEY=from_env\n")
-        _write(
-            tmp_path / ".codefreedom" / ".env.proxy.secrets",
-            "API_KEY=from_secret\n",
-        )
-        merged = load_env_chain(tmp_path, component="proxy")
-        assert merged["API_KEY"] == "from_secret"
-
-    def test_shared_env_overrides_component_env(self, tmp_path):
-        """Shared ~/.codefreedom/.env overrides component-specific env files."""
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env.claude", "KEY=from_claude\n")
-        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_shared\n")
-        merged = load_env_chain(tmp_path, component="claude")
-        assert merged["KEY"] == "from_shared"
-
-    def test_missing_component_files_ok(self, tmp_path):
-        """Missing component-specific env files are skipped gracefully."""
-        (tmp_path / ".codefreedom").mkdir(parents=True, exist_ok=True)
-        _write(tmp_path / ".codefreedom" / ".env", "KEY=from_shared\n")
-        merged = load_env_chain(tmp_path, component="claude")
-        assert merged["KEY"] == "from_shared"
+    def test_empty_string_is_valid_override(self):
+        """Empty string in context does NOT fall through to default."""
+        ctx = {"EMPTY_KEY": ""}
+        assert resolve_var("${EMPTY_KEY:-fallback}", ctx) == ""
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+class TestConfigLoading:
+    """Tests for load_config — the single config entry point."""
 
+    def test_loads_valid_yaml(self, tmp_path):
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"KEY": "value"}},
+                    }
+                }
+            }
+        }))
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["KEY"] == "value"
 
-def _write(path: Path, content: str) -> None:
-    path.write_text(content)
+    def test_interpolation_in_profiles(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CF_CLI_TEST_INTERP", "resolved")
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"RESULT": "${TEST_INTERP}"}},
+                    }
+                }
+            }
+        }))
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["RESULT"] == "resolved"
 
+    def test_var_with_default_in_profile(self, tmp_path):
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"PORT": "${PORT:-4000}"}},
+                    }
+                }
+            }
+        }))
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["PORT"] == "4000"
 
-def _write_temp(content: str) -> Path:
-    """Write content to a temp file, return path. Caller is responsible for cleanup."""
-    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False)
-    tmp.write(content)
-    tmp.close()
-    return Path(tmp.name)
+    def test_missing_yaml_raises_error(self, tmp_path):
+        with pytest.raises(Exception):
+            load_config(tmp_path / "nonexistent")
+
+    def test_malformed_yaml_raises_error(self, tmp_path):
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(": invalid yaml :\n")
+        with pytest.raises(Exception):
+            load_config(tmp_path)
+
+    def test_empty_agents_section(self, tmp_path):
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({"agents": {}}))
+        config = load_config(tmp_path)
+        with pytest.raises(Exception):
+            config.for_agent("claude-code")
+
+    def test_override_yaml_merges(self, tmp_path):
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"KEY": "from_base"}},
+                    }
+                }
+            }
+        }))
+        override = tmp_path / "override.yaml"
+        override.write_text(yaml.dump({
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"KEY": "from_override"}},
+                    }
+                }
+            }
+        }))
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["KEY"] == "from_override"
+
+    def test_override_env_does_not_remove_base_keys(self, tmp_path):
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"A": "1", "B": "2"}},
+                    }
+                }
+            }
+        }))
+        override = tmp_path / "override.yaml"
+        override.write_text(yaml.dump({
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"B": "overridden"}},
+                    }
+                }
+            }
+        }))
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "1"
+        assert agent_cfg.env["B"] == "overridden"
+
+    def test_legacy_profiles_format_conversion(self, tmp_path):
+        """Legacy profiles: {default: {env: ...}} is auto-converted."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "profiles": {
+                "default": {"description": "test", "env": {"KEY": "val"}},
+            }
+        }))
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["KEY"] == "val"
+
+    def test_legacy_unified_format_conversion(self, tmp_path):
+        """Legacy profiles: {claude-code: {profiles: {default: ...}}} is converted."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "profiles": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"env": {"KEY": "val"}},
+                    }
+                }
+            }
+        }))
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["KEY"] == "val"
+
+    def test_for_agent_unknown_agent(self, tmp_path):
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "agents": {
+                "claude-code": {
+                    "profiles": {"default": {"env": {}}}
+                }
+            }
+        }))
+        config = load_config(tmp_path)
+        with pytest.raises(Exception):
+            config.for_agent("unknown-agent")
+
+    def test_for_tool_defaults(self, tmp_path):
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({"agents": {}, "tools": {}}))
+        config = load_config(tmp_path)
+        tool = config.for_tool("chrome")
+        assert tool.name == "chrome"
+        assert "chrome" in tool.image
+
+    def test_for_tool_profile_overrides(self, tmp_path):
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "agents": {},
+            "tools": {
+                "chrome": {
+                    "port": 9999,
+                    "env": {"CUSTOM": "yes"},
+                }
+            }
+        }))
+        config = load_config(tmp_path)
+        tool = config.for_tool("chrome")
+        assert tool.port == 9999
+        assert tool.env["CUSTOM"] == "yes"
+
+    def test_vars_priority_profiles_wins(self, tmp_path):
+        """vars from profiles.yaml are used when no recipe/override."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_profiles"},
+            "common": {"suffix_id": "${MY_VAR:-default}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "from_profiles"
+
+    def test_vars_priority_recipe_overrides_profiles(self, tmp_path):
+        """vars from recipe.yaml override vars from profiles.yaml."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_profiles"},
+            "common": {"suffix_id": "${MY_VAR:-default}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        recipe = tmp_path / "recipe.yaml"
+        recipe.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_recipe"},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "from_recipe"
+
+    def test_vars_priority_override_overrides_recipe(self, tmp_path):
+        """vars from override.yaml override vars from recipe.yaml."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_profiles"},
+            "common": {"suffix_id": "${MY_VAR:-default}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        recipe = tmp_path / "recipe.yaml"
+        recipe.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_recipe"},
+        }))
+        override = tmp_path / "override.yaml"
+        override.write_text(yaml.dump({
+            "comment": "user overrides",
+            "vars": {"MY_VAR": "from_override"},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "from_override"
+
+    def test_vars_priority_cflcli_overrides_all(self, tmp_path, monkeypatch):
+        """CF_CLI_* env vars override all config layers."""
+        monkeypatch.setenv("CF_CLI_MY_VAR", "from_cflcli")
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_profiles"},
+            "common": {"suffix_id": "${MY_VAR:-default}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        recipe = tmp_path / "recipe.yaml"
+        recipe.write_text(yaml.dump({
+            "vars": {"MY_VAR": "from_recipe"},
+        }))
+        override = tmp_path / "override.yaml"
+        override.write_text(yaml.dump({
+            "comment": "user overrides",
+            "vars": {"MY_VAR": "from_override"},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "from_cflcli"
+
+    def test_override_comment_field_does_not_break_validation(self, tmp_path):
+        """override.yaml 'comment' field is stripped before validation."""
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        override = tmp_path / "override.yaml"
+        override.write_text(yaml.dump({
+            "comment": "User overrides",
+            "vars": {"SUFFIX_ID": "test123"},
+        }))
+        config = load_config(tmp_path)
+        assert config.common.suffix_id == "test123"
+pytestmark = pytest.mark.unit

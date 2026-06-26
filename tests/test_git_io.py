@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 import yaml
 
@@ -32,45 +30,25 @@ from codefreedom.cli.git.git_ops import (
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def git_repo(tmp_path):
-    subprocess.run(["git", "init"], capture_output=True, cwd=str(tmp_path))
-    subprocess.run(
-        ["git", "config", "user.email", "test@test.com"],
-        capture_output=True, cwd=str(tmp_path),
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"],
-        capture_output=True, cwd=str(tmp_path),
-    )
-    subprocess.run(
-        ["git", "config", "commit.gpgsign", "false"],
-        capture_output=True, cwd=str(tmp_path),
-    )
-    return tmp_path
-
-
 # ── Config loading ────────────────────────────────────────────────────────
 
 
 class TestLoadGlobalGitConfig:
     def test_missing_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.git.config.get_codefreedom_dir",
+            "codefreedom.cli.git.config.get_config_dir",
             lambda: tmp_path,
         )
         result = load_global_git_config()
         assert result == {}
 
     def test_loads_yaml(self, tmp_path, monkeypatch):
-        profiles_dir = tmp_path / "profiles"
-        profiles_dir.mkdir()
-        (profiles_dir / "git.yaml").write_text(
-            yaml.dump({"git": {"model": "gpt-4o", "signed_commit": False}}),
+        (tmp_path / "profiles.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "gpt-4o", "signed_commit": False}}}),
             encoding="utf-8",
         )
         monkeypatch.setattr(
-            "codefreedom.cli.git.config.get_codefreedom_dir",
+            "codefreedom.cli.git.config.get_config_dir",
             lambda: tmp_path,
         )
         result = load_global_git_config()
@@ -110,13 +88,11 @@ class TestLoadGitConfig:
             lambda _=None: tmp_path,
         )
         monkeypatch.setattr(
-            "codefreedom.cli.git.config.get_codefreedom_dir",
+            "codefreedom.cli.git.config.get_config_dir",
             lambda: tmp_path,
         )
-        profiles_dir = tmp_path / "profiles"
-        profiles_dir.mkdir()
-        (profiles_dir / "git.yaml").write_text(
-            yaml.dump({"git": {"model": "gpt-4o", "signed_commit": True}}),
+        (tmp_path / "profiles.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "gpt-4o", "signed_commit": True}}}),
             encoding="utf-8",
         )
         (tmp_path / ".cf.yaml").write_text(

@@ -58,7 +58,7 @@ def _print_version() -> None:
 
     deps = [
         "PyYAML", "deepdiff", "pydantic", "GitPython",
-        "python-dotenv", "httpx", "docker",
+        "httpx", "docker",
     ]
     for dep in deps:
         try:
@@ -109,7 +109,7 @@ def _expand_pa_flag() -> None:
             return
 
 
-def main() -> None:
+def main() -> int:
     _expand_pa_flag()
     parser = argparse.ArgumentParser(
         prog="codefreedom",
@@ -323,6 +323,8 @@ def main() -> None:
         parser.print_help()
         sys.exit(0)
 
+    return 0  # unreachable — every branch calls sys.exit()
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Parser builders for inline subcommands
@@ -330,7 +332,7 @@ def main() -> None:
 
 
 def _build_init_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("recipe", type=str, metavar="RECIPE", help="Recipe name to install (e.g., costeffective-coding)")
+    p.add_argument("recipe", type=str, nargs="?", default=None, metavar="RECIPE", help="Recipe name to install (e.g., costeffective-coding)")
     group = p.add_mutually_exclusive_group()
     group.add_argument("-p", "--plan", type=str, metavar="NAME", help="Preview a recipe: generate .patch files without applying")
     group.add_argument("-a", "--apply", type=str, metavar="PLAN_ID", help="Apply a previously generated plan by ID")
@@ -413,6 +415,9 @@ def _dispatch_init(args) -> None:
         from codefreedom.cli.setup.recipe import plan_recipe
         sys.exit(plan_recipe(args.plan, store=store, staging=staging))
 
+    if not args.recipe:
+        eprint(f"{tag('ERROR')} A recipe name is required. Use 'cf s i -l' to list available recipes.")
+        sys.exit(2)
     from codefreedom.cli.setup.recipe import init_recipe
     sys.exit(init_recipe(args.recipe, store=store, staging=staging))
 

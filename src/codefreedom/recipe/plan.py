@@ -8,8 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from codefreedom.cli.docker_utils import _TOOL_PROFILE_PATHS
-from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.config import get_codefreedom_dir, get_config_dir
 from codefreedom.log import eprint, tag
 from codefreedom.recipe.materialize import materialize_recipe
 from codefreedom.recipe.store import (
@@ -82,6 +81,7 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     )
 
     cf_dir = get_codefreedom_dir()
+    config_dir = get_config_dir()
 
     # ── 1. Recipe source ────────────────────────────────────────────────
     branch = _resolve_recipe_branch() if not staging else "staging"
@@ -118,10 +118,15 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
             )
         else:
             _collect_targets(base_manifest)
-            _install_recipe_files(base_manifest, base_files, cf_dir, vars_dict=vars_dict)
+            _install_recipe_files(
+                base_manifest, base_files, cf_dir, vars_dict=vars_dict
+            )
 
     # ── 2. Install / merge each file ─────────────────────────────────────
     _collect_targets(manifest)
+
+    # ── 2a. Copy recipe manifest to config for reference by scripts ─────
+    _copy_recipe_manifest(manifest, config_dir)
 
     has_generated = bool(manifest.get("generated_artifacts"))
     if has_generated:
@@ -154,125 +159,170 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
                         static_files[fk] = fv
             else:
                 static_files[e["target"]] = e["content"]
-        _install_recipe_files(static_manifest, static_files, cf_dir, vars_dict=vars_dict)
+        _install_recipe_files(
+            static_manifest, static_files, cf_dir, vars_dict=vars_dict
+        )
 
         for entry in generated_entries:
-            dst = cf_dir / entry["target"]
+            dst = config_dir / entry["target"]
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(entry["content"], encoding="utf-8")
             if dst.suffix == ".sh":
                 import stat
-                dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+                dst.chmod(
+                    dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                )
             print(f"  {tag('CREATE')} {entry['target']} (generated)")
             all_managed.add(entry["target"])
     else:
         _install_recipe_files(manifest, files, cf_dir, vars_dict=vars_dict)
 
     # ── 2b. Orphan detection — delete files from previous recipe(s) ────
-    _remove_orphans(all_managed, cf_dir)
+    # Exclude recipe.yaml and override.yaml from orphan scan
+    all_managed.add("recipe.yaml")
+    all_managed.add("override.yaml")
+    _remove_orphans(all_managed, config_dir)
 
-    # ── 2c. Ensure .env.user exists (user-managed overrides file) ──────
-    _ensure_user_env(cf_dir)
+    # ── 2c. Ensure override.yaml exists (user-managed overrides file) ──
+    _ensure_override_yaml(config_dir)
+
+    # ── 2d. Ensure .env.user exists (user-managed secrets file) ────────
+    _ensure_env_user(cf_dir)
 
     # ── 3. What's Next summary ──────────────────────────────────────────
-    _print_summary(manifest, cf_dir)
+    _print_summary(manifest, config_dir)
     return 0
 
 
-def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -> int:
-    """Preview recipe changes without applying them.
+def _collect_recipe_files(
+    man: dict, fdict: dict, source_label: str, vars_dict: dict[str, str]
+) -> list[dict]:
+    """Collect plan entries from a single manifest's file list.
 
-    Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
-    showing exactly what would be created or replaced.
-
-    All files are replaced (not merged). The plan shows the diff
-    between existing content and the new recipe content.
+    Handles copy_dir, split_by_key, and variable interpolation.
+    Returns a list of plan-entry dicts.
     """
-    from codefreedom.recipe.merge import _make_diff
+    import os
+    import re
 
-    cf_dir = get_codefreedom_dir()
+    entries: list[dict] = []
 
-    # ── 1. Resolve recipe ──────────────────────────────────────────────
-    branch = _resolve_recipe_branch() if not staging else "staging"
-    store_path = _resolve_store(store, branch=branch)
-    manifest, files = _store_resolve_recipe(name, store_path=store_path)
-    if manifest is None:
-        print(f"{tag('PLAN')} Recipe '{name}' not found.")
-        print("       Run 'cf s i -l' to see available recipes.")
-        return 1
+    for entry in man.get("files", []):
+        src = entry.get("path", "")
+        target = entry.get("target", src)
+        split_key = entry.get("split_by_key")
+        copy_dir = entry.get("copy_dir", False)
 
-    vars_dict = _load_recipe_vars(manifest)
+        if copy_dir:
+            src_dir = src.rstrip("/")
+            prefix = src_dir + "/"
+            for file_key, file_content in fdict.items():
+                if not (file_key.startswith(prefix) or file_key == src_dir):
+                    continue
+                rel_path = (
+                    file_key[len(src_dir) + 1 :]
+                    if file_key.startswith(prefix)
+                    else file_key
+                )
+                if not rel_path:
+                    continue
+                if target.endswith("/"):
+                    individual_target = f"{target}{rel_path}"
+                else:
+                    individual_target = f"{target}/{rel_path}"
+                entries.append(
+                    {
+                        "target": individual_target,
+                        "content": file_content,
+                        "merge": entry.get("merge", "auto"),
+                        "source": source_label,
+                    }
+                )
+            continue
 
-    # ── 2. Resolve extends chain ───────────────────────────────────────
+        content = fdict.get(target) or fdict.get(src)
+        if content is None:
+            continue
+
+        if split_key:
+            data = yaml.safe_load(content)
+            if not isinstance(data, dict):
+                continue
+
+            common = data.get("common", {})
+            section = data.get(split_key, {})
+
+            for name, profile_data in section.items():
+                merged = {**common, **profile_data}
+                merged_content = yaml.dump(
+                    merged, default_flow_style=False, sort_keys=False
+                )
+
+                if target.endswith("/"):
+                    individual_target = f"{target}{name}.yaml"
+                else:
+                    individual_target = f"{target}/{name}.yaml"
+
+                entries.append(
+                    {
+                        "target": individual_target,
+                        "content": merged_content,
+                        "merge": entry.get("merge", "auto"),
+                        "source": source_label,
+                    }
+                )
+            continue
+
+        if vars_dict:
+            def _replace_var(match: re.Match) -> str:
+                var_name = match.group(1)
+                has_default = match.group(2) is not None
+                default = str(match.group(2)) if has_default else ""
+                if var_name in vars_dict:
+                    return vars_dict[var_name]
+                if var_name in os.environ:
+                    return os.environ[var_name]
+                if has_default:
+                    return default
+                return str(match.group(0))
+
+            content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, content)
+
+        entries.append(
+            {
+                "target": target,
+                "content": content,
+                "merge": entry.get("merge", "auto"),
+                "source": source_label,
+            }
+        )
+
+    return entries
+
+
+def _compute_plan_entries(
+    manifest: dict,
+    files: dict,
+    name: str,
+    store_path: Path | None,
+    vars_dict: dict[str, str],
+) -> list[dict]:
+    """Resolve extends chain, collect entries, add generated artifacts, deduplicate."""
+    extends = manifest.get("extends")
     plan_entries: list[dict] = []
 
-    def _collect(man: dict, fdict: dict, source_label: str) -> None:
-        for entry in man.get("files", []):
-            src = entry.get("path", "")
-            target = entry.get("target", src)
-            split_key = entry.get("split_by_key")
-            content = fdict.get(target) or fdict.get(src)
-            if content is None:
-                continue
-
-            if split_key:
-                data = yaml.safe_load(content)
-                if not isinstance(data, dict):
-                    continue
-
-                common = data.get("common", {})
-                section = data.get(split_key, {})
-
-                for name, profile_data in section.items():
-                    merged = {**common, **profile_data}
-                    merged_content = yaml.dump(
-                        merged, default_flow_style=False, sort_keys=False
-                    )
-
-                    if target.endswith("/"):
-                        individual_target = f"{target}{name}.yaml"
-                    else:
-                        individual_target = f"{target}/{name}.yaml"
-
-                    plan_entries.append(
-                        {
-                            "target": individual_target,
-                            "content": merged_content,
-                            "merge": entry.get("merge", "auto"),
-                            "source": source_label,
-                        }
-                    )
-                continue
-
-            if vars_dict:
-                import os
-                import re
-
-                def _replace_var(match: re.Match) -> str:
-                    var_name = match.group(1)
-                    default = match.group(2) if match.group(2) is not None else ""
-                    return vars_dict.get(var_name, os.environ.get(var_name, default))
-
-                content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, content)
-            plan_entries.append(
-                {
-                    "target": target,
-                    "content": content,
-                    "merge": entry.get("merge", "auto"),
-                    "source": source_label,
-                }
-            )
-
-    extends = manifest.get("extends")
-    base_man: dict[str, Any] | None = None
     if extends:
         base_man, base_files = _store_resolve_recipe(extends, store_path=store_path)
         if base_man is not None:
-            _collect(base_man, base_files, extends)
+            plan_entries.extend(
+                _collect_recipe_files(base_man, base_files, extends, vars_dict)
+            )
 
-    _collect(manifest, files, name)
+    plan_entries.extend(
+        _collect_recipe_files(manifest, files, name, vars_dict)
+    )
 
-    # ── 2b. Include generated artifacts in plan ────────────────────────
     has_generated = bool(manifest.get("generated_artifacts"))
     if has_generated:
         result = materialize_recipe(manifest, files)
@@ -287,36 +337,30 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
                     }
                 )
 
-    # ── 2b. Deduplicate by target — keep only the last entry (highest  ──
-    #        priority from the extending recipe).                         ──
     seen: dict[str, dict] = {}
     for entry in plan_entries:
-        seen[entry["target"]] = entry  # later entries override earlier
-    plan_entries = list(seen.values())
+        seen[entry["target"]] = entry
+    return list(seen.values())
 
-    # ── 3. Compute what would happen to each file ──────────────────────
-    plan_id = _generate_plan_id()
-    tool_home = Path.home() / ".codefreedom"
-    plans_dir = cf_dir / "plans" / plan_id
-    plans_dir.mkdir(parents=True, exist_ok=True)
+
+def _compute_file_changes(
+    plan_entries: list[dict], config_dir: Path, plans_dir: Path
+) -> tuple[dict[str, int], list[dict]]:
+    """Compute create/replace/same for each entry and write patch files."""
+    from codefreedom.recipe.merge import _make_diff
 
     summary: dict[str, int] = {"create": 0, "replace": 0, "same": 0}
     patch_files: list[dict] = []
 
     for entry in plan_entries:
-        # Tool profiles live in ~/.codefreedom/, everything else respects CODEFREEDOM_HOME.
-        if entry["target"] in _TOOL_PROFILE_PATHS:
-            dst = tool_home / entry["target"]
-        else:
-            dst = cf_dir / entry["target"]
+        dst = config_dir / entry["target"]
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         if not dst.exists():
             diff = _make_diff("", entry["content"], entry["target"], from_devnull=True)
-            safe_name = entry["target"].replace("/", "-")
+            safe_name = entry["target"].replace("/", "-").replace("\\", "-")
             patch_name = f"create-{safe_name}.diff"
             (plans_dir / patch_name).write_text(diff, encoding="utf-8")
-            # Also store full content for reliable apply
             content_name = f"create-{safe_name}.content"
             (plans_dir / content_name).write_text(entry["content"], encoding="utf-8")
             patch_files.append(
@@ -344,9 +388,8 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
             summary["same"] += 1
             continue
 
-        # REPLACE — write diff for review + full content for reliable apply
         diff = _make_diff(existing, entry["content"], entry["target"])
-        safe_name = entry["target"].replace("/", "-")
+        safe_name = entry["target"].replace("/", "-").replace("\\", "-")
         diff_name = f"replace-{safe_name}.diff"
         (plans_dir / diff_name).write_text(diff, encoding="utf-8")
         content_name = f"replace-{safe_name}.content"
@@ -362,19 +405,21 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         )
         summary["replace"] += 1
 
-    # ── 3b. Orphan detection — delete files that existed from the    ──
-    #        previous recipe but aren't in the new recipe's file list.  ──
-    #        Scans each directory that contains a managed file and      ──
-    #        flags any sibling file not in the managed set.             ──
+    return summary, patch_files
+
+
+def _detect_orphan_files(
+    plan_entries: list[dict],
+    patch_files: list[dict],
+    summary: dict[str, int],
+    config_dir: Path,
+) -> tuple[dict[str, int], list[dict]]:
+    """Detect files from previous recipe that aren't in the new recipe."""
     managed_targets = {e["target"] for e in plan_entries}
     orphan_dirs: set[Path] = set()
     for e in plan_entries:
-        if e["target"] in _TOOL_PROFILE_PATHS:
-            parent = tool_home / e["target"]
-        else:
-            parent = cf_dir / e["target"]
-        parent = parent.parent
-        if parent != cf_dir and parent != tool_home:  # Skip root dirs
+        parent = (config_dir / e["target"]).parent
+        if parent != config_dir:
             orphan_dirs.add(parent)
 
     for parent_dir in sorted(orphan_dirs):
@@ -383,13 +428,7 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         for child in sorted(parent_dir.iterdir()):
             if not child.is_file():
                 continue
-            try:
-                rel = child.relative_to(cf_dir).as_posix()
-            except ValueError:
-                try:
-                    rel = child.relative_to(tool_home).as_posix()
-                except ValueError:
-                    continue
+            rel = child.relative_to(config_dir).as_posix()
             if rel not in managed_targets:
                 patch_files.append(
                     {
@@ -402,19 +441,20 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
                 )
                 summary["delete"] = summary.get("delete", 0) + 1
 
-    # ── 3c. Collect dirs from base + extending manifests ──────────────
-    plan_dirs: list[str] = []
+    return summary, patch_files
 
-    def _collect_dirs(man: dict) -> None:
-        for d in man.get("dirs") or []:
-            if d not in plan_dirs:
-                plan_dirs.append(d)
 
-    if extends and base_man is not None:
-        _collect_dirs(base_man)
-    _collect_dirs(manifest)
-
-    # ── 4. Write plan.yaml ─────────────────────────────────────────────
+def _write_plan_and_print(
+    plan_id: str,
+    name: str,
+    extends: str | None,
+    summary: dict[str, int],
+    plan_dirs: list[str],
+    patch_files: list[dict],
+    plans_dir: Path,
+    config_dir: Path,
+) -> int:
+    """Write plan.yaml and print the human-readable summary."""
     plan_meta = {
         "plan_id": plan_id,
         "recipe": name,
@@ -428,9 +468,10 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         encoding="utf-8",
     )
 
-    # ── 5. Print summary ──────────────────────────────────────────────
     delete_count = summary.get("delete", 0)
-    print(f"{tag('PLAN')} Recipe: {name}" + (f" (extends {extends})" if extends else ""))
+    print(
+        f"{tag('PLAN')} Recipe: {name}" + (f" (extends {extends})" if extends else "")
+    )
     print(f"{tag('PLAN')} Plan ID: {plan_id}")
     print(f"{tag('PLAN')} Files:   {plans_dir}/")
     print(f"{tag('PLAN')}")
@@ -449,19 +490,72 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         action = pf["action"].upper().ljust(8)
         src_label = pf["source"][:12].ljust(12)
         target = pf["target"]
-        if target in _TOOL_PROFILE_PATHS:
-            dest = tool_home / target
-        else:
-            dest = cf_dir / target
+        dest = config_dir / target
         print(f"{tag('PLAN')}   {action} {src_label} {dest}")
     for d in plan_dirs:
-        dest = cf_dir / d
+        dest = config_dir / d
         print(f"{tag('PLAN')}   {'MKDIR'.ljust(8)} {'recipe'.ljust(12)} {dest}/")
     print(f"{tag('PLAN')}")
     print(f"{tag('PLAN')} To apply:  cf s i -a {plan_id}")
     print(f"{tag('PLAN')} Quick:     cf s i -pa {name}")
     print(f"{tag('PLAN')} To review: cat {plans_dir}/<patch-file>.diff")
     return 0
+
+
+def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -> int:
+    """Preview recipe changes without applying them.
+
+    Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
+    showing exactly what would be created or replaced.
+
+    All files are replaced (not merged). The plan shows the diff
+    between existing content and the new recipe content.
+    """
+    cf_dir = get_codefreedom_dir()
+
+    # ── 1. Resolve recipe ──────────────────────────────────────────────
+    branch = _resolve_recipe_branch() if not staging else "staging"
+    store_path = _resolve_store(store, branch=branch)
+    manifest, files = _store_resolve_recipe(name, store_path=store_path)
+    if manifest is None:
+        print(f"{tag('PLAN')} Recipe '{name}' not found.")
+        print("       Run 'cf s i -l' to see available recipes.")
+        return 1
+
+    vars_dict = _load_recipe_vars(manifest)
+
+    # ── 2. Collect plan entries from extends chain ─────────────────────
+    plan_entries = _compute_plan_entries(manifest, files, name, store_path, vars_dict)
+
+    # ── 3. Compute file changes ────────────────────────────────────────
+    plan_id = _generate_plan_id()
+    config_dir = get_config_dir()
+    plans_dir = cf_dir / "plans" / plan_id
+    plans_dir.mkdir(parents=True, exist_ok=True)
+
+    summary, patch_files = _compute_file_changes(plan_entries, config_dir, plans_dir)
+
+    # ── 4. Orphan detection ────────────────────────────────────────────
+    summary, patch_files = _detect_orphan_files(
+        plan_entries, patch_files, summary, config_dir
+    )
+
+    # ── 5. Collect dirs + write plan + print ───────────────────────────
+    plan_dirs: list[str] = []
+    extends = manifest.get("extends")
+    if extends:
+        base_man, _ = _store_resolve_recipe(extends, store_path=store_path)
+        if base_man is not None:
+            for d in base_man.get("dirs") or []:
+                if d not in plan_dirs:
+                    plan_dirs.append(d)
+    for d in manifest.get("dirs") or []:
+        if d not in plan_dirs:
+            plan_dirs.append(d)
+
+    return _write_plan_and_print(
+        plan_id, name, extends, summary, plan_dirs, patch_files, plans_dir, config_dir
+    )
 
 
 def plan_and_apply_recipe(
@@ -524,39 +618,96 @@ def _load_recipe_vars(manifest: Dict[str, Any]) -> Dict[str, str]:
         return yaml.safe_load(f) or {}
 
 
-def _ensure_user_env(cf_dir: Path) -> None:
-    """Create ``.env.user`` if it doesn't exist.
+def _copy_recipe_manifest(manifest: Dict[str, Any], config_dir: Path) -> None:
+    """Copy the recipe manifest to the config directory for reference.
 
-    ``.env.user`` is a user-managed override file with the highest config
-    priority — it is created once by the init flow and never touched by
-    recipes again. Users put their personal overrides here (e.g. port
-    changes, custom URLs). It is intentionally excluded from recipe
-    file lists so recipes never create, merge, or update it.
+    Saves a clean copy of the recipe manifest (without internal keys like
+    ``_recipe_dir``) as ``recipe.yaml`` in the config directory.  Scripts
+    and other components can read ``required_secrets``, ``vars``, and other
+    metadata from this canonical location.
     """
-    user_env = cf_dir / ".env.user"
-    if user_env.exists():
+    clean = {k: v for k, v in manifest.items() if not k.startswith("_")}
+    dst = config_dir / "recipe.yaml"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(
+        yaml.dump(clean, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
+
+
+def _ensure_env_user(cf_dir: Path) -> None:
+    """Create ``.env.user`` in the codefreedom directory if it doesn't exist.
+
+    ``.env.user`` is a user-managed secrets file — created once by the init
+    flow and never touched by recipes again. Users put their personal secrets
+    here (API keys, tokens, etc.).
+
+    Machine env vars (``CF_CLI_*``) take priority over this file.
+    """
+    env_user_path = cf_dir / ".env.user"
+    if env_user_path.exists():
         return
 
-    header = (
-        "# ═══════════════════════════════════════════════════════════════════════════════\n"
-        "# .env.user — User overrides (highest config priority)\n"
-        "# ═══════════════════════════════════════════════════════════════════════════════\n"
-        "#\n"
-        "# This file is created once by `cf s i` and is NEVER touched by\n"
-        "# recipes again. It has the highest precedence of any config file — values\n"
-        "# here override .env.proxy, .env.claude, .env, .env.secrets, and all recipe\n"
-        "# defaults. Only the host OS environment (exported vars) can override it.\n"
-        "#\n"
-        "# Use this file for your personal overrides, such as:\n"
-        "#   LITELLM_PORT=4001\n"
-        "#   LITELLM_MODEL_ALIAS_BEST=my-custom-model\n"
-        "#\n"
-        "# Syntax: standard KEY=value (no quotes needed, no spaces around =)\n"
-        "# Supports ${VAR} and ${VAR:-default} interpolation.\n"
-        "# ═══════════════════════════════════════════════════════════════════════════════\n"
+    env_user_path.parent.mkdir(parents=True, exist_ok=True)
+    env_user_path.write_text(
+        "# User-managed secrets — add your API keys here\n"
+        "# Machine env vars (CF_CLI_*) take priority over this file\n"
+        "# LITELLM_MASTER_KEY=sk-your-key-here\n",
+        encoding="utf-8",
     )
-    user_env.write_text(header, encoding="utf-8")
-    print("  [CREATE] .env.user (user-managed overrides)")
+    print("  [CREATE] .env.user")
+
+
+def _ensure_override_yaml(cf_dir: Path) -> None:
+    """Create ``override.yaml`` in config directory if it doesn't exist.
+
+    ``override.yaml`` is a user-managed override file with the highest config
+    priority — it is created once by the init flow and never touched by
+    recipes again. Users put their personal overrides here to override values
+    from ``profiles.yaml``. It is intentionally excluded from recipe
+    file lists so recipes never create, merge, or update it.
+
+    The override.yaml mirrors the structure of profiles.yaml, allowing users
+    to override specific values. It also contains special variables like
+    SUFFIX_ID, POSTGRES_HOST_PORT, etc.
+    """
+    import yaml
+
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    override_path = config_dir / "override.yaml"
+    if override_path.exists():
+        return
+
+    # Ensure config directory exists
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    # Sample override.yaml content
+    override_content = {
+        "comment": "User overrides — values here override profiles.yaml",
+        "vars": {
+            "SUFFIX_ID": "0000",
+            "POSTGRES_HOST_PORT": "5433",
+        },
+        "profiles": {
+            "default": {
+                "env": {},
+            },
+        },
+        "tools": {
+            "chrome": {},
+            "web": {},
+            "github": {},
+            "web-bridge": {},
+            "git": {},
+        },
+    }
+
+    with open(override_path, "w", encoding="utf-8") as f:
+        yaml.dump(override_content, f, default_flow_style=False, sort_keys=False)
+
+    print("  [CREATE] override.yaml (user-managed overrides)")
 
 
 def _create_recipe_dirs(

@@ -24,18 +24,18 @@ class TestFindComposeFile:
     """Tests for _find_compose_file — only ~/.codefreedom/proxy/."""
 
     def test_finds_in_codefreedom_dir(self, monkeypatch, tmp_path):
-        compose = tmp_path / "proxy" / "docker-compose.yaml"
+        compose = tmp_path / "config" / "proxy" / "docker-compose.yaml"
         compose.parent.mkdir(parents=True)
         compose.write_text("")
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_config_dir", lambda: tmp_path / "config"
         )
         result = _find_compose_file()
         assert result == compose
 
     def test_returns_none_when_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir",
+            "codefreedom.cli.run.proxy.get_config_dir",
             lambda: Path("/nonexistent"),
         )
         result = _find_compose_file()
@@ -43,21 +43,21 @@ class TestFindComposeFile:
 
 
 class TestFindConfigFile:
-    """Tests for _find_config_file — only ~/.codefreedom/proxy/config/."""
+    """Tests for _find_config_file — only ~/.codefreedom/config/proxy/config/."""
 
     def test_finds_in_codefreedom_dir(self, monkeypatch, tmp_path):
-        config = tmp_path / "proxy" / "config" / "config.yaml"
+        config = tmp_path / "config" / "proxy" / "config" / "config.yaml"
         config.parent.mkdir(parents=True)
         config.write_text("")
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_config_dir", lambda: tmp_path / "config"
         )
         result = _find_config_file()
         assert result == config
 
     def test_returns_none_when_not_found(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir",
+            "codefreedom.cli.run.proxy.get_config_dir",
             lambda: Path("/nonexistent"),
         )
         result = _find_config_file()
@@ -78,14 +78,14 @@ class TestValidate:
             },
         )
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_config_dir", lambda: tmp_path / "config"
         )
         result = _validate()
         assert result == 0
 
     def test_missing_config_file(self, monkeypatch):
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir",
+            "codefreedom.cli.run.proxy.get_config_dir",
             lambda: Path("/nonexistent"),
         )
         result = _validate()
@@ -93,10 +93,10 @@ class TestValidate:
 
     def test_yaml_parse_error(self, monkeypatch, tmp_path):
         _write_proxy_config(tmp_path, {})
-        config_path = tmp_path / "proxy" / "config" / "config.yaml"
+        config_path = tmp_path / "config" / "proxy" / "config" / "config.yaml"
         config_path.write_text(": invalid yaml : :")
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_config_dir", lambda: tmp_path / "config"
         )
         result = _validate()
         assert result == 1
@@ -196,7 +196,7 @@ class TestRun:
 
     def test_restart_calls_compose_restart(self, monkeypatch, tmp_path):
         """restart must call `docker compose restart` (no --docker flag)."""
-        compose = tmp_path / "proxy" / "docker-compose.yaml"
+        compose = tmp_path / "config" / "proxy" / "docker-compose.yaml"
         compose.parent.mkdir(parents=True)
         compose.write_text("")
 
@@ -211,7 +211,7 @@ class TestRun:
             return _R()
 
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_config_dir", lambda: tmp_path / "config"
         )
         monkeypatch.setattr("codefreedom.cli.run.proxy.subprocess.run", fake_run)
 
@@ -274,7 +274,7 @@ class TestRun:
     def test_start_overrides_port_and_host_in_env(self, monkeypatch, tmp_path):
         """`--port` and `--host` must set LITELLM_PORT/LITELLM_BIND_HOST
         in the subprocess env (for this run only — does not edit .env.proxy)."""
-        compose = tmp_path / "proxy" / "docker-compose.yaml"
+        compose = tmp_path / "config" / "proxy" / "docker-compose.yaml"
         compose.parent.mkdir(parents=True)
         compose.write_text("")
 
@@ -289,7 +289,7 @@ class TestRun:
             return _R()
 
         monkeypatch.setattr(
-            "codefreedom.cli.run.proxy.get_codefreedom_dir", lambda: tmp_path
+            "codefreedom.cli.run.proxy.get_config_dir", lambda: tmp_path / "config"
         )
         monkeypatch.setattr("codefreedom.cli.run.proxy.subprocess.run", fake_run)
         monkeypatch.setattr(
@@ -312,7 +312,7 @@ class TestRun:
 
 
 def _write_proxy_config(tmp_path: Path, data: dict) -> Path:
-    config_dir = tmp_path / "proxy" / "config"
+    config_dir = tmp_path / "config" / "proxy" / "config"
     config_dir.mkdir(parents=True)
     config_file = config_dir / "config.yaml"
     config_file.write_text(yaml.dump(data))
@@ -526,3 +526,4 @@ class TestEnsureWebBridgeImage:
             proxy_mod._ensure_web_bridge_image()
         )  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         assert rc == 1
+pytestmark = pytest.mark.integration

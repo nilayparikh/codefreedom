@@ -10,17 +10,15 @@ Translates SearXNG-style /search requests into MCP calls against the
 Camoufox web_search tool.  LiteLLM's websearch_interception routes Claude
 Code's native WebSearch through this bridge.
 
-Settings are loaded from ~/.codefreedom/profiles/web-bridge.yaml.
-Use `cf s i` to initialize.
+Settings are loaded from the unified ~/.codefreedom/config/profiles.yaml.
 """
 
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
-from codefreedom.log import eprint
-from codefreedom.cli.docker_utils import (
+from codefreedom.log import eprint, tag
+from codefreedom.core.container import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
@@ -32,7 +30,6 @@ from codefreedom.cli.docker_utils import (
     start_tool_init_gate,
     stop_tool_container,
     tool_data_dir,
-    tool_profile_path,
 )
 
 from codefreedom.tools.schemas.web_bridge import WebBridgeConfig
@@ -44,16 +41,11 @@ _DEFAULT_CONTAINER_NAME = "codefreedom-web-bridge"
 _DEFAULT_PORT = 8500
 
 
-def _profile_path() -> Path:
-    """Return the web-bridge tool profile path (~/.codefreedom/profiles/web-bridge.yaml)."""
-    return tool_profile_path("web-bridge.yaml")
-
-
 # ── Profile loader ────────────────────────────────────────────────────────────
 
 
 def _load_profile() -> dict:
-    """Load web-bridge tool profile from ~/.codefreedom/profiles/web-bridge.yaml.
+    """Load web-bridge tool settings from the unified profiles.yaml.
 
     Returns a flat dict with keys: image, container_name, port, data_dir, env.
     Any missing key falls back to the hardcoded default above.
@@ -66,9 +58,8 @@ def _load_profile() -> dict:
         "env": {},
     }
     return load_tool_profile(
-        "web_bridge",
+        "web-bridge",
         settings,
-        "web-bridge.yaml",
         schema_class=WebBridgeConfig,
         env_port_var="CODEFREEDOM_WEB_BRIDGE_PORT",
     )
@@ -79,7 +70,7 @@ def _load_profile() -> dict:
 
 def init_tool() -> int:
     """Initialize the web-bridge tool profile via recipes."""
-    return init_tool_redirect("web-bridge.yaml")
+    return init_tool_redirect("web-bridge")
 
 
 # ── Actions ───────────────────────────────────────────────────────────────────
@@ -87,7 +78,7 @@ def init_tool() -> int:
 
 def start(settings: dict) -> int:
     """Start the web-bridge container. Returns exit code."""
-    if not start_tool_init_gate("web-bridge.yaml", "web-bridge"):
+    if not start_tool_init_gate("web-bridge"):
         return 1
 
     print_tool_notice("web-bridge")
@@ -96,7 +87,7 @@ def start(settings: dict) -> int:
     port = settings["port"]
 
     if container_is_running(container_name):
-        eprint(f"[WEB-BRIDGE] Container '{container_name}' is already running.")
+        eprint(f"{tag('WEB-BRIDGE')} Container '{container_name}' is already running.")
         return 0
 
     if not start_tool_docker_guard("WEB-BRIDGE"):
@@ -104,17 +95,19 @@ def start(settings: dict) -> int:
 
     resolved_data = resolve_data_dir(settings["data_dir"])
     docker_args = [
-        "-p", f"{port}:8500",
-        "-v", f"{resolved_data}:/app/data",
+        "-p",
+        f"{port}:8500",
+        "-v",
+        f"{resolved_data}:/app/data",
     ]
 
     rc = start_tool_container(settings, "WEB-BRIDGE", docker_args)
     if rc != 0:
         return 1
 
-    eprint("[WEB-BRIDGE] Container started.")
-    eprint(f"[WEB-BRIDGE] SearXNG endpoint: http://127.0.0.1:{port}/search")
-    eprint(f"[WEB-BRIDGE] Health: http://127.0.0.1:{port}/healthz")
+    eprint(f"{tag('WEB-BRIDGE')} Container started.")
+    eprint(f"{tag('WEB-BRIDGE')} SearXNG endpoint: http://127.0.0.1:{port}/search")
+    eprint(f"{tag('WEB-BRIDGE')} Health: http://127.0.0.1:{port}/healthz")
     return 0
 
 
@@ -128,7 +121,7 @@ def restart(settings: dict) -> int:
     rc = restart_tool_container(settings, "WEB-BRIDGE")
     if rc == 0:
         port = settings["port"]
-        eprint(f"[WEB-BRIDGE] SearXNG endpoint: http://127.0.0.1:{port}/search")
+        eprint(f"{tag('WEB-BRIDGE')} SearXNG endpoint: http://127.0.0.1:{port}/search")
     return rc
 
 

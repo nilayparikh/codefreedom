@@ -12,10 +12,9 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
-from codefreedom.env_loader import load_env_chain
-from codefreedom.core.settings import resolve_agent_runtime
+from codefreedom.config.errors import ProfileError
+from codefreedom.config.runtime import load_profile_env, resolve_agent_runtime
 from codefreedom.log import eprint, tag
-from codefreedom.core.profiles import ProfileError, load_profile_env
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
 # ║ Section 1: Claude Code VS Code config (`vscode claude config`)            ║
@@ -193,11 +192,11 @@ def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
 
     profiles_path = _resolve_profiles_path()
     if not profiles_path.exists():
-        eprint(f"[ERROR] Profiles file not found: {profiles_path}")
+        eprint(f"{tag('ERROR')} Profiles file not found: {profiles_path}")
         eprint("   Run: codefreedom setup init")
         return 1
 
-    eprint(f"[VSCODE] Loading env chain (claude component) from {workspace_dir}...")
+    eprint(f"{tag('VSCODE')} Loading env chain (claude component) from {workspace_dir}...")
     try:
         resolve_agent_runtime(
             "claude-code",
@@ -207,18 +206,13 @@ def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
             validate_profile=False,
         )
     except ProfileError as e:
-        eprint(f"[ERROR] {e}")
+        eprint(f"{tag('ERROR')} {e}")
         return 1
 
     try:
-        profile_env = load_profile_env(
-            profile_name,
-            profiles_path,
-            load_env_chain(workspace_dir, component="claude"),
-            "local",
-        )
+        profile_env = load_profile_env(profile_name, profiles_path)
     except ProfileError as e:
-        eprint(f"[ERROR] {e}")
+        eprint(f"{tag('ERROR')} {e}")
         return 1
 
     env_array, referenced_secrets = _build_vscode_environment_variables(

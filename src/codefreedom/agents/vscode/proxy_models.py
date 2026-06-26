@@ -15,8 +15,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import yaml
 
+from codefreedom.config.runtime import apply_cf_cli_overrides
 from codefreedom.core.http_client import HTTPError, HTTPStatusError
-from codefreedom.env_loader import get_env
 from codefreedom.log import eprint, tag
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -93,20 +93,14 @@ def _resolve_reasoning_effort(_model_name: str) -> List[str]:
 def _load_route_image_models(codefreedom_dir: Optional[Path] = None) -> Set[str]:
     """Return model names that have ``route-image-request: enabled``.
 
-    Reads provider YAML files from ``~/.codefreedom/proxy/config/providers/``
-    (or ``$CODEFREEDOM_HOME/proxy/config/providers/``) and collects every
-    ``model_name`` whose ``codefreedom.plugins.route-image-request.enabled``
-    is ``true``.  These models can process images through the proxy's
-    image-router middleware, even if the upstream model_info does not
-    advertise ``supports_vision``.
-
-    The logic mirrors ``image_router.py``'s ``_load_provider_codefreedom()``
-    method so the same source of truth is used.
+    Reads provider YAML files from ``~/.codefreedom/config/proxy/config/providers/``
+    and collects every ``model_name`` whose
+    ``codefreedom.plugins.route-image-request.enabled`` is ``true``.
     """
     if codefreedom_dir is None:
-        from codefreedom.core.config import get_codefreedom_dir
+        from codefreedom.core.config import get_config_dir
 
-        codefreedom_dir = get_codefreedom_dir()
+        codefreedom_dir = get_config_dir()
     providers_dir = codefreedom_dir / "proxy" / "config" / "providers"
     if not os.path.isdir(providers_dir):
         return set()
@@ -136,19 +130,13 @@ def _load_route_image_models(codefreedom_dir: Optional[Path] = None) -> Set[str]
 def _load_alias_models(codefreedom_dir: Optional[Path] = None) -> Set[str]:
     """Return model names that are ``model_group_alias`` entries.
 
-    Reads ``~/.codefreedom/proxy/config/config.yaml`` (or
-    ``$CODEFREEDOM_HOME/proxy/config/config.yaml``) and collects the
-    keys of ``router_settings.model_group_alias``.  These are shorthand
-    aliases (e.g. ``opus``, ``sonnet``) that LiteLLM resolves to real
-    model groups at runtime.  By default the VS Code config skips them
-    so users only see the actual model entries.
-
-    Pass ``--keep-alias`` to include them.
+    Reads ``~/.codefreedom/config/proxy/config/config.yaml`` and collects the
+    keys of ``router_settings.model_group_alias``.
     """
     if codefreedom_dir is None:
-        from codefreedom.core.config import get_codefreedom_dir
+        from codefreedom.core.config import get_config_dir
 
-        codefreedom_dir = get_codefreedom_dir()
+        codefreedom_dir = get_config_dir()
     config_path = codefreedom_dir / "proxy" / "config" / "config.yaml"
     if not config_path.is_file():
         return set()
@@ -178,9 +166,7 @@ def _resolve_master_key() -> Optional[str]:
     This is a convenience wrapper; ``cmd_vscode_proxy_config`` accesses
     the key directly from ``get_env()``.
     """
-    from codefreedom.env_loader import get_env
-
-    merged = get_env(Path.cwd(), component="proxy", verbose=False)
+    merged = apply_cf_cli_overrides(dict(os.environ))
     key = merged.get("LITELLM_MASTER_KEY", "").strip()
     return key if key else None
 
@@ -385,7 +371,7 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     eprint(
         f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}..."
     )
-    base_env = get_env(workspace_dir, component="proxy", verbose=False)
+    base_env = apply_cf_cli_overrides(dict(os.environ))
 
     eprint(f"{tag('VSCODE')} Probing proxy at {_proxy_health_url(host, port)} ...")
     if not _check_proxy_live(host, port):

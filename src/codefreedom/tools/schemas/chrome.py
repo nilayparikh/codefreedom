@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 import yaml
 from pydantic import BaseModel, Field
 
-from codefreedom.core.interpolate import interpolate_all_strings
+from codefreedom.config.interpolation import interpolate_all
 
 
 class ChromeSettings(BaseModel, extra="forbid"):
@@ -42,4 +42,4 @@ class ChromeConfig(BaseModel, extra="forbid"):
     def interpolate_envs(self, context: dict[str, str] | None = None) -> None:
         """Interpolate ${VAR} in the chrome env dict, in-place."""
         if self.chrome.env:
-            interpolate_all_strings(self.chrome.env, context)
+            interpolate_all(self.chrome.env, context)

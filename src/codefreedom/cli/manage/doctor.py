@@ -32,10 +32,9 @@ from codefreedom.cli.docker_utils import (
     get_codefreedom_container_ports,
     is_port_available,
     load_tool_profile,
-    tool_home,
 )
-from codefreedom.core.config import get_codefreedom_dir
-from codefreedom.core.settings import resolve_config_value
+from codefreedom.config.runtime import apply_cf_cli_overrides, resolve_config_value
+from codefreedom.core.config import get_codefreedom_dir, get_config_dir
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Check result types
@@ -177,8 +176,10 @@ def _check_cf_dir_exists() -> CheckResult:
 
 @_section("CodeFreedom Home")
 def _check_recipe_instruction() -> CheckResult:
-    cf_dir = get_codefreedom_dir()
-    recipe_file = cf_dir / "RECIPE.md"
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    recipe_file = config_dir / "RECIPE.md"
     if recipe_file.exists():
         content = recipe_file.read_text(encoding="utf-8")
         # Extract recipe name from the first line
@@ -202,19 +203,21 @@ def _check_cf_dir_permissions() -> CheckResult:
 
 @_section("CodeFreedom Home")
 def _check_cf_dir_structure() -> CheckResult:
-    """Check that key subdirectories exist."""
-    cf_dir = get_codefreedom_dir()
-    expected_dirs = ["profiles", "proxy", "proxy/config"]
+    """Check that key subdirectories exist in config directory."""
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    expected_dirs = ["proxy", "proxy/config"]
     missing = []
     for sub in expected_dirs:
-        if not (cf_dir / sub).is_dir():
+        if not (config_dir / sub).is_dir():
             missing.append(sub)
     if missing:
         return _warn(
-            f"Missing subdirectories: {', '.join(missing)}",
+            f"Missing config subdirectories: {', '.join(missing)}",
             "Run 'cf s i' to create them",
         )
-    return _ok("All key subdirectories present")
+    return _ok("All config subdirectories present")
 
 
 # ── Section: Docker ────────────────────────────────────────────────────────
@@ -284,21 +287,25 @@ def _resolve_tool_home() -> Path:
 
 def _load_tool_settings(
     tool_key: str,
-    profile_filename: str,
     defaults: dict,
     extra_keys: list[str] | None = None,
+    env_port_var: str | None = None,
+    env_port_vars: dict[str, str] | None = None,
 ) -> dict:
-    """Load tool settings from profile, falling back to defaults.
+    """Load tool settings from unified profiles.yaml, falling back to defaults.
 
     Uses the same ``load_tool_profile()`` that tool modules use, so
-    doctor checks always reflect the actual configured values.
+    doctor checks always reflect the actual configured values. Plumbs through
+    ``env_port_var`` / ``env_port_vars`` so doctor honours ``CODEFREEDOM_*``
+    port overrides the same way tool runtime does.
     """
     try:
         return load_tool_profile(
             tool_key,
             defaults,
-            profile_filename,
             extra_keys=extra_keys,
+            env_port_var=env_port_var,
+            env_port_vars=env_port_vars,
         )
     except Exception:
         return defaults
@@ -307,7 +314,6 @@ def _load_tool_settings(
 def _get_chrome_settings() -> dict:
     return _load_tool_settings(
         "chrome",
-        "chrome.yaml",
         {
             "image": "docker.io/nilayparikh/codefreedom:chrome-latest",
             "container_name": "codefreedom-chrome",
@@ -319,13 +325,17 @@ def _get_chrome_settings() -> dict:
             "env": {},
         },
         extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port"],
+        env_port_var="CODEFREEDOM_CHROME_PORT",
+        env_port_vars={
+            "mcp_port": "CODEFREEDOM_CHROME_MCP_PORT",
+            "cdp_proxy_port": "CODEFREEDOM_CHROME_CDP_PROXY_PORT",
+        },
     )
 
 
 def _get_web_settings() -> dict:
     return _load_tool_settings(
         "web",
-        "web.yaml",
         {
             "image": "docker.io/nilayparikh/codefreedom:web-latest",
             "container_name": "codefreedom-web",
@@ -339,7 +349,6 @@ def _get_web_settings() -> dict:
 def _get_github_settings() -> dict:
     return _load_tool_settings(
         "github",
-        "github.yaml",
         {
             "image": "docker.io/nilayparikh/codefreedom:github-latest",
             "container_name": "codefreedom-tools-github",
@@ -352,8 +361,7 @@ def _get_github_settings() -> dict:
 
 def _get_web_bridge_settings() -> dict:
     return _load_tool_settings(
-        "web_bridge",
-        "web-bridge.yaml",
+        "web-bridge",
         {
             "image": "docker.io/nilayparikh/codefreedom:web-bridge-latest",
             "container_name": "codefreedom-web-bridge",
@@ -365,10 +373,7 @@ def _get_web_bridge_settings() -> dict:
 
 
 ESSENTIAL_PROFILE_FILES = [
-    "chrome.yaml",
-    "web.yaml",
-    "github.yaml",
-    "web-bridge.yaml",
+    "profiles.yaml",  # Unified profiles file
 ]
 
 ESSENTIAL_PROXY_FILES = [
@@ -379,13 +384,10 @@ ESSENTIAL_PROXY_FILES = [
 
 @_section("Config Files")
 def _check_profile_files() -> CheckResult:
-    tool_home = _resolve_tool_home()
-    profiles_dir = tool_home / "profiles"
-    discovered = (
-        sorted(p.name for p in profiles_dir.glob("*.yaml") if p.is_file())
-        if profiles_dir.is_dir()
-        else []
-    )
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    discovered = sorted(p.name for p in config_dir.glob("*.yaml") if p.is_file())
     missing = [f for f in ESSENTIAL_PROFILE_FILES if f not in discovered]
     if missing:
         return _warn(
@@ -399,10 +401,10 @@ def _check_profile_files() -> CheckResult:
 
 @_section("Config Files")
 def _check_proxy_config_files() -> CheckResult:
-    cf_dir = get_codefreedom_dir()
+    config_dir = get_config_dir()
     missing = []
     for rel_path, label in ESSENTIAL_PROXY_FILES:
-        if not (cf_dir / rel_path).exists():
+        if not (config_dir / rel_path).exists():
             missing.append(f"{label} ({rel_path})")
     if missing:
         return _fail(
@@ -414,19 +416,19 @@ def _check_proxy_config_files() -> CheckResult:
 
 @_section("Config Files")
 def _check_claude_code_profile() -> CheckResult:
-    """Check claude-code profile (legacy .json or new .yaml name)."""
-    cf_dir = get_codefreedom_dir()
+    """Check claude-code profile (unified profiles.yaml)."""
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
     candidates = [
-        cf_dir / "profiles" / "claude-code.json",
-        cf_dir / "profiles" / "claude-code.yaml",
-        cf_dir / "profiles" / "claude-code-profiles.yaml",
+        config_dir / "profiles.yaml",
     ]
     found = [p for p in candidates if p.exists()]
     if found:
         return _ok(f"Claude Code profile found: {found[0].name}")
     return _warn(
         "No Claude Code profile file found",
-        "Looked for: claude-code.json, claude-code.yaml, claude-code-profiles.yaml",
+        "Run 'cf s i' to install a recipe",
     )
 
 
@@ -477,15 +479,37 @@ def _check_compose_pg_volume() -> CheckResult:
 
 
 def _get_litellm_image() -> str:
-    """Return the LiteLLM image from env or compose default."""
-    return os.environ.get(
-        "LITELLM_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
-    )
+    """Return the LiteLLM image, honouring the resolved config (override.yaml)."""
+    try:
+        from codefreedom.config import load_config
+
+        proxy_env = load_config().for_component("proxy")
+        merged_env = apply_cf_cli_overrides(dict(os.environ))
+        return proxy_env.get(
+            "LITELLM_IMAGE",
+            merged_env.get(
+                "LITELLM_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
+            ),
+        )
+    except Exception:
+        return os.environ.get(
+            "LITELLM_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
+        )
 
 
 def _get_litellm_container_name() -> str:
-    """Return the LiteLLM container name from env or compose default."""
-    return os.environ.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
+    """Return the LiteLLM container name (with suffix) per resolved config.
+
+    Reads ``SUFFIX_ID`` from ``load_config().for_component('proxy')`` rather
+    than bare ``os.environ`` so a user-set ``override.yaml`` ``SUFFIX_ID``
+    actually affects doctor diagnostics (parity with ``cf run proxy start``).
+    """
+    try:
+        from codefreedom.core.proxy_env import build_proxy_run_env, litellm_container_name
+
+        return litellm_container_name(build_proxy_run_env())
+    except Exception:
+        return os.environ.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
 
 
 @_section("Docker Images")
@@ -537,30 +561,33 @@ def _check_github_profile() -> CheckResult:
 
 
 def _check_tool_profile(name: str, label: str) -> CheckResult:
-    cf_dir = get_codefreedom_dir()
-    profile_file = cf_dir / "profiles" / f"{name}.json"
-    if not profile_file.exists():
-        profile_file = cf_dir / "profiles" / f"{name}.yaml"
+    from codefreedom.core.config import get_config_dir
 
-    if not profile_file.exists():
+    config_dir = get_config_dir()
+    profiles_path = config_dir / "profiles.yaml"
+
+    if not profiles_path.exists():
         return _warn(
-            f"{label} profile not found",
-            f"Run 'cf run tools {name} init' or 'cf s i' to create it",
+            f"{label} profile not found (no profiles.yaml)",
+            "Run 'cf s i' to install a recipe",
         )
 
     try:
-        import json
         import yaml
 
-        if profile_file.suffix == ".json":
-            with open(profile_file, encoding="utf-8") as f:
-                json.load(f)
-        else:
-            with open(profile_file, encoding="utf-8") as f:
-                yaml.safe_load(f)
-        return _ok(f"{label} profile is valid ({profile_file.name})")
-    except (json.JSONDecodeError, yaml.YAMLError) as e:
-        return _fail(f"{label} profile has parse errors: {e}")
+        with open(profiles_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            return _fail("profiles.yaml is not a valid mapping")
+        tools = data.get("tools", {})
+        if name in tools:
+            return _ok(f"{label} profile found in profiles.yaml (tools.{name})")
+        return _warn(
+            f"{label} profile not found in profiles.yaml",
+            f"Run 'cf s i' to install a recipe with {name} config",
+        )
+    except (yaml.YAMLError, OSError) as e:
+        return _fail(f"profiles.yaml has parse errors: {e}")
 
 
 # ── Section: Env Vars (Proxy) ──────────────────────────────────────────────
@@ -568,59 +595,54 @@ def _check_tool_profile(name: str, label: str) -> CheckResult:
 
 def _resolve_env_var_value(
     name: str,
-    env_files: Optional[List[Path]] = None,
+    env_files: list[Path] | None = None,
 ) -> Tuple[Optional[str], Optional[str]]:
-    """Resolve an env var value across all sources.
+    """Resolve an env var value from machine environment variables only.
+
+    All secrets must come from machine environment variables with CF_CLI_* prefix.
+    No .env.* files are read for secrets.
 
     Checks (in priority order):
-    1. ``CF_CLI_<NAME>`` in ``os.environ`` (highest priority machine override)
-    2. ``NAME`` directly in ``os.environ``
-    3. ``NAME=`` in ``~/.codefreedom/.env.user``
-    4. ``NAME=`` in the provided *env_files*
+    1. ``CF_CLI_<NAME>`` in ``os.environ`` (only source for secrets)
+    2. ``NAME`` directly in ``os.environ`` (for non-secret config)
 
-    Returns ``(value, source_description)`` or ``(None, None)`` if not found
-    in any source.
+    Returns ``(value, source_description)`` or ``(None, None)`` if not found.
     """
     return resolve_config_value(
         name,
         workspace_dir=Path.cwd(),
-        extra_env_files=env_files,
     )
 
 
 @_section("Environment Variables (Proxy)")
 def _check_litellm_master_key() -> CheckResult:
     return _check_env_var(
-        "LITELLM_MASTER_KEY", "Proxy master key", ".env.proxy.secrets"
+        "LITELLM_MASTER_KEY", "Proxy master key", "CF_CLI_LITELLM_MASTER_KEY"
     )
 
 
 def _check_env_var(name: str, label: str, source_hint: str) -> CheckResult:
-    """Check that an env var is set across all sources (env, CF_CLI_*, files).
+    """Check that an env var is set from machine environment variables only.
 
     Uses :func:`_resolve_env_var_value` for a single code path that considers
-    ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
+    ``CF_CLI_*`` machine overrides and direct ``os.environ``.
     """
-    cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.proxy.secrets"]
-    value, source = _resolve_env_var_value(name, env_files=env_files)
+    value, source = _resolve_env_var_value(name)
     if value is not None:
         return _ok(f"{name} is set ({label})")
     return _fail(
         f"{name} is not set ({label})",
-        f"Set it in {source_hint} or export CF_CLI_{name}=... in your shell",
+        f"Export CF_CLI_{name}=... in your shell",
     )
 
 
 def _check_env_var_optional(name: str, label: str, _source_hint: str) -> CheckResult:
-    """Check an optional env var across all sources (env, CF_CLI_*, files).
+    """Check an optional env var from machine environment variables only.
 
     Uses :func:`_resolve_env_var_value` for a single code path that considers
-    ``CF_CLI_*`` machine overrides, direct ``os.environ``, and env files.
+    ``CF_CLI_*`` machine overrides and direct ``os.environ``.
     """
-    cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.proxy.secrets"]
-    value, source = _resolve_env_var_value(name, env_files=env_files)
+    value, source = _resolve_env_var_value(name)
     if value is not None:
         return _ok(f"{name} is set ({label})")
     return _skip(f"{name} is not set (optional — {label})")
@@ -633,25 +655,26 @@ def _load_claude_profile_env() -> dict[str, str]:
     """Load env vars from the Claude Code profile's default profile.
 
     Returns the ``env`` dict from the ``default`` profile in
-    ``profiles/claude-code.yaml``, or an empty dict if not found.
+    ``profiles.yaml``, or an empty dict if not found.
     """
     import yaml
 
-    cf_dir = get_codefreedom_dir()
-    for name in ("claude-code.yaml", "claude-code-profiles.yaml"):
-        path = cf_dir / "profiles" / name
-        if path.exists():
-            try:
-                with open(path, encoding="utf-8") as f:
-                    data = yaml.safe_load(f)
-                if isinstance(data, dict):
-                    profiles = data.get("profiles", {})
-                    default = profiles.get("default", {})
-                    env = default.get("env", {})
-                    if isinstance(env, dict):
-                        return {k: str(v) for k, v in env.items()}
-            except Exception:
-                pass
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    path = config_dir / "profiles.yaml"
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict):
+                profiles = data.get("profiles", {})
+                default = profiles.get("default", {})
+                env = default.get("env", {})
+                if isinstance(env, dict):
+                    return {k: str(v) for k, v in env.items()}
+        except Exception:
+            pass
     return {}
 
 
@@ -666,21 +689,13 @@ def _check_anthropic_auth_token() -> CheckResult:
 
 
 def _check_claude_env_var(name: str, label: str) -> CheckResult:
-    """Check a Claude env var across profiles, env, CF_CLI_*, and files.
+    """Check a Claude env var from machine environment variables only.
 
     Resolution order:
-    1. Claude Code profile (``profiles/claude-code.yaml`` → default → env)
-    2. ``CF_CLI_<NAME>`` machine override
-    3. ``NAME`` directly in ``os.environ``
-    4. ``.env.claude.secrets`` file
+    1. ``CF_CLI_<NAME>`` machine override (only source for secrets)
+    2. ``NAME`` directly in ``os.environ`` (for non-secret config)
     """
-    profile_env = _load_claude_profile_env()
-    if name in profile_env and profile_env[name]:
-        return _ok(f"{name} is set ({label}, from Claude Code profile)")
-
-    cf_dir = get_codefreedom_dir()
-    env_files = [cf_dir / ".env.claude.secrets"]
-    value, source = _resolve_env_var_value(name, env_files=env_files)
+    value, source = _resolve_env_var_value(name)
     if value is not None:
         return _ok(f"{name} is set ({label})")
     return _skip(f"{name} is not set (optional — {label})")
@@ -700,23 +715,35 @@ def _check_sandbox_dir() -> CheckResult:
 
 @_section("Sandbox")
 def _check_sandbox_profiles() -> CheckResult:
-    cf_dir = get_codefreedom_dir()
-    profile_file = cf_dir / "profiles" / "claude-code.json"
-    if not profile_file.exists():
-        return _skip("(no claude-code profile to check sandbox settings)")
+    from codefreedom.core.config import get_config_dir
+
+    config_dir = get_config_dir()
+    profiles_path = config_dir / "profiles.yaml"
+    if not profiles_path.exists():
+        return _skip("(no profiles.yaml to check sandbox settings)")
 
     try:
-        import json
+        import yaml
 
-        with open(profile_file, encoding="utf-8") as f:
-            profiles = json.load(f)
-        profiles_list = profiles.get("profiles", {})
-        for pname, pdata in profiles_list.items():
-            if isinstance(pdata, dict) and "sandbox_images" in pdata:
-                return _ok(f"Profile '{pname}' has sandbox image configuration")
+        with open(profiles_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            return _skip("(could not read profiles.yaml)")
+        profiles_section = data.get("profiles", {})
+        if isinstance(profiles_section, dict):
+            for aname, agent_data in profiles_section.items():
+                if not isinstance(agent_data, dict):
+                    continue
+                agent_profiles = agent_data.get("profiles", {})
+                if isinstance(agent_profiles, dict):
+                    for pname, pdata in agent_profiles.items():
+                        if isinstance(pdata, dict) and "sandbox_images" in pdata:
+                            return _ok(
+                                f"Profile '{aname}.{pname}' has sandbox image configuration"
+                            )
         return _skip("(no sandbox images configured in profiles)")
-    except (json.JSONDecodeError, OSError):
-        return _skip("(could not read profile)")
+    except (yaml.YAMLError, OSError):
+        return _skip("(could not read profiles.yaml)")
 
 
 # ── Section: Proxy Status ──────────────────────────────────────────────────
@@ -787,7 +814,7 @@ def _check_web_bridge_running() -> CheckResult:
 def _check_chrome_cdp_port() -> CheckResult:
     settings = _get_chrome_settings()
     port = settings["port"]
-    hint = f"{tool_home()}/profiles/chrome.yaml (chrome.port)"
+    hint = f"{get_config_dir()}/profiles.yaml (tools.chrome.port)"
     return _check_port(port, "Chrome CDP", hint)
 
 
@@ -795,7 +822,7 @@ def _check_chrome_cdp_port() -> CheckResult:
 def _check_chrome_mcp_port() -> CheckResult:
     settings = _get_chrome_settings()
     port = settings.get("mcp_port", 9223)
-    hint = f"{tool_home()}/profiles/chrome.yaml (chrome.mcp_port)"
+    hint = f"{get_config_dir()}/profiles.yaml (tools.chrome.mcp_port)"
     return _check_port(port, "Chrome MCP", hint)
 
 
@@ -803,14 +830,26 @@ def _check_chrome_mcp_port() -> CheckResult:
 def _check_web_port() -> CheckResult:
     settings = _get_web_settings()
     port = settings["port"]
-    hint = f"{tool_home()}/profiles/web.yaml (web.port)"
+    hint = f"{get_config_dir()}/profiles.yaml (tools.web.port)"
     return _check_port(port, "Web search (Camoufox)", hint)
 
 
 @_section("Port Availability")
 def _check_proxy_port() -> CheckResult:
-    port = 4000
-    hint = "Default LiteLLM port (LITELLM_PORT)"
+    """Read the resolved LiteLLM port from config (override.yaml > recipe > default).
+
+    Previously this hard-coded ``4000`` and so the doctor would insist the
+    proxy is on 4000 even when the user had overridden ``LITELLM_PORT`` —
+    the inverse of the same masking bug fixed in ``cli/run/proxy.py``.
+    """
+    try:
+        from codefreedom.config import load_config
+
+        proxy_env = load_config().for_component("proxy")
+        port = int(proxy_env.get("LITELLM_PORT", "4000"))
+    except Exception:
+        port = 4000
+    hint = "LiteLLM port (from override.yaml vars.LITELLM_PORT or default)"
     return _check_port(port, "LiteLLM proxy", hint)
 
 
@@ -894,23 +933,24 @@ def _check_opencode_binary() -> CheckResult:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def run(verbose: bool = False) -> int:
+def run(verbose: bool = False, show_config: bool = True) -> int:
     """Run the full doctor diagnostic suite.
 
     Args:
         verbose: Show detail messages for all checks (not just failures).
+        show_config: Show resolved configuration tree after checks.
 
     Returns:
         Exit code: 0 if all checks pass, 1 if any failures, 2 if any failures
         plus warnings.
     """
+    from codefreedom.log import bold, cyan, green, red, yellow
+
     print()
     print(f"  CodeFreedom Doctor — {get_codefreedom_dir()}")
     print("  " + "=" * 55)
 
     passed, failed, warned = _run_checks(verbose=verbose)
-
-    from codefreedom.log import bold, green, red, yellow
 
     print()
     if failed == 0 and warned == 0:
@@ -923,6 +963,22 @@ def run(verbose: bool = False) -> int:
         print(
             f"  {red(bold(f'[FAIL] {failed} failure(s), {warned} warning(s), {passed} passed.'))}"
         )
+
+    # ── Resolved Configuration ────────────────────────────────────────────
+    if show_config:
+        try:
+            from codefreedom.config.display import format_resolved_config
+
+            print()
+            print(f"  {cyan(bold('[Resolved Configuration]'))}")
+            config_dir = get_config_dir()
+            config_str = format_resolved_config(config_dir, show_source=True)
+            for line in config_str.splitlines():
+                print(f"  {line}")
+        except Exception as e:
+            print()
+            print(f"  {yellow('[WARN] Could not load resolved configuration:')}")
+            print(f"         {e}")
 
     print()
     return 0 if failed == 0 else (2 if warned > 0 else 1)

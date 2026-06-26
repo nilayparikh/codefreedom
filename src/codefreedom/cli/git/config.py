@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 
 from codefreedom.cli.git.git_ops import get_git_root
-from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.config import get_config_dir
 from codefreedom.log import eprint, tag
 
 _DEFAULTS: dict[str, Any] = {
@@ -25,15 +25,17 @@ _DEFAULTS: dict[str, Any] = {
 
 
 def load_global_git_config() -> dict[str, Any]:
-    """Load git config from ~/.codefreedom/profiles/git.yaml."""
-    path = get_codefreedom_dir() / "profiles" / "git.yaml"
+    """Load git config from the unified profiles.yaml (tools.git section)."""
+    path = get_config_dir() / "profiles.yaml"
     if not path.exists():
         return {}
     try:
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if isinstance(data, dict):
-            return data.get("git", {})
+            tools = data.get("tools", {})
+            if isinstance(tools, dict):
+                return tools.get("git", {})
     except Exception as e:
         eprint(f"{tag('WARN')} Failed to load {path}: {e}")
     return {}

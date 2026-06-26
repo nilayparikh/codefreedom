@@ -393,7 +393,7 @@ def _args(
 
 class TestVscodeSettingsGenerate:
     def test_happy_path_default_profile(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
+        profiles_file = tmp_path / "config" / "profiles.yaml"
         profiles_file.parent.mkdir(parents=True)
         _write_yaml(
             profiles_file,
@@ -423,10 +423,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args())
         assert result == 0
@@ -472,7 +469,7 @@ class TestVscodeSettingsGenerate:
         assert env_names == sorted(env_names)
 
     def test_custom_profile(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
+        profiles_file = tmp_path / "config" / "profiles.yaml"
         profiles_file.parent.mkdir(parents=True)
         _write_yaml(
             profiles_file,
@@ -494,10 +491,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args(profile="ultra"))
         assert result == 0
@@ -510,7 +504,7 @@ class TestVscodeSettingsGenerate:
         assert payload["claudeCode.selectedModel"] == "CodeFreedom/Ultra"
 
     def test_host_port_override(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
+        profiles_file = tmp_path / "config" / "profiles.yaml"
         profiles_file.parent.mkdir(parents=True)
         _write_yaml(
             profiles_file,
@@ -528,10 +522,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args(host="proxy.lan", port=5000))
         assert result == 0
@@ -545,7 +536,7 @@ class TestVscodeSettingsGenerate:
         assert base_url_entry["value"] == "http://proxy.lan:5000"
 
     def test_writes_to_out_file(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
+        profiles_file = tmp_path / "config" / "profiles.yaml"
         profiles_file.parent.mkdir(parents=True)
         _write_yaml(
             profiles_file,
@@ -563,10 +554,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         out_file = tmp_path / "fragment.json"
         result = cmd_vscode_claude_config(_args(out=str(out_file)))
@@ -586,10 +574,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: missing,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args())
         assert result == 1
@@ -598,7 +583,7 @@ class TestVscodeSettingsGenerate:
         assert "codefreedom setup init" in captured.err
 
     def test_profile_error_returns_1(self, monkeypatch, tmp_path: Path, capsys):
-        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
+        profiles_file = tmp_path / "config" / "profiles.yaml"
         profiles_file.parent.mkdir(parents=True)
         _write_yaml(
             profiles_file,
@@ -616,13 +601,10 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         def boom(*_a, **_kw):
-            from codefreedom.core.profiles import ProfileError
+            from codefreedom.config.errors import ProfileError
 
             raise ProfileError("nope")
 
@@ -637,7 +619,7 @@ class TestVscodeSettingsGenerate:
     def test_no_claude_model_omits_selected_model(
         self, monkeypatch, tmp_path: Path, capsys
     ):
-        profiles_file = tmp_path / "profiles" / "claude-code.yaml"
+        profiles_file = tmp_path / "config" / "profiles.yaml"
         profiles_file.parent.mkdir(parents=True)
         _write_yaml(
             profiles_file,
@@ -655,10 +637,7 @@ class TestVscodeSettingsGenerate:
             "codefreedom.agents.vscode.claude_settings._resolve_profiles_path",
             lambda: profiles_file,
         )
-        monkeypatch.setattr(
-            "codefreedom.agents.vscode.claude_settings.load_env_chain",
-            lambda *a, **kw: {},
-        )
+
 
         result = cmd_vscode_claude_config(_args())
         assert result == 0
@@ -680,7 +659,7 @@ class TestDispatchPath:
         from codefreedom.core.config import resolve_profiles_path
 
         path = resolve_profiles_path()
-        assert path == tmp_path / "profiles" / "claude-code.yaml"
+        assert path == tmp_path / "config" / "profiles.yaml"
 
     def test_resolve_profiles_path_env_override(self, monkeypatch, tmp_path: Path):
         custom = tmp_path / "custom-profiles.json"
