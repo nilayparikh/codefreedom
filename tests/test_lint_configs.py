@@ -37,6 +37,27 @@ def _all_dockerfiles() -> list[Path]:
     return sorted(DOCKER_DIR.rglob("Dockerfile.*"))
 
 
+def _docker_linux_image_available(image: str) -> bool:
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "manifest",
+                "inspect",
+                image,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode != 0:
+        return False
+    output = result.stdout + result.stderr
+    return '"os": "linux"' in output
+
+
 # ── Workflow lint (actionlint) ──────────────────────────────────────────────
 
 
@@ -46,6 +67,8 @@ class TestWorkflowLint:
     def test_actionlint(self) -> None:
         if not _docker_available():
             pytest.skip("Docker not available")
+        if not _docker_linux_image_available("rhysd/actionlint"):
+            pytest.skip("actionlint image not available for this Docker platform")
         result = subprocess.run(
             [
                 "docker", "run", "--rm",
@@ -99,6 +122,11 @@ _SKIP_HADOLINT = {
     "docker/litellm/Dockerfile.PgBase",
 }
 
+_SKIP_BUILD_ARTIFACT_CHECKS = {
+    "docker/litellm/Dockerfile.LitellmBase",
+    "docker/litellm/Dockerfile.PgBase",
+}
+
 
 class TestDockerfileLint:
     """Validate all Dockerfiles."""
@@ -111,16 +139,27 @@ class TestDockerfileLint:
     def test_hadolint(self, dockerfile: str) -> None:
         if not _docker_available():
             pytest.skip("Docker not available")
+        if not _docker_linux_image_available("hadolint/hadolint"):
+            pytest.skip("hadolint image not available for this Docker platform")
         path = REPO_ROOT / dockerfile
         result = subprocess.run(
-            ["docker", "run", "--rm", "-i", "hadolint/hadolint", "hadolint", "--failure-threshold", "error", "-"],
-            input=path.read_text(encoding="utf-8"),
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-i",
+                "hadolint/hadolint",
+                "hadolint",
+                "--failure-threshold",
+                "error",
+                "-",
+            ],
+            input=path.read_text(encoding="utf-8").encode("utf-8"),
             capture_output=True,
-            text=True,
             timeout=30,
         )
         if result.returncode != 0:
-            output = result.stdout or result.stderr
+            output = (result.stdout or result.stderr).decode("utf-8", errors="replace")
             pytest.fail(f"{dockerfile} hadolint errors:\n{output}")
 
     @pytest.mark.parametrize(
@@ -145,7 +184,7 @@ class TestDockerfileLint:
         ids=lambda p: p,
     )
     def test_dockerfile_has_version_arg(self, dockerfile: str) -> None:
-        if dockerfile in _SKIP_HADOLINT:
+        if dockerfile in _SKIP_BUILD_ARTIFACT_CHECKS:
             pytest.skip("build artifact")
         path = REPO_ROOT / dockerfile
         content = path.read_text(encoding="utf-8")
@@ -159,7 +198,7 @@ class TestDockerfileLint:
         ids=lambda p: p,
     )
     def test_dockerfile_has_labels(self, dockerfile: str) -> None:
-        if dockerfile in _SKIP_HADOLINT:
+        if dockerfile in _SKIP_BUILD_ARTIFACT_CHECKS:
             pytest.skip("build artifact")
         path = REPO_ROOT / dockerfile
         content = path.read_text(encoding="utf-8")
