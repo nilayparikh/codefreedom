@@ -82,38 +82,21 @@ def find_codex_binary() -> str | None:
 def _detect_proxy_url(base_env: dict[str, str]) -> str:
     """Detect the proxy URL from environment or use default.
 
-    Checks (in order):
-    1. PROXY_BASE_URL in the merged env
-    2. PROXY_BASE_URL in os.environ
-    3. LITELLM_BASE_URL (legacy) in the merged env
-    4. LITELLM_BASE_URL (legacy) in os.environ
-    5. Default http://localhost:4000
+    Thin wrapper over :func:`codefreedom.core.agent_runtime.detect_proxy_url`.
     """
-    return (
-        base_env.get("PROXY_BASE_URL")
-        or os.environ.get("PROXY_BASE_URL")
-        or base_env.get("LITELLM_BASE_URL")
-        or os.environ.get("LITELLM_BASE_URL")
-        or "http://localhost:4000"
-    )
+    from codefreedom.core.agent_runtime import detect_proxy_url
+
+    return detect_proxy_url(base_env)
 
 
 def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> list[dict]:
     """Fetch the model list from the LiteLLM proxy ``/v1/models`` endpoint.
 
-    Returns a list of model dicts (with at least an ``id`` key).
-    Returns an empty list if the proxy is unreachable or returns an error.
+    Thin wrapper over :func:`codefreedom.core.agent_runtime.fetch_proxy_models`.
     """
-    import json as _json
+    from codefreedom.core.agent_runtime import fetch_proxy_models
 
-    from codefreedom.core.http_client import get_json, HTTPError, HTTPStatusError
-
-    models_url = f"{proxy_url.rstrip('/')}/v1/models"
-    try:
-        data = get_json(models_url, timeout=5, bearer=api_key)
-        return data.get("data", [])
-    except (HTTPStatusError, HTTPError, _json.JSONDecodeError):
-        return []
+    return fetch_proxy_models(proxy_url, api_key=api_key)
 
 
 def _generate_model_catalog(proxy_models: list[dict]) -> list[dict]:

@@ -87,46 +87,26 @@ def find_opencode_binary() -> Optional[str]:
 def _detect_proxy_url(base_env: Dict[str, str]) -> str:
     """Detect the proxy URL from environment or use default.
 
-    Checks (in order):
-    1. PROXY_BASE_URL in the merged env
-    2. PROXY_BASE_URL in os.environ
-    3. LITELLM_BASE_URL (legacy) in the merged env
-    4. LITELLM_BASE_URL (legacy) in os.environ
-    5. Default http://localhost:4000
+    Thin wrapper over :func:`codefreedom.core.agent_runtime.detect_proxy_url`.
     """
-    return (
-        base_env.get("PROXY_BASE_URL")
-        or os.environ.get("PROXY_BASE_URL")
-        or base_env.get("LITELLM_BASE_URL")
-        or os.environ.get("LITELLM_BASE_URL")
-        or "http://localhost:4000"
-    )
+    from codefreedom.core.agent_runtime import detect_proxy_url
+
+    return detect_proxy_url(base_env)
 
 
 def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> List[Dict[str, Any]]:
     """Fetch the model list from the LiteLLM proxy ``/v1/models`` endpoint.
 
-    If *api_key* is provided it is sent as a ``Bearer`` token so the
-    call succeeds even when the proxy requires authentication.
-
-    Returns a list of model dicts (with at least an ``id`` key).
-    Returns an empty list if the proxy is unreachable or returns an error.
+    Thin wrapper over :func:`codefreedom.core.agent_runtime.fetch_proxy_models`.
     """
-    from codefreedom.core.http_client import get_json, HTTPError, HTTPStatusError
+    from codefreedom.core.agent_runtime import fetch_proxy_models
 
-    models_url = f"{proxy_url.rstrip('/')}/v1/models"
-    try:
-        data = get_json(models_url, timeout=5, bearer=api_key)
-        return data.get("data", [])
-    except HTTPStatusError as exc:
-        if exc.status_code in (401, 403):
-            eprint(
-                f"[OPENCODE] Proxy returned {exc.status_code} — is LITELLM_MASTER_KEY set "
-                f"in ~/.codefreedom/.env.opencode.secrets?"
-            )
-        return []
-    except (HTTPError, json.JSONDecodeError):
-        return []
+    return fetch_proxy_models(
+        proxy_url,
+        api_key=api_key,
+        label="OPENCODE",
+        secrets_hint="~/.codefreedom/.env.opencode.secrets",
+    )
 
 
 def _build_provider_models(
@@ -134,34 +114,11 @@ def _build_provider_models(
 ) -> Dict[str, Dict[str, Any]]:
     """Build a provider models dict from the proxy model list.
 
-    Each model gets a minimal capability profile — just ``tool_call: True``
-    and a display name.  Context limits and reasoning support are discovered
-    by OpenCode at runtime; the proxy handles the actual routing.
+    Thin wrapper over :func:`codefreedom.core.agent_runtime.build_provider_models`.
     """
-    provider_models: Dict[str, Dict[str, Any]] = {}
+    from codefreedom.core.agent_runtime import build_provider_models
 
-    for m in proxy_models:
-        model_id = m.get("id", "")
-        if not model_id:
-            continue
-
-        model_id_lower = model_id.lower()
-
-        # Skip internal LiteLLM models and provider-prefixed helpers
-        if model_id_lower.startswith("azure/") or model_id_lower in (
-            "gpt-3.5-turbo",
-            "custom",
-        ):
-            continue
-
-        display_name = model_id.split("/")[-1] if "/" in model_id else model_id
-
-        provider_models[model_id] = {
-            "name": display_name,
-            "tool_call": True,
-        }
-
-    return provider_models
+    return build_provider_models(proxy_models)
 
 
 def _generate_opencode_config(

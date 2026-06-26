@@ -505,20 +505,11 @@ def _ensure_lean_ctx() -> None:
 def _detect_proxy_url(base_env: dict[str, str]) -> str:
     """Detect the proxy URL from environment or use default.
 
-    Checks (in order):
-    1. PROXY_BASE_URL in the merged env
-    2. PROXY_BASE_URL in os.environ
-    3. LITELLM_BASE_URL (legacy) in the merged env
-    4. LITELLM_BASE_URL (legacy) in os.environ
-    5. Default http://localhost:4000
+    Thin wrapper over :func:`codefreedom.core.agent_runtime.detect_proxy_url`.
     """
-    return (
-        base_env.get("PROXY_BASE_URL")
-        or os.environ.get("PROXY_BASE_URL")
-        or base_env.get("LITELLM_BASE_URL")
-        or os.environ.get("LITELLM_BASE_URL")
-        or "http://localhost:4000"
-    )
+    from codefreedom.core.agent_runtime import detect_proxy_url
+
+    return detect_proxy_url(base_env)
 
 
 # ── Execution ─────────────────────────────────────────────────────────────────
