@@ -89,9 +89,9 @@ jobs:
           echo "branch=${BRANCH}" >> "${GITHUB_OUTPUT}"
 
           if [[ "${BRANCH}" == main ]]; then
-            echo "tag_version=v${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "tag_version=${VERSION}" >> "${GITHUB_OUTPUT}"
             echo "push_latest=true" >> "${GITHUB_OUTPUT}"
-            echo "Branch: main → tags: {platform}-v${VERSION}, {platform}-latest"
+            echo "Branch: main → tags: {platform}-${VERSION}, {platform}-latest"
           elif [[ "${BRANCH}" == dev/* ]]; then
             echo "tag_version=dev-${VERSION}rc${RC}.dev${DEV}" >> "${GITHUB_OUTPUT}"
             echo "push_latest=false" >> "${GITHUB_OUTPUT}"
