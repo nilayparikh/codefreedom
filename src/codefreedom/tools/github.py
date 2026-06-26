@@ -20,7 +20,7 @@ import random
 import socket
 import subprocess
 
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.cli.docker_utils import (
     container_is_running,
     init_tool_redirect,
@@ -127,15 +127,15 @@ def start(settings: dict) -> int:
 
     token = env_vars.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
     if not token:
-        eprint("[ERROR] GITHUB_PERSONAL_ACCESS_TOKEN is not set.")
+        eprint(f"{tag('ERROR')} GITHUB_PERSONAL_ACCESS_TOKEN is not set.")
         eprint("   Set it in ~/.codefreedom/profiles/github.yaml under env:")
         eprint('     "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..." }')
         return 1
 
     if container_is_running(container_name):
         port = _get_mapped_port(container_name) or settings["port"]
-        eprint(f"[GITHUB] Container '{container_name}' is already running.")
-        eprint(f"[GITHUB]   MCP endpoint: http://127.0.0.1:{port}/mcp")
+        eprint(f"{tag('GITHUB')} Container '{container_name}' is already running.")
+        eprint(f"{tag('GITHUB')}   MCP endpoint: http://127.0.0.1:{port}/mcp")
         return 0
 
     if not start_tool_docker_guard("GITHUB"):
@@ -145,7 +145,7 @@ def start(settings: dict) -> int:
     if host_port == 0:
         host_port = _find_free_port()
 
-    eprint(f"[GITHUB]   HTTP MCP port: {host_port}")
+    eprint(f"{tag('GITHUB')}   HTTP MCP port: {host_port}")
 
     docker_args = [
         "-p",

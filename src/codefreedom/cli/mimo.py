@@ -32,7 +32,7 @@ from codefreedom.core.config import (
     get_codefreedom_dir,
     resolve_mimo_profiles_path,
 )
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import generate_session_id
 from codefreedom.sandbox.signals import forward_signal
 
@@ -131,7 +131,7 @@ def _generate_mimo_config(
 
     Returns the config dict ready to be serialised to JSON.
     """
-    eprint(f"[MIMO] Detecting proxy at {proxy_url}...")
+    eprint(f"{tag('MIMO')} Detecting proxy at {proxy_url}...")
     api_key = profile_env.get("PROXY_API_KEY", "")
     proxy_models = _fetch_proxy_models(proxy_url, api_key=api_key)
 
@@ -195,7 +195,7 @@ def _generate_mimo_config(
         if "/" not in default_model:
             default_model = f"codefreedom/{default_model}"
         config["model"] = default_model
-        eprint(f"[MIMO] Default model set to '{default_model}' from profile.")
+        eprint(f"{tag('MIMO')} Default model set to '{default_model}' from profile.")
 
     return config
 
@@ -213,7 +213,7 @@ def _write_mimo_config(
     config_path = config_dir / MIMOCODE_CONFIG_NAME
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
     config_path.chmod(0o600)
-    eprint(f"[MIMO] Generated proxy config at {config_path}")
+    eprint(f"{tag('MIMO')} Generated proxy config at {config_path}")
     return config_path
 
 
@@ -253,7 +253,7 @@ def run_local(
         )
         return 1
 
-    eprint("[LOCAL] Running MiMoCode natively...")
+    eprint(f"{tag('LOCAL')} Running MiMoCode natively...")
 
     env = {**os.environ}
     env.update(profile_env)
@@ -275,7 +275,7 @@ def run_local(
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
-        eprint(f"[ERROR] MiMoCode binary not found at {mimo_bin}.")
+        eprint(f"{tag('ERROR')} MiMoCode binary not found at {mimo_bin}.")
         return 1
     except KeyboardInterrupt:
         return 130
@@ -402,7 +402,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     generates a complete ``mimocode.json`` and outputs it.
     """
     workspace_dir = Path.cwd()
-    eprint("[ENV] Loading configuration...")
+    eprint(f"{tag('ENV')} Loading configuration...")
     runtime = resolve_agent_runtime(
         "mimo-code",
         workspace_dir=workspace_dir,
@@ -486,7 +486,7 @@ def _update_mimocode_mcp(tools: List[str]) -> None:
         try:
             existing = json.loads(config_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
-            eprint(f"[MIMO] Could not parse {config_path} — starting fresh.")
+            eprint(f"{tag('MIMO')} Could not parse {config_path} — starting fresh.")
             existing = {}
 
     existing.setdefault("mcp", {})
@@ -521,7 +521,7 @@ def _update_mimocode_mcp(tools: List[str]) -> None:
             f"[MIMO] Registered MCP in {config_path}:" f" {', '.join(sorted(added))}"
         )
     else:
-        eprint("[MIMO] All MCP servers already registered.")
+        eprint(f"{tag('MIMO')} All MCP servers already registered.")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -544,7 +544,7 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Load env chain ─────────────────────────────────────────────────────
     workspace_dir = Path.cwd()
-    eprint("[ENV] Loading configuration...")
+    eprint(f"{tag('ENV')} Loading configuration...")
 
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
@@ -609,7 +609,7 @@ def run(args: argparse.Namespace) -> int:
             )
         else:
             if run_as_me:
-                eprint("[WARN] --run-as-me is only valid with --sandbox; ignoring.")
+                eprint(f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring.")
             return run_local(profile_env, args.agent_args)
 
     return acquire_and_run(session_id, tools, profile_name, _run)

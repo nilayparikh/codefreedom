@@ -208,7 +208,7 @@ def _ensure_web_bridge_image() -> int:
         check=False,
     )
     if check.returncode != 0:
-        eprint(f"[PROXY] Web-bridge image '{image}' not found locally, pulling...")
+        eprint(f"{tag('PROXY')} Web-bridge image '{image}' not found locally, pulling...")
         pull = subprocess.run(
             ["docker", "pull", image],
             capture_output=True,

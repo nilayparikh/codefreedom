@@ -37,7 +37,7 @@ from codefreedom.core.http_client import (
 )
 from codefreedom.core.config import get_config_dir
 from codefreedom.docker.pull import get_local_digest, normalize_ref, parse_image_ref
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -195,7 +195,7 @@ def _fetch_manifest_digest(url: str, token: str, _label: str) -> str | None:
             f"[UPDATE] Warning: Hub manifest check failed ({exc.status_code}): {url}."
         )
     except HTTPError as exc:
-        eprint(f"[UPDATE] Warning: Hub unreachable ({exc}): {url}.")
+        eprint(f"{tag('UPDATE')} Warning: Hub unreachable ({exc}): {url}.")
     return None
 
 
@@ -207,7 +207,7 @@ def _get_docker_hub_token(namespace: str, repo: str) -> str | None:
         data = get_json(url, timeout=10.0)
         return data.get("token")
     except (HTTPError, json.JSONDecodeError) as exc:
-        eprint(f"[UPDATE] Warning: Docker Hub auth failed: {exc}.")
+        eprint(f"{tag('UPDATE')} Warning: Docker Hub auth failed: {exc}.")
     return None
 
 

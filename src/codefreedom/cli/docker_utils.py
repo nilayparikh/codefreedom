@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from codefreedom.config.interpolation import interpolate_all
 from codefreedom.config.runtime import apply_cf_cli_overrides
 from codefreedom.docker.pull import pull_if_stale
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 # ── Tool metadata ────────────────────────────────────────────────────────────
 
@@ -133,7 +133,7 @@ def accept_tool_prompt(tool_name: str) -> bool:
     """
     info = TOOL_INFO.get(tool_name)
     if not info:
-        eprint(f"[INIT] Unknown tool: {tool_name}.")
+        eprint(f"{tag('INIT')} Unknown tool: {tool_name}.")
         return False
 
     eprint()
@@ -153,13 +153,13 @@ def accept_tool_prompt(tool_name: str) -> bool:
         response = input("Continue? [y/N]: ").strip()
     except (EOFError, KeyboardInterrupt):
         eprint()
-        eprint("[INIT] Init aborted.")
+        eprint(f"{tag('INIT')} Init aborted.")
         return False
 
     if response.lower() == "y":
         return True
 
-    eprint("[INIT] Init aborted.")
+    eprint(f"{tag('INIT')} Init aborted.")
     return False
 
 
@@ -314,7 +314,7 @@ def ensure_image(
             eprint(f"[{label}] Image pulled.")
             return True
 
-        eprint(f"[ERROR] Failed to pull image '{image}'.")
+        eprint(f"{tag('ERROR')} Failed to pull image '{image}'.")
         if pull.stderr:
             eprint(f"   {pull.stderr.strip()}")
         eprint("")
@@ -780,7 +780,7 @@ def restart_tool_container(settings: dict, label: str) -> int:
         check=False,
     )
     if result.returncode != 0:
-        eprint(f"[ERROR] Failed to restart {label} container.")
+        eprint(f"{tag('ERROR')} Failed to restart {label} container.")
         if result.stderr:
             eprint(f"   {result.stderr.strip()}")
         return 1
@@ -898,11 +898,11 @@ def start_tool_container(settings: dict, label: str, docker_args: list[str]) -> 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     except (subprocess.TimeoutExpired, OSError):
-        eprint(f"[ERROR] Failed to start {label} container: timeout or OS error.")
+        eprint(f"{tag('ERROR')} Failed to start {label} container: timeout or OS error.")
         return 1
 
     if result.returncode != 0:
-        eprint(f"[ERROR] Failed to start {label} container.")
+        eprint(f"{tag('ERROR')} Failed to start {label} container.")
         if result.stderr:
             eprint(f"   {result.stderr.strip()}")
         return 1

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 
 def build_parser(parent: argparse.ArgumentParser) -> None:
@@ -65,7 +65,7 @@ def handle_args(args: argparse.Namespace) -> int:
     target = getattr(args, "config_target", None)
 
     if target is None:
-        eprint("[CONFIG] No target specified. Run 'cf setup config -h' for available targets.")
+        eprint(f"{tag('CONFIG')} No target specified. Run 'cf setup config -h' for available targets.")
         return 1
 
     from codefreedom.cli.vscode import cmd_vscode_proxy_config

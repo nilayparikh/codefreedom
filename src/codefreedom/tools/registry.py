@@ -11,7 +11,7 @@ import json
 import secrets
 from typing import Callable, Protocol
 
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 # ── Tool handler dispatch ─────────────────────────────────────────────────────
 # Each tool maps to (load_settings, start, stop) — existing functions from
@@ -98,7 +98,7 @@ def acquire_tools(_session_id: str, tools: list[str], _profile: str) -> list[str
 
     for tool_name in tools:
         if tool_name not in _KNOWN_TOOLS:
-            eprint(f"[TOOLS] Unknown tool '{tool_name}' -- skipping.")
+            eprint(f"{tag('TOOLS')} Unknown tool '{tool_name}' -- skipping.")
             continue
 
         _load_settings, _start, _ = _KNOWN_TOOLS[tool_name]
@@ -106,7 +106,7 @@ def acquire_tools(_session_id: str, tools: list[str], _profile: str) -> list[str
         try:
             settings = _load_settings()
         except (FileNotFoundError, json.JSONDecodeError) as exc:
-            eprint(f"[TOOLS] Failed to load settings for '{tool_name}': {exc}")
+            eprint(f"{tag('TOOLS')} Failed to load settings for '{tool_name}': {exc}")
             continue
 
         result = _start(settings)
@@ -117,7 +117,7 @@ def acquire_tools(_session_id: str, tools: list[str], _profile: str) -> list[str
             continue
 
         acquired.append(tool_name)
-        eprint(f"[TOOLS] Tool '{tool_name}' acquired.")
+        eprint(f"{tag('TOOLS')} Tool '{tool_name}' acquired.")
 
     return acquired
 
@@ -151,7 +151,7 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
             )
             continue
         except json.JSONDecodeError as exc:
-            eprint(f"[MCP] Tool '{tool_name}' profile is malformed — {exc}.")
+            eprint(f"{tag('MCP')} Tool '{tool_name}' profile is malformed — {exc}.")
             continue
 
         if not path.startswith("/"):
@@ -197,7 +197,7 @@ def start_all_tools(selected: set[str] | None = None) -> int:
             if result != 0:
                 failures += 1
         except Exception as exc:
-            eprint(f"[TOOLS] Failed to start '{name}': {exc}")
+            eprint(f"{tag('TOOLS')} Failed to start '{name}': {exc}")
             failures += 1
     return 1 if failures else 0
 
@@ -215,6 +215,6 @@ def stop_all_tools(selected: set[str] | None = None) -> int:
             if result != 0:
                 failures += 1
         except Exception as exc:
-            eprint(f"[TOOLS] Failed to stop '{name}': {exc}")
+            eprint(f"{tag('TOOLS')} Failed to stop '{name}': {exc}")
             failures += 1
     return 1 if failures else 0

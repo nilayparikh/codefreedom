@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import argparse
 
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.cli.docker_utils import (
     container_is_running,
     init_tool_redirect,
@@ -87,7 +87,7 @@ def start(settings: dict) -> int:
     port = settings["port"]
 
     if container_is_running(container_name):
-        eprint(f"[WEB-BRIDGE] Container '{container_name}' is already running.")
+        eprint(f"{tag('WEB-BRIDGE')} Container '{container_name}' is already running.")
         return 0
 
     if not start_tool_docker_guard("WEB-BRIDGE"):
@@ -105,9 +105,9 @@ def start(settings: dict) -> int:
     if rc != 0:
         return 1
 
-    eprint("[WEB-BRIDGE] Container started.")
-    eprint(f"[WEB-BRIDGE] SearXNG endpoint: http://127.0.0.1:{port}/search")
-    eprint(f"[WEB-BRIDGE] Health: http://127.0.0.1:{port}/healthz")
+    eprint(f"{tag('WEB-BRIDGE')} Container started.")
+    eprint(f"{tag('WEB-BRIDGE')} SearXNG endpoint: http://127.0.0.1:{port}/search")
+    eprint(f"{tag('WEB-BRIDGE')} Health: http://127.0.0.1:{port}/healthz")
     return 0
 
 
@@ -121,7 +121,7 @@ def restart(settings: dict) -> int:
     rc = restart_tool_container(settings, "WEB-BRIDGE")
     if rc == 0:
         port = settings["port"]
-        eprint(f"[WEB-BRIDGE] SearXNG endpoint: http://127.0.0.1:{port}/search")
+        eprint(f"{tag('WEB-BRIDGE')} SearXNG endpoint: http://127.0.0.1:{port}/search")
     return rc
 
 

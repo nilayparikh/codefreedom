@@ -92,6 +92,10 @@ _TAG_CYAN = frozenset({
     "PLAN", "SECRETS", "RECIPE", "STORE", "PROXY", "RESTORE", "VSCODE",
     "TOOLS", "AGENT", "DOCTOR", "SANDBOX", "MCP", "FETCH", "INFO",
     "ENV", "GPU", "IMAGE", "CONTAINER", "NATIVE", "CONFIG", "LOCAL",
+    "COMMIT", "PUSH", "LSP", "LEAN-CTX", "CODEX", "PI",
+    "CHROME", "CLEAN", "EXEC", "GITHUB", "INIT", "MIMO",
+    "OPENCODE", "PROFILE", "PROFILES", "RUN", "UPDATE",
+    "WEB", "WEB-BRIDGE",
 })
 
 

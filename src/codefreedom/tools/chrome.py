@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.cli.docker_utils import (
     container_is_running,
     init_tool_redirect,
@@ -88,7 +88,7 @@ def start(settings: dict) -> int:
     env_vars = settings.get("env", {})
 
     if container_is_running(container_name):
-        eprint(f"[CHROME] Container '{container_name}' is already running.")
+        eprint(f"{tag('CHROME')} Container '{container_name}' is already running.")
         return 0
 
     if not start_tool_docker_guard("CHROME"):
@@ -106,7 +106,7 @@ def start(settings: dict) -> int:
         settings["env"]["CDP_PROXY_PORT"] = str(cdp_proxy_port)
 
     resolved_data = resolve_data_dir(settings["data_dir"])
-    eprint(f"[CHROME]   CDP port: {port}  MCP port: {mcp_port}")
+    eprint(f"{tag('CHROME')}   CDP port: {port}  MCP port: {mcp_port}")
 
     docker_args = [
         "--shm-size=512m",
@@ -168,7 +168,7 @@ def url(settings: dict) -> int:
     port = settings["port"]
 
     if not container_is_running(container_name):
-        eprint("[CHROME] Chrome container is not running.")
+        eprint(f"{tag('CHROME')} Chrome container is not running.")
         eprint("   Use: cf run tools start.")
         return 1
 

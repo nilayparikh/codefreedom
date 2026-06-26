@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 
 MERGEABLE_EXTENSIONS = {".yaml", ".yml", ".json"}
 
@@ -110,7 +110,7 @@ def _deepdiff_merge(
         existing_obj = yaml.safe_load(existing)
         incoming_obj = yaml.safe_load(incoming)
     except yaml.YAMLError as e:
-        eprint(f"[RECIPE] Warning: YAML parse error in {display_path}: {e}")
+        eprint(f"{tag('RECIPE')} Warning: YAML parse error in {display_path}: {e}")
         return incoming
 
     # Handle edge cases

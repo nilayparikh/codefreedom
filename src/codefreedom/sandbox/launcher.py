@@ -147,7 +147,7 @@ def run_sandbox(
         check=False,
     )
     if _inspect.returncode != 0:
-        eprint(f"[IMAGE] Pulling '{image}'...")
+        eprint(f"{tag('IMAGE')} Pulling '{image}'...")
         pull = subprocess.run(
             ["docker", "pull", image],
             capture_output=True,
@@ -156,7 +156,7 @@ def run_sandbox(
             check=False,
         )
         if pull.returncode != 0:
-            eprint(f"[ERROR] Failed to pull image '{image}'.")
+            eprint(f"{tag('ERROR')} Failed to pull image '{image}'.")
             if pull.stderr:
                 eprint(f"   {pull.stderr.strip()}")
             return 1
@@ -164,7 +164,7 @@ def run_sandbox(
         pull_if_stale(image, label="IMAGE")
 
     # ── Start ephemeral container ─────────────────────────────────────────────
-    eprint(f"[RUN] Creating ephemeral container '{container_name}'...")
+    eprint(f"{tag('RUN')} Creating ephemeral container '{container_name}'...")
     create = subprocess.run(
         ["docker", "run", "-d", "--rm", "--name", container_name]
         + base_opts
@@ -176,14 +176,14 @@ def run_sandbox(
         check=False,
     )
     if create.returncode != 0:
-        eprint("[ERROR] Failed to start container.")
+        eprint(f"{tag('ERROR')} Failed to start container.")
         if create.stderr:
             eprint(f"   {create.stderr.strip()}")
         return 1
-    eprint("[SANDBOX] Container started.")
+    eprint(f"{tag('SANDBOX')} Container started.")
 
     # ── Exec agent into the container ─────────────────────────────────────────
-    eprint("[EXEC] Attaching agent session...")
+    eprint(f"{tag('EXEC')} Attaching agent session...")
 
     exec_cmd = list(exec_image_cmd)
     for flag_set in (exec_extra_env, env_flags):
@@ -203,7 +203,7 @@ def run_sandbox(
     except KeyboardInterrupt:
         exit_code = 130
     finally:
-        eprint(f"[CLEAN] Stopping container '{container_name}'...")
+        eprint(f"{tag('CLEAN')} Stopping container '{container_name}'...")
         subprocess.run(
             ["docker", "stop", container_name],
             capture_output=True,
@@ -216,7 +216,7 @@ def run_sandbox(
             timeout=5,
             check=False,
         )
-        eprint("[SANDBOX] Container cleaned up.")
+        eprint(f"{tag('SANDBOX')} Container cleaned up.")
 
     return exit_code
 
@@ -233,12 +233,12 @@ def sandbox_status(container_prefix: str) -> int:
         )
         output = result.stdout.strip()
         if not output:
-            eprint(f"[SANDBOX] No containers found with prefix '{container_prefix}'.")
+            eprint(f"{tag('SANDBOX')} No containers found with prefix '{container_prefix}'.")
             return 0
         eprint(output)
         return 0
     except subprocess.SubprocessError as exc:
-        eprint(f"[ERROR] Failed to list containers: {exc}")
+        eprint(f"{tag('ERROR')} Failed to list containers: {exc}")
         return 1
 
 
@@ -254,16 +254,16 @@ def sandbox_stop(container_prefix: str) -> int:
         )
         ids = [cid for cid in find.stdout.strip().split("\n") if cid]
         if not ids:
-            eprint(f"[SANDBOX] No containers found with prefix '{container_prefix}'.")
+            eprint(f"{tag('SANDBOX')} No containers found with prefix '{container_prefix}'.")
             return 0
 
         for cid in ids:
-            eprint(f"[SANDBOX] Stopping container {cid}...")
+            eprint(f"{tag('SANDBOX')} Stopping container {cid}...")
             subprocess.run(["docker", "stop", cid], check=False, timeout=15)
             subprocess.run(["docker", "rm", "-f", cid], check=False, timeout=5)
 
-        eprint("[SANDBOX] Containers stopped.")
+        eprint(f"{tag('SANDBOX')} Containers stopped.")
         return 0
     except subprocess.SubprocessError as exc:
-        eprint(f"[ERROR] Failed to stop containers: {exc}")
+        eprint(f"{tag('ERROR')} Failed to stop containers: {exc}")
         return 1

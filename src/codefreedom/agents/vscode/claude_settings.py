@@ -192,11 +192,11 @@ def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
 
     profiles_path = _resolve_profiles_path()
     if not profiles_path.exists():
-        eprint(f"[ERROR] Profiles file not found: {profiles_path}")
+        eprint(f"{tag('ERROR')} Profiles file not found: {profiles_path}")
         eprint("   Run: codefreedom setup init")
         return 1
 
-    eprint(f"[VSCODE] Loading env chain (claude component) from {workspace_dir}...")
+    eprint(f"{tag('VSCODE')} Loading env chain (claude component) from {workspace_dir}...")
     try:
         resolve_agent_runtime(
             "claude-code",
@@ -206,13 +206,13 @@ def cmd_vscode_claude_config(args: argparse.Namespace) -> int:
             validate_profile=False,
         )
     except ProfileError as e:
-        eprint(f"[ERROR] {e}")
+        eprint(f"{tag('ERROR')} {e}")
         return 1
 
     try:
         profile_env = load_profile_env(profile_name, profiles_path)
     except ProfileError as e:
-        eprint(f"[ERROR] {e}")
+        eprint(f"{tag('ERROR')} {e}")
         return 1
 
     env_array, referenced_secrets = _build_vscode_environment_variables(
