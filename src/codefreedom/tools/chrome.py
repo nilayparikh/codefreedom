@@ -182,22 +182,17 @@ def url(settings: dict) -> int:
 
 def run(args: argparse.Namespace) -> int:
     """Execute the chrome tool subcommand. Returns exit code."""
-    settings = _load_profile()
+    from codefreedom.core.tool_base import dispatch_tool_run
 
-    # CLI --port flag overrides profile only when explicitly provided
-    if getattr(args, "port", None) and args.port != _DEFAULT_PORT:
-        settings["port"] = args.port
-
-    action = args.action or "status"
-    from codefreedom.cli.common import run_tool_action
-
-    return run_tool_action(
-        action,
-        start_fn=lambda: start(settings),
-        stop_fn=lambda: stop(settings),
-        restart_fn=lambda: restart(settings),
-        status_fn=lambda: status(settings),
-        url_fn=lambda: url(settings),
+    return dispatch_tool_run(
+        args,
+        load_profile=_load_profile,
+        default_port=_DEFAULT_PORT,
+        start=start,
+        stop=stop,
+        restart=restart,
+        status=status,
+        url=url,
     )
 
 
