@@ -12,64 +12,109 @@ tini (PID 1)
         └── exec litellm on :4000
 ```
 
-- **Non-root:** Runs as `codefreedom` user (uid 1000).
-- **Healthcheck:** `GET /health/liveliness`.
-- **No database extra:** `prisma db push` creates the schema directly — no `litellm-proxy-extras` needed.
+- **Non-root:** Runs as `litellm` user (uid 999).
+- **Healthcheck:** TCP socket connect to `127.0.0.1:4000`.
+- **No database extra:** `prisma db push` creates the schema directly -- no `litellm-proxy-extras` needed.
 
 ## Build
 
+The image uses a three-stage build. The PG base and LiteLLM base are pre-built checkpoints pushed to the registry; the final image is a thin runtime overlay.
+
 ```bash
+# Stage 1 -- PG base (rarely rebuilt, quarterly at most)
 docker build \
-  -t docker.io/nilayparikh/codefreedom:litellm-latest \
-  -f docker/litellm/Dockerfile.LiteLLM docker/litellm/
+  -t nilayparikh/codefreedom:litellm-pg-base-latest \
+  -f docker/litellm/Dockerfile.PgBase docker/litellm/
+
+# Stage 2 -- LiteLLM base (rebuild on LITELLM_TAG, patch, or plugin changes)
+docker build \
+  -t nilayparikh/codefreedom:litellm-base-v1.87.1 \
+  -f docker/litellm/Dockerfile.LitellmBase docker/litellm/
+
+# Stage 3 -- Final runtime image (fast, ~1-2 min)
+docker build \
+  -t nilayparikh/codefreedom:litellm-latest \
+  -f docker/litellm/Dockerfile.LitellmFinal docker/litellm/
 ```
 
 ### Build Args
 
-| Arg                | Default                                      | Description             |
-| ------------------ | -------------------------------------------- | ----------------------- |
-| `IMAGE_VERSION`    | `0.1.0`                                      | OCI image version label |
-| `LITELLM_FORK_URL` | `https://github.com/nilayparikh/litellm.git` | LiteLLM git fork        |
-| `LITELLM_TAG`      | `v1.87.1`                                    | Pinned LiteLLM git tag  |
-| `PG_VERSION`       | `18.4`                                       | PostgreSQL version      |
-| `PG_SOURCE_URL`    | `https://github.com/postgres/postgres.git`   | PG source repo          |
-| `PG_TAG`           | `REL_18_4`                                   | PG git tag              |
+| Arg                | Default                                      | Stage  | Description             |
+| ------------------ | -------------------------------------------- | ------ | ----------------------- |
+| `PG_VERSION`       | `18.4`                                       | PgBase | PostgreSQL version      |
+| `PG_SOURCE_URL`    | `https://github.com/postgres/postgres.git`   | PgBase | PG source repo          |
+| `PG_TAG`           | `REL_18_4`                                   | PgBase | PG git tag              |
+| `LITELLM_FORK_URL` | `https://github.com/nilayparikh/litellm.git` | Base   | LiteLLM git fork        |
+| `LITELLM_TAG`      | `v1.87.1`                                    | Base   | Pinned LiteLLM git tag  |
+| `IMAGE_VERSION`    | `1.0.0`                                      | Final  | OCI image version label |
+| `PG_BASE_IMAGE`    | `nilayparikh/codefreedom:litellm-pg-base-latest` | Base | PG base image       |
+| `LITELLM_BASE_IMAGE` | `nilayparikh/codefreedom:litellm-base-v1.87.1` | Final | LiteLLM base image  |
 
 Override any arg at build time with `--build-arg`.
 
 ## Multi-Stage Architecture
 
-### Stage 1 — `pg-builder`
+### Stage 1 -- `Dockerfile.PgBase`
 
-Builds PostgreSQL 18.4 from source (stripped: no readline, zlib, PAM, LDAP, GSSAPI, SELinux, systemd, NLS, debug). Keeps ICU + OpenSSL for collation correctness and TLS.
+Builds PostgreSQL 18.4 from source (stripped: no readline, zlib, PAM, LDAP, GSSAPI, SELinux, systemd, NLS, debug). Keeps ICU + OpenSSL for collation correctness and TLS. Produces `/usr/local/pgsql` binaries only.
 
-### Stage 2 — `litellm-builder`
+### Stage 2 -- `Dockerfile.LitellmBase`
 
-Installs LiteLLM from the git fork at the pinned tag with `--no-deps` (skipping `litellm-enterprise`, `granian`, etc.), then installs the curated minimal dependency set from `requirements.txt`. Applies the WebSearch count patch and pre-generates Prisma client/engine binaries.
+Installs LiteLLM from the git fork at the pinned tag with `--no-deps` (skipping `litellm-enterprise`, `granian`, etc.), then installs the curated minimal dependency set from `requirements.txt`. Applies all 5 patches. Copies plugins and PG binaries. Pre-generates Prisma client/engine binaries.
 
-### Stage 3 — `runtime`
+**Not directly runnable** -- this is a build artifact.
 
-Combines PG binaries + LiteLLM site-packages + tini + entrypoint. Exposes port 4000. Declares volumes for PG data and backups.
+### Stage 3 -- `Dockerfile.LitellmFinal`
+
+Thin runtime overlay: adds tini, gosu, nodejs, runtime libs. Copies everything from the LiteLLM base. Sets up the `litellm` user, volumes, entrypoint, and healthcheck. Exposes port 4000.
+
+Build time: ~1-2 minutes (no compilation, no pip install, no Prisma).
 
 ## Files
 
-| File                       | Purpose                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------- |
-| `Dockerfile.LiteLLM`       | Multi-stage build definition                                                  |
-| `entrypoint.sh`            | Boots PG, pushes Prisma schema, starts LiteLLM                                |
-| `requirements.txt`         | Curated minimal dependency list                                               |
-| `patch_websearch_count.py` | Injects `server_tool_use.web_search_requests` into LiteLLM responses          |
-| `patch_responses_azure.py` | Disables Azure Responses API auto-routing (not yet reliable on Azure Foundry) |
+| File                       | Purpose                                                                  |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `Dockerfile.PgBase`        | Stage 1: PostgreSQL build from source                                    |
+| `Dockerfile.LitellmBase`   | Stage 2: LiteLLM + deps + patches + Prisma (build artifact)             |
+| `Dockerfile.LitellmFinal`  | Stage 3: Runtime overlay with user setup, volumes, healthcheck           |
+| `entrypoint.sh`            | Boots PG, pushes Prisma schema, symlinks plugins, starts LiteLLM        |
+| `requirements.txt`         | Curated minimal dependency list                                          |
+| `patches/`                 | Build-time patches applied to LiteLLM site-packages                      |
+| `plugins/`                 | CustomLogger plugins baked into the image                                |
 
 ## Patches
 
-### WebSearch Count Display (`patch_websearch_count.py`)
+All patches are applied at build time in `Dockerfile.LitellmBase`. Each modifies the installed site-packages file in place. Idempotent; builds fail loudly if target code changes.
 
-LiteLLM's `try_short_circuit_search` returns `"usage": {"input_tokens": 0, "output_tokens": 0}` — omitting the `server_tool_use.web_search_requests` field that Claude Code's TUI needs to display "Did N searches." This patch injects the missing field at build time. Idempotent; fails loudly if the target line changes.
+### WebSearch Count Display (`patches/patch_websearch_count.py`)
 
-### Azure Responses API (`patch_responses_azure.py`)
+Injects `server_tool_use.web_search_requests` into LiteLLM responses so Claude Code's TUI displays "Did N searches." Patches the short-circuit path, agentic loop typed-plan path, and legacy path.
 
-LiteLLM 1.87.x auto-routes GPT-5.x chat completions through the Azure Responses API when `reasoning_effort` + `tools` or `reasoning_summary` are present. Since Azure Foundry (`services.ai.azure.com`) does not reliably serve the Responses API yet, this patch restricts auto-routing to OpenAI only.
+### Retry-After Type Cast (`patches/patch_retry_after_type.py`)
+
+Wraps `min_timeout` in `float()` inside `_calculate_retry_after` to fix `TypeError: '>' not supported between instances of 'str' and 'float'` when `retry_after` is set via `os.environ/` (always a string).
+
+### Anthropic Fake Stream Logging (`patches/patch_anthropic_fake_stream_logging.py`)
+
+Adds an early-return guard for `FakeAnthropicMessagesStreamIterator` in `_handle_anthropic_messages_response_logging`. Prevents `ValidationError` spam on every streaming request when `use_chat_completions_url_for_anthropic_messages = True`.
+
+### Parse Search Tools Noise (`patches/patch_parse_search_tools_noise.py`)
+
+Suppresses the repeated "LiteLLM: Proxy initialized with Search Tools" print that fires every 30 seconds on the `add_deployment` scheduler job. Adds a `_search_tools_printed` sentinel.
+
+### Azure Responses API (`patches/patch_responses_azure.py`)
+
+Removes `"azure"` from the Responses API auto-routing condition in `main.py`. Azure Foundry does not reliably serve the Responses API yet; restricts auto-routing to OpenAI only.
+
+## Plugins
+
+CustomLogger plugins baked into `/app/litellm-plugins/`. The entrypoint symlinks them into the config mount so LiteLLM can find them. Plugin YAML configs are user-editable on the host.
+
+| Plugin | File | Purpose |
+| --- | --- | --- |
+| Reasoning Efforts | `plugins/reasoning_efforts_mapping.py` | Translates reasoning-effort signals across provider standards |
+| System Message Merger | `plugins/system_message_merger.py` | Merges multiple system messages into one for models that require it |
+| Image Router | `plugins/image_router.py` | Routes image payloads through VLMs for text-only target models |
 
 ## Usage
 
@@ -104,7 +149,7 @@ codefreedom run proxy status   # check status
 
 ## Security
 
-- PostgreSQL listens on `localhost:5432` only — never exposed to the host network.
+- PostgreSQL listens on `localhost:5432` only -- never exposed to the host network.
 - `pg_hba.conf` uses `trust` for local connections only (single-container trust boundary).
-- Runs as non-root `codefreedom` user (uid 1000).
+- Runs as non-root `litellm` user (uid 999).
 - No SSH, no TCP PG listener outside the container.

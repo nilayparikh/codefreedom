@@ -37,7 +37,22 @@ def _all_dockerfiles() -> list[Path]:
     return sorted(DOCKER_DIR.rglob("Dockerfile.*"))
 
 
+def _docker_can_run_linux() -> bool:
+    try:
+        result = subprocess.run(
+            ["docker", "info", "--format", "{{.OSType}}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0 and "linux" in result.stdout.lower()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
 def _docker_linux_image_available(image: str) -> bool:
+    if not _docker_can_run_linux():
+        return False
     try:
         result = subprocess.run(
             [
@@ -133,7 +148,7 @@ class TestDockerfileLint:
 
     @pytest.mark.parametrize(
         "dockerfile",
-        [str(f.relative_to(REPO_ROOT)) for f in _all_dockerfiles()],
+        [f.relative_to(REPO_ROOT).as_posix() for f in _all_dockerfiles()],
         ids=lambda p: p,
     )
     def test_hadolint(self, dockerfile: str) -> None:
@@ -164,7 +179,7 @@ class TestDockerfileLint:
 
     @pytest.mark.parametrize(
         "dockerfile",
-        [str(f.relative_to(REPO_ROOT)) for f in _all_dockerfiles()],
+        [f.relative_to(REPO_ROOT).as_posix() for f in _all_dockerfiles()],
         ids=lambda p: p,
     )
     def test_dockerfile_has_from(self, dockerfile: str) -> None:
@@ -180,7 +195,7 @@ class TestDockerfileLint:
 
     @pytest.mark.parametrize(
         "dockerfile",
-        [str(f.relative_to(REPO_ROOT)) for f in _all_dockerfiles()],
+        [f.relative_to(REPO_ROOT).as_posix() for f in _all_dockerfiles()],
         ids=lambda p: p,
     )
     def test_dockerfile_has_version_arg(self, dockerfile: str) -> None:
@@ -194,7 +209,7 @@ class TestDockerfileLint:
 
     @pytest.mark.parametrize(
         "dockerfile",
-        [str(f.relative_to(REPO_ROOT)) for f in _all_dockerfiles()],
+        [f.relative_to(REPO_ROOT).as_posix() for f in _all_dockerfiles()],
         ids=lambda p: p,
     )
     def test_dockerfile_has_labels(self, dockerfile: str) -> None:

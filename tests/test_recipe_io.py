@@ -6,6 +6,7 @@ end-to-end recipe apply with mocked network and real filesystem.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest import mock
 
@@ -533,7 +534,8 @@ class TestGeneratedArtifacts:
 
         captured = capsys.readouterr()
         assert "gen-recipe" in captured.out
-        assert "config/scripts/setup.sh" in captured.out
+        expected = os.path.join("config", "scripts", "setup.sh")
+        assert expected in captured.out
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -659,5 +661,7 @@ def test_plan_recipe_splits_by_key(monkeypatch, tmp_path, capsys):
     assert rc == 0
 
     captured = capsys.readouterr()
-    assert "config/profiles/claude-code.yaml" in captured.out
-    assert "config/profiles/mimo-code.yaml" in captured.out
+    expected_claude = os.path.join("config", "profiles", "claude-code.yaml")
+    expected_mimo = os.path.join("config", "profiles", "mimo-code.yaml")
+    assert expected_claude in captured.out
+    assert expected_mimo in captured.out
