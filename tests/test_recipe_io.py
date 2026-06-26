@@ -533,7 +533,7 @@ class TestGeneratedArtifacts:
 
         captured = capsys.readouterr()
         assert "gen-recipe" in captured.out
-        assert "scripts/setup.sh" in captured.out
+        assert "config/scripts/setup.sh" in captured.out
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -659,5 +659,5 @@ def test_plan_recipe_splits_by_key(monkeypatch, tmp_path, capsys):
     assert rc == 0
 
     captured = capsys.readouterr()
-    assert "profiles/claude-code.yaml" in captured.out
-    assert "profiles/mimo-code.yaml" in captured.out
+    assert "config/profiles/claude-code.yaml" in captured.out
+    assert "config/profiles/mimo-code.yaml" in captured.out
