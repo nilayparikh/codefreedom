@@ -7,8 +7,7 @@
 CodeFreedom solves three problems:
 
 1. **Model lock-in** — switch LLM providers without reconfiguring your code agent.
-2. **Environment chaos** — isolated, reproducible environments per project with GPU support.
-3. **Config sprawl** — profiles, proxy routing, and sandbox settings managed from one place (`~/.codefreedom`).
+2. **Config sprawl** — profiles, proxy routing, and tool settings managed from one place (`~/.codefreedom`).
 
 ## Behavioral Guidelines
 
@@ -63,10 +62,6 @@ src/codefreedom/
 │       ├── doctor.py        # cf manage doctor: env checks, agent binary checks
 │       ├── update.py        # cf manage update: image/PyPI checks
 │       └── admin.py         # cf manage admin: backup/restore/prune/inspect
-├── sandbox/
-│   ├── launcher.py          # run_sandbox(), sandbox_status(), sandbox_stop()
-│   ├── signals.py           # Signal forwarding
-│   └── terminal.py          # Terminal allocation
 ├── tools/
 │   ├── registry.py          # acquire_tools(), release_tools(), start_all_tools()
 │   ├── chrome.py            # Chrome MCP tool
@@ -151,7 +146,7 @@ ruff check src/ tests/ && mypy src/ --ignore-missing-imports
 
 ### `--dangerously-skip-permissions`
 
-Sandbox mode **always** passes this to Claude CLI inside the container. Local mode only passes it if the user explicitly requests it.
+Only pass this if the user explicitly requests it.
 
 ### Unicode breaks Windows CI
 

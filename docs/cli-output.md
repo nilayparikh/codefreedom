@@ -35,7 +35,6 @@ All `eprint()` messages must use an uppercase `[COMPONENT]` prefix. No nested pr
 | Recipe             | `[RECIPE]`                        |
 | Update             | `[UPDATE]`                        |
 | VS Code            | `[VSCODE]`                        |
-| Launcher/sandbox   | `[SANDBOX]`                       |
 | Environment loader | `[ENV]`                           |
 | Profile loader     | `[PROFILE]`                       |
 | MCP                | `[MCP]`                           |

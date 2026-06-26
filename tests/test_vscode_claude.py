@@ -409,11 +409,6 @@ class TestVscodeSettingsGenerate:
                             "ANTHROPIC_DEFAULT_SONNET_MODEL": "CodeFreedom/Pro",
                             "ANTHROPIC_DEFAULT_HAIKU_MODEL": "CodeFreedom/Flash",
                         },
-                        "sandbox": {
-                            "env": {
-                                "IS_SANDBOX": "1",
-                            }
-                        },
                     }
                 }
             },
@@ -449,9 +444,6 @@ class TestVscodeSettingsGenerate:
         # But the env var NAME should appear in the stderr notice
         assert "ANTHROPIC_AUTH_TOKEN" in captured.err
         assert "${env:ANTHROPIC_AUTH_TOKEN}" in captured.err
-
-        # Sandbox-only key filtered
-        assert "IS_SANDBOX" not in env_names
 
         # selectedModel pulled from CLAUDE_MODEL
         assert payload["claudeCode.selectedModel"] == "CodeFreedom/Flash"
@@ -706,7 +698,6 @@ class TestSubprocessDispatch:
         """cf run agent claude-code --help"""
         result = self._run("run", "agent", "claude-code", "--help")
         assert result.returncode == 0, result.stderr
-        assert "--sandbox" in result.stdout
         assert "--profile" in result.stdout
 
     def test_agent_list_succeeds(self):

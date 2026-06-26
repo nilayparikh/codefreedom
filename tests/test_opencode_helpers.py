@@ -122,7 +122,7 @@ class TestOpenCodeEnvLoading:
         monkeypatch.setattr(
             common_mod,
             "load_profile_with_tools",
-            lambda name, path, env, mode, **kw: ({}, {}, [], 0),
+            lambda name, path, env, mode, **kw: ({}, [], 0),
         )
         monkeypatch.setattr(
             common_mod, "acquire_and_run", lambda sid, tools, name, fn: 0
@@ -132,10 +132,6 @@ class TestOpenCodeEnvLoading:
             list_profiles=False,
             profile="default",
             opencode_action=None,
-            sandbox=False,
-            gpu_cuda=False,
-            gpu_rocm=False,
-            run_as_me=False,
             agent_args=[],
         )
         opencode_mod.run(ns)

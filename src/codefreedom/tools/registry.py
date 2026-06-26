@@ -75,12 +75,9 @@ _MCP_TOOLS: dict[str, _McpTool] = {
 def generate_session_id(mode: str) -> str:
     """Generate a unique session ID.
 
-    Sandbox mode: ``codefreedom-XXXX`` (doubles as Docker container name).
-    Local mode:   ``codefreedom-local-XXXX``.
+    Local mode: ``codefreedom-local-XXXX``.
     """
     suffix = secrets.token_hex(2)  # 4 hex chars
-    if mode == "sandbox":
-        return f"codefreedom-{suffix}"
     return f"codefreedom-local-{suffix}"
 
 

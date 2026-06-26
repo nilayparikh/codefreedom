@@ -45,7 +45,7 @@
 #     -p 9222:9222 \
 #     -p 9223:9223 \
 #     --shm-size=512m \
-#     -v ~/.codefreedom/sandbox/tools/chrome:/data/chrome \
+#     -v ~/.codefreedom/tools/chrome:/data/chrome \
 #     codefreedom:chrome-latest
 #
 # CDP connect:  devtools://devtools/bundled/inspector.html?ws=127.0.0.1:9222

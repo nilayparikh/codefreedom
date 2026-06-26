@@ -312,8 +312,6 @@ def _categorize(rel_path: str) -> str:
         return "pi-code"
     if rel_path.startswith("tools/"):
         return "tools"
-    if rel_path.startswith("sandbox/"):
-        return "sandbox"
     if rel_path.startswith("proc/"):
         return "proc"
     if rel_path.startswith("pg/"):

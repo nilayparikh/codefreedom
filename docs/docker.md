@@ -15,16 +15,13 @@ Docker tags **must be lowercase**. Examples:
 
 | Image | Dockerfile | Use Case |
 |---|---|---|
-| **Ubuntu** | `docker/agents/Dockerfile.Agents` (target: ubuntu) | CPU-only, all agents |
-| **CUDA** | `docker/agents/Dockerfile.Agents` (target: cuda) | NVIDIA GPU, all agents |
-| **ROCm** | `docker/agents/Dockerfile.Agents` (target: rocm) | AMD GPU, all agents |
 | **Chrome** | `docker/chrome/Dockerfile.Chrome` | Headless Chromium (CDP port 9222) |
 | **Web** | `docker/web/Dockerfile.Web` | Camoufox MCP (stealth web search) |
 | **GitHub MCP** | `docker/github/Dockerfile.Github` | GitHub API tools (port 8082) |
 | **LiteLLM** | `docker/litellm/Dockerfile.LitellmFinal` | LLM proxy with embedded PostgreSQL |
-| **LiteLLM Base** | `docker/litellm/Dockerfile.LiteLLM` | LiteLLM base image (monthly rebuild) |
-| **PG Base** | `docker/litellm/Dockerfile.PGBase` | PostgreSQL base image (quarterly rebuild) |
-| **Web Bridge** | `docker/web-bridge/Dockerfile.Bridge` | SearXNG → Camoufox bridge |
+| **LiteLLM Base** | `docker/litellm/Dockerfile.LitellmBase` | LiteLLM base image (monthly rebuild) |
+| **PG Base** | `docker/litellm/Dockerfile.PgBase` | PostgreSQL base image (quarterly rebuild) |
+| **Web Bridge** | `docker/web-bridge/Dockerfile.Bridge` | SearXNG -> Camoufox bridge |
 
 ## Docker Workflows
 
@@ -32,7 +29,6 @@ All Docker workflows are manual trigger only (`workflow_dispatch`).
 
 | Workflow | Image | Inputs |
 |---|---|---|
-| `docker-agents.yml` | Unified agents (ubuntu/cuda/rocm) | `platform` (default: all) |
 | `docker-chrome.yml` | Chrome browser | `tag` (required), `latest` (default: true) |
 | `docker-litellm.yml` | LiteLLM proxy | `tag` (required), `latest` (default: true), `litellm_base_tag` (optional) |
 | `docker-web.yml` | Camoufox MCP | `tag` (required), `latest` (default: true) |
@@ -47,14 +43,14 @@ The proxy always runs via `docker compose` against `~/.codefreedom/config/proxy/
 
 ## Patches
 
-Patches in `docker/litellm/patches/` are applied during image build. If you change LiteLLM and a patch can no longer find its target, the build fails loudly — do not silently fall back.
+Patches in `docker/litellm/patches/` are applied during image build. If you change LiteLLM and a patch can no longer find its target, the build fails loudly -- do not silently fall back.
 
 ## LiteLLM Checkpoint Builds
 
 The LiteLLM image uses a 3-stage checkpoint build system:
 
-1. **PG Base** (`litellm-pg-base`) — PostgreSQL compiled from source (quarterly rebuild)
-2. **LiteLLM Base** (`litellm-base`) — LiteLLM + dependencies + Prisma (monthly rebuild)
-3. **LiteLLM Final** (`litellm`) — Patches + plugins + entrypoint (every PR, ~1-2 min)
+1. **PG Base** (`litellm-pg-base`) -- PostgreSQL compiled from source (quarterly rebuild)
+2. **LiteLLM Base** (`litellm-base`) -- LiteLLM + dependencies + Prisma (monthly rebuild)
+3. **LiteLLM Final** (`litellm`) -- Patches + plugins + entrypoint (every PR, ~1-2 min)
 
 This reduces CI build time from 30-40 minutes to 1-2 minutes for routine changes.

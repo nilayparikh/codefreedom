@@ -27,6 +27,7 @@ from __future__ import annotations
     | `tag()` | `from codefreedom.log import tag` |
     | `load_config()` | `from codefreedom.config import load_config` |
     | `resolve_var()` / `resolve_dict()` / `interpolate_all()` | `from codefreedom.config.interpolation import ...` |
+    | `_VAR_REF_RE` | `from codefreedom.config.interpolation import _VAR_REF_RE` |
     | `ConfigError` | `from codefreedom.config.errors import ConfigError` |
     | `ProfileError` | `from codefreedom.config.errors import ProfileError` |
     | YAML loading | `from codefreedom.config.yaml_utils import safe_load` |
@@ -34,8 +35,7 @@ from __future__ import annotations
     | Proxy URL detection | `from codefreedom.core.agent_runtime import detect_proxy_url` |
     | Proxy model fetch | `from codefreedom.core.agent_runtime import fetch_proxy_models` |
     | Provider model building | `from codefreedom.core.agent_runtime import build_provider_models` |
-    | Sandbox preparation | `from codefreedom.sandbox.launcher import prepare_sandbox, SandboxPrep` |
-    | Sandbox container run | `from codefreedom.sandbox.launcher import run_sandbox` |
+    | Container lifecycle | `from codefreedom.core.container import ...` |
     | Docker digest helpers | `from codefreedom.docker.pull import normalize_ref, parse_image_ref, get_local_digest` |
     | `resolve_agent_runtime()` | `from codefreedom.config.runtime import resolve_agent_runtime` |
     | `list_profiles()` | `from codefreedom.config.runtime import list_profiles` |
@@ -55,7 +55,7 @@ from __future__ import annotations
     | Green | `OK`, `SET`, `SAME`, `CREATE`, `MKDIR`, `BACKUP`, `PRUNE`, `KEEP` |
     | Yellow | `WARN`, `SKIP`, `DEINIT`, `ADMIN`, `DELETE` |
     | Red (bold) | `FAIL`, `MISSING`, `ERROR` |
-    | Cyan | `PLAN`, `SECRETS`, `RECIPE`, `STORE`, `PROXY`, `RESTORE`, `VSCODE`, `TOOLS`, `AGENT`, `DOCTOR`, `SANDBOX`, `MCP`, `FETCH`, `INFO`, `ENV`, `GPU`, `IMAGE`, `CONTAINER`, `NATIVE`, `CONFIG`, `LOCAL`, `COMMIT`, `PUSH`, `CODEX`, `PI`, `LSP`, `LEAN-CTX`, `CHROME`, `CLEAN`, `EXEC`, `GITHUB`, `INIT`, `MIMO`, `OPENCODE`, `PROFILE`, `PROFILES`, `RUN`, `UPDATE`, `WEB`, `WEB-BRIDGE` |
+    | Cyan | `PLAN`, `SECRETS`, `RECIPE`, `STORE`, `PROXY`, `RESTORE`, `VSCODE`, `TOOLS`, `AGENT`, `DOCTOR`, `SANDBOX`, `MCP`, `FETCH`, `INFO`, `ENV`, `GPU`, `IMAGE`, `CONTAINER`, `NATIVE`, `CONFIG`, `LOCAL`, `COMMIT`, `PUSH`, `LSP`, `LEAN-CTX`, `CODEX`, `PI`, `CHROME`, `CLEAN`, `EXEC`, `GITHUB`, `INIT`, `MIMO`, `OPENCODE`, `PROFILE`, `PROFILES`, `RUN`, `UPDATE`, `WEB`, `WEB-BRIDGE` |
     | Dim | Any tag not in the above set |
 
 - Tags not in the color map appear dim. If a tag deserves color, add it to `_TAG_CYAN` (or the appropriate set) in `log.py`.
@@ -115,9 +115,8 @@ def load_config(config_dir: Path) -> ResolvedConfig:
 Every agent module (`mimo.py`, `opencode.py`, `codex.py`, `pi.py`) must:
 
 1. Import shared proxy helpers from `codefreedom.core.agent_runtime` instead of defining `_detect_proxy_url()` / `_fetch_proxy_models()` / `_build_provider_models()` inline. Thin `_`-prefixed wrappers are acceptable for test compatibility.
-2. Call `prepare_sandbox()` from `codefreedom.sandbox.launcher` for shared image selection, container naming, env-flag building, and run-as-me identity resolution. Each agent's `run_docker()` keeps only its agent-specific config generation + volume mounts.
-3. Use `run_args = getattr(args, "agent", None)` pattern for optional args (not `args.agent`).
-4. All `eprint()` output must use `tag()` — never bare `"[TAG]"` strings.
+2. Use `run_args = getattr(args, "agent", None)` pattern for optional args (not `args.agent`).
+3. All `eprint()` output must use `tag()` — never bare `"[TAG]"` strings.
 
 ## 10. Tool Module Pattern
 

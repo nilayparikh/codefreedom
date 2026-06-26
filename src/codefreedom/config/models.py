@@ -67,19 +67,10 @@ class PostgresSettings(BaseModel, extra="forbid"):
 
 
 class CommonSection(BaseModel, extra="forbid"):
-    sandbox_images: Dict[str, str] = Field(default_factory=dict)
-    sandbox_env: Dict[str, str] = Field(default_factory=dict)
     proxy: ProxySettings = Field(default_factory=ProxySettings)
     postgres: PostgresSettings = Field(default_factory=PostgresSettings)
     suffix_id: str = "${SUFFIX_ID:-0000}"
 
-
-class SandboxImages(BaseModel, extra="forbid"):
-    """Sandbox images keyed by GPU type."""
-    default: Optional[str] = None
-    unified: Optional[str] = None
-    cuda: Optional[str] = None
-    rocm: Optional[str] = None
 
 
 # ── Mode-specific overrides ─────────────────────────────────────────────
@@ -92,10 +83,8 @@ class ModeEnv(BaseModel, extra="forbid"):
 
 class ProfileEntry(BaseModel, extra="forbid"):
     description: str = ""
-    sandbox_images: Optional[Dict[str, str]] = None
     tools: Optional[List[str]] = None
     env: Dict[str, str] = Field(default_factory=dict)
-    sandbox: Optional[ModeEnv] = None
     local: Optional[ModeEnv] = None
     extensions: Optional[List[str]] = None
     lsp_servers: Optional[Dict[str, List[str]]] = None
@@ -110,14 +99,6 @@ class ProfileEntry(BaseModel, extra="forbid"):
             tools = list(base.tools) + [t for t in override.tools if t not in seen]
         else:
             tools = override.tools if override.tools is not None else base.tools
-        sandbox_images = {
-            **(base.sandbox_images or {}),
-            **(override.sandbox_images or {}),
-        }
-        sandbox_env = {
-            **((base.sandbox.env) if base.sandbox else {}),
-            **((override.sandbox.env) if override.sandbox else {}),
-        }
         local_env = {
             **((base.local.env) if base.local else {}),
             **((override.local.env) if override.local else {}),
@@ -125,8 +106,6 @@ class ProfileEntry(BaseModel, extra="forbid"):
         return cls(
             env=env,
             tools=tools,
-            sandbox_images=sandbox_images or None,
-            sandbox=ModeEnv(env=sandbox_env) if sandbox_env else None,
             local=ModeEnv(env=local_env) if local_env else None,
             extensions=override.extensions if override.extensions is not None else base.extensions,
             lsp_servers=override.lsp_servers if override.lsp_servers is not None else base.lsp_servers,
@@ -146,7 +125,7 @@ class AgentDefinition(BaseModel, extra="forbid"):
 
         ``default`` and ``bare`` are standalone (no inheritance).
         All other profiles inherit from ``default``.
-        If *mode* is provided ("sandbox" | "local"), mode-specific
+        If *mode* is provided ("local"), mode-specific
         env overrides are layered on top.
         """
         if name == "bare":
@@ -165,7 +144,7 @@ class AgentDefinition(BaseModel, extra="forbid"):
     def _with_mode(
         entry: ProfileEntry, mode: Optional[str]
     ) -> ProfileEntry:
-        if mode not in ("sandbox", "local"):
+        if mode != "local":
             return entry
         mode_env = getattr(entry, mode, None)
         if mode_env and mode_env.env:
@@ -234,14 +213,13 @@ class ConfigModel(BaseModel, extra="forbid"):
     Structure::
 
         common:
-          sandbox_images: {default, cuda, rocm}
           proxy: {bind_host, bind_port, env}
           postgres: {host_port, user, password}
           suffix_id
         agents:
           claude-code:
             profiles:
-              default: {env, tools, sandbox_images, sandbox, local}
+              default: {env, tools, local}
               bare: {env}
         tools:
           chrome: {image, port, container_name, env}

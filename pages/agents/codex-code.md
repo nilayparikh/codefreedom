@@ -14,29 +14,23 @@ Codex is OpenAI's terminal-native coding agent. CodeFreedom provides 0-click pro
 ## Commands
 
 ```bash
-cf run agent codex-code                    # Launch (native mode)
-cf run agent codex-code --sandbox          # Launch (sandboxed)
+cf run agent codex-code                    # Launch
 cf run agent codex-code -p deepseek        # Launch with a profile
 cf run agent codex-code config             # Print config.toml for standalone use
-cf run agent codex-code status             # Show sandbox container status
+cf run agent codex-code status             # Show proxy and config status
 cf run agent codex-code stop               # Stop running containers
 ```
 
 Short:
 
 ```bash
-cf r ag cx                               # Launch (native)
-cf r ag cx --sandbox                     # Launch (sandboxed)
+cf r ag cx                               # Launch
 ```
 
 ## Flags
 
 | Flag | Description |
 | --- | --- |
-| `--sandbox` | Run inside a Docker container |
-| `--run-as-me` | Run sandbox as host user (uid/gid match) |
-| `--cuda` | Use CUDA sandbox image (NVIDIA GPUs) |
-| `--rocm` | Use ROCm sandbox image (AMD GPUs) |
 | `-p NAME`, `--profile NAME` | Load a named profile |
 | `-l`, `--list-profiles` | List available profiles |
 
@@ -63,15 +57,6 @@ When launched natively, CodeFreedom:
 2. Resolves the selected profile's environment variables
 3. Generates `config.toml` and `model_catalog.json` with proxy model discovery
 4. Launches `codex` with `CODEX_HOME` pointing to the generated config
-
-### Sandbox Mode
-
-Sandbox mode runs Codex inside a Docker container with:
-
-- Isolated filesystem
-- Mounted workspace directory
-- Tool endpoints injected via MCP config
-- Proxy configuration auto-generated inside the container
 
 ### Config Generation
 
@@ -117,7 +102,7 @@ Codex discovers MCP servers via `config.toml`. CodeFreedom registers tool endpoi
 ## Status and Lifecycle
 
 ```bash
-cf r ag cx status                        # Check sandbox container status
+cf r ag cx status                        # Check proxy connection and config
 cf r ag cx stop                          # Stop running containers
 ```
 

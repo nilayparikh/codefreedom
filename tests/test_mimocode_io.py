@@ -1,11 +1,10 @@
 """I/O-dependent tests for MiMoCode CLI.
 
-Tests file writing, binary detection, and sandbox directory creation.
+Tests file writing and binary detection.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import stat
 import sys
@@ -66,35 +65,3 @@ class TestFindMimoBinary:
 
         result = find_mimo_binary()
         assert result is None or isinstance(result, str)
-
-
-class TestEnsureMimoSandboxDir:
-    def test_creates_directories(self):
-        from codefreedom.cli.mimo import _ensure_mimo_sandbox_dir
-
-        mimo_home, config_dir = _ensure_mimo_sandbox_dir("test-mimo")
-
-        assert mimo_home.exists()
-        assert (mimo_home / "data").exists()
-        assert (mimo_home / "config").exists()
-        assert (mimo_home / "cache").exists()
-        assert (mimo_home / "state").exists()
-        assert config_dir.exists()
-
-
-class TestRegisterArgs:
-    def test_add_sandbox_flag(self):
-        from codefreedom.cli.mimo import register_args
-
-        parser = argparse.ArgumentParser()
-        register_args(parser)
-        args = parser.parse_args(["--sandbox"])
-        assert args.sandbox is True
-
-    def test_run_as_me_flag(self):
-        from codefreedom.cli.mimo import register_args
-
-        parser = argparse.ArgumentParser()
-        register_args(parser)
-        args = parser.parse_args(["--run-as-me"])
-        assert args.run_as_me is True

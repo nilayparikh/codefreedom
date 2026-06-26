@@ -33,7 +33,6 @@ from codefreedom.core.config import (
     resolve_pi_profiles_path,
 )
 from codefreedom.log import eprint, tag
-from codefreedom.sandbox.signals import forward_signal
 from codefreedom.tools.registry import generate_session_id
 
 
@@ -612,8 +611,8 @@ def run_local(
 
     try:
         proc = subprocess.Popen(cmd, env=env)
-        signal.signal(signal.SIGINT, lambda s, f: forward_signal(proc, s, f))
-        signal.signal(signal.SIGTERM, lambda s, f: forward_signal(proc, s, f))
+        signal.signal(signal.SIGINT, lambda s, f: proc.send_signal(s) if proc and proc.poll() is None else None)
+        signal.signal(signal.SIGTERM, lambda s, f: proc.send_signal(s) if proc and proc.poll() is None else None)
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
@@ -655,7 +654,7 @@ def run(args: argparse.Namespace) -> int:
 
     from codefreedom.cli.common import load_profile_with_tools
 
-    profile_env, _sandbox_images, tools, exit_code = load_profile_with_tools(
+    profile_env, tools, exit_code = load_profile_with_tools(
         profile_name, profiles_path, runtime.base_env, "local",
         agent="pi-code",
     )

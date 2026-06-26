@@ -24,6 +24,10 @@ cf manage admin backup|restore|list|inspect|prune    # Config management (alias:
 cf manage doctor [--verbose]                         # Validate environment
 cf manage update [--services...]                     # Check for updates
 cf setup deinit [--force]                           # Tear down
+
+# Git workflows
+cf git cmt [options] [files]                        # LLM-powered commit (alias: g c)
+cf git pr create|generate [options]                 # LLM-powered PR (alias: g p)
 ```
 
 ## Agent Commands
@@ -36,8 +40,6 @@ cf run agent list
 
 # Options:
 --profile NAME        Load a named profile (default: 'default')
---sandbox             Run inside Docker container (not supported for pi-code)
---run-as-me           Match host uid/gid in sandbox
 --list-profiles       List available profiles and exit
 ```
 
@@ -94,6 +96,29 @@ cf manage update [services...]                    # Check for updates
 cf setup deinit [--force]                        # Tear down
 ```
 
+## Git Commands
+
+```bash
+cf git cmt [options] [files]                     # LLM-powered commit workflow
+cf git pr create [options]                       # Create PR via gh CLI
+cf git pr generate [options]                     # Generate PR title/body only
+
+# Options for git cmt:
+-m, --message MSG      Provide commit message directly
+-y, --yes              Auto-commit without confirmation
+-n, --no-scope         Skip scope in conventional commit
+-S, --signed           Sign commit with GPG
+--no-sign              Don't sign this commit
+--dry-run              Preview without committing
+-s, --stage-only       Only commit manually staged changes
+
+# Options for git pr:
+-s, --source BRANCH    Source branch (default: current)
+-t, --target BRANCH    Target branch (default: main)
+-b, --browser-mode     Open browser instead of gh CLI
+--dry-run              Preview without action
+```
+
 ## Aliases
 
 | Command | Alias |
@@ -110,6 +135,9 @@ cf setup deinit [--force]                        # Tear down
 | `cf setup init` | `cf s i` |
 | `cf setup config` | `cf s c` |
 | `cf setup deinit` | `cf s di` |
+| `cf git` | `cf g` |
+| `cf git cmt` | `cf g c` |
+| `cf git pr` | `cf g p` |
 
 ## Deprecated Commands
 

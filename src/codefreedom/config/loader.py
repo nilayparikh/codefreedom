@@ -5,7 +5,7 @@ Usage::
     from codefreedom.config import load_config
 
     config = load_config()
-    agent_cfg = config.for_agent("claude-code", profile="default", mode="sandbox")
+    agent_cfg = config.for_agent("claude-code", profile="default", mode="local")
     tool_cfg = config.for_tool("chrome")
 """
 
@@ -40,8 +40,6 @@ class AgentConfig:
     profile_name: str
     env: Dict[str, str]
     tools: List[str]
-    sandbox_images: Dict[str, str]
-    sandbox_env: Dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -78,10 +76,10 @@ class ResolvedConfig:
         Args:
             agent: Canonical agent name (e.g. ``"claude-code"``).
             profile: Profile name (e.g. ``"default"``, ``"bare"``).
-            mode: ``"sandbox"``, ``"local"``, or ``None``.
+            mode: ``"local"`` or ``None``.
 
         Returns:
-            AgentConfig with resolved env, tools, sandbox_images.
+            AgentConfig with resolved env and tools.
         """
         agent_def = self.agents.get(agent)
         if agent_def is None:
@@ -93,18 +91,11 @@ class ResolvedConfig:
 
         profile_entry = agent_def.resolve_profile(profile, mode=mode)
 
-        # Inherit sandbox images
-        sandbox_images = dict(self.common.sandbox_images)
-        if profile_entry.sandbox_images:
-            sandbox_images.update(profile_entry.sandbox_images)
-
         return AgentConfig(
             agent=agent,
             profile_name=profile,
             env=dict(profile_entry.env),
             tools=list(profile_entry.tools or []),
-            sandbox_images=sandbox_images,
-            sandbox_env=dict(self.common.sandbox_env),
         )
 
     def for_tool(self, name: str) -> ToolConfig:

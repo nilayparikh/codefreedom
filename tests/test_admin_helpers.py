@@ -60,9 +60,6 @@ class TestCategorize:
     def test_proxy(self):
         assert _categorize("proxy/config/config.yaml") == "proxy"
 
-    def test_sandbox(self):
-        assert _categorize("sandbox/default/settings.json") == "sandbox"
-
     def test_proc(self):
         assert _categorize("proc/sessions/active.json") == "proc"
 

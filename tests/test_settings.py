@@ -73,7 +73,6 @@ def test_resolve_agent_runtime_uses_agent_component(
                             "default": {
                                 "description": "default",
                                 "tools": ["github"],
-                                "sandbox_images": {"default": "docker.io/example/image:latest"},
                                 "env": {"SEEN_COMPONENT": "${SPECIAL_COMPONENT}"},
                             }
                         }
@@ -94,7 +93,6 @@ def test_resolve_agent_runtime_uses_agent_component(
 
     assert runtime.profile_env["SEEN_COMPONENT"] == "from_mimo"
     assert runtime.tools == ["github"]
-    assert runtime.sandbox_images == {"default": "docker.io/example/image:latest"}
 
 
 def test_resolve_config_value_uses_common_precedence(

@@ -212,24 +212,6 @@ class TestProfileEnv:
         with pytest.raises(ConfigError):
             config.for_agent("unknown-agent")
 
-    def test_sandbox_mode_env(self, tmp_path):
-        _write(tmp_path, {
-            "agents": {
-                "claude-code": {
-                    "profiles": {
-                        "default": {
-                            "env": {"BASE": "val"},
-                            "sandbox": {"env": {"SANDBOX_KEY": "sandbox_val"}},
-                        }
-                    }
-                }
-            }
-        })
-        config = load_config(tmp_path)
-        agent_cfg = config.for_agent("claude-code", mode="sandbox")
-        assert agent_cfg.env["BASE"] == "val"
-        assert agent_cfg.env["SANDBOX_KEY"] == "sandbox_val"
-
     def test_local_mode_env(self, tmp_path):
         _write(tmp_path, {
             "agents": {

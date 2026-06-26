@@ -1,11 +1,11 @@
-"""MiMoCode subcommand -- sandboxed or local launch with 0-click proxy config.
+"""MiMoCode subcommand -- local launch with 0-click proxy config.
 
 Auto-detects the running CodeFreedom LiteLLM proxy, generates a complete
 ``mimocode.json`` config with all proxy models, and launches MiMoCode
 (``mimo``) with zero manual configuration.
 
 Usage:
-    codefreedom run agent mimo-code [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
+    codefreedom run agent mimo-code [--profile NAME] [--list-profiles] [agent-args...]
     codefreedom run agent mimo-code [options] [-- <agent-args>]
 
 Proxy auto-config:
@@ -25,7 +25,7 @@ import shutil
 import signal
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from codefreedom.config.runtime import list_profiles, resolve_agent_runtime
 from codefreedom.core.config import (
@@ -34,42 +34,17 @@ from codefreedom.core.config import (
 )
 from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import generate_session_id
-from codefreedom.sandbox.signals import forward_signal
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:
     """Register MiMo-specific arguments on the agent parser."""
-    gpu_group = parser.add_mutually_exclusive_group()
-    gpu_group.add_argument(
-        "--cuda",
-        action="store_true",
-        dest="gpu_cuda",
-        help="Use CUDA sandbox image for NVIDIA GPUs (only with --sandbox)",
-    )
-    gpu_group.add_argument(
-        "--rocm",
-        action="store_true",
-        dest="gpu_rocm",
-        help="Use ROCm sandbox image for AMD GPUs (only with --sandbox)",
-    )
-    parser.add_argument(
-        "--sandbox",
-        action="store_true",
-        help="Run inside a sandboxed Docker container (default: native)",
-    )
-    parser.add_argument(
-        "--run-as-me",
-        action="store_true",
-        help="Run sandbox container as host user (uid/gid match). Only valid with --sandbox.",
-    )
+    pass
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_MIMO_IMAGE = "docker.io/nilayparikh/codefreedom:ubuntu-latest"
 PROXY_MODELS_CACHE_FILE = "proxy-models.json"
 MIMOCODE_CONFIG_NAME = "mimocode.json"
-_CONTAINER_PREFIX = "codefreedom-mimo-"
 
 CODEFREEDOM_DIR = get_codefreedom_dir()
 
@@ -213,27 +188,13 @@ def _write_mimo_config(
     return config_path
 
 
-def _ensure_mimo_sandbox_dir(profile_name: str) -> Tuple[Path, Path]:
-    """Create isolated sandbox directories for MiMoCode.
-
-    Returns (mimo_data_dir, config_path) — the MIMOCODE_HOME data directory
-    and the path to the generated ``mimocode.json`` config file.
-    """
-    profile_dir = CODEFREEDOM_DIR / "mimo-code" / "sandbox" / profile_name
-    profile_dir.mkdir(parents=True, exist_ok=True)
-
-    # Isolated MIMOCODE_HOME structure: data/config/cache/state subdirs
-    mimo_home = profile_dir / "home"
-    for sub in ("data", "config", "cache", "state"):
-        (mimo_home / sub).mkdir(parents=True, exist_ok=True)
-
-    config_dir = profile_dir / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-
-    return mimo_home, config_dir
-
-
 # ── Execution ─────────────────────────────────────────────────────────────────
+
+
+def _forward_signal(proc: subprocess.Popen, signum: int, frame: Any) -> None:
+    """Forward a signal to the child process if it is still running."""
+    if proc and proc.poll() is None:
+        proc.send_signal(signum)
 
 
 def run_local(
@@ -266,8 +227,8 @@ def run_local(
 
     try:
         proc = subprocess.Popen(cmd, env=env)
-        signal.signal(signal.SIGINT, lambda s, f: forward_signal(proc, s, f))
-        signal.signal(signal.SIGTERM, lambda s, f: forward_signal(proc, s, f))
+        signal.signal(signal.SIGINT, lambda s, f: _forward_signal(proc, s, f))
+        signal.signal(signal.SIGTERM, lambda s, f: _forward_signal(proc, s, f))
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
@@ -275,88 +236,6 @@ def run_local(
         return 1
     except KeyboardInterrupt:
         return 130
-
-
-def run_docker(
-    profile_env: Dict[str, str],
-    mimo_args: List[str],
-    workspace_dir: Path,
-    profile_name: str,
-    sandbox_images: Dict[str, str] | None = None,
-    run_as_me: bool = False,
-    gpu_type: str | None = None,
-) -> int:
-    """Run ``mimo`` inside an ephemeral Docker container.
-
-    Delegates container lifecycle to the shared sandbox launcher.
-    """
-    from codefreedom.sandbox.launcher import prepare_sandbox, run_sandbox
-
-    prep = prepare_sandbox(
-        profile_env=profile_env,
-        sandbox_images=sandbox_images or {},
-        default_image=DEFAULT_MIMO_IMAGE,
-        container_prefix=_CONTAINER_PREFIX,
-        run_as_me=run_as_me,
-        gpu_type=gpu_type,
-    )
-
-    # ── Generate proxy config first ────────────────────────────────────────────
-    proxy_url = _detect_proxy_url(profile_env)
-    config = _generate_mimo_config(proxy_url, profile_env)
-    mimo_home_dir, config_dir = _ensure_mimo_sandbox_dir(profile_name)
-    config_path = _write_mimo_config(config, config_dir)
-
-    # ── Docker run base options ───────────────────────────────────────────────
-    base_opts = [
-        "--network",
-        "host",
-        *prep.container_user_flag,
-        "--ipc=host",
-        "-v",
-        f"{workspace_dir}:/workspace",
-        "-w",
-        "/workspace",
-        "-v",
-        f"{Path.home() / '.gitconfig'}:{prep.container_home}/.gitconfig:ro",
-        "-v",
-        f"{Path.home() / '.ssh'}:{prep.container_home}/.ssh:ro",
-        "-v",
-        f"{mimo_home_dir}:{prep.container_home}/.local/share/mimocode",
-        "-v",
-        f"{config_path}:{prep.container_home}/.config/mimocode/mimocode.json:ro",
-        "-e",
-        f"HOME={prep.container_home}",
-        "-e",
-        f"MIMOCODE_CONFIG={prep.container_home}/.config/mimocode/mimocode.json",
-        "-e",
-        "IS_SANDBOX=1",
-        "-e",
-        "MIMOCODE_DISABLE_AUTO_UPDATE=1",
-    ]
-
-    # ── Exec command ──────────────────────────────────────────────────────────
-    exec_image_cmd = (
-        ["docker", "exec", "-it"]
-        + prep.container_user_flag
-        + ["-e", f"HOME={prep.container_home}"]
-        + [prep.container_name, "mimo"]
-        + mimo_args
-    )
-
-    exec_extra_env = [
-        "-e",
-        f"MIMOCODE_CONFIG={prep.container_home}/.config/mimocode/mimocode.json",
-    ]
-
-    return run_sandbox(
-        image=prep.image,
-        container_name=prep.container_name,
-        base_opts=base_opts,
-        env_flags=prep.env_flags,
-        exec_image_cmd=exec_image_cmd,
-        exec_extra_env=exec_extra_env,
-    )
 
 
 # ── Init command ─────────────────────────────────────────────────────────────
@@ -379,8 +258,7 @@ def init_mimo() -> int:
             "  cf run proxy start",
             "",
             "To launch MiMoCode:",
-            "  cf run agent mimo-code              # native mode",
-            "  cf run agent mimo-code --sandbox    # isolated Docker sandbox",
+            "  cf run agent mimo-code",
         ],
         docs_url="https://github.com/XiaomiMiMo/MiMo-Code",
         include_disclaimer=False,
@@ -439,23 +317,6 @@ def cmd_config(args: argparse.Namespace) -> int:
 
     print(output)
     return 0
-
-
-# ── Status / Stop ─────────────────────────────────────────────────────────────
-
-
-def status() -> int:
-    """Show all codefreedom run agent mimo-code sandbox containers. Returns exit code."""
-    from codefreedom.sandbox.launcher import sandbox_status
-
-    return sandbox_status(_CONTAINER_PREFIX)
-
-
-def stop() -> int:
-    """Stop and remove all codefreedom run agent mimo-code sandbox containers. Returns exit code."""
-    from codefreedom.sandbox.launcher import sandbox_stop
-
-    return sandbox_stop(_CONTAINER_PREFIX)
 
 
 # ── Main entry point ─────────────────────────────────────────────────────────
@@ -547,7 +408,7 @@ def run(args: argparse.Namespace) -> int:
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
     profiles_path = resolve_mimo_profiles_path()
-    mode = "sandbox" if args.sandbox else "local"
+    mode = "local"
     runtime = resolve_agent_runtime(
         "mimo-code",
         workspace_dir=workspace_dir,
@@ -557,7 +418,7 @@ def run(args: argparse.Namespace) -> int:
 
     from codefreedom.cli.common import load_profile_with_tools
 
-    profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
+    profile_env, tools, exit_code = load_profile_with_tools(
         profile_name, profiles_path, runtime.base_env, mode,
         agent="mimo-code",
     )
@@ -573,15 +434,6 @@ def run(args: argparse.Namespace) -> int:
         if master_key:
             profile_env["PROXY_API_KEY"] = master_key
 
-    run_as_me = getattr(args, "run_as_me", False)
-
-    # ── GPU type from --cuda / --rocm flags ────────────────────────────────
-    gpu_type: str | None = None
-    if getattr(args, "gpu_cuda", False):
-        gpu_type = "cuda"
-    elif getattr(args, "gpu_rocm", False):
-        gpu_type = "rocm"
-
     # ── Tools: acquire if declared in profile ────────────────────────────
     session_id = generate_session_id(mode)
 
@@ -595,19 +447,6 @@ def run(args: argparse.Namespace) -> int:
             _write_mcp_json(workspace_dir, acquired_tools)
             # Also register MCP servers in mimocode.jsonc for MiMoCode
             _update_mimocode_mcp(acquired_tools)
-        if args.sandbox:
-            return run_docker(
-                profile_env,
-                args.agent_args,
-                workspace_dir,
-                profile_name,
-                sandbox_images=sandbox_images,
-                run_as_me=run_as_me,
-                gpu_type=gpu_type,
-            )
-        else:
-            if run_as_me:
-                eprint(f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring.")
-            return run_local(profile_env, args.agent_args)
+        return run_local(profile_env, args.agent_args)
 
     return acquire_and_run(session_id, tools, profile_name, _run)

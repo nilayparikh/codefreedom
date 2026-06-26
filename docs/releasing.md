@@ -3,7 +3,9 @@
 ## Overview
 
 CodeFreedom uses a Gitflow-inspired branching strategy with GitHub Actions for all releases.
-No local release scripts — everything runs in CI via `workflow_dispatch`.
+No local release scripts -- everything runs in CI via `workflow_dispatch`.
+
+`version.yaml` is the single source of truth for versioning. `pyproject.toml` is derived at release time and should never be edited on branches.
 
 ## Branch Structure
 
@@ -51,7 +53,7 @@ pip install -e ".[all]"
 ## Release Workflow
 
 All releases are triggered via GitHub Actions `workflow_dispatch`.
-No local scripts — everything runs in CI atomically.
+No local scripts -- everything runs in CI atomically.
 
 ### Phase 1: Feature Development
 
@@ -68,11 +70,7 @@ git checkout -b feature/docker-gpu
 git checkout prerelease/v0.2.1
 # Merge PRs from feature branches
 # Optionally trigger dev release:
-#   Actions -> Release -> Run workflow
-#     version: 0.2.1
-#     pre-release: true
-#     type: dev
-#     dev-number: 1
+#   Actions -> Publish Dev -> Run workflow
 ```
 
 ### Phase 3: Release Candidate
@@ -82,18 +80,10 @@ git checkout prerelease/v0.2.1
 git checkout -b release/v0.2.1
 git push -u origin release/v0.2.1
 
-# Trigger release from GitHub:
-# Actions -> Release -> Run workflow
-#   version: 0.2.1
-#   pre-release: true
-#   type: rc
-#   candidate: 1
+# Trigger RC release from GitHub:
+#   Actions -> Publish RC -> Run workflow
 
-# Found a bug? Fix on release branch, then trigger again:
-#   version: 0.2.1
-#   pre-release: true
-#   type: rc
-#   candidate: 2
+# Found a bug? Fix on release branch, then trigger again.
 ```
 
 ### Phase 4: Final Release
@@ -104,10 +94,8 @@ git checkout main
 git merge release/v0.2.1
 git push origin main
 
-# Trigger release from GitHub:
-# Actions -> Release -> Run workflow
-#   version: 0.2.1
-#   pre-release: false
+# Trigger final release from GitHub:
+#   Actions -> Publish Final -> Run workflow
 
 # Cleanup
 git branch -d release/v0.2.1
@@ -129,45 +117,27 @@ Single workflow for all branches and PRs.
 
 **Stages:**
 
-1. **Lint** — `ruff check src/ tests/`
-2. **Type-check** — `mypy src/ --ignore-missing-imports`
-3. **Unit tests** — `pytest tests/ -v --tb=short` (Python 3.10/3.11/3.12)
-4. **Integration tests** — build wheel, install, smoke test (Ubuntu/Windows/macOS)
-5. **Commit lint** — conventional commit validation (PRs only)
+1. **Lint** -- `ruff check src/ tests/`
+2. **Type-check** -- `mypy src/ --ignore-missing-imports`
+3. **Unit tests** -- `pytest tests/ -v --tb=short` (Python 3.10/3.11/3.12)
+4. **Integration tests** -- build wheel, install, smoke test (Ubuntu/Windows/macOS)
+5. **Commit lint** -- conventional commit validation (PRs only)
 
-### Release (`release.yml`)
+### Publish Dev (`publish-dev.yml`)
 
-Atomic release via `workflow_dispatch`.
+Manual dispatch only (`workflow_dispatch`). Must be on a `dev/v*` branch.
 
-| Input | Required | Description |
-|---|---|---|
-| `version` | Yes | Base version (e.g., `0.2.1`) |
-| `pre-release` | No | Mark as pre-release (default: false) |
-| `type` | No | Pre-release type: `dev` or `rc` (default: `rc`) |
-| `candidate` | No | RC number (required if type=rc) |
-| `dev-number` | No | Dev number (required if type=dev) |
+Reads `version.yaml` to build the version string `{version}rc{rc}.dev{dev}`.
 
-**What it does:**
+### Publish RC (`publish-rc.yml`)
 
-1. Validates version format, branch, clean working tree, no duplicate tags
-2. Builds full version string: `X.Y.Z.devN`, `X.Y.ZrcN`, or `X.Y.Z`
-3. Bumps version in `pyproject.toml`
-4. Generates changelog with `git-cliff`
-5. Commits: `release: bump to X.Y.Z.devN` or `release: bump to X.Y.ZrcN`
-6. Tags: creates annotated tag
-7. Pushes commit + tag to origin
+Manual dispatch only (`workflow_dispatch`). Must be on an `rc/v*` branch.
 
-**Branch requirements:**
-
-| Release type | Must be on |
-|---|---|
-| Dev (`type=dev`) | `prerelease/v*` branch |
-| RC (`type=rc`) | `release/v*` branch |
-| Final (`pre-release=false`) | `main` branch |
+Reads `version.yaml` to build the version string `{version}rc{rc}`.
 
 ### PyPI Publish (`pipy.yaml`)
 
-Manual dispatch only (`workflow_dispatch`). 100% user-controlled — no auto-trigger on tag push or any other event.
+Manual dispatch only (`workflow_dispatch`). 100% user-controlled -- no auto-trigger on tag push or any other event.
 
 | Step | Description |
 |---|---|
@@ -182,7 +152,6 @@ All Docker workflows are manual trigger only (`workflow_dispatch`).
 
 | Workflow | Image | Inputs |
 |---|---|---|
-| `docker-agents.yml` | Unified agents (ubuntu/cuda/rocm) | `platform` (default: all) |
 | `docker-chrome.yml` | Chrome browser | `tag` (required), `latest` (default: true) |
 | `docker-litellm.yml` | LiteLLM proxy | `tag` (required), `latest` (default: true), `litellm_base_tag` (optional) |
 | `docker-web.yml` | Camoufox MCP | `tag` (required), `latest` (default: true) |
@@ -196,12 +165,11 @@ All Docker workflows are manual trigger only (`workflow_dispatch`).
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `trivy.yml` | Push to main, PRs, weekly | Security scanning |
-| `scorecard.yml` | Push to main, weekly | OpenSSF Scorecard |
 | `publish-docs.yml` | Push to main (docs changes) | MkDocs to GitHub Pages |
 
 ## What Triggers PyPI Release
 
-Only manual dispatch triggers the `pipy.yaml` workflow.
+Only manual dispatch triggers the publish workflows.
 No auto-trigger on tag push, merge, or branch push.
 
 | Action | PyPI Release? |
@@ -212,7 +180,9 @@ No auto-trigger on tag push, merge, or branch push.
 | Push to main | No |
 | PR to any branch | No |
 | Tag push (v*) | No |
-| Trigger pipy.yaml manually | Yes |
+| Trigger publish-dev.yml | Yes (dev pre-release) |
+| Trigger publish-rc.yml | Yes (RC pre-release) |
+| Trigger pipy.yaml | Yes (final or pre-release) |
 
 ## Branch Protection
 
@@ -269,4 +239,4 @@ source .venv/bin/activate
 pip install -e ".[all]"
 ```
 
-The version in `pyproject.toml` is bumped only at release time via the `release.yml` workflow.
+The version in `pyproject.toml` is bumped only at release time via CI workflows. `version.yaml` is the source of truth.

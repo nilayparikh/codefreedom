@@ -39,7 +39,6 @@ class AgentRuntimeConfig:
     base_env: dict[str, str]
     profile_env: dict[str, str]
     tools: list[str]
-    sandbox_images: dict[str, str]
     settings: CodeFreedomSettings
 
 
@@ -141,7 +140,6 @@ def resolve_agent_runtime(
             base_env=dict(os.environ),
             profile_env={},
             tools=[],
-            sandbox_images={},
             settings=CodeFreedomSettings(),
         )
 
@@ -153,7 +151,6 @@ def resolve_agent_runtime(
             base_env=dict(os.environ),
             profile_env={},
             tools=[],
-            sandbox_images={},
             settings=CodeFreedomSettings(),
         )
 
@@ -165,8 +162,6 @@ def resolve_agent_runtime(
             profile_name=profile_name,
             env={},
             tools=[],
-            sandbox_images={},
-            sandbox_env={},
         )
 
     profile_env = dict(agent_cfg.env)
@@ -184,7 +179,6 @@ def resolve_agent_runtime(
         base_env=dict(os.environ),
         profile_env=profile_env,
         tools=agent_cfg.tools,
-        sandbox_images=agent_cfg.sandbox_images,
         settings=CodeFreedomSettings(),
     )
 

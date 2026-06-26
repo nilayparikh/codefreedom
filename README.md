@@ -9,7 +9,7 @@
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-nilayparikh%2Fcodefreedom-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/nilayparikh/codefreedom)
 [![GHCR Image](https://img.shields.io/badge/GHCR-ghcr.io%2Fnilayparikh%2Fcodefreedom-2496ED?logo=docker&logoColor=white)](https://ghcr.io/nilayparikh/codefreedom)
 
-**Unified interface for all code agents. Simple LLM routing. Sandboxing just a click away.**
+**Unified interface for all code agents. Simple LLM routing. Profile management.**
 
 > **Full documentation:** [https://nilayparikh.github.io/codefreedom/](https://nilayparikh.github.io/codefreedom/)
 
@@ -23,15 +23,14 @@ That fragmentation creates three compounding risks:
 
 - **Vendor lock-in** -- choosing a provider today can constrain your choices tomorrow. As the model landscape evolves, being tied to one ecosystem means missing better capabilities, pricing, or reliability from competitors.
 - **Unmanaged cost** -- without visibility across providers, there is no way to route work to the most cost-effective model. Token spend grows unchecked because switching providers is a manual, error-prone process.
-- **Complexity as a barrier** -- setting up proxies, sandboxes, and provider integrations demands infrastructure expertise. Developers who should be building products spend time plumbing tooling, or avoid the tools altogether.
+- **Complexity as a barrier** -- setting up proxies and provider integrations demands infrastructure expertise. Developers who should be building products spend time plumbing tooling, or avoid the tools altogether.
 
 ### The Solution
 
 CodeFreedom is a CLI that sits between you and your code agent (Claude Code, MiMoCode, OpenCode, etc.). It provides a portable abstraction layer so you can:
 
 1. **Switch models and providers** -- change your backend without reconfiguring your agent.
-2. **Isolate environments** -- reproducible, sandboxed sessions per project with GPU support.
-3. **Manage everything from one place** -- profiles, proxy routing, and sandbox settings live in `~/.codefreedom`.
+2. **Manage everything from one place** -- profiles, proxy routing, and tool settings live in `~/.codefreedom`.
 
 It orchestrates agents through their **publicly supported interfaces** (environment variables, CLI flags, API endpoints). No patching, no reverse-engineering.
 
@@ -45,7 +44,7 @@ It orchestrates agents through their **publicly supported interfaces** (environm
 | **Pi Code** | `pc` | Earendil's code agent with extension-based model discovery |
 | **Codex** | `cx` | OpenAI's code agent with 0-click proxy config |
 
-All agents share the same proxy, sandbox, and tooling layers.
+All agents share the same proxy and tooling layers.
 
 ## Video Walkthrough
 
@@ -83,11 +82,6 @@ cf r px start
 cf r ag cc          # Claude Code
 cf r ag mc          # MiMoCode
 cf r ag oc          # OpenCode
-
-# Or launch in a sandboxed container
-cf r ag cc --sandbox
-cf r ag cc --sandbox --cuda   # NVIDIA GPU
-cf r ag cc --sandbox --rocm   # AMD GPU
 ```
 
 ### Common commands
@@ -115,8 +109,7 @@ See the [full documentation](https://nilayparikh.github.io/codefreedom/) for pro
 | Feature | Details |
 |---------|---------|
 | LLM proxy | Self-hosted LiteLLM image (embedded PostgreSQL, multi-provider routing) |
-| Agent launcher | Claude Code, MiMoCode, OpenCode -- local + sandbox modes |
-| Sandboxing | Pre-configured containers (CPU, CUDA, ROCm) for each agent |
+| Agent launcher | Claude Code, MiMoCode, OpenCode |
 | Profiles | Model switching, env inheritance, isolation |
 | Browser tools | Chrome (CDP + MCP), Camoufox stealth browser (MCP), GitHub MCP, Web Bridge |
 | Backup & restore | Config backups with diff preview and selective restore |
@@ -124,7 +117,7 @@ See the [full documentation](https://nilayparikh.github.io/codefreedom/) for pro
 ## Requirements
 
 - Python 3.10+
-- Docker -- required for sandbox mode and the proxy
+- Docker -- required for the proxy
 - Node.js -- for local mode (agent-specific)
 
 ## Principles

@@ -139,7 +139,7 @@ class TestCodexEnvLoading:
         monkeypatch.setattr(
             common_mod,
             "load_profile_with_tools",
-            lambda name, path, env, mode, **kw: ({}, {}, [], 0),
+            lambda name, path, env, mode, **kw: ({}, [], 0),
         )
         monkeypatch.setattr(
             common_mod, "acquire_and_run", lambda sid, tools, name, fn: 0
@@ -149,10 +149,6 @@ class TestCodexEnvLoading:
             list_profiles=False,
             profile="default",
             codex_action=None,
-            sandbox=False,
-            gpu_cuda=False,
-            gpu_rocm=False,
-            run_as_me=False,
             agent_args=[],
         )
         codex_mod.run(ns)

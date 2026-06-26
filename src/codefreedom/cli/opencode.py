@@ -1,11 +1,11 @@
-"""OpenCode subcommand -- sandboxed or local launch with 0-click proxy config.
+"""OpenCode subcommand -- local launch with 0-click proxy config.
 
 Auto-detects the running CodeFreedom LiteLLM proxy, generates a complete
 ``opencode.json`` config with all proxy models, and launches OpenCode
 (``opencode``) with zero manual configuration.
 
 Usage:
-    codefreedom run agent open-code [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
+    codefreedom run agent open-code [--profile NAME] [--list-profiles] [agent-args...]
     codefreedom run agent open-code [options] [-- <agent-args>]
 
 Proxy auto-config:
@@ -26,7 +26,7 @@ import signal
 import subprocess
 from pathlib import Path
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from codefreedom.config.runtime import list_profiles, resolve_agent_runtime
 from codefreedom.core.config import (
@@ -35,42 +35,17 @@ from codefreedom.core.config import (
 )
 from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import generate_session_id
-from codefreedom.sandbox.signals import forward_signal
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:
     """Register OpenCode-specific arguments on the agent parser."""
-    gpu_group = parser.add_mutually_exclusive_group()
-    gpu_group.add_argument(
-        "--cuda",
-        action="store_true",
-        dest="gpu_cuda",
-        help="Use CUDA sandbox image for NVIDIA GPUs (only with --sandbox)",
-    )
-    gpu_group.add_argument(
-        "--rocm",
-        action="store_true",
-        dest="gpu_rocm",
-        help="Use ROCm sandbox image for AMD GPUs (only with --sandbox)",
-    )
-    parser.add_argument(
-        "--sandbox",
-        action="store_true",
-        help="Run inside a sandboxed Docker container (default: native)",
-    )
-    parser.add_argument(
-        "--run-as-me",
-        action="store_true",
-        help="Run sandbox container as host user (uid/gid match). Only valid with --sandbox.",
-    )
+    pass
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_OPENCODE_IMAGE = "docker.io/nilayparikh/codefreedom:ubuntu-latest"
 PROXY_MODELS_CACHE_FILE = "proxy-models.json"
 OPENCODE_CONFIG_NAME = "opencode.json"
-_CONTAINER_PREFIX = "codefreedom-opencode-"
 
 CODEFREEDOM_DIR = get_codefreedom_dir()
 
@@ -214,26 +189,6 @@ def _write_opencode_config(
     return config_path
 
 
-def _ensure_opencode_sandbox_dir(profile_name: str) -> Tuple[Path, Path]:
-    """Create isolated sandbox directories for OpenCode.
-
-    Returns (opencode_data_dir, config_path) — the OPENCODE_HOME data directory
-    and the path to the generated ``opencode.json`` config file.
-    """
-    profile_dir = CODEFREEDOM_DIR / "open-code" / "sandbox" / profile_name
-    profile_dir.mkdir(parents=True, exist_ok=True)
-
-    # Isolated OPENCODE_HOME structure: data/config/cache/state subdirs
-    opencode_home = profile_dir / "home"
-    for sub in ("data", "config", "cache", "state"):
-        (opencode_home / sub).mkdir(parents=True, exist_ok=True)
-
-    config_dir = profile_dir / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-
-    return opencode_home, config_dir
-
-
 # ── Execution ─────────────────────────────────────────────────────────────────
 
 
@@ -267,8 +222,8 @@ def run_local(
 
     try:
         proc = subprocess.Popen(cmd, env=env)
-        signal.signal(signal.SIGINT, lambda s, f: forward_signal(proc, s, f))
-        signal.signal(signal.SIGTERM, lambda s, f: forward_signal(proc, s, f))
+        signal.signal(signal.SIGINT, lambda s, f: proc.send_signal(s) if proc and proc.poll() is None else None)
+        signal.signal(signal.SIGTERM, lambda s, f: proc.send_signal(s) if proc and proc.poll() is None else None)
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
@@ -276,88 +231,6 @@ def run_local(
         return 1
     except KeyboardInterrupt:
         return 130
-
-
-def run_docker(
-    profile_env: Dict[str, str],
-    opencode_args: List[str],
-    workspace_dir: Path,
-    profile_name: str,
-    sandbox_images: Dict[str, str] | None = None,
-    run_as_me: bool = False,
-    gpu_type: str | None = None,
-) -> int:
-    """Run ``opencode`` inside an ephemeral Docker container.
-
-    Delegates container lifecycle to the shared sandbox launcher.
-    """
-    from codefreedom.sandbox.launcher import prepare_sandbox, run_sandbox
-
-    prep = prepare_sandbox(
-        profile_env=profile_env,
-        sandbox_images=sandbox_images or {},
-        default_image=DEFAULT_OPENCODE_IMAGE,
-        container_prefix=_CONTAINER_PREFIX,
-        run_as_me=run_as_me,
-        gpu_type=gpu_type,
-    )
-
-    # ── Generate proxy config first ────────────────────────────────────────────
-    proxy_url = _detect_proxy_url(profile_env)
-    config = _generate_opencode_config(proxy_url, profile_env)
-    opencode_home_dir, config_dir = _ensure_opencode_sandbox_dir(profile_name)
-    config_path = _write_opencode_config(config, config_dir)
-
-    # ── Docker run base options ───────────────────────────────────────────────
-    base_opts = [
-        "--network",
-        "host",
-        *prep.container_user_flag,
-        "--ipc=host",
-        "-v",
-        f"{workspace_dir}:/workspace",
-        "-w",
-        "/workspace",
-        "-v",
-        f"{Path.home() / '.gitconfig'}:{prep.container_home}/.gitconfig:ro",
-        "-v",
-        f"{Path.home() / '.ssh'}:{prep.container_home}/.ssh:ro",
-        "-v",
-        f"{opencode_home_dir}:{prep.container_home}/.local/share/opencode",
-        "-v",
-        f"{config_path}:{prep.container_home}/.config/opencode/opencode.json:ro",
-        "-e",
-        f"HOME={prep.container_home}",
-        "-e",
-        f"OPENCODE_CONFIG={prep.container_home}/.config/opencode/opencode.json",
-        "-e",
-        "IS_SANDBOX=1",
-        "-e",
-        "OPENCODE_DISABLE_AUTO_UPDATE=1",
-    ]
-
-    # ── Exec command ──────────────────────────────────────────────────────────
-    exec_image_cmd = (
-        ["docker", "exec", "-it"]
-        + prep.container_user_flag
-        + ["-e", f"HOME={prep.container_home}"]
-        + [prep.container_name, "opencode"]
-        + opencode_args
-    )
-
-    exec_extra_env = [
-        "-e",
-        f"OPENCODE_CONFIG={prep.container_home}/.config/opencode/opencode.json",
-    ]
-
-    return run_sandbox(
-        image=prep.image,
-        container_name=prep.container_name,
-        base_opts=base_opts,
-        env_flags=prep.env_flags,
-        exec_image_cmd=exec_image_cmd,
-        exec_extra_env=exec_extra_env,
-    )
 
 
 # ── Init command ─────────────────────────────────────────────────────────────
@@ -381,7 +254,6 @@ def init_opencode() -> int:
             "",
             "To launch OpenCode:",
             "  cf run agent open-code              # native mode",
-            "  cf run agent open-code --sandbox    # isolated Docker sandbox",
         ],
         docs_url="https://opencode.ai/docs/",
         include_disclaimer=False,
@@ -440,23 +312,6 @@ def cmd_config(args: argparse.Namespace) -> int:
 
     print(output)
     return 0
-
-
-# ── Status / Stop ─────────────────────────────────────────────────────────────
-
-
-def status() -> int:
-    """Show all codefreedom run agent open-code sandbox containers. Returns exit code."""
-    from codefreedom.sandbox.launcher import sandbox_status
-
-    return sandbox_status(_CONTAINER_PREFIX)
-
-
-def stop() -> int:
-    """Stop and remove all codefreedom run agent open-code sandbox containers. Returns exit code."""
-    from codefreedom.sandbox.launcher import sandbox_stop
-
-    return sandbox_stop(_CONTAINER_PREFIX)
 
 
 def _update_opencode_mcp(tools: List[str]) -> None:
@@ -549,7 +404,7 @@ def run(args: argparse.Namespace) -> int:
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
     profiles_path = resolve_opencode_profiles_path()
-    mode = "sandbox" if args.sandbox else "local"
+    mode = "local"
     runtime = resolve_agent_runtime(
         "open-code",
         workspace_dir=workspace_dir,
@@ -559,7 +414,7 @@ def run(args: argparse.Namespace) -> int:
 
     from codefreedom.cli.common import load_profile_with_tools
 
-    profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
+    profile_env, tools, exit_code = load_profile_with_tools(
         profile_name, profiles_path, runtime.base_env, mode,
         agent="open-code",
     )
@@ -572,15 +427,6 @@ def run(args: argparse.Namespace) -> int:
         master_key = runtime.base_env.get("LITELLM_MASTER_KEY", "")
         if master_key:
             profile_env["PROXY_API_KEY"] = master_key
-
-    run_as_me = getattr(args, "run_as_me", False)
-
-    # ── GPU type from --cuda / --rocm flags ────────────────────────────────
-    gpu_type: str | None = None
-    if getattr(args, "gpu_cuda", False):
-        gpu_type = "cuda"
-    elif getattr(args, "gpu_rocm", False):
-        gpu_type = "rocm"
 
     # ── Tools: acquire if declared in profile ────────────────────────────
     session_id = generate_session_id(mode)
@@ -595,19 +441,6 @@ def run(args: argparse.Namespace) -> int:
             _write_mcp_json(workspace_dir, acquired_tools)
             # Also register MCP servers in opencode config for OpenCode
             _update_opencode_mcp(acquired_tools)
-        if args.sandbox:
-            return run_docker(
-                profile_env,
-                args.agent_args,
-                workspace_dir,
-                profile_name,
-                sandbox_images=sandbox_images,
-                run_as_me=run_as_me,
-                gpu_type=gpu_type,
-            )
-        else:
-            if run_as_me:
-                eprint(f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring.")
-            return run_local(profile_env, args.agent_args)
+        return run_local(profile_env, args.agent_args)
 
     return acquire_and_run(session_id, tools, profile_name, _run)

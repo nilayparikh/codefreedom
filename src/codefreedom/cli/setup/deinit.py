@@ -9,8 +9,8 @@ Usage:
 Teardown steps:
   1. Stop the proxy (docker compose down)
   2. Stop all tools (chrome, web, github, web-bridge)
-  3. Find and remove any remaining CodeFreedom Docker containers (sandbox
-     sessions, orphaned containers, etc.)
+  3. Find and remove any remaining CodeFreedom Docker containers (orphaned
+     containers, etc.)
   4. Remove the shared ``codefreedom`` Docker network
   5. (Optional) Remove CodeFreedom Docker images, PG volumes, and dangling images
   6. Prompt the user to confirm removal of the CodeFreedom home directory
@@ -38,7 +38,7 @@ def _find_codefreedom_containers() -> list[str]:
     name merely contains ``codefreedom-`` as a substring).
 
     Matches containers whose name starts with known CodeFreedom prefixes:
-    - ``codefreedom-`` (sandbox sessions, legacy containers, tools)
+    - ``codefreedom-`` (legacy containers, tools)
     - ``litellm-codefreedom-`` (proxy containers)
 
     Returns container names sorted newest-first.

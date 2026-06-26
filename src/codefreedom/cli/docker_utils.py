@@ -426,7 +426,7 @@ def get_codefreedom_container_ports() -> set[int]:
     """Return host TCP ports bound by running CodeFreedom Docker containers.
 
     Queries Docker for all running containers whose names match known
-    CodeFreedom patterns (proxy, chrome, web, github, sandbox) and
+    CodeFreedom patterns (proxy, chrome, web, github) and
     extracts their host port mappings.  This covers containers started
     via ``cf run proxy start``, ``cf run tools <name> start``, and session-
     managed tools from ``acquire_tools``.

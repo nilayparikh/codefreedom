@@ -12,7 +12,7 @@ description: Install CodeFreedom and launch your first agent in five minutes.
 ## Prerequisites
 
 - **Python 3.10+** — for the CLI
-- **Docker** — for proxy and sandbox containers
+- **Docker** — for proxy and tool containers
 - **uv** — Python package manager
 
 Install uv if you don't have it:

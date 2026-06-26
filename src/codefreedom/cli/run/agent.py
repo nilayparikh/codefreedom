@@ -80,9 +80,6 @@ def validate_agent_args(args: argparse.Namespace) -> list[str]:
     """Validate common agent arguments. Returns list of warning messages."""
     warnings: list[str] = []
 
-    if getattr(args, "run_as_me", False) and not getattr(args, "sandbox", False):
-        warnings.append("--run-as-me is only valid with --sandbox, ignoring.")
-
     return warnings
 
 
@@ -146,7 +143,6 @@ def build_parser(parent: argparse.ArgumentParser) -> None:
     parent.epilog = (
         "examples:\n"
         "  cf r ag cc                       Launch Claude Code\n"
-        "  cf r ag mc --sandbox             Launch MiMo in sandbox\n"
         "  cf r ag pc                       Launch Pi Code\n"
         "  cf r ag cx                       Launch Codex\n"
         "  cf r ag list                     List available agents"

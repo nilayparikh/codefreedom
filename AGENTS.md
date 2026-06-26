@@ -7,7 +7,6 @@
 CodeFreedom is a CLI (`cf`) that sits between you and your code agent (Claude Code, MiMoCode, OpenCode). It provides:
 
 - **LLM proxy routing** via a self-hosted LiteLLM image (embedded PostgreSQL, multi-provider)
-- **Docker sandboxing** with GPU support (CUDA, ROCm) for isolated agent sessions
 - **Profile management** — model switching, env inheritance, tool declarations
 - **Browser tools** — Chrome (CDP + MCP), Camoufox stealth browser, GitHub MCP, Web Bridge
 - **Recipe system** — pre-built config bundles that wire up proxy, profiles, and providers in one command
@@ -83,23 +82,23 @@ The repo uses pre-commit. Hooks run automatically on `git commit`:
 
 ## Architecture
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full component inventory and dependency graph.
+See [docs/architecture.md](docs/architecture.md) for the full component inventory and dependency graph.
 
 ### Layer Model
 
 ```text
 User (CLI)
   |
-cli/          — command dispatch, user-facing logic
+cli/          -- command dispatch, user-facing logic
   |
-config/       — YAML loading, ${VAR} interpolation, schema validation
-core/         — env helpers, profiles re-exports
+config/       -- YAML loading, ${VAR} interpolation, schema validation, runtime settings
+core/         -- env helpers, container lifecycle, agent runtime, HTTP client
   |
-sandbox/      — container lifecycle, signals, terminal
-docker/       — Docker client helpers
-tools/        — tool classes, MCP endpoint dispatch
+docker/       -- Docker client helpers, image pull utilities
+tools/        -- tool classes, MCP endpoint dispatch
   |
-infra/        — Docker images, proxy config, recipes
+recipe/       -- recipe store, plan, merge, apply
+admin/        -- backup, restore, prune
 ```
 
 Each layer calls only the layer below it. No cross-layer or sideways calls.
@@ -117,6 +116,7 @@ Each layer calls only the layer below it. No cross-layer or sideways calls.
 cf setup    (s)   init (i) | config (c) | deinit (di)
 cf run      (r)   agent (ag) | proxy (px) | tools (tl)
 cf manage   (m)   doctor (dr) | update (up) | admin (adm/ad)
+cf git      (g)   cmt (c) | pr (p)
 ```
 
 ### Registered Agents
@@ -145,15 +145,25 @@ cf manage   (m)   doctor (dr) | update (up) | admin (adm/ad)
 - Use `from __future__ import annotations` at the top of every module
 - Import from the canonical source — never duplicate utilities
 
-### Shared Utilities — Single Source of Truth
+### Shared Utilities -- Single Source of Truth
 
 | Utility | Defined In | Import From |
 |---|---|---|
-| `eprint()` | `env_loader.py` | `from codefreedom.env_loader import eprint` |
+| `eprint()` | `log.py` | `from codefreedom.log import eprint` |
+| `tag()` | `log.py` | `from codefreedom.log import tag` |
 | `_VAR_REF_RE` | `config/interpolation.py` | `from codefreedom.config.interpolation import _VAR_REF_RE` |
 | `resolve_var()` / `resolve_dict()` / `interpolate_all()` | `config/interpolation.py` | `from codefreedom.config.interpolation import ...` |
-| `tag()` | `log.py` | `from codefreedom.log import tag` |
+| `ConfigError` | `config/errors.py` | `from codefreedom.config.errors import ConfigError` |
+| `ProfileError` | `config/errors.py` | `from codefreedom.config.errors import ProfileError` |
+| YAML loading | `config/yaml_utils.py` | `from codefreedom.config.yaml_utils import safe_load` |
 | `get_codefreedom_dir()` | `core/config.py` | `from codefreedom.core.config import get_codefreedom_dir` |
+| Proxy URL detection | `core/agent_runtime.py` | `from codefreedom.core.agent_runtime import detect_proxy_url` |
+| Proxy model fetch | `core/agent_runtime.py` | `from codefreedom.core.agent_runtime import fetch_proxy_models` |
+| Provider model building | `core/agent_runtime.py` | `from codefreedom.core.agent_runtime import build_provider_models` |
+| Container lifecycle | `core/container.py` | `from codefreedom.core.container import ...` |
+| Docker digest helpers | `docker/pull.py` | `from codefreedom.docker.pull import normalize_ref, parse_image_ref, get_local_digest` |
+| `resolve_agent_runtime()` | `config/runtime.py` | `from codefreedom.config.runtime import resolve_agent_runtime` |
+| `list_profiles()` | `config/runtime.py` | `from codefreedom.config.runtime import list_profiles` |
 | `load_config()` | `config/loader.py` | `from codefreedom.config import load_config` |
 
 **Do not duplicate** any of these in other modules.
@@ -169,7 +179,7 @@ All `eprint()` messages must use `tag('TAG')` from `codefreedom.log`. Bare `[TAG
 | **Green** | `OK`, `SET`, `SAME`, `CREATE`, `MKDIR`, `BACKUP`, `PRUNE`, `KEEP` |
 | **Yellow** | `WARN`, `SKIP`, `DEINIT`, `ADMIN`, `DELETE` |
 | **Red** (bold) | `FAIL`, `MISSING`, `ERROR` |
-| **Cyan** | `PLAN`, `SECRETS`, `RECIPE`, `STORE`, `PROXY`, `RESTORE`, `VSCODE`, `TOOLS`, `AGENT`, `DOCTOR`, `SANDBOX`, `MCP`, `FETCH`, `INFO`, `ENV`, `GPU`, `IMAGE`, `CONTAINER`, `NATIVE`, `CONFIG`, `LOCAL` |
+| **Cyan** | `PLAN`, `SECRETS`, `RECIPE`, `STORE`, `PROXY`, `RESTORE`, `VSCODE`, `TOOLS`, `AGENT`, `DOCTOR`, `SANDBOX`, `MCP`, `FETCH`, `INFO`, `ENV`, `GPU`, `IMAGE`, `CONTAINER`, `NATIVE`, `CONFIG`, `LOCAL`, `COMMIT`, `PUSH`, `LSP`, `LEAN-CTX`, `CODEX`, `PI`, `CHROME`, `CLEAN`, `EXEC`, `GITHUB`, `INIT`, `MIMO`, `OPENCODE`, `PROFILE`, `PROFILES`, `RUN`, `UPDATE`, `WEB`, `WEB-BRIDGE` |
 | **Dim** | Any tag not in the above sets |
 
 #### Output Streams
@@ -207,7 +217,6 @@ All `eprint()` messages must use `tag('TAG')` from `codefreedom.log`. Bare `[TAG
 | Recipe | `[RECIPE]` |
 | Update | `[UPDATE]` |
 | VS Code | `[VSCODE]` |
-| Launcher/sandbox | `[SANDBOX]` |
 | Environment loader | `[ENV]` |
 | Profile loader | `[PROFILE]` |
 | MCP | `[MCP]` |
@@ -302,7 +311,7 @@ pytest tests/test_admin_helpers.py::TestCategorize -q
 
 - `default` and `bare` are **standalone** — no inheritance
 - All other profiles inherit from `default`
-- Mode-specific overrides (`sandbox.env`, `local.env`) also inherit
+- Mode-specific overrides (`local.env`) also inherit
 - `tools` field declares tool containers to auto-start
 
 ### Environment Variable Chain
@@ -336,7 +345,7 @@ def run(args: argparse.Namespace) -> int: ...
 
 ### Docker Container Lifecycle
 
-Use shared helpers from `docker_utils.py`:
+Use shared helpers from `core/container.py`:
 
 | Helper | Purpose |
 |---|---|
@@ -348,12 +357,6 @@ Use shared helpers from `docker_utils.py`:
 | `start_tool_docker_guard(label)` | Check Docker available |
 | `stop_tool_container(settings, label)` | Stop and remove |
 | `load_tool_profile(...)` | Load YAML profile with defaults |
-
-### Sandbox Containers
-
-- Ephemeral: `codefreedom-XXXX` (random 4-hex), auto-removed on exit
-- Pattern: container runs `sleep infinity`; agent is `docker exec`'d into it
-- Volume mounts: workspace (rw), `~/.gitconfig` (ro), `~/.ssh` (ro)
 
 ### Tool Registry — Reference Counting
 
@@ -368,19 +371,18 @@ Tools are shared infrastructure. First session starts them, last session stops t
 
 ### Version Source of Truth
 
-Only `pyproject.toml` holds the version. `__init__.py` derives `__version__` from `importlib.metadata` — never edit it directly.
+`version.yaml` is the single source of truth for versioning. It holds the base version, dev iteration, and RC number. `pyproject.toml` is derived at release time by CI workflows and should never be edited on branches. `__init__.py` derives `__version__` from `importlib.metadata`.
 
 ## Docker Images
 
 | Image | Dockerfile | Use Case |
 |---|---|---|
-| Ubuntu | `docker/agents/Dockerfile.Agents` (target: ubuntu) | CPU-only, all agents |
-| CUDA | `docker/agents/Dockerfile.Agents` (target: cuda) | NVIDIA GPU, all agents |
-| ROCm | `docker/agents/Dockerfile.Agents` (target: rocm) | AMD GPU, all agents |
 | Chrome | `docker/chrome/Dockerfile.Chrome` | Headless Chromium |
 | Web | `docker/web/Dockerfile.Web` | Camoufox MCP |
 | GitHub MCP | `docker/github/Dockerfile.Github` | GitHub API tools |
-| LiteLLM | `docker/litellm/Dockerfile.LiteLLM` | LLM proxy + PG |
+| LiteLLM | `docker/litellm/Dockerfile.LitellmFinal` | LLM proxy + PG |
+| LiteLLM Base | `docker/litellm/Dockerfile.LitellmBase` | LiteLLM base image |
+| PG Base | `docker/litellm/Dockerfile.PgBase` | PostgreSQL base image |
 | Web Bridge | `docker/web-bridge/Dockerfile.Bridge` | SearXNG bridge |
 
 Docker tags must be **lowercase**.
@@ -389,7 +391,7 @@ Docker tags must be **lowercase**.
 
 ### `--dangerously-skip-permissions`
 
-Sandbox mode **always** passes this to Claude CLI inside the container. Local mode only passes it if the user explicitly requests it.
+Only pass this if the user explicitly requests it.
 
 ### Unicode breaks Windows CI
 
@@ -427,9 +429,9 @@ CodeFreedom canonical names must be hyphenated: `claude-code`, `mimo-code`, `ope
 
 All `print()`/`eprint()` feedback must use `tag('TAG')` from `codefreedom.log`. Bare `[TAG]` strings violate the convention. See the tag color map above.
 
-### `eprint` and `_VAR_REF_RE` — single source of truth
+### `eprint` and `_VAR_REF_RE` -- single source of truth
 
-`eprint()` is defined once in `env_loader.py`. `_VAR_REF_RE` is defined once in `core/interpolate.py`. Do not duplicate these in other modules.
+`eprint()` is defined once in `log.py`. `_VAR_REF_RE` is defined once in `config/interpolation.py`. Do not duplicate these in other modules.
 
 ## CI/CD
 
@@ -442,11 +444,9 @@ All CI is consolidated into `ci.yml`. No separate lint/test/type-check workflows
 | `ci.yml` | Push to ANY branch + PRs | Lint, type-check, unit tests, integration tests |
 | `publish-dev.yml` | workflow_dispatch | Build + publish dev version to PyPI (dev/v* only) |
 | `publish-rc.yml` | workflow_dispatch | Build + publish RC version to PyPI (rc/v* only) |
-| `pipy.yaml` | tag push (v*) | Build + publish final version to PyPI + GitHub Release |
-| `docker-agents.yml` | workflow_dispatch | Build + publish Docker agents images (ubuntu/cuda/rocm) |
-| `docker-*.yml` | workflow_dispatch | Build + publish other Docker images |
+| `pipy.yaml` | workflow_dispatch | Build + publish final version to PyPI + GitHub Release |
+| `docker-*.yml` | workflow_dispatch | Build + publish Docker images |
 | `trivy.yml` | Various | Security scanning |
-| `scorecard.yml` | Various | OpenSSF Scorecard |
 | `publish-docs.yml` | Various | MkDocs deployment |
 
 ### CI Stages (all in ci.yml)
@@ -458,14 +458,14 @@ All CI is consolidated into `ci.yml`. No separate lint/test/type-check workflows
 
 ### Branch Protection & Promotion Flow
 
-**CRITICAL: NEVER push directly to protected branches (main, dev/v*, rc/v*).**
+**CRITICAL: NEVER push directly to protected branches (main, prerelease/v*, release/v*).**
 
 Branch protection requires PRs and status checks. Direct pushes will be rejected.
 
 **Required promotion flow:**
 
 ```text
-feature/* → PR to dev/v* → PR to rc/v* → PR to main
+feature/* -> PR to prerelease/v* -> PR to release/v* -> PR to main
 ```
 
 Steps:
@@ -473,11 +473,11 @@ Steps:
 1. Create feature branch: `git checkout -b feature/your-feature`
 2. Commit changes on feature branch
 3. Push feature branch: `git push -u origin feature/your-feature`
-4. Create PR: feature → dev/v*
+4. Create PR: feature -> prerelease/v*
 5. Wait for CI checks to pass, merge PR
-6. Create PR: dev/v*→ rc/v*
+6. Create PR: prerelease/v* -> release/v*
 7. Wait for CI checks to pass, merge PR
-8. Create PR: rc/v* → main
+8. Create PR: release/v* -> main
 9. Wait for CI checks to pass, merge PR
 
 ### Release Process
@@ -488,15 +488,15 @@ Releases are triggered via GitHub Actions `workflow_dispatch` — no local scrip
 
 **Version format:**
 
-- **Dev**: `{version}rc{rc}.dev{dev}` (e.g., `0.2.2rc1.dev1`) — from `dev/v*` branches
-- **RC**: `{version}rc{rc}` (e.g., `0.2.2rc1`) — from `rc/v*` branches
-- **Final**: `{version}` (e.g., `0.2.2`) — tag on `main`
+- **Dev**: `{version}rc{rc}.dev{dev}` (e.g., `0.2.2rc1.dev1`) -- from `prerelease/v*` branches
+- **RC**: `{version}rc{rc}` (e.g., `0.2.2rc1`) -- from `release/v*` branches
+- **Final**: `{version}` (e.g., `0.2.2`) -- tag on `main`
 
 **Promotion steps:**
 
 1. Ensure changes are promoted to desired branch (see promotion flow above)
-2. For dev releases: Go to **Actions → Publish Dev → Run workflow** (must be on `dev/v*`)
-3. For RC releases: Go to **Actions → Publish RC → Run workflow** (must be on `rc/v*`)
+2. For dev releases: Go to **Actions -> Publish Dev -> Run workflow** (must be on `prerelease/v*`)
+3. For RC releases: Go to **Actions -> Publish RC -> Run workflow** (must be on `release/v*`)
 4. For final releases: Run `python scripts/release.py` on `main` to create tag, then `pipy.yaml` publishes
 
 **After final release:** `release.py` auto-increments `version` patch and resets `rc`/`dev` counters.
@@ -536,10 +536,10 @@ Configured in `.mcp.json`:
 
 | Document | Purpose |
 |---|---|
-| `specs/cli-reference.md` | Complete CLI command reference |
-| `specs/cli-output.md` | CLI output conventions |
-| `specs/code-style.md` | Code style and patterns |
-| `specs/patterns.md` | Key patterns (profiles, env chain, tools) |
-| `specs/docker.md` | Docker images and naming |
-| `specs/ci-cd.md` | CI/CD workflows |
-| `specs/tests.md` | Test coverage and architecture |
+| `docs/cli-reference.md` | Complete CLI command reference |
+| `docs/cli-output.md` | CLI output conventions |
+| `docs/code-style.md` | Code style and patterns |
+| `docs/patterns.md` | Key patterns (profiles, env chain, tools) |
+| `docs/docker.md` | Docker images and naming |
+| `docs/ci-cd.md` | CI/CD workflows |
+| `docs/tests.md` | Test coverage and architecture |

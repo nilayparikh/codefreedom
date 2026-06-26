@@ -1,11 +1,11 @@
-"""Codex subcommand -- sandboxed or local launch with 0-click proxy config.
+"""Codex subcommand -- local launch with 0-click proxy config.
 
 Auto-detects the running CodeFreedom LiteLLM proxy, generates a complete
 ``config.toml`` with a custom model provider, and launches Codex
 (``codex``) with zero manual configuration.
 
 Usage:
-    codefreedom run agent codex-code [--sandbox] [--profile NAME] [--list-profiles] [agent-args...]
+    codefreedom run agent codex-code [--profile NAME] [--list-profiles] [agent-args...]
     codefreedom run agent codex-code [options] [-- <agent-args>]
 
 Proxy auto-config:
@@ -32,41 +32,16 @@ from codefreedom.core.config import (
 )
 from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import generate_session_id
-from codefreedom.sandbox.signals import forward_signal
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:
     """Register Codex-specific arguments on the agent parser."""
-    gpu_group = parser.add_mutually_exclusive_group()
-    gpu_group.add_argument(
-        "--cuda",
-        action="store_true",
-        dest="gpu_cuda",
-        help="Use CUDA sandbox image for NVIDIA GPUs (only with --sandbox)",
-    )
-    gpu_group.add_argument(
-        "--rocm",
-        action="store_true",
-        dest="gpu_rocm",
-        help="Use ROCm sandbox image for AMD GPUs (only with --sandbox)",
-    )
-    parser.add_argument(
-        "--sandbox",
-        action="store_true",
-        help="Run inside a sandboxed Docker container (default: native)",
-    )
-    parser.add_argument(
-        "--run-as-me",
-        action="store_true",
-        help="Run sandbox container as host user (uid/gid match). Only valid with --sandbox.",
-    )
+    pass
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DEFAULT_CODEX_IMAGE = "docker.io/nilayparikh/codefreedom:ubuntu-latest"
 CODEX_CONFIG_NAME = "config.toml"
-_CONTAINER_PREFIX = "codefreedom-codex-"
 
 CODEFREEDOM_DIR = get_codefreedom_dir()
 
@@ -385,23 +360,6 @@ def _merge_codex_config(existing: str, new: str) -> str:
     return result
 
 
-def _ensure_codex_sandbox_dir(profile_name: str) -> tuple[Path, Path]:
-    """Create isolated sandbox directories for Codex.
-
-    Returns (codex_home, config_path) -- the CODEX_HOME directory
-    and the path to the generated ``config.toml`` config file.
-    """
-    profile_dir = CODEFREEDOM_DIR / "codex-code" / "sandbox" / profile_name
-    profile_dir.mkdir(parents=True, exist_ok=True)
-
-    codex_home = profile_dir / "home"
-    codex_home.mkdir(parents=True, exist_ok=True)
-
-    config_path = codex_home / CODEX_CONFIG_NAME
-
-    return codex_home, config_path
-
-
 # ── Execution ─────────────────────────────────────────────────────────────────
 
 
@@ -461,8 +419,8 @@ def run_local(
 
     try:
         proc = subprocess.Popen(cmd, env=env)
-        signal.signal(signal.SIGINT, lambda s, f: forward_signal(proc, s, f))
-        signal.signal(signal.SIGTERM, lambda s, f: forward_signal(proc, s, f))
+        signal.signal(signal.SIGINT, lambda s, f: proc.send_signal(s) if proc and proc.poll() is None else None)
+        signal.signal(signal.SIGTERM, lambda s, f: proc.send_signal(s) if proc and proc.poll() is None else None)
         proc.wait()
         return proc.returncode
     except FileNotFoundError:
@@ -470,99 +428,6 @@ def run_local(
         return 1
     except KeyboardInterrupt:
         return 130
-
-
-def run_docker(
-    profile_env: dict[str, str],
-    codex_args: list[str],
-    workspace_dir: Path,
-    profile_name: str,
-    sandbox_images: dict[str, str] | None = None,
-    run_as_me: bool = False,
-    gpu_type: str | None = None,
-    acquired_tools: list[str] | None = None,
-) -> int:
-    """Run ``codex`` inside an ephemeral Docker container.
-
-    Delegates container lifecycle to the shared sandbox launcher.
-    """
-    from codefreedom.sandbox.launcher import prepare_sandbox, run_sandbox
-
-    prep = prepare_sandbox(
-        profile_env=profile_env,
-        sandbox_images=sandbox_images or {},
-        default_image=DEFAULT_CODEX_IMAGE,
-        container_prefix=_CONTAINER_PREFIX,
-        run_as_me=run_as_me,
-        gpu_type=gpu_type,
-    )
-
-    proxy_url = _detect_proxy_url(profile_env)
-    eprint(f"{tag('CODEX')} Detecting proxy at {proxy_url}...")
-    codex_home_dir, config_path = _ensure_codex_sandbox_dir(profile_name)
-    config_content, catalog_content = _generate_codex_config(
-        proxy_url, profile_env, codex_home_dir
-    )
-
-    # Write config.toml (merge with existing)
-    _write_codex_config(config_content, codex_home_dir)
-
-    # Register MCP servers in config.toml
-    if acquired_tools:
-        _update_codex_mcp(acquired_tools, codex_home_dir)
-
-    # Write model catalog
-    if catalog_content:
-        catalog_path = codex_home_dir / "model_catalog.json"
-        catalog_path.write_text(catalog_content, encoding="utf-8")
-        catalog_path.chmod(0o600)
-        eprint(f"{tag('CODEX')} Generated model catalog at {catalog_path}")
-
-    base_opts = [
-        "--network",
-        "host",
-        *prep.container_user_flag,
-        "--ipc=host",
-        "-v",
-        f"{workspace_dir}:/workspace",
-        "-w",
-        "/workspace",
-        "-v",
-        f"{Path.home() / '.gitconfig'}:{prep.container_home}/.gitconfig:ro",
-        "-v",
-        f"{Path.home() / '.ssh'}:{prep.container_home}/.ssh:ro",
-        "-v",
-        f"{codex_home_dir}:{prep.container_home}/.codex",
-        "-e",
-        f"HOME={prep.container_home}",
-        "-e",
-        f"CODEX_HOME={prep.container_home}/.codex",
-        "-e",
-        "IS_SANDBOX=1",
-    ]
-
-    exec_image_cmd = (
-        ["docker", "exec", "-it"]
-        + prep.container_user_flag
-        + ["-e", f"HOME={prep.container_home}"]
-        + ["-e", f"CODEX_HOME={prep.container_home}/.codex"]
-        + [prep.container_name, "codex"]
-        + _inject_default_model(codex_args, profile_env)
-    )
-
-    exec_extra_env = [
-        "-e",
-        f"CODEX_HOME={prep.container_home}/.codex",
-    ]
-
-    return run_sandbox(
-        image=prep.image,
-        container_name=prep.container_name,
-        base_opts=base_opts,
-        env_flags=prep.env_flags,
-        exec_image_cmd=exec_image_cmd,
-        exec_extra_env=exec_extra_env,
-    )
 
 
 # ── Init command ─────────────────────────────────────────────────────────────
@@ -586,7 +451,6 @@ def init_codex() -> int:
             "",
             "To launch Codex:",
             "  cf run agent codex-code              # native mode",
-            "  cf run agent codex-code --sandbox    # isolated Docker sandbox",
         ],
         docs_url="https://developers.openai.com/codex",
         include_disclaimer=False,
@@ -642,23 +506,6 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
-# ── Status / Stop ─────────────────────────────────────────────────────────────
-
-
-def status() -> int:
-    """Show all codefreedom codex-code sandbox containers. Returns exit code."""
-    from codefreedom.sandbox.launcher import sandbox_status
-
-    return sandbox_status(_CONTAINER_PREFIX)
-
-
-def stop() -> int:
-    """Stop and remove all codefreedom codex-code sandbox containers. Returns exit code."""
-    from codefreedom.sandbox.launcher import sandbox_stop
-
-    return sandbox_stop(_CONTAINER_PREFIX)
-
-
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 
@@ -683,7 +530,7 @@ def run(args: argparse.Namespace) -> int:
 
     profile_name = args.profile or "default"
     profiles_path = resolve_codex_profiles_path()
-    mode = "sandbox" if args.sandbox else "local"
+    mode = "local"
     runtime = resolve_agent_runtime(
         "codex-code",
         workspace_dir=workspace_dir,
@@ -693,7 +540,7 @@ def run(args: argparse.Namespace) -> int:
 
     from codefreedom.cli.common import load_profile_with_tools
 
-    profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
+    profile_env, tools, exit_code = load_profile_with_tools(
         profile_name, profiles_path, runtime.base_env, mode,
         agent="codex-code",
     )
@@ -705,14 +552,6 @@ def run(args: argparse.Namespace) -> int:
         if master_key:
             profile_env["PROXY_API_KEY"] = master_key
 
-    run_as_me = getattr(args, "run_as_me", False)
-
-    gpu_type: str | None = None
-    if getattr(args, "gpu_cuda", False):
-        gpu_type = "cuda"
-    elif getattr(args, "gpu_rocm", False):
-        gpu_type = "rocm"
-
     session_id = generate_session_id(mode)
 
     from codefreedom.cli.common import acquire_and_run
@@ -722,24 +561,8 @@ def run(args: argparse.Namespace) -> int:
             from codefreedom.launcher import _write_mcp_json
 
             _write_mcp_json(workspace_dir, acquired_tools)
-        if args.sandbox:
-            return run_docker(
-                profile_env,
-                args.agent_args,
-                workspace_dir,
-                profile_name,
-                sandbox_images=sandbox_images,
-                run_as_me=run_as_me,
-                gpu_type=gpu_type,
-                acquired_tools=acquired_tools,
-            )
-        else:
-            if run_as_me:
-                eprint(
-                    f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring."
-                )
-            return run_local(
-                profile_env, args.agent_args, acquired_tools=acquired_tools
-            )
+        return run_local(
+            profile_env, args.agent_args, acquired_tools=acquired_tools
+        )
 
     return acquire_and_run(session_id, tools, profile_name, _run)

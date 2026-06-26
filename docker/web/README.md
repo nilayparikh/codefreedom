@@ -35,7 +35,7 @@ docker build \
 ```bash
 docker run -d --name codefreedom-camoufox \
   -p 8420:8420 \
-  -v ~/.codefreedom/sandbox/tools/camoufox:/userdata \
+  -v ~/.codefreedom/tools/camoufox:/userdata \
   codefreedom:web-latest
 ```
 

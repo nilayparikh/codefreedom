@@ -20,11 +20,17 @@ mypy src/
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `ci.yml` | Push to ANY branch + PRs | Lint, type-check, unit tests, integration tests, commit lint (PRs only) |
-| `release.yml` | workflow_dispatch | Atomic bump + changelog + commit + tag + push |
-| `pipy.yaml` | workflow_dispatch | Build + publish to PyPI + GitHub Release (manual only) |
-| `docker-*.yml` | workflow_dispatch | Build, sign, publish Docker images (manual trigger only) |
+| `publish-dev.yml` | workflow_dispatch | Build + publish dev version to PyPI (`dev/v*` only) |
+| `publish-rc.yml` | workflow_dispatch | Build + publish RC version to PyPI (`rc/v*` only) |
+| `pipy.yaml` | workflow_dispatch | Build + publish final version to PyPI + GitHub Release (manual only) |
+| `docker-chrome.yml` | workflow_dispatch | Build, sign, publish Chrome Docker image |
+| `docker-litellm.yml` | workflow_dispatch | Build, sign, publish LiteLLM Docker image |
+| `docker-web.yml` | workflow_dispatch | Build, sign, publish Camoufox MCP Docker image |
+| `docker-web-bridge.yml` | workflow_dispatch | Build, sign, publish Web Bridge Docker image |
+| `docker-github.yml` | workflow_dispatch | Build, sign, publish GitHub MCP Docker image |
+| `docker-litellm-base.yml` | workflow_dispatch | Build, sign, publish LiteLLM base Docker image |
+| `docker-litellm-pg-base.yml` | workflow_dispatch | Build, sign, publish PostgreSQL base Docker image |
 | `trivy.yml` | Push to main, PRs, weekly | Security scanning |
-| `scorecard.yml` | Push to main, weekly | OpenSSF Scorecard |
 | `publish-docs.yml` | Push to main (pages changes) | MkDocs to GitHub Pages |
 
 ## CI Stages (all in ci.yml)
@@ -37,9 +43,9 @@ mypy src/
 
 ## Release Process
 
-Releases are triggered via GitHub Actions `workflow_dispatch` — no local scripts needed.
+Releases are triggered via GitHub Actions `workflow_dispatch` -- no local scripts needed.
 
-1. Go to **Actions → Release → Run workflow**
+1. Go to **Actions -> Release -> Run workflow**
 2. Enter version (e.g., `0.2.1`), select type (dev/rc/final)
 3. Workflow atomically: bumps version, generates changelog, commits, tags, pushes
 4. Manually trigger `pipy.yaml` to publish to PyPI + create GitHub Release

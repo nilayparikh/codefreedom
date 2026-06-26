@@ -1,7 +1,7 @@
-"""Code agent subcommand — launch with profile-based routing and sandboxing.
+"""Code agent subcommand — launch with profile-based routing.
 
 Usage:
-    codefreedom run agent claude-code [--profile NAME] [--sandbox] [--list-profiles] [agent-args...]
+    codefreedom run agent claude-code [--profile NAME] [--list-profiles] [agent-args...]
     codefreedom run agent claude-code [options] [-- <agent-args>]
 
 VS Code integration: see `codefreedom setup config vscode`.
@@ -15,37 +15,12 @@ from pathlib import Path
 from codefreedom.config.runtime import list_profiles, resolve_agent_runtime
 from codefreedom.core.config import resolve_profiles_path
 from codefreedom.log import eprint, tag
-from codefreedom.launcher import run_docker, run_local
+from codefreedom.launcher import run_local
 from codefreedom.tools.registry import generate_session_id
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:
     """Register Claude-specific arguments on the agent parser."""
-    # GPU image flags (mutually exclusive, only meaningful with --sandbox)
-    gpu_group = parser.add_mutually_exclusive_group()
-    gpu_group.add_argument(
-        "--cuda",
-        action="store_true",
-        dest="gpu_cuda",
-        help="Use CUDA sandbox image for NVIDIA GPUs (only with --sandbox)",
-    )
-    gpu_group.add_argument(
-        "--rocm",
-        action="store_true",
-        dest="gpu_rocm",
-        help="Use ROCm sandbox image for AMD GPUs (only with --sandbox)",
-    )
-
-    parser.add_argument(
-        "--sandbox",
-        action="store_true",
-        help="Run inside a sandboxed Docker container (default: native)",
-    )
-    parser.add_argument(
-        "--run-as-me",
-        action="store_true",
-        help="Run sandbox container as host user (uid/gid match). Only valid with --sandbox.",
-    )
     parser.add_argument(
         "--native-models",
         action="store_true",
@@ -190,17 +165,10 @@ def run(args: argparse.Namespace) -> int:
     workspace_dir = Path.cwd()
     eprint(f"{tag('ENV')} Loading configuration...")
 
-    # ── GPU type from --cuda / --rocm flags ────────────────────────────────
-    gpu_type: str | None = None
-    if getattr(args, "gpu_cuda", False):
-        gpu_type = "cuda"
-    elif getattr(args, "gpu_rocm", False):
-        gpu_type = "rocm"
-
     # ── Load profile ───────────────────────────────────────────────────────
     profile_name = args.profile or "default"
     profiles_path = resolve_profiles_path()
-    mode = "sandbox" if args.sandbox else "local"
+    mode = "local"
     runtime = resolve_agent_runtime(
         "claude-code",
         workspace_dir=workspace_dir,
@@ -210,7 +178,7 @@ def run(args: argparse.Namespace) -> int:
 
     from codefreedom.cli.common import load_profile_with_tools
 
-    profile_env, sandbox_images, tools, exit_code = load_profile_with_tools(
+    profile_env, tools, exit_code = load_profile_with_tools(
         profile_name, profiles_path, runtime.base_env, mode,
         agent="claude-code",
     )
@@ -223,7 +191,6 @@ def run(args: argparse.Namespace) -> int:
         _NATIVE_STRIP_VARS = {
             "ANTHROPIC_AUTH_TOKEN",
             "ANTHROPIC_BASE_URL",
-            "IS_SANDBOX",
         }
         for var in _NATIVE_STRIP_VARS:
             if var in profile_env:
@@ -233,7 +200,6 @@ def run(args: argparse.Namespace) -> int:
                 del profile_env[var]
 
     dangerously_skip = getattr(args, "dangerously_skip_permissions", False)
-    run_as_me = getattr(args, "run_as_me", False)
 
     # ── Tools: ensure profile-declared tools are running ─────────────────
     # Tools are shared and persistent.  Start them if not already running.
@@ -243,28 +209,10 @@ def run(args: argparse.Namespace) -> int:
     from codefreedom.cli.common import acquire_and_run
 
     def _run(acquired_tools: list[str]) -> int:
-        if args.sandbox:
-            # --run-as-me is only meaningful with --sandbox; silently ignore otherwise
-            return run_docker(
-                profile_env,
-                args.agent_args,
-                workspace_dir,
-                profile_name,
-                gpu_type=gpu_type,
-                sandbox_images=sandbox_images,
-                run_as_me=run_as_me,
-                container_name=session_id,
-                acquired_tools=acquired_tools,
-            )
-        else:
-            if run_as_me:
-                eprint(
-                    f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring."
-                )
-            if acquired_tools:
-                from codefreedom.launcher import _register_claude_mcp_servers
+        if acquired_tools:
+            from codefreedom.launcher import _register_claude_mcp_servers
 
-                _register_claude_mcp_servers(workspace_dir, acquired_tools)
-            return run_local(profile_env, args.agent_args, dangerously_skip)
+            _register_claude_mcp_servers(workspace_dir, acquired_tools)
+        return run_local(profile_env, args.agent_args, dangerously_skip)
 
     return acquire_and_run(session_id, tools, profile_name, _run)

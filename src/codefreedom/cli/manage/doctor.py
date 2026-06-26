@@ -695,51 +695,6 @@ def _check_claude_env_var(name: str, label: str) -> CheckResult:
     return _skip(f"{name} is not set (optional — {label})")
 
 
-# ── Section: Sandbox ────────────────────────────────────────────────────────
-
-
-@_section("Sandbox")
-def _check_sandbox_dir() -> CheckResult:
-    cf_dir = get_codefreedom_dir()
-    sandbox_default = cf_dir / "claude-code" / "sandbox" / "default"
-    if not sandbox_default.exists():
-        return _ok(f"{sandbox_default} will be created on first sandbox run")
-    return _ok(f"{sandbox_default} exists")
-
-
-@_section("Sandbox")
-def _check_sandbox_profiles() -> CheckResult:
-    from codefreedom.core.config import get_config_dir
-
-    config_dir = get_config_dir()
-    profiles_path = config_dir / "profiles.yaml"
-    if not profiles_path.exists():
-        return _skip("(no profiles.yaml to check sandbox settings)")
-
-    try:
-        import yaml
-
-        with open(profiles_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        if not isinstance(data, dict):
-            return _skip("(could not read profiles.yaml)")
-        profiles_section = data.get("profiles", {})
-        if isinstance(profiles_section, dict):
-            for aname, agent_data in profiles_section.items():
-                if not isinstance(agent_data, dict):
-                    continue
-                agent_profiles = agent_data.get("profiles", {})
-                if isinstance(agent_profiles, dict):
-                    for pname, pdata in agent_profiles.items():
-                        if isinstance(pdata, dict) and "sandbox_images" in pdata:
-                            return _ok(
-                                f"Profile '{aname}.{pname}' has sandbox image configuration"
-                            )
-        return _skip("(no sandbox images configured in profiles)")
-    except (yaml.YAMLError, OSError):
-        return _skip("(could not read profiles.yaml)")
-
-
 # ── Section: Proxy Status ──────────────────────────────────────────────────
 
 

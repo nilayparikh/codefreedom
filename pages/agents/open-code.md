@@ -14,8 +14,7 @@ OpenCode is a terminal-native AI coding agent. CodeFreedom provides 0-click prox
 ## Commands
 
 ```bash
-cf run agent open-code                    # Launch (native mode)
-cf run agent open-code --sandbox          # Launch (sandboxed)
+cf run agent open-code                    # Launch
 cf run agent open-code -p deepseek        # Launch with a profile
 cf run agent open-code status             # Show proxy and config status
 cf run agent open-code stop               # Stop the agent
@@ -24,16 +23,13 @@ cf run agent open-code stop               # Stop the agent
 Short:
 
 ```bash
-cf r ag oc                               # Launch (native)
-cf r ag oc --sandbox                     # Launch (sandboxed)
+cf r ag oc                               # Launch
 ```
 
 ## Flags
 
 | Flag | Description |
 | --- | --- |
-| `--sandbox` | Run inside a Docker container |
-| `--run-as-me` | Run sandbox as host user (uid/gid match) |
 | `-p NAME`, `--profile NAME` | Load a named profile |
 | `-l`, `--list-profiles` | List available profiles |
 
@@ -59,15 +55,6 @@ When launched natively, CodeFreedom:
 2. Resolves the selected profile's environment variables
 3. Generates `opencode.json` with proxy model discovery
 4. Launches `opencode` with `OPENCODE_CONFIG` pointing to the generated config
-
-### Sandbox Mode
-
-Sandbox mode runs OpenCode inside a Docker container with:
-
-- Isolated filesystem
-- Mounted workspace directory
-- Tool endpoints injected via MCP config
-- Proxy configuration auto-generated inside the container
 
 ### Config Generation
 

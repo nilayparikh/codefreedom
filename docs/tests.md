@@ -4,8 +4,8 @@
 
 Tests verify CodeFreedom's correctness at two levels:
 
-1. **Unit tests** — pure logic with zero I/O. Fast (runs in <2s), deterministic, no side effects.
-2. **Integration tests** — exercise filesystem, subprocess, Docker, or network. Slower (~10s), may need mocking.
+1. **Unit tests** -- pure logic with zero I/O. Fast (runs in <2s), deterministic, no side effects.
+2. **Integration tests** -- exercise filesystem, subprocess, Docker, or network. Slower (~10s), may need mocking.
 
 ## Methodology
 
@@ -20,8 +20,8 @@ Tests verify CodeFreedom's correctness at two levels:
 
 Ask: **"Does this test read/write files, call subprocess, or make network requests (even mocked)?"**
 
-- **Yes** → integration
-- **No** → unit
+- **Yes** -> integration
+- **No** -> unit
 
 If a test uses `tmp_path` for filesystem assertions (not just as a throwaway), it's integration. If `tmp_path` is only used to set `CODEFREEDOM_HOME` for env-var resolution, it's unit.
 
@@ -47,10 +47,10 @@ pytest tests/test_admin_helpers.py::TestCategorize -q
 ### Pre-Commit Gate
 
 ```bash
-# Fast gate — unit tests only
+# Fast gate -- unit tests only
 pytest tests/ -m unit -q --tb=short
 
-# Full gate — all tests
+# Full gate -- all tests
 pytest tests/ -q --tb=short
 ```
 
@@ -64,9 +64,13 @@ Test files mirror source structure and are split by responsibility:
 | `test_admin_backup.py` | Backup/restore/prune/list/inspect, PostgreSQL dump | integration |
 | `test_recipe_merge.py` | DeepDiff merge, env merge, recursive merge, installation orchestration | unit |
 | `test_recipe_io.py` | GitHub fetch, local resolution, summary, end-to-end apply, store resolution | integration |
+| `test_recipe_compose_compatibility.py` | Docker Compose compatibility for recipes | unit |
+| `test_recipe_generated_artifacts.py` | Generated artifacts for recipes | unit |
+| `test_recipe_materialize.py` | Recipe materialization | unit |
 | `test_vscode_proxy_helpers.py` | Model ID resolution, deduplication, entry building, reasoning effort | unit |
 | `test_vscode_proxy_io.py` | Master key resolution, proxy URLs, health check, model fetch, alias/route loading | integration |
 | `test_vscode_proxy_cmd.py` | Full CLI command flow with mocked network | integration |
+| `test_vscode_claude.py` | Claude Code VS Code settings | unit |
 | `test_agent_dispatch.py` | Agent registry, name validation, alias resolution | unit |
 | `test_mcp_endpoints.py` | MCP endpoint configuration for all tools | unit |
 | `test_pi_helpers.py` | Pi-code extension generation, model building, profile reading | unit |
@@ -75,40 +79,48 @@ Test files mirror source structure and are split by responsibility:
 | `test_opencode_helpers.py` | OpenCode config generation, provider building | unit |
 | `test_opencode_io.py` | OpenCode proxy detection, model fetching | integration |
 | `test_claudecode_helpers.py` | Claude Code config generation | unit |
+| `test_codex_helpers.py` | Codex Code config generation | unit |
 | `test_chrome.py` | Chrome tool lifecycle | integration |
 | `test_web.py` | Web tool lifecycle | integration |
 | `test_github.py` | GitHub MCP tool lifecycle | integration |
 | `test_web_bridge.py` | Web bridge tool lifecycle | integration |
 | `test_tool_registry.py` | Tool registry, reference counting | unit |
+| `test_tool_override.py` | Tool override behavior | unit |
 | `test_docker_utils.py` | Docker utility functions | unit |
 | `test_docker_client.py` | Docker client operations | integration |
-| `test_launcher.py` | Sandbox launcher, container lifecycle | integration |
-| `test_sandbox_launcher.py` | Sandbox-specific launcher tests | integration |
 | `test_profiles.py` | Profile loading, inheritance | unit |
 | `test_env_loader.py` | Environment variable loading, chain resolution | unit |
 | `test_log.py` | Logging, tag() helper | unit |
 | `test_doctor.py` | Doctor command, environment validation | integration |
 | `test_deinit.py` | Deinit command, cleanup | integration |
 | `test_proxy.py` | Proxy validation, config loading | integration |
+| `test_proxy_env.py` | Proxy environment resolution | unit |
 | `test_image_router.py` | Image routing, VLM model detection | unit |
 | `test_reasoning_efforts_mapping.py` | Reasoning effort configuration | unit |
 | `test_litellm_image_files.py` | LiteLLM Dockerfile validation | unit |
 | `test_http_client.py` | HTTP client operations | integration |
+| `test_config_display.py` | Config display/formatting | unit |
+| `test_settings.py` | Settings loading and resolution | unit |
+| `test_git_helpers.py` | Git workflow helpers | unit |
+| `test_git_io.py` | Git workflow I/O operations | integration |
+| `test_lint_configs.py` | Lint configuration validation | unit |
+| `test_project_config.py` | Project config helpers | unit |
+| `test_unified_image.py` | Unified image handling | unit |
 
 ### Naming Convention
 
-- `test_<module>_helpers.py` — pure logic tests (unit)
-- `test_<module>_io.py` — I/O-dependent tests (integration)
-- `test_<module>_cmd.py` — CLI command tests (integration)
-- `test_<module>.py` — single-responsibility module (either unit or integration, use `pytestmark`)
+- `test_<module>_helpers.py` -- pure logic tests (unit)
+- `test_<module>_io.py` -- I/O-dependent tests (integration)
+- `test_<module>_cmd.py` -- CLI command tests (integration)
+- `test_<module>.py` -- single-responsibility module (either unit or integration, use `pytestmark`)
 
 ## Conventions
 
 - All tests use `tmp_path` fixtures and `monkeypatch` for isolation.
 - Never touch real `~/.codefreedom/` during tests.
-- `conftest.py` sets `CODEFREEDOM_HOME` to a function-scoped `tmp_path` — each test gets its own directory.
+- `conftest.py` sets `CODEFREEDOM_HOME` to a function-scoped `tmp_path` -- each test gets its own directory.
 - Test files use `pytestmark = pytest.mark.unit` or `pytest.mark.integration` at module level.
-- Private functions (`_prefix`) are tested directly — this is intentional for internal API coverage.
+- Private functions (`_prefix`) are tested directly -- this is intentional for internal API coverage.
 - Mock at the lowest boundary: mock `_do_get` for HTTP tests, not `get_json` (which is imported locally).
 
 ## Adding New Tests

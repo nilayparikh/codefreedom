@@ -2,11 +2,11 @@
 
 Provides:
     display_profiles()     — display available profiles in a consistent format
-    load_profile_env_only() — load profile env without tools/sandbox images
+    load_profile_env_only() — load profile env without tools
     write_output_file()    — write content to file with security permissions
     confirm_stdout_output() — output to stdout with confirmation prompt
     run_tool_action()      — dispatch tool actions (start/stop/restart/status)
-    add_profile_args()     — add common --profile/--sandbox/--list-profiles args
+    add_profile_args()     — add common --profile/--list-profiles args
 """
 
 from __future__ import annotations
@@ -61,8 +61,6 @@ def display_profiles(
             if len(p["env_keys"]) > 5:
                 keys_summary += ", …"
             eprint(f"    sets: {keys_summary}")
-        if p.get("sandbox_env_keys"):
-            eprint(f"    sandbox: {', '.join(p['sandbox_env_keys'])}")
         if p.get("local_env_keys"):
             eprint(f"    local: {', '.join(p['local_env_keys'])}")
         if show_tools and p.get("tools"):
@@ -81,7 +79,7 @@ def load_profile_env_only(
     error_prefix: str = "codefreedom setup init",
     agent: str = "",
 ) -> tuple[dict[str, str], int]:
-    """Load profile env without tools or sandbox images.
+    """Load profile env without tools.
 
     This is the single source of truth for profile loading in cmd_config
     functions (claude config, mimo config, etc).
@@ -203,8 +201,8 @@ def load_profile_with_tools(
     mode: str,
     show_errors: bool = True,
     agent: str = "",
-) -> tuple[dict[str, str], dict[str, str], list[str], int]:
-    """Load profile env, sandbox images, and tools in one call.
+) -> tuple[dict[str, str], list[str], int]:
+    """Load profile env and tools in one call.
 
     This eliminates the repeated profile loading pattern across subcommands.
 
@@ -212,19 +210,18 @@ def load_profile_with_tools(
         profile_name: Name of the profile to load
         profiles_path: Path to the profiles file
         base_env: Base environment from load_env_chain()
-        mode: "sandbox" or "local"
+        mode: "local"
         show_errors: Whether to print error messages (default True)
         agent: Canonical agent name (e.g. "claude-code").  When empty it is
             inferred from the profiles filename.
 
     Returns:
-        Tuple of (profile_env, sandbox_images, tools, exit_code)
+        Tuple of (profile_env, tools, exit_code)
         exit_code is 0 on success, 1 on error.
     """
     from codefreedom.config.errors import ProfileError
 
     profile_env: dict[str, str] = {}
-    sandbox_images: dict[str, str] = {}
     tools: list[str] = []
 
     if not profiles_path.exists() and profile_name != "default":
@@ -232,11 +229,11 @@ def load_profile_with_tools(
             eprint(
                 f"[ERROR] Profile '{profile_name}' requested but no profiles file found."
             )
-        return profile_env, sandbox_images, tools, 1
+        return profile_env, tools, 1
     elif not profiles_path.exists():
         if show_errors:
             eprint(f"{tag('PROFILE')} No profiles file found. Using defaults only.")
-        return profile_env, sandbox_images, tools, 0
+        return profile_env, tools, 0
 
     try:
         resolved_agent = agent or _agent_name_from_profiles_path(profiles_path)
@@ -247,14 +244,13 @@ def load_profile_with_tools(
             mode=mode,
         )
         profile_env = runtime.profile_env
-        sandbox_images = runtime.sandbox_images
         tools = runtime.tools
     except (ProfileError, ValueError) as e:
         if show_errors:
             eprint(f"{tag('ERROR')} {e}")
-        return profile_env, sandbox_images, tools, 1
+        return profile_env, tools, 1
 
-    return profile_env, sandbox_images, tools, 0
+    return profile_env, tools, 0
 
 
 def _agent_name_from_profiles_path(profiles_path: Path) -> str:
@@ -364,7 +360,6 @@ def run_tool_action(
 def add_profile_args(
     parser: argparse.ArgumentParser,
     *,
-    add_sandbox: bool = False,
     add_list_profiles: bool = True,
 ) -> None:
     """Add common --profile and --list-profiles arguments to a parser.
@@ -373,7 +368,6 @@ def add_profile_args(
 
     Args:
         parser: The argument parser to add arguments to
-        add_sandbox: Whether to add --sandbox flag (default False)
         add_list_profiles: Whether to add --list-profiles flag (default True)
     """
     parser.add_argument(
@@ -388,17 +382,6 @@ def add_profile_args(
             "--list-profiles",
             action="store_true",
             help="List available profiles and exit",
-        )
-    if add_sandbox:
-        parser.add_argument(
-            "--sandbox",
-            action="store_true",
-            help="Run inside a sandboxed Docker container (default: native)",
-        )
-        parser.add_argument(
-            "--run-as-me",
-            action="store_true",
-            help="Run sandbox container as host user (uid/gid match). Only valid with --sandbox.",
         )
 
 

@@ -14,8 +14,7 @@ MiMo Code is Xiaomi's terminal-native coding agent. CodeFreedom provides 0-click
 ## Commands
 
 ```bash
-cf run agent mimo-code                    # Launch (native mode)
-cf run agent mimo-code --sandbox          # Launch (sandboxed)
+cf run agent mimo-code                    # Launch
 cf run agent mimo-code -p deepseek        # Launch with a profile
 cf run agent mimo-code status             # Show proxy and config status
 cf run agent mimo-code stop               # Stop the agent
@@ -24,16 +23,13 @@ cf run agent mimo-code stop               # Stop the agent
 Short:
 
 ```bash
-cf r ag mc                               # Launch (native)
-cf r ag mc --sandbox                     # Launch (sandboxed)
+cf r ag mc                               # Launch
 ```
 
 ## Flags
 
 | Flag | Description |
 | --- | --- |
-| `--sandbox` | Run inside a Docker container |
-| `--run-as-me` | Run sandbox as host user (uid/gid match) |
 | `-p NAME`, `--profile NAME` | Load a named profile |
 | `-l`, `--list-profiles` | List available profiles |
 
@@ -59,15 +55,6 @@ When launched natively, CodeFreedom:
 2. Resolves the selected profile's environment variables
 3. Generates `mimocode.json` with proxy model discovery
 4. Launches `mimo` with `MIMOCODE_CONFIG` pointing to the generated config
-
-### Sandbox Mode
-
-Sandbox mode runs MiMo Code inside a Docker container with:
-
-- Isolated filesystem
-- Mounted workspace directory
-- Tool endpoints injected via MCP config
-- Proxy configuration auto-generated inside the container
 
 ### Config Generation
 

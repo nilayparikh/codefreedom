@@ -43,7 +43,6 @@ from codefreedom.config.models import (
     AgentDefinition,
     CommonSection,
     ProfileEntry,
-    SandboxImages,
     ToolDefinition,
 )
 from codefreedom.config.runtime import (
@@ -74,7 +73,6 @@ __all__ = [
     # Models
     "AgentDefinition",
     "ProfileEntry",
-    "SandboxImages",
     "ToolDefinition",
     "CommonSection",
     # Runtime

@@ -10,7 +10,6 @@ then compares local digests against the Docker Hub registry.
 Also checks the installed PyPI package version.
 
 Services (filter which images to check):
-    sandbox    Ubuntu, CUDA, and ROCm sandbox images
     chrome     Chrome browser tool image
     web        Web search tool image
     proxy      LiteLLM proxy and web-bridge images
@@ -51,9 +50,6 @@ IMAGE_REPO = "codefreedom"
 
 # Known service descriptions for display
 _SERVICE_DESCRIPTIONS: dict[str, str] = {
-    "sandbox (default)": "sandbox (cpu)",
-    "sandbox (cuda)": "sandbox (cuda)",
-    "sandbox (rocm)": "sandbox (rocm)",
     "chrome": "tool: chrome",
     "web": "tool: web",
     "github": "tool: github",
@@ -268,16 +264,9 @@ def discover_images() -> list[dict[str, str]]:
         if norm not in profile_images:
             profile_images[norm] = (img, source, service)
 
-    # 1. Unified profiles.yaml — extract sandbox_images and tools
+    # 1. Unified profiles.yaml — extract tools
     profiles_data = _read_yaml(config_dir / "profiles.yaml")
     if profiles_data:
-        profiles_section = profiles_data.get("profiles", {})
-        for pname, pdef in profiles_section.items():
-            if not isinstance(pdef, dict):
-                continue
-            for stype, img in pdef.get("sandbox_images", {}).items():
-                if isinstance(img, str):
-                    _add_profile(img, "profiles.yaml", f"{pname} sandbox ({stype})")
         tools_section = profiles_data.get("tools", {})
         if isinstance(tools_section, dict):
             for tname, tdef in tools_section.items():
@@ -623,7 +612,6 @@ def _filter_by_service(
         return images
 
     service_map: dict[str, list[str]] = {
-        "sandbox": ["sandbox"],
         "chrome": ["chrome"],
         "web": ["web"],
         "litellm": ["litellm"],

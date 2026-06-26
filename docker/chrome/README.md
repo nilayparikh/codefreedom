@@ -36,7 +36,7 @@ docker build --build-arg IMAGE_VERSION=1.0.0 \
 docker run -d --name codefreedom-chrome \
   -p 9222:9222 \
   --shm-size=512m \
-  -v ~/.codefreedom/sandbox/tools/chrome:/data/chrome \
+  -v ~/.codefreedom/tools/chrome:/data/chrome \
   codefreedom:chrome-latest
 ```
 

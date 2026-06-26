@@ -30,7 +30,7 @@
 #   docker run -d --name codefreedom-camoufox \
 #     -p 8420:8420 \
 #     -p 5900:5900 \
-#     -v ~/.codefreedom/sandbox/tools/camoufox:/userdata \
+#     -v ~/.codefreedom/tools/camoufox:/userdata \
 #     codefreedom:Camoufox-local
 #
 # ──────────────────────────────────────────────────────────────────────────

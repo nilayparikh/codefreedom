@@ -278,12 +278,6 @@ def format_resolved_config(
             common["postgres.host_port"] = postgres.get("host_port", "")
             common["postgres.user"] = postgres.get("user", "")
             common["postgres.password"] = postgres.get("password", "")
-        sandbox_images = common_data.get("sandbox_images", {})
-        if sandbox_images:
-            common["sandbox_images"] = dict(sandbox_images)
-        sandbox_env = common_data.get("sandbox_env", {})
-        if sandbox_env:
-            common["sandbox_env"] = dict(sandbox_env)
     display_dict["common"] = common
 
     # Vars section — show each var with its resolved value and source layer
@@ -335,12 +329,6 @@ def format_resolved_config(
                     tools = pdata.get("tools")
                     if tools:
                         profile_data["tools"] = tools
-                    sandbox_images = pdata.get("sandbox_images")
-                    if sandbox_images:
-                        profile_data["sandbox_images"] = dict(sandbox_images)
-                    sandbox = pdata.get("sandbox", {})
-                    if isinstance(sandbox, dict) and sandbox.get("env"):
-                        profile_data["sandbox.env"] = dict(sandbox["env"])
                     local = pdata.get("local", {})
                     if isinstance(local, dict) and local.get("env"):
                         profile_data["local.env"] = dict(local["env"])

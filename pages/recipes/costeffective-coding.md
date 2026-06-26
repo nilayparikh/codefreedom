@@ -127,17 +127,9 @@ Routes through the proxy. Environment variables set `ANTHROPIC_BASE_URL=http://l
 
 | Profile | Description |
 | --- | --- |
-| `default` | Base profile with full alias set and sandbox support |
-| `bare` | Minimal — no aliases, no sandbox, no preferences |
+| `default` | Base profile with full alias set |
+| `bare` | Minimal — no aliases, no preferences |
 | `ui-ux` | Vision-capable models for frontend/design work |
-
-**Sandbox images:**
-
-| Variant | Image |
-| --- | --- |
-| Default | `docker.io/nilayparikh/codefreedom:ubuntu-latest` |
-| CUDA | `docker.io/nilayparikh/codefreedom:cuda-latest` |
-| ROCm | `docker.io/nilayparikh/codefreedom:rocm-latest` |
 
 ### MiMo Code
 
@@ -145,7 +137,7 @@ Proxy auto-config: reads `PROXY_BASE_URL` and `PROXY_API_KEY`, generates `mimoco
 
 | Profile | Description |
 | --- | --- |
-| `default` | Base profile with tools and sandbox |
+| `default` | Base profile with tools |
 | `bare` | Minimal — pure mimo mode, no proxy |
 | `ui-ux` | Image attachment support, question tool |
 
@@ -155,7 +147,7 @@ Proxy auto-config: reads `PROXY_BASE_URL` and `PROXY_API_KEY`, generates `openco
 
 | Profile | Description |
 | --- | --- |
-| `default` | Base profile with tools and sandbox |
+| `default` | Base profile with tools |
 | `bare` | Minimal — no proxy config |
 | `ui-ux` | Experimental features |
 

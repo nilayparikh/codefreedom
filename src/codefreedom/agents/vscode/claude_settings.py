@@ -28,9 +28,9 @@ from codefreedom.log import eprint, tag
 # settings.
 
 
-# Env vars that are sandbox-mode-only and have no meaning in the VS Code
-# extension (which always runs natively).  Filtered out of the generated
-# `claudeCode.environmentVariables` array regardless of profile.
+# Env vars that have no meaning in the VS Code extension.
+# Filtered out of the generated `claudeCode.environmentVariables` array
+# regardless of profile.
 _VSCODE_SANDBOX_ONLY_KEYS = frozenset({"IS_SANDBOX"})
 
 # Default location for the Claude Code panel in VS Code.
@@ -98,8 +98,8 @@ def _build_vscode_environment_variables(
     `ANTHROPIC_BASE_URL` host/port (for users generating configs for a remote
     proxy), and:
 
-    * Filters out sandbox-only markers like `IS_SANDBOX` (the VS Code
-      extension has no sandbox concept).
+    * Filters out markers like `IS_SANDBOX` (the VS Code
+      extension has no container concept).
     * REPLACES secret-looking env vars (TOKEN/KEY/SECRET/etc.) with a
       `${env:VARNAME}` reference using the same name.  VS Code substitutes
       the actual value from the system/user environment at runtime -- the
@@ -125,7 +125,7 @@ def _build_vscode_environment_variables(
         new_port = port or parsed.port or 4000
         env["ANTHROPIC_BASE_URL"] = f"{scheme}://{new_host}:{new_port}"
 
-    # Drop sandbox-only keys entirely.  Replace secret-looking values with
+    # Drop container-only keys entirely.  Replace secret-looking values with
     # `${env:VARNAME}` so VS Code can substitute them at runtime from the
     # user's system environment.  The resolved secret value is never
     # written to disk.

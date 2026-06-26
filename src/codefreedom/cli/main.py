@@ -115,7 +115,7 @@ def main() -> int:
         prog="codefreedom",
         description=(
             "Unified CLI for code agents.\n"
-            "LLM proxy routing, Docker sandboxing, profile management."
+            "LLM proxy routing, profile management."
         ),
         formatter_class=CodeFreedomHelpFormatter,
         epilog=(
@@ -369,7 +369,7 @@ def _build_doctor_args(p: argparse.ArgumentParser) -> None:
 
 
 def _build_update_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("services", nargs="*", metavar="SERVICE", help="Filter by service: sandbox, chrome, web, proxy, tools, all (default)")
+    p.add_argument("services", nargs="*", metavar="SERVICE", help="Filter by service: chrome, web, proxy, tools, all (default)")
 
 
 def _build_deinit_args(p: argparse.ArgumentParser) -> None:
