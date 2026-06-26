@@ -261,11 +261,10 @@ def run(args: argparse.Namespace) -> int:
                 eprint(
                     f"{tag('WARN')} --run-as-me is only valid with --sandbox; ignoring."
                 )
-            # Write .mcp.json so the agent discovers MCP tool endpoints
             if acquired_tools:
-                from codefreedom.launcher import _write_mcp_json
+                from codefreedom.launcher import _register_claude_mcp_servers
 
-                _write_mcp_json(workspace_dir, acquired_tools)
+                _register_claude_mcp_servers(workspace_dir, acquired_tools)
             return run_local(profile_env, args.agent_args, dangerously_skip)
 
     return acquire_and_run(session_id, tools, profile_name, _run)

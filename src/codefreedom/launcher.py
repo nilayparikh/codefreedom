@@ -95,6 +95,57 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
         )
 
 
+def _register_claude_mcp_servers(workspace_dir: Path, acquired_tools: list[str]) -> None:
+    """Register project-scoped HTTP MCP servers with Claude CLI."""
+    claude_bin = find_claude_binary()
+    if not claude_bin:
+        eprint(f"{tag('MCP')} Claude CLI not found; skipping Claude MCP registration.")
+        return
+
+    mcp_config = load_tool_mcp_endpoints(acquired_tools)
+    auto_servers = mcp_config.get("mcpServers", {})
+    if not auto_servers:
+        eprint(f"{tag('MCP')} No Claude MCP endpoints to register.")
+        return
+
+    for server_name, server in auto_servers.items():
+        if server.get("type") != "http" or not server.get("url"):
+            eprint(
+                f"{tag('MCP')} Skipping unsupported Claude MCP server '{server_name}'."
+            )
+            continue
+        cmd = [
+            claude_bin,
+            "mcp",
+            "add",
+            "--transport",
+            "http",
+            "--scope",
+            "project",
+            server_name,
+            server["url"],
+        ]
+        result = subprocess.run(
+            cmd,
+            cwd=workspace_dir,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            stdout = (result.stdout or "").strip()
+            detail = stderr or stdout or f"exit {result.returncode}"
+            eprint(
+                f"{tag('MCP')} Failed to register Claude MCP server '{server_name}': {detail}."
+            )
+            continue
+        eprint(
+            f"{tag('MCP')} Registered Claude MCP server '{server_name}' at project scope."
+        )
+
+
 def find_claude_binary() -> str | None:
     """Locate the claude CLI binary."""
     return shutil.which("claude")

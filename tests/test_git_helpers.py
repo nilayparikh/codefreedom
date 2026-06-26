@@ -37,6 +37,14 @@ class TestRenderTemplate:
         })
         assert result == "chore():"
 
+    def test_escaped_placeholders_are_rendered(self):
+        result = render_template("$${type}($${scope}): $${description}", {
+            "type": "fix",
+            "scope": "cli",
+            "description": "repair formatting",
+        })
+        assert result == "fix(cli): repair formatting"
+
     def test_multiline_template(self):
         template = "## Summary\n${summary}\n\n## Changes\n${changes}"
         result = render_template(template, {
@@ -102,6 +110,20 @@ class TestParseCommitResponse:
         assert result["type"] == "feat"
         assert result["scope"] == "core"
         assert result["description"] == "trim spaces"
+
+    def test_strips_shell_style_dollar_prefixes(self):
+        result = parse_commit_response(
+            "$fix($cli): $fix override merging and LLM response parsing"
+        )
+        assert result["type"] == "fix"
+        assert result["scope"] == "cli"
+        assert result["description"] == "override merging and LLM response parsing"
+
+    def test_strips_code_fence_wrappers(self):
+        result = parse_commit_response("```\nfix(cli): repair formatting\n```")
+        assert result["type"] == "fix"
+        assert result["scope"] == "cli"
+        assert result["description"] == "repair formatting"
 
 
 class TestParsePrResponse:

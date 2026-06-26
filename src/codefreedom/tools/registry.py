@@ -160,7 +160,7 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
         from codefreedom.core.urls import build_endpoint_url
 
         url = build_endpoint_url(port, path)
-        servers[tool.mcp_server_name] = {"url": url}
+        servers[tool.mcp_server_name] = {"type": "http", "url": url}
 
     return {"mcpServers": servers}
 
