@@ -193,3 +193,4 @@ def test_recipe_yaml_vars_feed_runtime_tool_interpolation(monkeypatch, tmp_path)
     )
 
     assert settings["image"] == "docker.io/nilayparikh/codefreedom:chrome-latest"
+
