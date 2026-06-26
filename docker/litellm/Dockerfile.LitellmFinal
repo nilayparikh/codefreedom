@@ -12,7 +12,7 @@ ARG LITELLM_BASE_IMAGE=nilayparikh/codefreedom:litellm-base-v1.87.1
 
 FROM ${LITELLM_BASE_IMAGE} AS litellm-base
 
-FROM python:3.13-slim AS runtime
+FROM mirror.gcr.io/library/python:3.13-slim AS runtime
 
 ARG IMAGE_VERSION
 

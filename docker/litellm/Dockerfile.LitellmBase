@@ -15,7 +15,7 @@
 ARG PG_BASE_IMAGE=nilayparikh/codefreedom:litellm-pg-base-latest
 FROM ${PG_BASE_IMAGE} AS pg-artifacts
 
-FROM python:3.13-slim
+FROM mirror.gcr.io/library/python:3.13-slim
 
 ARG LITELLM_FORK_URL=https://github.com/nilayparikh/litellm.git
 ARG LITELLM_TAG=v1.87.1
