@@ -131,8 +131,6 @@ jobs:
           test -f ~/.codefreedom/.env.user || { echo "MISSING: .env.user"; exit 1; }
           test -f ~/.codefreedom/config/proxy/config/config.yaml || { echo "MISSING: proxy config"; exit 1; }
           test -f ~/.codefreedom/config/proxy/docker-compose.yaml || { echo "MISSING: compose"; exit 1; }
-          test -f ~/.codefreedom/profiles/claude-code.yaml || { echo "MISSING: claude-code profile"; exit 1; }
-          test -f ~/.codefreedom/profiles/mimo-code.yaml || { echo "MISSING: mimo-code profile"; exit 1; }
-          test -f ~/.codefreedom/profiles/chrome.yaml || { echo "MISSING: chrome profile"; exit 1; }
+          test -f ~/.codefreedom/config/profiles.yaml || { echo "MISSING: profiles.yaml"; exit 1; }
 
           codefreedom run agent claude-code --list-profiles
