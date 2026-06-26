@@ -1,5 +1,6 @@
 """Tests for config.display — secret redaction, source tracking, config display."""
 
+import pytest
 import yaml
 
 from codefreedom.config.display import (
@@ -8,6 +9,8 @@ from codefreedom.config.display import (
     redact_value,
     resolve_value_source,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestSecretDetection:

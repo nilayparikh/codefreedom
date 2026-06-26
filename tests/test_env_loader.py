@@ -321,3 +321,4 @@ class TestConfigLoading:
         }))
         config = load_config(tmp_path)
         assert config.common.suffix_id == "test123"
+pytestmark = pytest.mark.unit

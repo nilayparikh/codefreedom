@@ -158,3 +158,4 @@ class TestRunDispatch:
         result = run(args)
         assert result == 0
         assert called == [action]
+pytestmark = pytest.mark.integration

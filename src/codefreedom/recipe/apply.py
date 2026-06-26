@@ -261,7 +261,11 @@ def _install_recipe_files(
         if content is None:
             continue
 
-        if vars_dict:
+        # profiles.yaml must keep ${VAR} references intact so override.yaml
+        # vars can override them at runtime via load_config(). Only script
+        # and env files get install-time interpolation.
+        is_profiles = target_path == "profiles.yaml"
+        if vars_dict and not is_profiles:
             import os
             import re
 

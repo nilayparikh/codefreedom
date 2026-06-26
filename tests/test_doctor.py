@@ -5,6 +5,8 @@
 from pathlib import Path
 from typing import Dict
 
+import pytest
+
 
 from codefreedom.cli.manage.doctor import (
     CheckResult,
@@ -491,3 +493,4 @@ class TestRun:
 
         result = run(verbose=True)
         assert result in (0, 1, 2)
+pytestmark = pytest.mark.integration

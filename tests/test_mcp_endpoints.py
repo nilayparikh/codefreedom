@@ -1,48 +1,11 @@
 """Tests for load_tool_mcp_endpoints in tool_registry.py."""
 
-import os
-from pathlib import Path
-
-import yaml
-
 import pytest
 
-from codefreedom.core.config import get_codefreedom_dir
 from codefreedom.tools.registry import load_tool_mcp_endpoints
+from tests.helpers import write_tool_profile
 
 pytestmark = pytest.mark.integration
-
-
-def _tool_home() -> Path:
-    """Return the tool home directory (set by conftest.py or default)."""
-    override = os.environ.get("CODEFREEDOM_TOOL_HOME")
-    if override:
-        return Path(override)
-    return get_codefreedom_dir()
-
-
-def _write_tool_profile(tool, data):
-    """Write tool profile to unified profiles.yaml in config directory."""
-    from codefreedom.core.config import get_config_dir
-
-    config_dir = get_config_dir()
-    config_dir.mkdir(parents=True, exist_ok=True)
-
-    # Load existing profiles.yaml or create new one
-    profiles_path = config_dir / "profiles.yaml"
-    if profiles_path.exists():
-        with open(profiles_path, encoding="utf-8") as f:
-            existing = yaml.safe_load(f) or {}
-    else:
-        existing = {}
-
-    # Merge tools section
-    if "tools" not in existing:
-        existing["tools"] = {}
-    existing["tools"].update(data)
-
-    with open(profiles_path, "w", encoding="utf-8") as f:
-        yaml.dump(existing, f, default_flow_style=False, sort_keys=False)
 
 
 class TestLoadToolMcpEndpoints:
@@ -70,7 +33,7 @@ class TestLoadToolMcpEndpoints:
 
     def test_chrome_with_custom_mcp_port_and_path(self):
         """Chrome reads mcp_port and mcp_path from profile."""
-        _write_tool_profile(
+        write_tool_profile(
             "chrome",
             {
                 "chrome": {
@@ -92,7 +55,7 @@ class TestLoadToolMcpEndpoints:
 
     def test_web_with_custom_mcp_path(self):
         """Web reads mcp_path from profile; port comes from the standard 'port' field."""
-        _write_tool_profile(
+        write_tool_profile(
             "web",
             {
                 "web": {
@@ -113,7 +76,7 @@ class TestLoadToolMcpEndpoints:
 
     def test_both_tools_merged(self):
         """Both Chrome and Web produce distinct entries."""
-        _write_tool_profile(
+        write_tool_profile(
             "chrome",
             {
                 "chrome": {
@@ -127,7 +90,7 @@ class TestLoadToolMcpEndpoints:
                 }
             },
         )
-        _write_tool_profile(
+        write_tool_profile(
             "web",
             {
                 "web": {
@@ -170,7 +133,7 @@ class TestLoadToolMcpEndpoints:
 
     def test_github_with_custom_port(self, monkeypatch):
         """GitHub reads port from profile."""
-        _write_tool_profile(
+        write_tool_profile(
             "github",
             {
                 "github": {
@@ -192,7 +155,7 @@ class TestLoadToolMcpEndpoints:
             "codefreedom.tools.github._get_mapped_port",
             lambda _: None,
         )
-        _write_tool_profile(
+        write_tool_profile(
             "chrome",
             {
                 "chrome": {
@@ -206,7 +169,7 @@ class TestLoadToolMcpEndpoints:
                 }
             },
         )
-        _write_tool_profile(
+        write_tool_profile(
             "web",
             {
                 "web": {
@@ -219,7 +182,7 @@ class TestLoadToolMcpEndpoints:
                 }
             },
         )
-        _write_tool_profile(
+        write_tool_profile(
             "github",
             {
                 "github": {

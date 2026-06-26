@@ -179,3 +179,4 @@ class TestResponse:
         with pytest.raises(HTTPStatusError) as exc_info:
             resp.raise_for_status()
         assert exc_info.value.status_code == 404
+pytestmark = pytest.mark.unit

@@ -5,6 +5,8 @@
 import argparse
 import subprocess
 
+import pytest
+
 
 from codefreedom.cli.setup.deinit import (
     _find_codefreedom_containers,
@@ -598,3 +600,4 @@ class TestRun:
         exit_code = run(args)
         assert exit_code == 0
         assert not cleanup_called
+pytestmark = pytest.mark.integration

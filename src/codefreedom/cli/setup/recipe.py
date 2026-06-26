@@ -1,4 +1,5 @@
 """Recipe subsystem — thin CLI entry point that delegates to the recipe subpackage."""
+from __future__ import annotations
 
 from codefreedom.recipe.apply import (  # noqa: F401
     _install_recipe_files,

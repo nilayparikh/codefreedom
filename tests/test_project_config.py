@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 
 from codefreedom.cli.project_config import (
@@ -14,15 +12,6 @@ from codefreedom.cli.project_config import (
 )
 
 pytestmark = pytest.mark.unit
-
-
-@pytest.fixture
-def git_repo(tmp_path):
-    subprocess.run(["git", "init"], capture_output=True, cwd=str(tmp_path))
-    subprocess.run(["git", "config", "user.email", "t@t.com"], capture_output=True, cwd=str(tmp_path))
-    subprocess.run(["git", "config", "user.name", "T"], capture_output=True, cwd=str(tmp_path))
-    subprocess.run(["git", "config", "commit.gpgsign", "false"], capture_output=True, cwd=str(tmp_path))
-    return tmp_path
 
 
 class TestLoadCfYaml:

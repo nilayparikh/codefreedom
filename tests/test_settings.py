@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from codefreedom.cli.run import proxy as proxy_module
@@ -117,3 +118,4 @@ def test_resolve_config_value_uses_common_precedence(
     )
     assert value == "cf-cli-value"
     assert source == "CF_CLI_* override"
+pytestmark = pytest.mark.unit

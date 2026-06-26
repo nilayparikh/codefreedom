@@ -247,3 +247,4 @@ def _write_override(tmp_path: Path, data: dict) -> Path:
     with open(path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     return path
+pytestmark = pytest.mark.unit

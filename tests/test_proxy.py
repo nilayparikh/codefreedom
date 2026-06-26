@@ -526,3 +526,4 @@ class TestEnsureWebBridgeImage:
             proxy_mod._ensure_web_bridge_image()
         )  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         assert rc == 1
+pytestmark = pytest.mark.integration

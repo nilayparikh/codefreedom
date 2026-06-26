@@ -6,6 +6,8 @@ import pytest
 
 from codefreedom.tools.chrome import restart, run
 
+pytestmark = pytest.mark.integration
+
 
 def _settings(**overrides) -> dict:
     """Build a chrome settings dict for tests."""
