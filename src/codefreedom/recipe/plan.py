@@ -187,6 +187,9 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     # ── 2c. Ensure override.yaml exists (user-managed overrides file) ──
     _ensure_override_yaml(config_dir)
 
+    # ── 2d. Ensure .env.user exists (user-managed secrets file) ────────
+    _ensure_env_user(cf_dir)
+
     # ── 3. What's Next summary ──────────────────────────────────────────
     _print_summary(manifest, config_dir)
     return 0
@@ -630,6 +633,29 @@ def _copy_recipe_manifest(manifest: Dict[str, Any], config_dir: Path) -> None:
         yaml.dump(clean, default_flow_style=False, sort_keys=False),
         encoding="utf-8",
     )
+
+
+def _ensure_env_user(cf_dir: Path) -> None:
+    """Create ``.env.user`` in the codefreedom directory if it doesn't exist.
+
+    ``.env.user`` is a user-managed secrets file — created once by the init
+    flow and never touched by recipes again. Users put their personal secrets
+    here (API keys, tokens, etc.).
+
+    Machine env vars (``CF_CLI_*``) take priority over this file.
+    """
+    env_user_path = cf_dir / ".env.user"
+    if env_user_path.exists():
+        return
+
+    env_user_path.parent.mkdir(parents=True, exist_ok=True)
+    env_user_path.write_text(
+        "# User-managed secrets — add your API keys here\n"
+        "# Machine env vars (CF_CLI_*) take priority over this file\n"
+        "# LITELLM_MASTER_KEY=sk-your-key-here\n",
+        encoding="utf-8",
+    )
+    print("  [CREATE] .env.user")
 
 
 def _ensure_override_yaml(cf_dir: Path) -> None:
