@@ -676,7 +676,7 @@ def _layer_profiles_yaml() -> tuple[dict, dict]:
                 if isinstance(override.get(section), dict):
                     base = raw.setdefault(section, {})
                     if isinstance(base, dict):
-                        _merge_deep(base, override[section])
+                        raw[section] = _merge_deep(base, override[section])
                     else:
                         raw[section] = override[section]
 

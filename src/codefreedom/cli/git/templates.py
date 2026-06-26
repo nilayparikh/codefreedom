@@ -10,7 +10,7 @@ def render_template(template: str, context: dict[str, str]) -> str:
 
     Unresolved ${VAR} placeholders are removed from the output.
     """
-    result = template
+    result = template.replace("$${", "${")
     for key, value in context.items():
         result = result.replace(f"${{{key}}}", value)
     result = re.sub(r"\$\{\w+\}", "", result)

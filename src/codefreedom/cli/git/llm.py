@@ -91,22 +91,37 @@ def generate_message(
 
 _COMMIT_TYPE_RE = re.compile(
     r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
-    r"(?:\((\w+)\))?\s*:\s*(.+)$",
+    r"(?:\(([a-zA-Z0-9_\-/]+)\))?\s*:\s*(.+)$",
     re.MULTILINE,
 )
 
 
 def parse_commit_response(text: str) -> dict[str, str]:
     """Parse LLM response into {type, scope, description}."""
-    m = _COMMIT_TYPE_RE.search(text.strip())
+    cleaned = text.strip()
+    cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\n?|```$", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"\$(?=(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)\b)", "", cleaned)
+    cleaned = re.sub(r"(?<=\()\$", "", cleaned)
+    cleaned = re.sub(r"\$(?=\()", "", cleaned)
+    m = _COMMIT_TYPE_RE.search(cleaned)
     if m:
+        description = re.sub(
+            r"^\$(?=(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)\b)\s*",
+            "",
+            m.group(3).strip(),
+        )
+        description = re.sub(
+            r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)\s+",
+            "",
+            description,
+        )
         return {
             "type": m.group(1),
             "scope": m.group(2) or "",
-            "description": m.group(3).strip(),
+            "description": description,
         }
-    lines = text.strip().split("\n")
-    first_line = lines[0].strip() if lines else text.strip()
+    lines = cleaned.split("\n")
+    first_line = lines[0].strip() if lines else cleaned
     return {
         "type": "chore",
         "scope": "",
