@@ -166,3 +166,30 @@ def test_no_override_yaml_falls_back_clean(monkeypatch, tmp_path):
     assert settings["port"] == 9222
     assert settings["mcp_port"] == 9223
     assert settings["container_name"] == "codefreedom-tools-chrome"
+
+
+def test_recipe_yaml_vars_feed_runtime_tool_interpolation(monkeypatch, tmp_path):
+    cf_home = tmp_path / ".codefreedom"
+    monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    cdir = _config_dir(cf_home)
+    profiles = _base_profiles()
+    profiles["tools"]["chrome"]["image"] = "${TOOL_IMAGE_BASE}:chrome-${CHROME_IMAGE_TAG}"
+    _write_yaml(cdir / "profiles.yaml", profiles)
+    _write_yaml(
+        cdir / "recipe.yaml",
+        {
+            "vars": {
+                "TOOL_IMAGE_BASE": "docker.io/nilayparikh/codefreedom",
+                "CHROME_IMAGE_TAG": "latest",
+            }
+        },
+    )
+
+    settings = load_tool_profile(
+        "chrome",
+        {"image": "default:img", "container_name": "default",
+         "port": 9222, "mcp_port": 9223, "mcp_path": "/mcp", "data_dir": "", "env": {}},
+        extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port"],
+    )
+
+    assert settings["image"] == "docker.io/nilayparikh/codefreedom:chrome-latest"

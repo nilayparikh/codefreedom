@@ -624,19 +624,13 @@ def _coerce_int(val: Any) -> int | None:
 
 
 def _layer_profiles_yaml() -> tuple[dict, dict]:
-    """Read ``profiles.yaml`` with ``override.yaml`` layered on top.
+    """Read ``profiles.yaml`` with ``recipe.yaml`` and ``override.yaml`` context.
 
     Returns ``(merged_raw, interpolation_ctx)`` where ``merged_raw`` already has
-    override's ``tools`` / ``common`` deep-merged into the profiles dict (so a
-    user setting ``tools.chrome.mcp_port`` in ``override.yaml`` actually wins),
-    and ``interpolation_ctx`` is the context used for ``${VAR}`` resolution
-    with: ``os.environ`` < flattened ``common`` < ``override.yaml`` ``vars``
-    < ``CF_CLI_*`` (highest).
-
-    Previously tool loaders read *only* ``profiles.yaml`` and ignored
-    ``override.yaml`` entirely, which meant the seeded
-    ``tools: {chrome: {}}`` block in ``override.yaml`` (from ``cf setup init``)
-    was decorative — tool overrides written there silently did nothing.
+    override's ``tools`` / ``common`` deep-merged into the profiles dict, and
+    ``interpolation_ctx`` is the context used for ``${VAR}`` resolution with:
+    ``os.environ`` < flattened ``common`` < ``recipe.yaml`` ``vars`` <
+    ``override.yaml`` ``vars`` < ``CF_CLI_*`` (highest).
     """
     profile_path = get_profiles_path()
     if not profile_path.exists():
@@ -652,6 +646,28 @@ def _layer_profiles_yaml() -> tuple[dict, dict]:
     if not isinstance(raw, dict):
         eprint(f"{tag('TOOLS')} Warning: invalid profile format in {profile_path}")
         return {}, {}
+
+    def _load_vars(path: Path) -> dict[str, Any]:
+        if not path.exists():
+            return {}
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+        except (yaml.YAMLError, OSError) as exc:
+            eprint(f"{tag('TOOLS')} Warning: failed to read {path}: {exc}")
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        raw_vars = data.get("vars", {}) or {}
+        if isinstance(raw_vars, list):
+            merged: dict[str, Any] = {}
+            for item in raw_vars:
+                if isinstance(item, dict):
+                    merged.update(item)
+            raw_vars = merged
+        return raw_vars if isinstance(raw_vars, dict) else {}
+
+    recipe_vars = _load_vars(profile_path.parent / "recipe.yaml")
 
     override_path = profile_path.parent / "override.yaml"
     override_vars: dict[str, Any] = {}
@@ -680,12 +696,11 @@ def _layer_profiles_yaml() -> tuple[dict, dict]:
                     else:
                         raw[section] = override[section]
 
-    # Build interpolation context. Order matters:
-    #   os.environ < common.* flatten < override.yaml vars < CF_CLI_* (max).
     ctx = dict(os.environ)
     common_section = raw.get("common", {})
     if isinstance(common_section, dict):
         ctx.update(_flatten_dict(common_section, prefix="common"))
+    ctx.update(recipe_vars)
     ctx.update(override_vars)
     ctx = apply_cf_cli_overrides(ctx)
     return raw, ctx
