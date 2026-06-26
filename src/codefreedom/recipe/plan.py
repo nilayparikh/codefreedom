@@ -192,136 +192,134 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     return 0
 
 
-def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -> int:
-    """Preview recipe changes without applying them.
+def _collect_recipe_files(
+    man: dict, fdict: dict, source_label: str, vars_dict: dict[str, str]
+) -> list[dict]:
+    """Collect plan entries from a single manifest's file list.
 
-    Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
-    showing exactly what would be created or replaced.
-
-    All files are replaced (not merged). The plan shows the diff
-    between existing content and the new recipe content.
+    Handles copy_dir, split_by_key, and variable interpolation.
+    Returns a list of plan-entry dicts.
     """
-    from codefreedom.recipe.merge import _make_diff
+    import os
+    import re
 
-    cf_dir = get_codefreedom_dir()
+    entries: list[dict] = []
 
-    # ── 1. Resolve recipe ──────────────────────────────────────────────
-    branch = _resolve_recipe_branch() if not staging else "staging"
-    store_path = _resolve_store(store, branch=branch)
-    manifest, files = _store_resolve_recipe(name, store_path=store_path)
-    if manifest is None:
-        print(f"{tag('PLAN')} Recipe '{name}' not found.")
-        print("       Run 'cf s i -l' to see available recipes.")
-        return 1
+    for entry in man.get("files", []):
+        src = entry.get("path", "")
+        target = entry.get("target", src)
+        split_key = entry.get("split_by_key")
+        copy_dir = entry.get("copy_dir", False)
 
-    vars_dict = _load_recipe_vars(manifest)
+        if copy_dir:
+            src_dir = src.rstrip("/")
+            prefix = src_dir + "/"
+            for file_key, file_content in fdict.items():
+                if not (file_key.startswith(prefix) or file_key == src_dir):
+                    continue
+                rel_path = (
+                    file_key[len(src_dir) + 1 :]
+                    if file_key.startswith(prefix)
+                    else file_key
+                )
+                if not rel_path:
+                    continue
+                if target.endswith("/"):
+                    individual_target = f"{target}{rel_path}"
+                else:
+                    individual_target = f"{target}/{rel_path}"
+                entries.append(
+                    {
+                        "target": individual_target,
+                        "content": file_content,
+                        "merge": entry.get("merge", "auto"),
+                        "source": source_label,
+                    }
+                )
+            continue
 
-    # ── 2. Resolve extends chain ───────────────────────────────────────
+        content = fdict.get(target) or fdict.get(src)
+        if content is None:
+            continue
+
+        if split_key:
+            data = yaml.safe_load(content)
+            if not isinstance(data, dict):
+                continue
+
+            common = data.get("common", {})
+            section = data.get(split_key, {})
+
+            for name, profile_data in section.items():
+                merged = {**common, **profile_data}
+                merged_content = yaml.dump(
+                    merged, default_flow_style=False, sort_keys=False
+                )
+
+                if target.endswith("/"):
+                    individual_target = f"{target}{name}.yaml"
+                else:
+                    individual_target = f"{target}/{name}.yaml"
+
+                entries.append(
+                    {
+                        "target": individual_target,
+                        "content": merged_content,
+                        "merge": entry.get("merge", "auto"),
+                        "source": source_label,
+                    }
+                )
+            continue
+
+        if vars_dict:
+            def _replace_var(match: re.Match) -> str:
+                var_name = match.group(1)
+                has_default = match.group(2) is not None
+                default = str(match.group(2)) if has_default else ""
+                if var_name in vars_dict:
+                    return vars_dict[var_name]
+                if var_name in os.environ:
+                    return os.environ[var_name]
+                if has_default:
+                    return default
+                return str(match.group(0))
+
+            content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, content)
+
+        entries.append(
+            {
+                "target": target,
+                "content": content,
+                "merge": entry.get("merge", "auto"),
+                "source": source_label,
+            }
+        )
+
+    return entries
+
+
+def _compute_plan_entries(
+    manifest: dict,
+    files: dict,
+    name: str,
+    store_path: Path | None,
+    vars_dict: dict[str, str],
+) -> list[dict]:
+    """Resolve extends chain, collect entries, add generated artifacts, deduplicate."""
+    extends = manifest.get("extends")
     plan_entries: list[dict] = []
 
-    def _collect(man: dict, fdict: dict, source_label: str) -> None:
-        for entry in man.get("files", []):
-            src = entry.get("path", "")
-            target = entry.get("target", src)
-            split_key = entry.get("split_by_key")
-            copy_dir = entry.get("copy_dir", False)
-
-            if copy_dir:
-                src_dir = src.rstrip("/")
-                prefix = src_dir + "/"
-                for file_key, file_content in fdict.items():
-                    if not (file_key.startswith(prefix) or file_key == src_dir):
-                        continue
-                    rel_path = (
-                        file_key[len(src_dir) + 1 :]
-                        if file_key.startswith(prefix)
-                        else file_key
-                    )
-                    if not rel_path:
-                        continue
-                    if target.endswith("/"):
-                        individual_target = f"{target}{rel_path}"
-                    else:
-                        individual_target = f"{target}/{rel_path}"
-                    plan_entries.append(
-                        {
-                            "target": individual_target,
-                            "content": file_content,
-                            "merge": entry.get("merge", "auto"),
-                            "source": source_label,
-                        }
-                    )
-                continue
-
-            content = fdict.get(target) or fdict.get(src)
-            if content is None:
-                continue
-
-            if split_key:
-                data = yaml.safe_load(content)
-                if not isinstance(data, dict):
-                    continue
-
-                common = data.get("common", {})
-                section = data.get(split_key, {})
-
-                for name, profile_data in section.items():
-                    merged = {**common, **profile_data}
-                    merged_content = yaml.dump(
-                        merged, default_flow_style=False, sort_keys=False
-                    )
-
-                    if target.endswith("/"):
-                        individual_target = f"{target}{name}.yaml"
-                    else:
-                        individual_target = f"{target}/{name}.yaml"
-
-                    plan_entries.append(
-                        {
-                            "target": individual_target,
-                            "content": merged_content,
-                            "merge": entry.get("merge", "auto"),
-                            "source": source_label,
-                        }
-                    )
-                continue
-
-            if vars_dict:
-                import os
-                import re
-
-                def _replace_var(match: re.Match) -> str:
-                    var_name = match.group(1)
-                    has_default = match.group(2) is not None
-                    default = str(match.group(2)) if has_default else ""
-                    if var_name in vars_dict:
-                        return vars_dict[var_name]
-                    if var_name in os.environ:
-                        return os.environ[var_name]
-                    if has_default:
-                        return default
-                    return str(match.group(0))
-
-                content = re.sub(r"\$\{(\w+)(?::-(.*))?\}", _replace_var, content)
-            plan_entries.append(
-                {
-                    "target": target,
-                    "content": content,
-                    "merge": entry.get("merge", "auto"),
-                    "source": source_label,
-                }
-            )
-
-    extends = manifest.get("extends")
-    base_man: dict[str, Any] | None = None
     if extends:
         base_man, base_files = _store_resolve_recipe(extends, store_path=store_path)
         if base_man is not None:
-            _collect(base_man, base_files, extends)
+            plan_entries.extend(
+                _collect_recipe_files(base_man, base_files, extends, vars_dict)
+            )
 
-    _collect(manifest, files, name)
+    plan_entries.extend(
+        _collect_recipe_files(manifest, files, name, vars_dict)
+    )
 
-    # ── 2b. Include generated artifacts in plan ────────────────────────
     has_generated = bool(manifest.get("generated_artifacts"))
     if has_generated:
         result = materialize_recipe(manifest, files)
@@ -336,26 +334,22 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
                     }
                 )
 
-    # ── 2b. Deduplicate by target — keep only the last entry (highest  ──
-    #        priority from the extending recipe).                         ──
     seen: dict[str, dict] = {}
     for entry in plan_entries:
-        seen[entry["target"]] = entry  # later entries override earlier
-    plan_entries = list(seen.values())
+        seen[entry["target"]] = entry
+    return list(seen.values())
 
-    # ── 3. Compute what would happen to each file ──────────────────────
-    from codefreedom.core.config import get_config_dir
 
-    plan_id = _generate_plan_id()
-    config_dir = get_config_dir()
-    plans_dir = cf_dir / "plans" / plan_id
-    plans_dir.mkdir(parents=True, exist_ok=True)
+def _compute_file_changes(
+    plan_entries: list[dict], config_dir: Path, plans_dir: Path
+) -> tuple[dict[str, int], list[dict]]:
+    """Compute create/replace/same for each entry and write patch files."""
+    from codefreedom.recipe.merge import _make_diff
 
     summary: dict[str, int] = {"create": 0, "replace": 0, "same": 0}
     patch_files: list[dict] = []
 
     for entry in plan_entries:
-        # All files install into config directory
         dst = config_dir / entry["target"]
         dst.parent.mkdir(parents=True, exist_ok=True)
 
@@ -364,7 +358,6 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
             safe_name = entry["target"].replace("/", "-").replace("\\", "-")
             patch_name = f"create-{safe_name}.diff"
             (plans_dir / patch_name).write_text(diff, encoding="utf-8")
-            # Also store full content for reliable apply
             content_name = f"create-{safe_name}.content"
             (plans_dir / content_name).write_text(entry["content"], encoding="utf-8")
             patch_files.append(
@@ -392,7 +385,6 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
             summary["same"] += 1
             continue
 
-        # REPLACE — write diff for review + full content for reliable apply
         diff = _make_diff(existing, entry["content"], entry["target"])
         safe_name = entry["target"].replace("/", "-").replace("\\", "-")
         diff_name = f"replace-{safe_name}.diff"
@@ -410,14 +402,19 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         )
         summary["replace"] += 1
 
-    # ── 3b. Orphan detection — delete files that existed from the    ──
-    #        previous recipe but aren't in the new recipe's file list.  ──
-    #        Scans each directory that contains a managed file and      ──
-    #        flags any sibling file not in the managed set.             ──
+    return summary, patch_files
+
+
+def _detect_orphan_files(
+    plan_entries: list[dict],
+    patch_files: list[dict],
+    summary: dict[str, int],
+    config_dir: Path,
+) -> tuple[dict[str, int], list[dict]]:
+    """Detect files from previous recipe that aren't in the new recipe."""
     managed_targets = {e["target"] for e in plan_entries}
     orphan_dirs: set[Path] = set()
     for e in plan_entries:
-        # Only scan within config directory
         parent = (config_dir / e["target"]).parent
         if parent != config_dir:
             orphan_dirs.add(parent)
@@ -428,7 +425,6 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         for child in sorted(parent_dir.iterdir()):
             if not child.is_file():
                 continue
-            # Compute relative path within config directory
             rel = child.relative_to(config_dir).as_posix()
             if rel not in managed_targets:
                 patch_files.append(
@@ -442,19 +438,20 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
                 )
                 summary["delete"] = summary.get("delete", 0) + 1
 
-    # ── 3c. Collect dirs from base + extending manifests ──────────────
-    plan_dirs: list[str] = []
+    return summary, patch_files
 
-    def _collect_dirs(man: dict) -> None:
-        for d in man.get("dirs") or []:
-            if d not in plan_dirs:
-                plan_dirs.append(d)
 
-    if extends and base_man is not None:
-        _collect_dirs(base_man)
-    _collect_dirs(manifest)
-
-    # ── 4. Write plan.yaml ─────────────────────────────────────────────
+def _write_plan_and_print(
+    plan_id: str,
+    name: str,
+    extends: str | None,
+    summary: dict[str, int],
+    plan_dirs: list[str],
+    patch_files: list[dict],
+    plans_dir: Path,
+    config_dir: Path,
+) -> int:
+    """Write plan.yaml and print the human-readable summary."""
     plan_meta = {
         "plan_id": plan_id,
         "recipe": name,
@@ -468,7 +465,6 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         encoding="utf-8",
     )
 
-    # ── 5. Print summary ──────────────────────────────────────────────
     delete_count = summary.get("delete", 0)
     print(
         f"{tag('PLAN')} Recipe: {name}" + (f" (extends {extends})" if extends else "")
@@ -491,7 +487,6 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
         action = pf["action"].upper().ljust(8)
         src_label = pf["source"][:12].ljust(12)
         target = pf["target"]
-        # All files install into config directory
         dest = config_dir / target
         print(f"{tag('PLAN')}   {action} {src_label} {dest}")
     for d in plan_dirs:
@@ -502,6 +497,62 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     print(f"{tag('PLAN')} Quick:     cf s i -pa {name}")
     print(f"{tag('PLAN')} To review: cat {plans_dir}/<patch-file>.diff")
     return 0
+
+
+def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -> int:
+    """Preview recipe changes without applying them.
+
+    Generates .patch files in ``~/.codefreedom/plans/<plan_id>/``
+    showing exactly what would be created or replaced.
+
+    All files are replaced (not merged). The plan shows the diff
+    between existing content and the new recipe content.
+    """
+    cf_dir = get_codefreedom_dir()
+
+    # ── 1. Resolve recipe ──────────────────────────────────────────────
+    branch = _resolve_recipe_branch() if not staging else "staging"
+    store_path = _resolve_store(store, branch=branch)
+    manifest, files = _store_resolve_recipe(name, store_path=store_path)
+    if manifest is None:
+        print(f"{tag('PLAN')} Recipe '{name}' not found.")
+        print("       Run 'cf s i -l' to see available recipes.")
+        return 1
+
+    vars_dict = _load_recipe_vars(manifest)
+
+    # ── 2. Collect plan entries from extends chain ─────────────────────
+    plan_entries = _compute_plan_entries(manifest, files, name, store_path, vars_dict)
+
+    # ── 3. Compute file changes ────────────────────────────────────────
+    plan_id = _generate_plan_id()
+    config_dir = get_config_dir()
+    plans_dir = cf_dir / "plans" / plan_id
+    plans_dir.mkdir(parents=True, exist_ok=True)
+
+    summary, patch_files = _compute_file_changes(plan_entries, config_dir, plans_dir)
+
+    # ── 4. Orphan detection ────────────────────────────────────────────
+    summary, patch_files = _detect_orphan_files(
+        plan_entries, patch_files, summary, config_dir
+    )
+
+    # ── 5. Collect dirs + write plan + print ───────────────────────────
+    plan_dirs: list[str] = []
+    extends = manifest.get("extends")
+    if extends:
+        base_man, _ = _store_resolve_recipe(extends, store_path=store_path)
+        if base_man is not None:
+            for d in base_man.get("dirs") or []:
+                if d not in plan_dirs:
+                    plan_dirs.append(d)
+    for d in manifest.get("dirs") or []:
+        if d not in plan_dirs:
+            plan_dirs.append(d)
+
+    return _write_plan_and_print(
+        plan_id, name, extends, summary, plan_dirs, patch_files, plans_dir, config_dir
+    )
 
 
 def plan_and_apply_recipe(

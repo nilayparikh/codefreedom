@@ -529,6 +529,70 @@ def _warn_database_url(
 # ── Validate ─────────────────────────────────────────────────────────────────
 
 
+def _validate_providers(
+    config: dict, config_file: Path, proxy_env: dict, errors: list[str]
+) -> None:
+    """Validate provider include files and their model api_key references."""
+    import yaml
+
+    includes = config.get("include", [])
+    if not includes:
+        eprint(f"  {tag('WARN')}  No provider includes found in config.yaml")
+        return
+
+    config_dir = config_file.parent
+    for inc in includes:
+        provider_file = config_dir / inc
+        if provider_file.exists():
+            eprint(f"  {tag('OK')}  {inc}")
+            try:
+                with open(provider_file, encoding="utf-8") as f:
+                    provider_config = yaml.safe_load(f)
+                if provider_config is None:
+                    eprint(f"    {tag('SKIP')}  (empty/commented out)")
+                    continue
+                models = provider_config.get("model_list", [])
+                for m in models:
+                    name = m.get("model_name", "?")
+                    params = m.get("litellm_params", {})
+                    api_key_ref = params.get("api_key", "")
+                    if api_key_ref.startswith("os.environ/"):
+                        env_var = api_key_ref[len("os.environ/") :]
+                        if not _env_is_set(env_var, proxy_env):
+                            eprint(
+                                f"    [WARN]  {name}: env var {env_var} is not set"
+                            )
+                        else:
+                            eprint(
+                                f"    {tag('OK')}  {name} (auth: {env_var} {tag('OK')})"
+                            )
+                    else:
+                        eprint(f"    {tag('OK')}  {name}")
+            except yaml.YAMLError as e:
+                eprint(f"    {tag('FAIL')}  {inc}: YAML error -- {e}")
+                errors.append(f"YAML error in {inc}: {e}")
+        else:
+            eprint(f"  {tag('FAIL')}  {inc} -- file not found")
+            errors.append(f"Missing provider file: {inc}")
+
+
+def _validate_settings(config: dict, proxy_env: dict, errors: list[str]) -> None:
+    """Validate general_settings and router_settings."""
+    general = config.get("general_settings", {})
+    database_url_in_config = general.get("database_url")
+    database_url_in_env = _env_is_set("DATABASE_URL", proxy_env)
+    _warn_database_url(database_url_in_config, database_url_in_env, proxy_env)
+
+    router = config.get("router_settings", {})
+    aliases = router.get("model_group_alias", {})
+    if aliases:
+        eprint(f"  {tag('OK')}  Model aliases: {len(aliases)} defined")
+        for alias, model in aliases.items():
+            eprint(f"       {alias} -> {model}")
+    else:
+        eprint(f"  {tag('WARN')}  No model_group_alias defined")
+
+
 def _validate() -> int:
     """Validate the LiteLLM configuration."""
     config_file = _find_config_file()
@@ -544,7 +608,6 @@ def _validate() -> int:
     eprint(f"{tag('PROXY')} Validating {config_file}...")
     eprint()
 
-    # Load proxy env files so we can check api_key references against them
     proxy_env = _load_proxy_env_files()
 
     try:
@@ -570,58 +633,8 @@ def _validate() -> int:
         eprint(f"  {tag('FAIL')}  Config must be a YAML dictionary.")
         return 1
 
-    includes = config.get("include", [])
-    if not includes:
-        eprint(f"  {tag('WARN')}  No provider includes found in config.yaml")
-    else:
-        config_dir = config_file.parent
-        for inc in includes:
-            provider_file = config_dir / inc
-            if provider_file.exists():
-                eprint(f"  {tag('OK')}  {inc}")
-                try:
-                    with open(provider_file, encoding="utf-8") as f:
-                        provider_config = yaml.safe_load(f)
-                    if provider_config is None:
-                        eprint(f"    {tag('SKIP')}  (empty/commented out)")
-                        continue
-                    models = provider_config.get("model_list", [])
-                    for m in models:
-                        name = m.get("model_name", "?")
-                        params = m.get("litellm_params", {})
-                        api_key_ref = params.get("api_key", "")
-                        if api_key_ref.startswith("os.environ/"):
-                            env_var = api_key_ref[len("os.environ/") :]
-                            if not _env_is_set(env_var, proxy_env):
-                                eprint(
-                                    f"    [WARN]  {name}: env var {env_var} is not set"
-                                )
-                            else:
-                                eprint(
-                                    f"    {tag('OK')}  {name} (auth: {env_var} {tag('OK')})"
-                                )
-                        else:
-                            eprint(f"    {tag('OK')}  {name}")
-                except yaml.YAMLError as e:
-                    eprint(f"    {tag('FAIL')}  {inc}: YAML error -- {e}")
-                    errors.append(f"YAML error in {inc}: {e}")
-            else:
-                eprint(f"  {tag('FAIL')}  {inc} -- file not found")
-                errors.append(f"Missing provider file: {inc}")
-
-    general = config.get("general_settings", {})
-    database_url_in_config = general.get("database_url")
-    database_url_in_env = _env_is_set("DATABASE_URL", proxy_env)
-    _warn_database_url(database_url_in_config, database_url_in_env, proxy_env)
-
-    router = config.get("router_settings", {})
-    aliases = router.get("model_group_alias", {})
-    if aliases:
-        eprint(f"  {tag('OK')}  Model aliases: {len(aliases)} defined")
-        for alias, model in aliases.items():
-            eprint(f"       {alias} -> {model}")
-    else:
-        eprint(f"  {tag('WARN')}  No model_group_alias defined")
+    _validate_providers(config, config_file, proxy_env, errors)
+    _validate_settings(config, proxy_env, errors)
 
     eprint()
     _print_validation_result(errors)

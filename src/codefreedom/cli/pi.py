@@ -525,6 +525,71 @@ def _get_pi_agent_dir() -> Path:
     return Path.home() / ".pi" / "agent"
 
 
+def _prepare_pi_env(
+    profile_env: dict[str, str],
+    workspace_dir: Path,
+    extensions: list[str] | None = None,
+    acquired_tools: list[str] | None = None,
+    lsp_servers: dict[str, list[str]] | None = None,
+) -> dict[str, str]:
+    """Build the env dict and set up pi agent directory, MCP, LSP, lean-ctx."""
+    extensions = extensions or []
+
+    env = {**os.environ}
+    env.update(profile_env)
+
+    pi_agent_dir = _get_pi_agent_dir()
+    pi_agent_dir.mkdir(parents=True, exist_ok=True)
+    _write_minimal_settings(pi_agent_dir, extensions=extensions)
+    _generate_codefreedom_extension(pi_agent_dir)
+
+    if acquired_tools:
+        from codefreedom.launcher import _write_mcp_json
+
+        _write_mcp_json(workspace_dir, acquired_tools)
+
+    if "pi-lean-ctx" in extensions:
+        _ensure_lean_ctx()
+
+    if lsp_servers:
+        _ensure_lsp_servers(lsp_servers)
+
+    image_router_models = _read_image_router_models(CODEFREEDOM_DIR)
+    if image_router_models:
+        env["IMAGE_ROUTER_MODELS"] = ",".join(image_router_models)
+
+    alias_models = _load_alias_models(CODEFREEDOM_DIR)
+    if alias_models:
+        env["ALIAS_MODELS"] = ",".join(alias_models)
+
+    return env
+
+
+def _build_pi_command(
+    pi_bin: str, profile_env: dict[str, str], pi_args: list[str]
+) -> list[str]:
+    """Build the pi command with profile-driven --model/--thinking/--provider flags."""
+    cmd = [pi_bin]
+
+    default_model = profile_env.get("PI_DEFAULT_MODEL")
+    has_model_flag = any(arg in ("--model", "-m") for arg in pi_args)
+    if not has_model_flag and default_model:
+        cmd.extend(["--model", default_model])
+
+    default_thinking = profile_env.get("PI_DEFAULT_THINKING_LEVEL")
+    has_thinking_flag = any(arg == "--thinking" for arg in pi_args)
+    if not has_thinking_flag and default_thinking:
+        cmd.extend(["--thinking", default_thinking])
+
+    default_provider = profile_env.get("PI_DEFAULT_PROVIDER", "codefreedom")
+    has_provider_flag = any(arg == "--provider" for arg in pi_args)
+    if not has_provider_flag and default_provider:
+        cmd.extend(["--provider", default_provider])
+
+    cmd.extend(pi_args)
+    return cmd
+
+
 def run_local(
     profile_env: dict[str, str],
     pi_args: list[str],
@@ -537,67 +602,17 @@ def run_local(
     pi_bin = find_pi_binary()
     if not pi_bin:
         eprint(
-            "[ERROR] Pi (pi) not found on PATH.\n"
+            f"{tag('ERROR')} Pi (pi) not found on PATH.\n"
             "       Install: npm install -g @earendil-works/pi-coding-agent"
         )
         return 1
 
-    extensions = extensions or []
     eprint(f"{tag('LOCAL')} Running Pi natively...")
 
-    env = {**os.environ}
-    env.update(profile_env)
-
-    pi_agent_dir = _get_pi_agent_dir()
-    pi_agent_dir.mkdir(parents=True, exist_ok=True)
-    _write_minimal_settings(pi_agent_dir, extensions=extensions)
-    _generate_codefreedom_extension(pi_agent_dir)
-
-    # Write .mcp.json so pi-mcp-adapter discovers MCP tool endpoints
-    if acquired_tools:
-        from codefreedom.launcher import _write_mcp_json
-
-        _write_mcp_json(workspace_dir, acquired_tools)
-
-    # lean-ctx binary setup (for pi-lean-ctx extension)
-    if "pi-lean-ctx" in extensions:
-        _ensure_lean_ctx()
-
-    # LSP servers (for pi-lens extension)
-    if lsp_servers:
-        _ensure_lsp_servers(lsp_servers)
-
-    image_router_models = _read_image_router_models(CODEFREEDOM_DIR)
-    if image_router_models:
-        env["IMAGE_ROUTER_MODELS"] = ",".join(image_router_models)
-
-    alias_models = _load_alias_models(CODEFREEDOM_DIR)
-    if alias_models:
-        env["ALIAS_MODELS"] = ",".join(alias_models)
-
-    # Build command with profile-driven configuration via CLI flags.
-    # CLI flags take precedence over settings.json (which pi may mutate).
-    cmd = [pi_bin]
-
-    # Set default model via --model flag
-    default_model = profile_env.get("PI_DEFAULT_MODEL")
-    has_model_flag = any(arg in ("--model", "-m") for arg in pi_args)
-    if not has_model_flag and default_model:
-        cmd.extend(["--model", default_model])
-
-    # Set thinking level via --thinking flag
-    default_thinking = profile_env.get("PI_DEFAULT_THINKING_LEVEL")
-    has_thinking_flag = any(arg == "--thinking" for arg in pi_args)
-    if not has_thinking_flag and default_thinking:
-        cmd.extend(["--thinking", default_thinking])
-
-    # Set provider via --provider flag
-    default_provider = profile_env.get("PI_DEFAULT_PROVIDER", "codefreedom")
-    has_provider_flag = any(arg == "--provider" for arg in pi_args)
-    if not has_provider_flag and default_provider:
-        cmd.extend(["--provider", default_provider])
-
-    cmd.extend(pi_args)
+    env = _prepare_pi_env(
+        profile_env, workspace_dir, extensions, acquired_tools, lsp_servers
+    )
+    cmd = _build_pi_command(pi_bin, profile_env, pi_args)
 
     try:
         proc = subprocess.Popen(cmd, env=env)
