@@ -16,6 +16,41 @@ from pydantic import BaseModel, Field, model_validator
 from codefreedom.config.errors import SchemaValidationError
 
 
+def unwrap_double_nested(data: dict[str, Any]) -> bool:
+    """Repair accidentally double-wrapped ``agents`` in-place; return True if repaired.
+
+    Symptom (seen in the wild): an older codefreedom run wrote
+    ``agents.claude-code.profiles.<agent>.profiles.<profile>`` instead of
+    ``agents.<agent>.profiles.<profile>``. The flat-format fallback had run
+    on already-wrapped data and produced a single outer ``claude-code`` agent
+    whose ``profiles`` map keys are *agent names*, not profile names.
+
+    Detection: a single outer agent whose ``profiles`` keys are a subset of
+    :data:`_AGENT_NAMES` and whose values each carry a nested ``profiles``
+    dict. We rewrite ``agents`` to the inner per-agent dict.
+    """
+    agents = data.get("agents")
+    if not isinstance(agents, dict) or len(agents) != 1:
+        return False
+    (outer_name, outer_val), = agents.items()
+    if not isinstance(outer_val, dict):
+        return False
+    inner = outer_val.get("profiles")
+    if not isinstance(inner, dict) or not inner:
+        return False
+    if not all(k in _AGENT_NAMES for k in inner.keys()):
+        return False
+    if not all(isinstance(v, dict) and isinstance(v.get("profiles"), dict)
+               for v in inner.values()):
+        return False
+    data["agents"] = inner
+    return True
+
+
+# Backwards-compat alias used by the validator (renamed public helper above).
+_unwrap_double_nested = unwrap_double_nested
+
+
 # ── Common Settings ──────────────────────────────────────────────────────
 
 class ProxySettings(BaseModel, extra="forbid"):
@@ -160,6 +195,32 @@ _AGENT_NAMES = frozenset({
     "claude-code", "mimo-code", "open-code", "pi-code", "codex-code",
 })
 
+# Keys that may appear in a recipe *manifest* (recipe.yaml) but are NOT
+# part of the config schema. They leak into the merged config dict when
+# ``load_config`` layers recipe.yaml on top of profiles.yaml (recipe.yaml
+# contributes ``vars``; the rest is manifest metadata). Stripping them here
+# keeps ``extra="forbid"`` strict for genuine schema drift while tolerating
+# a recipe manifest sitting next to the config. The single source of truth
+# for this set; ``loader.py`` and ``display.py`` reuse it.
+RECIPE_MANIFEST_KEYS: frozenset[str] = frozenset({
+    "name", "description", "version", "files", "dirs",
+    "generated_artifacts", "required_secrets", "config_vars",
+    "advice", "common_blocks", "profile_presets", "tools_optional",
+    "extends", "optional_config", "service_groups",
+    "vars",  # extracted separately before validation
+})
+
+# Legacy ``common:`` keys from older recipe profiles.yaml versions. They
+# survive DeepDiff merges (which never delete) so users with config created
+# by an older recipe keep validating after upgrade. By the time the
+# before-validator runs, ``${...}`` interpolation has already baked their
+# values into the consuming fields, so they are residual and safe to drop.
+_LEGACY_COMMON_KEYS: frozenset[str] = frozenset({
+    "proxy_env",   # old: {PROXY_BASE_URL, PROXY_API_KEY} -> now common.proxy.env / vars
+    "tools",        # old: [chrome, web, ...] -> now top-level tools: dict
+    "tool_images",  # old: {base, tag} -> now inline in tools.<name>.image
+})
+
 
 class ConfigModel(BaseModel, extra="forbid"):
     """Top-level schema for profiles.yaml — the single configuration file.
@@ -195,44 +256,82 @@ class ConfigModel(BaseModel, extra="forbid"):
     @model_validator(mode="before")
     @classmethod
     def _normalize_legacy_format(cls, data: Any) -> Any:
-        """Convert legacy ``profiles:`` → ``agents:`` automatically.
+        """Normalize legacy/foreign keys before strict field validation.
 
-        Also strips known non-schema keys (``comment``, ``vars``) that
-        appear in override.yaml but are not part of the config model.
+        Handles four classes of drift so ``extra="forbid"`` stays strict
+        for genuine schema errors while tolerating config produced by
+        older recipes or layered next to a recipe manifest:
+
+        1. ``comment`` / ``vars`` (override.yaml) — stripped.
+        2. Recipe-manifest keys (``name``, ``files``, ``required_secrets`` …)
+           that leak in when ``load_config`` layers recipe.yaml on top of
+           profiles.yaml. Stripped via :data:`RECIPE_MANIFEST_KEYS`.
+        3. Legacy ``common:`` keys (``proxy_env``, ``tools`` list,
+           ``tool_images``) from older recipe profiles.yaml. By the time
+           this before-validator runs, ``${...}`` interpolation has already
+           baked their values into the consuming fields, so they are
+           residual and safe to drop.
+        4. Legacy ``profiles:`` → ``agents:`` conversion (unified/flat),
+           plus unwrapping of accidentally double-wrapped agents produced by
+           the flat-format fallback running on already-wrapped data.
         """
         if not isinstance(data, dict):
             return data
 
-        # Strip non-schema keys from override.yaml
+        # 1. Non-schema keys from override.yaml
         data.pop("comment", None)
         data.pop("vars", None)
 
-        # If the file already uses the new format, keep it as-is.
-        # Also strip stray "profiles" key that may have been merged
-        # from override.yaml (override has "profiles:", base has "agents:").
+        # 2. Recipe-manifest metadata that leaked in via load_config merge
+        for key in RECIPE_MANIFEST_KEYS:
+            data.pop(key, None)
+
+        # 3. Legacy common: keys (residual post-interpolation)
+        common = data.get("common")
+        if isinstance(common, dict):
+            for key in _LEGACY_COMMON_KEYS:
+                common.pop(key, None)
+            if not common:
+                data.pop("common", None)
+
+        # 4a. If the file already uses the new format, keep it — but first
+        # strip a stray "profiles" key merged from override.yaml and repair
+        # accidentally double-wrapped agents (see _unwrap_double_nested).
         if "agents" in data:
             data.pop("profiles", None)
+            _unwrap_double_nested(data)
             return data
 
-        # Detect legacy format: top-level "profiles" key exists
+        # 4b. Detect legacy format: top-level "profiles" key exists
         raw_profiles = data.get("profiles")
         if raw_profiles is None or not isinstance(raw_profiles, dict):
             return data
 
-        # If every key in profiles is a known agent name, wrap them.
-        # e.g. profiles: {claude-code: {profiles: {default: {...}}}}
-        #   → agents: {claude-code: {profiles: {default: {...}}}}
-        is_unified = all(
-            isinstance(v, dict) and "profiles" in v
-            for v in raw_profiles.values()
-        )
-        if is_unified:
-            # Map the top-level "profiles" to "agents"
-            data["agents"] = raw_profiles
+        # Classify entries: agent-keyed (have "profiles" subkey and key is
+        # a known agent name) vs. flat entries (old per-agent format).
+        agent_entries: dict[str, Any] = {}
+        flat_entries: dict[str, Any] = {}
+        for key, val in raw_profiles.items():
+            if (isinstance(val, dict) and "profiles" in val
+                    and key in _AGENT_NAMES):
+                agent_entries[key] = val
+            else:
+                flat_entries[key] = val
+
+        if agent_entries:
+            # Unified format — possibly mixed with flat entries from an
+            # override.yaml deep-merge (override had flat `profiles:`
+            # which merged into the base's agent-keyed `profiles:`).
+            # Extract agent entries as-is and fold remaining flat entries
+            # into claude-code.profiles (old flat format always targeted
+            # claude-code).
+            data["agents"] = agent_entries
+            if flat_entries and "claude-code" in agent_entries:
+                agent_entries["claude-code"]["profiles"].update(flat_entries)
             del data["profiles"]
             return data
 
-        # Flat format: profiles: {default: {env: ...}, bare: {env: ...}}
+        # Pure flat format: profiles: {default: {env: ...}, bare: {env: ...}}
         #   → agents: {claude-code: {profiles: {default: {...}, bare: {...}}}}
         data["agents"] = {"claude-code": {"profiles": raw_profiles}}
         del data["profiles"]
