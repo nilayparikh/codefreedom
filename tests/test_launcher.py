@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -109,6 +110,64 @@ class TestWriteMcpJson:
 
         mcp_path = workspace_dir / ".mcp.json"
         assert not mcp_path.exists()
+class TestRegisterClaudeMcpServers:
+    def test_registers_project_scoped_http_servers(self, workspace_dir: Path):
+        from codefreedom.launcher import _register_claude_mcp_servers
+
+        with patch("codefreedom.launcher.load_tool_mcp_endpoints") as mock_load:
+            with patch("codefreedom.launcher.find_claude_binary", return_value="/usr/bin/claude"):
+                with patch("subprocess.run") as mock_run:
+                    mock_run.return_value = subprocess.CompletedProcess([], 0, "", "")
+                    mock_load.return_value = {
+                        "mcpServers": {
+                            "chrome-devtools": {
+                                "type": "http",
+                                "url": "http://127.0.0.1:9223/mcp",
+                            },
+                            "web": {
+                                "type": "http",
+                                "url": "http://127.0.0.1:8420/mcp",
+                            },
+                        }
+                    }
+
+                    _register_claude_mcp_servers(workspace_dir, ["chrome", "web"])
+
+        assert mock_run.call_count == 2
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert commands[0] == [
+            "/usr/bin/claude",
+            "mcp",
+            "add",
+            "--transport",
+            "http",
+            "--scope",
+            "project",
+            "chrome-devtools",
+            "http://127.0.0.1:9223/mcp",
+        ]
+        assert commands[1] == [
+            "/usr/bin/claude",
+            "mcp",
+            "add",
+            "--transport",
+            "http",
+            "--scope",
+            "project",
+            "web",
+            "http://127.0.0.1:8420/mcp",
+        ]
+
+    def test_noop_when_claude_missing(self, workspace_dir: Path):
+        from codefreedom.launcher import _register_claude_mcp_servers
+
+        with patch("codefreedom.launcher.find_claude_binary", return_value=None):
+            with patch("subprocess.run") as mock_run:
+                _register_claude_mcp_servers(workspace_dir, ["chrome"])
+
+        mock_run.assert_not_called()
+
+
 class TestEnsureCodefreedomDir:
     def test_creates_sandbox_dirs(self):
         from codefreedom.launcher import ensure_codefreedom_dir
