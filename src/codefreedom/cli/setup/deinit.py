@@ -72,21 +72,20 @@ def _stop_proxy(cf_dir: Path) -> int:
         return 0
 
     eprint(f"{tag('DEINIT')} Stopping proxy...")
-    # Use the canonical get_env() chain to resolve all proxy env vars
-    # (including SUFFIX_ID, POSTGRES_HOST_* paths, and os.environ).
+    # Use the shared proxy-env helper so deinit targets the SAME compose
+    # project that ``cf run proxy start`` created — i.e. SUFFIX_ID and
+    # COMPOSE_PROJECT_NAME resolve identically (config > bare os.environ,
+    # CF_CLI_* highest). Previously deinit only consulted os.environ, so
+    # it could tear down the wrong (or no) project for override.yaml users.
     try:
-        from codefreedom.config.runtime import apply_cf_cli_overrides
+        from codefreedom.core.proxy_env import build_proxy_run_env
 
+        compose_env = build_proxy_run_env()
+    except Exception as exc:
+        eprint(f"{tag('DEINIT')} Warning: could not resolve proxy env ({exc}); using minimal env.")
         compose_env = dict(os.environ)
         compose_env.setdefault("POSTGRES_HOST_DATA_DIR", str(cf_dir / "pg" / "data"))
         compose_env.setdefault("POSTGRES_HOST_BACKUP_DIR", str(cf_dir / "pg" / "backup"))
-        compose_env = apply_cf_cli_overrides(compose_env)
-    except Exception:
-        # Fallback: minimal env for docker compose (shouldn't happen)
-        compose_env = dict(os.environ)
-
-    suffix = compose_env.get("SUFFIX_ID", "0000")
-    compose_env["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
 
     try:
         result = subprocess.run(

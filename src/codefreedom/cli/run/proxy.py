@@ -25,10 +25,13 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from codefreedom.config import load_config
-from codefreedom.config.errors import ConfigError
-from codefreedom.config.runtime import apply_cf_cli_overrides, load_codefreedom_settings
-from codefreedom.core.config import get_codefreedom_dir, get_config_dir
+# get_codefreedom_dir is re-imported (and otherwise unused here) so that tests
+# can monkeypatch ``codefreedom.cli.run.proxy.get_codefreedom_dir`` to redirect
+# ~/.codefreedom at a tmp_path. Proxy env resolution now lives in
+# :mod:`codefreedom.core.proxy_env`, but the import keeps the historical test
+# patch surface stable.
+from codefreedom.core.config import get_codefreedom_dir  # noqa: F401
+from codefreedom.core.config import get_config_dir
 from codefreedom.docker.pull import pull_if_stale
 from codefreedom.log import eprint, tag
 
@@ -77,7 +80,7 @@ def run(args: argparse.Namespace) -> int:
     # subcommand -- see codefreedom.cli.vscode.
     else:
         eprint(
-            "[PROXY] No action specified."
+            f"{tag('PROXY')} No action specified."
             " Use start, stop, restart, status, or validate."
         )
         return 1
@@ -104,42 +107,25 @@ def _load_proxy_env_files() -> Dict[str, str]:
 
 
 def _build_proxy_env() -> Dict[str, str]:
-    """Build merged proxy environment via the canonical :func:`get_env` chain.
+    """Build the merged environment for a ``docker compose`` proxy invocation.
 
-    Resolution order (standard — later wins):
-      1. .env.proxy (config, skip if missing)
-      2. .env (shared config, skip if missing)
-      3. workspace .env (skip if missing)
-      4. .env.proxy.secrets (secrets, skip if missing)
-      5. .env.secrets (shared secrets, skip if missing)
-      6. workspace .env.secrets (skip if missing)
-      7. .env.user (user overrides, skip if missing)
-      8. os.environ (machine env — always wins)
-      9. CF_CLI_* overrides (absolute highest)
+    Thin wrapper around :func:`codefreedom.core.proxy_env.build_proxy_run_env` —
+    the shared helper is the single source of truth used by both the
+    ``run/proxy`` (start/stop/restart/status) and ``setup/deinit`` (proxy
+    teardown) code paths. See that module's docstring for the precedence
+    chain (``CF_CLI_*`` > ``override.yaml`` vars > bare ``os.environ``) and
+    why we no longer ``setdefault`` against :data:`os.environ`.
 
-    Also injects ``POSTGRES_HOST_DATA_DIR`` from ``CODEFREEDOM_HOME``
-    so the embedded PostgreSQL always lands inside the correct CodeFreedom
-    directory, even when customised.
+    Previously a stray ``SUFFIX_ID`` exported in the shell silently won
+    over the user's ``override.yaml`` value, producing
+    ``litellm-codefreedom-0000`` even when ``SUFFIX_ID: "windemo"`` was
+    configured. Proxy start now derives ``SUFFIX_ID`` and
+    ``COMPOSE_PROJECT_NAME`` from the resolved config first, then applies
+    ``CF_CLI_*`` overrides last.
     """
-    cf_dir = get_codefreedom_dir()
-    merged = dict(os.environ)
-    merged.setdefault("POSTGRES_HOST_DATA_DIR", str(cf_dir / "pg" / "data"))
-    merged = apply_cf_cli_overrides(merged)
-    settings = load_codefreedom_settings(Path.cwd())
-    merged["LITELLM_BIND_HOST"] = settings.proxy.bind_host
-    merged["LITELLM_PORT"] = str(settings.proxy.bind_port)
-    merged.setdefault("PROXY_PUBLIC_BASE_URL", settings.proxy.public_base_url)
+    from codefreedom.core.proxy_env import build_proxy_run_env
 
-    # Inject SUFFIX_ID from config system so container/project names reflect
-    # the user's override.yaml vars (e.g. SUFFIX_ID: "windemo").
-    try:
-        config = load_config()
-        proxy_component = config.for_component("proxy")
-        merged.setdefault("SUFFIX_ID", proxy_component.get("SUFFIX_ID", "0000"))
-    except (ConfigError, Exception):
-        merged.setdefault("SUFFIX_ID", "0000")
-
-    return merged
+    return build_proxy_run_env()
 
 
 # ── Start ────────────────────────────────────────────────────────────────────
@@ -225,7 +211,7 @@ def _ensure_web_bridge_image() -> int:
                 )
                 return 1
             eprint(
-                f"[PROXY] Web-bridge image '{image}' not found locally."
+                f"{tag('PROXY')} Web-bridge image '{image}' not found locally."
                 " Building from source tree..."
             )
             eprint("   This is a one-time build (may take ~30 s).")
@@ -318,13 +304,15 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         if getattr(args, "host", None):
             merged_env["LITELLM_BIND_HOST"] = args.host
 
-    # Use SUFFIX_ID from .env.proxy to create deterministic container/project
-    # names.  Docker becomes the single source of truth — no /proc needed.
-    suffix = merged_env.get("SUFFIX_ID", "0000")
-    litellm_base = merged_env.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
-    litellm_name = f"{litellm_base}-{suffix}"
+    # Derive the LiteLLM container name. SUFFIX_ID and COMPOSE_PROJECT_NAME
+    # are already resolved by ``_build_proxy_env`` (and hence
+    # ``for_component("proxy")`` → ``common.suffix_id``); we only need to
+    # append the suffix to the base container name. Re-deriving
+    # COMPOSE_PROJECT_NAME here would overwrite the already-resolved value.
+    from codefreedom.core.proxy_env import litellm_container_name
+
+    litellm_name = litellm_container_name(merged_env)
     merged_env["LITELLM_CONTAINER_NAME"] = litellm_name
-    merged_env["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
 
     # Ensure the shared `codefreedom` bridge network exists (external network
     # referenced by docker-compose.yaml).  All proxy instances share this
@@ -351,9 +339,10 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         check=False,
     )
     if result.returncode == 0:
+        host = merged_env.get("LITELLM_BIND_HOST", "127.0.0.1")
         port = merged_env.get("LITELLM_PORT", "4000")
         eprint(
-            f"{tag('PROXY')} Proxy started at http://localhost:{port}"
+            f"{tag('PROXY')} Proxy started at http://{host}:{port}"
             f" ({litellm_name})"
         )
     else:
@@ -367,14 +356,12 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
 def _build_compose_env() -> dict[str, str]:
     """Build the environment dict for docker compose subprocess calls.
 
-    Loads proxy env files (same as ``_build_proxy_env``) and extracts
-    ``COMPOSE_PROJECT_NAME`` from ``SUFFIX_ID`` so that ``stop``, ``restart``,
-    and other compose commands target the same project that ``start`` created.
+    ``_build_proxy_env`` (via :func:`for_component("proxy")`) already bakes in
+    ``COMPOSE_PROJECT_NAME`` from the resolved ``common.suffix_id``, so
+    ``stop`` / ``restart`` / ``status`` target the same project that
+    ``start`` created without any local re-derivation of the suffix.
     """
-    merged = _build_proxy_env()
-    suffix = merged.get("SUFFIX_ID", "0000")
-    merged["COMPOSE_PROJECT_NAME"] = f"codefreedom-{suffix}"
-    return merged
+    return _build_proxy_env()
 
 
 # ── Stop ─────────────────────────────────────────────────────────────────────
@@ -440,10 +427,11 @@ def _restart() -> int:
         check=False,
     )
     if result.returncode == 0:
-        # Read port from env (resolved at build time, not /proc)
+        # Read host/port from env (resolved at build time, not /proc)
         merged_env = _build_proxy_env()
+        host = merged_env.get("LITELLM_BIND_HOST", "127.0.0.1")
         port = merged_env.get("LITELLM_PORT", "4000")
-        eprint(f"{tag('PROXY')} Proxy restarted at http://localhost:{port}")
+        eprint(f"{tag('PROXY')} Proxy restarted at http://{host}:{port}")
     else:
         eprint(f"{tag('PROXY')} Failed to restart. Check docker logs.")
     return result.returncode
@@ -513,7 +501,7 @@ def _warn_database_url(
 
     if using_codefreedom_image:
         eprint(
-            "[PROXY] database_url not required — embedded PG in"
+            f"{tag('PROXY')} database_url not required — embedded PG in"
             " nilayparikh/codefreedom:litellm image auto-sets it."
         )
     else:

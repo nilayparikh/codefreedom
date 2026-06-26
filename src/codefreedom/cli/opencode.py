@@ -82,14 +82,10 @@ def find_opencode_binary() -> Optional[str]:
     return shutil.which("opencode")
 
 
-def _detect_proxy_url(base_env: Dict[str, str]) -> str:
-    """Detect the proxy URL from environment or use default.
-
-    Thin wrapper over :func:`codefreedom.core.agent_runtime.detect_proxy_url`.
-    """
-    from codefreedom.core.agent_runtime import detect_proxy_url
-
-    return detect_proxy_url(base_env)
+# Backward-compat shim: tests import ``cli.opencode._detect_proxy_url`` directly.
+# Implementation lives in :mod:`codefreedom.core.agent_runtime`; this alias
+# removes the per-call function-body indirection that the previous wrapper had.
+from codefreedom.core.agent_runtime import detect_proxy_url as _detect_proxy_url  # noqa: E402
 
 
 def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> List[Dict[str, Any]]:
@@ -503,7 +499,9 @@ def _update_opencode_mcp(tools: List[str]) -> None:
         if not path.startswith("/"):
             path = "/" + path
 
-        url = f"http://127.0.0.1:{port}{path}"
+        from codefreedom.core.urls import build_endpoint_url
+
+        url = build_endpoint_url(port, path)
         existing["mcp"][tool.mcp_server_name] = {
             "type": "remote",
             "url": url,

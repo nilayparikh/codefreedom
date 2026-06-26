@@ -502,14 +502,10 @@ def _ensure_lean_ctx() -> None:
         )
 
 
-def _detect_proxy_url(base_env: dict[str, str]) -> str:
-    """Detect the proxy URL from environment or use default.
-
-    Thin wrapper over :func:`codefreedom.core.agent_runtime.detect_proxy_url`.
-    """
-    from codefreedom.core.agent_runtime import detect_proxy_url
-
-    return detect_proxy_url(base_env)
+# Backward-compat shim: tests import ``cli.pi._detect_proxy_url`` directly.
+# Implementation lives in :mod:`codefreedom.core.agent_runtime`; this alias
+# removes the per-call function-body indirection that the previous wrapper had.
+from codefreedom.core.agent_runtime import detect_proxy_url as _detect_proxy_url  # noqa: E402, F401
 
 
 # ── Execution ─────────────────────────────────────────────────────────────────

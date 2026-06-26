@@ -111,24 +111,28 @@ class ResolvedConfig:
         """Resolve runtime config for a tool.
 
         Returns sensible defaults for known tools even if the
-        tool section is sparsely populated.
+        tool section is sparsely populated. Default ``container_name`` values
+        mirror the constants in each tool module (``tools/chrome.py``,
+        ``tools/web.py``, ``tools/github.py``, ``tools/web_bridge.py``) so
+        callers (e.g. ``cli/manage/doctor.py``) reach the *actual* running
+        container rather than the legacy ``codefreedom-{name}-{suffix}`` form.
         """
-        cfg = self.tools.get(name, {})
+        cfg = self.tools.get(name, {}) or {}
 
-        _defaults: Dict[str, Any] = {
+        _defaults: dict[str, Any] = {
             "chrome": {
                 "image": "docker.io/nilayparikh/codefreedom:chrome-latest",
-                "container_name": f"codefreedom-chrome-{self.common.suffix_id}",
+                "container_name": "codefreedom-chrome",
                 "port": 9222,
             },
             "web": {
                 "image": "docker.io/nilayparikh/codefreedom:web-latest",
-                "container_name": f"codefreedom-web-{self.common.suffix_id}",
+                "container_name": "codefreedom-web",
                 "port": 8420,
             },
             "github": {
-                "image": "ghcr.io/github/github-mcp-server",
-                "container_name": f"codefreedom-github-{self.common.suffix_id}",
+                "image": "docker.io/nilayparikh/codefreedom:github-latest",
+                "container_name": "codefreedom-tools-github",
                 "port": 8129,
             },
             "git": {
@@ -138,7 +142,7 @@ class ResolvedConfig:
             },
             "web-bridge": {
                 "image": "docker.io/nilayparikh/codefreedom:web-bridge-latest",
-                "container_name": f"codefreedom-web-bridge-{self.common.suffix_id}",
+                "container_name": "codefreedom-web-bridge",
                 "port": 8500,
             },
         }.get(name, {})
@@ -149,7 +153,7 @@ class ResolvedConfig:
             if val is not None and val != "":
                 defaults[key] = val
 
-        extra: Dict[str, Any] = {}
+        extra: dict[str, Any] = {}
         for key, val in cfg.items():
             if key in ("image", "container_name", "port", "env"):
                 continue
@@ -159,8 +163,8 @@ class ResolvedConfig:
             name=name,
             image=str(defaults.get("image", "")),
             container_name=str(defaults.get("container_name", f"codefreedom-{name}")),
-            port=int(defaults.get("port", 0)),
-            env=dict(cfg.get("env", {})),
+            port=int(defaults.get("port", 0)) if defaults.get("port") else 0,
+            env=dict(cfg.get("env", {}) or {}),
             extra=extra,
         )
 

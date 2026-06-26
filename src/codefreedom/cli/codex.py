@@ -78,14 +78,10 @@ def find_codex_binary() -> str | None:
     return shutil.which("codex")
 
 
-def _detect_proxy_url(base_env: dict[str, str]) -> str:
-    """Detect the proxy URL from environment or use default.
-
-    Thin wrapper over :func:`codefreedom.core.agent_runtime.detect_proxy_url`.
-    """
-    from codefreedom.core.agent_runtime import detect_proxy_url
-
-    return detect_proxy_url(base_env)
+# Backward-compat shim: tests import ``cli.codex._detect_proxy_url`` directly.
+# Implementation lives in :mod:`codefreedom.core.agent_runtime`; this alias
+# removes the per-call function-body indirection that the previous wrapper had.
+from codefreedom.core.agent_runtime import detect_proxy_url as _detect_proxy_url  # noqa: E402
 
 
 def _fetch_proxy_models(proxy_url: str, api_key: str = "") -> list[dict]:
@@ -238,7 +234,9 @@ def _update_codex_mcp(tools: list[str], codex_home: Path) -> None:
         if not path.startswith("/"):
             path = "/" + path
 
-        url = f"http://127.0.0.1:{port}{path}"
+        from codefreedom.core.urls import build_endpoint_url
+
+        url = build_endpoint_url(port, path)
         server_table = tomlkit.table()
         server_table.add("url", url)
         existing["mcp_servers"][tool.mcp_server_name] = server_table

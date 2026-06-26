@@ -33,8 +33,8 @@ from codefreedom.cli.docker_utils import (
     is_port_available,
     load_tool_profile,
 )
+from codefreedom.config.runtime import apply_cf_cli_overrides, resolve_config_value
 from codefreedom.core.config import get_codefreedom_dir, get_config_dir
-from codefreedom.config.runtime import resolve_config_value
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Check result types
@@ -289,17 +289,23 @@ def _load_tool_settings(
     tool_key: str,
     defaults: dict,
     extra_keys: list[str] | None = None,
+    env_port_var: str | None = None,
+    env_port_vars: dict[str, str] | None = None,
 ) -> dict:
     """Load tool settings from unified profiles.yaml, falling back to defaults.
 
     Uses the same ``load_tool_profile()`` that tool modules use, so
-    doctor checks always reflect the actual configured values.
+    doctor checks always reflect the actual configured values. Plumbs through
+    ``env_port_var`` / ``env_port_vars`` so doctor honours ``CODEFREEDOM_*``
+    port overrides the same way tool runtime does.
     """
     try:
         return load_tool_profile(
             tool_key,
             defaults,
             extra_keys=extra_keys,
+            env_port_var=env_port_var,
+            env_port_vars=env_port_vars,
         )
     except Exception:
         return defaults
@@ -319,6 +325,11 @@ def _get_chrome_settings() -> dict:
             "env": {},
         },
         extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port"],
+        env_port_var="CODEFREEDOM_CHROME_PORT",
+        env_port_vars={
+            "mcp_port": "CODEFREEDOM_CHROME_MCP_PORT",
+            "cdp_proxy_port": "CODEFREEDOM_CHROME_CDP_PROXY_PORT",
+        },
     )
 
 
@@ -468,15 +479,37 @@ def _check_compose_pg_volume() -> CheckResult:
 
 
 def _get_litellm_image() -> str:
-    """Return the LiteLLM image from env or compose default."""
-    return os.environ.get(
-        "LITELLM_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
-    )
+    """Return the LiteLLM image, honouring the resolved config (override.yaml)."""
+    try:
+        from codefreedom.config import load_config
+
+        proxy_env = load_config().for_component("proxy")
+        merged_env = apply_cf_cli_overrides(dict(os.environ))
+        return proxy_env.get(
+            "LITELLM_IMAGE",
+            merged_env.get(
+                "LITELLM_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
+            ),
+        )
+    except Exception:
+        return os.environ.get(
+            "LITELLM_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
+        )
 
 
 def _get_litellm_container_name() -> str:
-    """Return the LiteLLM container name from env or compose default."""
-    return os.environ.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
+    """Return the LiteLLM container name (with suffix) per resolved config.
+
+    Reads ``SUFFIX_ID`` from ``load_config().for_component('proxy')`` rather
+    than bare ``os.environ`` so a user-set ``override.yaml`` ``SUFFIX_ID``
+    actually affects doctor diagnostics (parity with ``cf run proxy start``).
+    """
+    try:
+        from codefreedom.core.proxy_env import build_proxy_run_env, litellm_container_name
+
+        return litellm_container_name(build_proxy_run_env())
+    except Exception:
+        return os.environ.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
 
 
 @_section("Docker Images")
@@ -803,8 +836,20 @@ def _check_web_port() -> CheckResult:
 
 @_section("Port Availability")
 def _check_proxy_port() -> CheckResult:
-    port = 4000
-    hint = "Default LiteLLM port (LITELLM_PORT)"
+    """Read the resolved LiteLLM port from config (override.yaml > recipe > default).
+
+    Previously this hard-coded ``4000`` and so the doctor would insist the
+    proxy is on 4000 even when the user had overridden ``LITELLM_PORT`` —
+    the inverse of the same masking bug fixed in ``cli/run/proxy.py``.
+    """
+    try:
+        from codefreedom.config import load_config
+
+        proxy_env = load_config().for_component("proxy")
+        port = int(proxy_env.get("LITELLM_PORT", "4000"))
+    except Exception:
+        port = 4000
+    hint = "LiteLLM port (from override.yaml vars.LITELLM_PORT or default)"
     return _check_port(port, "LiteLLM proxy", hint)
 
 

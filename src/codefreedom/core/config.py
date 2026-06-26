@@ -6,23 +6,27 @@ instead of being hardcoded in 7 places across 5 files.
 Set ``CODEFREEDOM_HOME`` to override the default ``~/.codefreedom`` location
 (for testing or custom deployments).
 
-Config responsibility map (0.1.9 audit):
-
-    config.py        — CODEFREEDOM_HOME path, profile path resolution, canonical config seam
-    env_loader.py    — .env chain loading (9 tiers), dotenv parsing
-    interpolate.py   — ${VAR} and ${VAR:-default} resolution
-    profiles.py      — Profile YAML loading, validation, inheritance, env resolution
-
-Overlaps:
-- profiles.py calls interpolate.py for ${VAR} resolution
-- claude.py/mimo.py/opencode.py each call env_loader + profiles independently
-- config.py provides paths that env_loader and profiles both need
+The five ``resolve_*_profiles_path`` helpers below were originally
+per-agent near-identical copies (each honouring its own
+``<AGENT>_PROFILES_FILE`` env override). They are now thin wrappers around
+:func:`resolve_agent_profiles_path`, which keeps the per-agent env-var map
+in one place so new agents don't need a fresh copy of the same code.
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+
+# Agent → env-var name that overrides that agent's profiles.yaml path. The env
+# var exists only for tests that want to redirect a single agent's config file.
+_AGENT_PROFILES_FILE_ENV: dict[str, str] = {
+    "claude-code": "CODEFREEDOM_PROFILES_FILE",
+    "mimo-code": "MIMOCODE_PROFILES_FILE",
+    "open-code": "OPENCODE_PROFILES_FILE",
+    "pi-code": "PI_PROFILES_FILE",
+    "codex-code": "CODEX_PROFILES_FILE",
+}
 
 
 def get_codefreedom_dir() -> Path:
@@ -58,93 +62,54 @@ def get_backup_dir() -> Path:
     return get_codefreedom_dir() / "backup"
 
 
-def resolve_profiles_path() -> Path:
-    """Return the unified profiles path (test-patchable).
+def resolve_agent_profiles_path(agent: str | None = None) -> Path:
+    """Return the unified ``profiles.yaml`` path.
 
-    Checks ``CODEFREEDOM_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/config/profiles.yaml``.
+    Args:
+        agent: Optional canonical agent name (e.g. ``"claude-code"``). When
+            supplied, the per-agent ``<AGENT>_PROFILES_FILE`` env var (see
+            :data:`_AGENT_PROFILES_FILE_ENV`) takes precedence. When omitted,
+            the generic ``CODEFREEDOM_PROFILES_FILE`` env var is consulted.
+
+    Falls back to ``~/.codefreedom/config/profiles.yaml`` if no override is
+    set. The historical 5x duplicate functions (one per agent) now delegate
+    here; new agents just need an entry in the env-var map above.
     """
-    override = os.environ.get("CODEFREEDOM_PROFILES_FILE")
+    if agent is None:
+        override = os.environ.get(_AGENT_PROFILES_FILE_ENV["claude-code"])
+    else:
+        override = os.environ.get(_AGENT_PROFILES_FILE_ENV.get(agent, ""))
     if override:
         return Path(override)
     return get_config_dir() / "profiles.yaml"
+
+
+# ── Backward-compatible per-agent wrappers ─────────────────────────────────
+# Existing CLI modules and tests import these by name; they delegate to the
+# single :func:`resolve_agent_profiles_path` resolver above. Do not duplicate
+# the resolver body — fix bugs in one place.
+
+
+def resolve_profiles_path() -> Path:
+    """Return the Claude Code (canonical) profiles path."""
+    return resolve_agent_profiles_path("claude-code")
 
 
 def resolve_mimo_profiles_path() -> Path:
-    """Return the MiMoCode profiles path (test-patchable).
-
-    Checks ``MIMOCODE_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/config/profiles.yaml``.
-    """
-    override = os.environ.get("MIMOCODE_PROFILES_FILE")
-    if override:
-        return Path(override)
-    return get_config_dir() / "profiles.yaml"
+    """Return the MiMoCode profiles path."""
+    return resolve_agent_profiles_path("mimo-code")
 
 
 def resolve_opencode_profiles_path() -> Path:
-    """Return the OpenCode profiles path (test-patchable).
-
-    Checks ``OPENCODE_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/config/profiles.yaml``.
-    """
-    override = os.environ.get("OPENCODE_PROFILES_FILE")
-    if override:
-        return Path(override)
-    return get_config_dir() / "profiles.yaml"
+    """Return the OpenCode profiles path."""
+    return resolve_agent_profiles_path("open-code")
 
 
 def resolve_pi_profiles_path() -> Path:
-    """Return the Pi Code profiles path (test-patchable).
-
-    Checks ``PI_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/config/profiles.yaml``.
-    """
-    override = os.environ.get("PI_PROFILES_FILE")
-    if override:
-        return Path(override)
-    return get_config_dir() / "profiles.yaml"
+    """Return the Pi Code profiles path."""
+    return resolve_agent_profiles_path("pi-code")
 
 
 def resolve_codex_profiles_path() -> Path:
-    """Return the Codex profiles path (test-patchable).
-
-    Checks ``CODEX_PROFILES_FILE`` env var, falls back to
-    ``~/.codefreedom/config/profiles.yaml``.
-    """
-    override = os.environ.get("CODEX_PROFILES_FILE")
-    if override:
-        return Path(override)
-    return get_config_dir() / "profiles.yaml"
-
-
-def resolve_agent_config(
-    agent: str,
-    profile_name: str = "default",
-    workspace_dir: Path | None = None,
-) -> dict:
-    """Resolve complete configuration for an agent launch via the new config system."""
-    from codefreedom.config import load_config
-    from codefreedom.config.loader import AgentConfig
-
-    _ = workspace_dir  # No longer used — env chain removed
-    try:
-        config = load_config()
-        agent_cfg = config.for_agent(agent, profile=profile_name)
-    except Exception:
-        agent_cfg = AgentConfig(
-            agent=agent,
-            profile_name=profile_name,
-            env={},
-            tools=[],
-            sandbox_images={},
-            sandbox_env={},
-        )
-
-    return {
-        "env": agent_cfg.env,
-        "profiles_path": get_config_dir() / "profiles.yaml",
-        "profile": {},
-        "tools": agent_cfg.tools,
-        "sandbox_images": agent_cfg.sandbox_images,
-    }
+    """Return the Codex profiles path."""
+    return resolve_agent_profiles_path("codex-code")

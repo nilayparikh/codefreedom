@@ -157,7 +157,9 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
         if not path.startswith("/"):
             path = "/" + path
 
-        url = f"http://127.0.0.1:{port}{path}"
+        from codefreedom.core.urls import build_endpoint_url
+
+        url = build_endpoint_url(port, path)
         servers[tool.mcp_server_name] = {"url": url}
 
     return {"mcpServers": servers}

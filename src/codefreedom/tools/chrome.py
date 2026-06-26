@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 
 from codefreedom.log import eprint, tag
-from codefreedom.cli.docker_utils import (
+from codefreedom.core.container import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
@@ -62,6 +62,10 @@ def _load_profile() -> dict:
         schema_class=ChromeConfig,
         env_port_var="CODEFREEDOM_CHROME_PORT",
         extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port"],
+        env_port_vars={
+            "mcp_port": "CODEFREEDOM_CHROME_MCP_PORT",
+            "cdp_proxy_port": "CODEFREEDOM_CHROME_CDP_PROXY_PORT",
+        },
     )
 
 

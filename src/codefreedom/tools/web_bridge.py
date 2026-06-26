@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 
 from codefreedom.log import eprint, tag
-from codefreedom.cli.docker_utils import (
+from codefreedom.core.container import (
     container_is_running,
     init_tool_redirect,
     load_tool_profile,
