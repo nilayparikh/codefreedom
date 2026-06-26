@@ -137,10 +137,18 @@ RUN npm install -g @anthropic-ai/claude-code \
     && npm config set cache /tmp/.npm --global \
     && npm cache clean --force
 
-# 8. MiMoCode — install via npm and pre-download native binary
-RUN npm install -g @mimo-ai/cli \
-    && mimo --version 2>/dev/null || true \
-    && rm -rf /tmp/*
+# 8. MiMoCode — install with explicit Linux native package per architecture
+RUN set -eux; \
+    ARCH=$(uname -m); \
+    if [ "${ARCH}" = "aarch64" ]; then \
+      MIMO_NATIVE_PKG="@mimo-ai/mimocode-linux-arm64"; \
+    else \
+      MIMO_NATIVE_PKG="@mimo-ai/mimocode-linux-x64"; \
+    fi; \
+    npm install -g @mimo-ai/cli@0.1.3 "${MIMO_NATIVE_PKG}@0.1.3"; \
+    npm config set cache /tmp/.npm --global; \
+    npm cache clean --force; \
+    rm -rf /tmp/*
 
 # 9. OpenCode — install via official install script
 RUN curl -fsSL https://opencode.ai/install --output /tmp/opencode-install.sh \
