@@ -4,6 +4,7 @@ This module owns:
 - Container creation and cleanup (run_sandbox)
 - Container status queries (sandbox_status)
 - Container stop operations (sandbox_stop)
+- Shared sandbox preparation (prepare_sandbox + SandboxPrep)
 
 launcher.py owns agent-specific orchestration (MCP config, sandbox dirs,
 Claude binary lookup) and delegates container operations here.
@@ -11,13 +12,107 @@ Claude binary lookup) and delegates container operations here.
 
 from __future__ import annotations
 
+import os
+import secrets
 import signal
 import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List
 
 from codefreedom.docker.pull import pull_if_stale
-from codefreedom.log import eprint
+from codefreedom.log import eprint, tag
 from codefreedom.sandbox.signals import forward_signal
+from codefreedom.sandbox.terminal import terminal_size
+
+_DEFAULT_CONTAINER_HOME = "/home/codefreedom"
+
+
+@dataclass
+class SandboxPrep:
+    """Resolved sandbox parameters shared by every agent's ``run_docker``.
+
+    Built once by :func:`prepare_sandbox` from the common inputs and
+    consumed by each agent to assemble its (agent-specific) volume mounts
+    and exec command before calling :func:`run_sandbox`.
+    """
+
+    image: str
+    container_name: str
+    container_home: str
+    container_user_flag: list[str]
+    env_flags: list[str] = field(default_factory=list)
+
+
+def prepare_sandbox(
+    *,
+    profile_env: dict[str, str],
+    sandbox_images: dict[str, str],
+    default_image: str,
+    container_prefix: str,
+    run_as_me: bool = False,
+    gpu_type: str | None = None,
+) -> SandboxPrep:
+    """Resolve the sandbox inputs shared by every agent's ``run_docker``.
+
+    Handles:
+    1. Image selection (GPU-type override vs default)
+    2. Ephemeral container-name generation
+    3. ``-e KEY=VALUE`` env-flag list (profile env + terminal size)
+    4. ``--run-as-me`` container identity (uid/gid + home) resolution
+
+    Returns a :class:`SandboxPrep` the caller combines with its
+    agent-specific config/volumes before calling :func:`run_sandbox`.
+    """
+    if gpu_type:
+        image = (
+            sandbox_images.get(gpu_type)
+            or f"docker.io/nilayparikh/codefreedom:{gpu_type}-latest"
+        )
+        eprint(f"{tag('GPU')} Selected '{gpu_type}' sandbox image: {image}.")
+    else:
+        image = sandbox_images.get("default") or default_image
+
+    container_name = f"{container_prefix}{secrets.token_hex(2)}"
+
+    eprint(f"{tag('IMAGE')} Using sandbox image: {image}.")
+    eprint(f"{tag('CONTAINER')} Name: {container_name}.")
+
+    env_flags: list[str] = []
+    for key in sorted(profile_env.keys()):
+        val = profile_env[key]
+        if val is not None:
+            env_flags.extend(["-e", f"{key}={val}"])
+
+    cols, lines = terminal_size()
+    env_flags.extend(["-e", f"COLUMNS={cols}", "-e", f"LINES={lines}"])
+
+    if run_as_me and hasattr(os, "getuid"):
+        host_uid = os.getuid()
+        host_gid = os.getgid()
+        container_home = f"/home/{Path.home().name}"
+        container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
+        eprint(
+            f"{tag('SANDBOX')} --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}"
+        )
+    else:
+        if run_as_me:
+            eprint(
+                f"{tag('WARN')} --run-as-me not supported on Windows; running as default user."
+            )
+        container_home = _DEFAULT_CONTAINER_HOME
+        container_user_flag = []
+        eprint(
+            f"{tag('SANDBOX')} Running as default container user 'codefreedom' (uid 1000)."
+        )
+
+    return SandboxPrep(
+        image=image,
+        container_name=container_name,
+        container_home=container_home,
+        container_user_flag=container_user_flag,
+        env_flags=env_flags,
+    )
 
 
 def run_sandbox(

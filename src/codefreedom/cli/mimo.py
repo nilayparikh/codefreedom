@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import secrets
 import shutil
 import signal
 import subprocess
@@ -36,7 +35,6 @@ from codefreedom.core.config import (
 from codefreedom.log import eprint
 from codefreedom.tools.registry import generate_session_id
 from codefreedom.sandbox.signals import forward_signal
-from codefreedom.sandbox.terminal import terminal_size
 
 
 def register_args(parser: argparse.ArgumentParser) -> None:
@@ -296,23 +294,16 @@ def run_docker(
 
     Delegates container lifecycle to the shared sandbox launcher.
     """
-    from codefreedom.sandbox.launcher import run_sandbox
+    from codefreedom.sandbox.launcher import prepare_sandbox, run_sandbox
 
-    sandbox_images = sandbox_images or {}
-
-    if gpu_type:
-        image = (
-            sandbox_images.get(gpu_type)
-            or f"docker.io/nilayparikh/codefreedom:{gpu_type}-latest"
-        )
-        eprint(f"[GPU] Selected '{gpu_type}' sandbox image: {image}.")
-    else:
-        image = sandbox_images.get("default") or DEFAULT_MIMO_IMAGE
-
-    container_name = f"{_CONTAINER_PREFIX}{secrets.token_hex(2)}"
-
-    eprint(f"[IMAGE] Using sandbox image: {image}.")
-    eprint(f"[CONTAINER] Name: {container_name}.")
+    prep = prepare_sandbox(
+        profile_env=profile_env,
+        sandbox_images=sandbox_images or {},
+        default_image=DEFAULT_MIMO_IMAGE,
+        container_prefix=_CONTAINER_PREFIX,
+        run_as_me=run_as_me,
+        gpu_type=gpu_type,
+    )
 
     # ── Generate proxy config first ────────────────────────────────────────────
     proxy_url = _detect_proxy_url(profile_env)
@@ -320,81 +311,53 @@ def run_docker(
     mimo_home_dir, config_dir = _ensure_mimo_sandbox_dir(profile_name)
     config_path = _write_mimo_config(config, config_dir)
 
-    # ── Build env flags ───────────────────────────────────────────────────────
-    env_flags: List[str] = []
-    for key in sorted(profile_env.keys()):
-        val = profile_env[key]
-        if val is not None:
-            env_flags.extend(["-e", f"{key}={val}"])
-
-    cols, lines = terminal_size()
-    env_flags.extend(["-e", f"COLUMNS={cols}", "-e", f"LINES={lines}"])
-
-    # ── Container identity ────────────────────────────────────────────────────
-    if run_as_me and hasattr(os, "getuid"):
-        host_uid = os.getuid()
-        host_gid = os.getgid()
-        container_home = f"/home/{Path.home().name}"
-        container_user_flag = ["-u", f"{host_uid}:{host_gid}"]
-        eprint(
-            f"[SANDBOX] --run-as-me: uid={host_uid}({Path.home().name}) gid={host_gid}"
-        )
-    else:
-        if run_as_me:
-            eprint(
-                "[SANDBOX] --run-as-me not supported on Windows; running as default user."
-            )
-        container_home = "/home/codefreedom"
-        container_user_flag = []
-        eprint("[SANDBOX] Running as default container user 'codefreedom' (uid 1000).")
-
     # ── Docker run base options ───────────────────────────────────────────────
     base_opts = [
         "--network",
         "host",
-        *container_user_flag,
+        *prep.container_user_flag,
         "--ipc=host",
         "-v",
         f"{workspace_dir}:/workspace",
         "-w",
         "/workspace",
         "-v",
-        f"{Path.home() / '.gitconfig'}:{container_home}/.gitconfig:ro",
+        f"{Path.home() / '.gitconfig'}:{prep.container_home}/.gitconfig:ro",
         "-v",
-        f"{Path.home() / '.ssh'}:{container_home}/.ssh:ro",
+        f"{Path.home() / '.ssh'}:{prep.container_home}/.ssh:ro",
         "-v",
-        f"{mimo_home_dir}:{container_home}/.local/share/mimocode",
+        f"{mimo_home_dir}:{prep.container_home}/.local/share/mimocode",
         "-v",
-        f"{config_path}:{container_home}/.config/mimocode/mimocode.json:ro",
+        f"{config_path}:{prep.container_home}/.config/mimocode/mimocode.json:ro",
         "-e",
-        f"HOME={container_home}",
+        f"HOME={prep.container_home}",
         "-e",
-        f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+        f"MIMOCODE_CONFIG={prep.container_home}/.config/mimocode/mimocode.json",
         "-e",
         "IS_SANDBOX=1",
         "-e",
-        "MIMOCODE_DISABLE_AUTOUPDATE=1",
+        "MIMOCODE_DISABLE_AUTO_UPDATE=1",
     ]
 
     # ── Exec command ──────────────────────────────────────────────────────────
     exec_image_cmd = (
         ["docker", "exec", "-it"]
-        + container_user_flag
-        + ["-e", f"HOME={container_home}"]
-        + [container_name, "mimo"]
+        + prep.container_user_flag
+        + ["-e", f"HOME={prep.container_home}"]
+        + [prep.container_name, "mimo"]
         + mimo_args
     )
 
     exec_extra_env = [
         "-e",
-        f"MIMOCODE_CONFIG={container_home}/.config/mimocode/mimocode.json",
+        f"MIMOCODE_CONFIG={prep.container_home}/.config/mimocode/mimocode.json",
     ]
 
     return run_sandbox(
-        image=image,
-        container_name=container_name,
+        image=prep.image,
+        container_name=prep.container_name,
         base_opts=base_opts,
-        env_flags=env_flags,
+        env_flags=prep.env_flags,
         exec_image_cmd=exec_image_cmd,
         exec_extra_env=exec_extra_env,
     )
