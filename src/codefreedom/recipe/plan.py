@@ -128,7 +128,7 @@ def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
     _collect_targets(manifest)
 
     # ── 2a. Copy recipe manifest to config for reference by scripts ─────
-    _copy_recipe_manifest(manifest, config_dir)
+    _copy_recipe_manifest(_manifest_with_inherited_vars(manifest, store_path), config_dir)
 
     has_generated = bool(manifest.get("generated_artifacts"))
     if has_generated:
@@ -632,6 +632,28 @@ def _copy_recipe_manifest(manifest: Dict[str, Any], config_dir: Path) -> None:
         yaml.dump(clean, default_flow_style=False, sort_keys=False),
         encoding="utf-8",
     )
+
+
+def _manifest_with_inherited_vars(
+    manifest: Dict[str, Any], store_path: Path | None
+) -> Dict[str, Any]:
+    """Return manifest with vars merged from its extends chain."""
+    merged = dict(manifest)
+    vars_dict: dict[str, Any] = {}
+    extends = manifest.get("extends")
+    if extends:
+        base_manifest, _ = _store_resolve_recipe(extends, store_path=store_path)
+        if base_manifest is not None:
+            inherited = _manifest_with_inherited_vars(base_manifest, store_path)
+            raw_vars = inherited.get("vars")
+            if isinstance(raw_vars, dict):
+                vars_dict.update(raw_vars)
+    raw_vars = manifest.get("vars")
+    if isinstance(raw_vars, dict):
+        vars_dict.update(raw_vars)
+    if vars_dict:
+        merged["vars"] = vars_dict
+    return merged
 
 
 def _ensure_override_yaml(cf_dir: Path) -> None:

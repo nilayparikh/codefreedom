@@ -12,7 +12,7 @@ def _run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedPr
         ["git", *args],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=90,
         cwd=str(cwd) if cwd else None,
     )
     return result

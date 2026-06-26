@@ -409,6 +409,85 @@ class TestGeneratedArtifacts:
         assert "#!/usr/bin/env bash" in content
         assert "MY_API_KEY" in content
 
+    def test_init_recipe_persists_extended_recipe_vars(self, tmp_path, monkeypatch):
+        cf_dir = tmp_path / ".codefreedom"
+        cf_dir.mkdir()
+
+        base_manifest = {
+            "name": "_default",
+            "vars": {
+                "TOOL_IMAGE_BASE": "docker.io/nilayparikh/codefreedom",
+                "CHROME_IMAGE_TAG": "latest",
+                "WEB_IMAGE_TAG": "latest",
+                "GITHUB_IMAGE_TAG": "latest",
+                "WEB_BRIDGE_IMAGE_TAG": "latest",
+            },
+            "files": [],
+        }
+        base_files = {}
+        child_manifest = {
+            "name": "child",
+            "extends": "_default",
+            "files": [
+                {
+                    "path": "profiles.yaml",
+                    "target": "profiles.yaml",
+                    "merge": "deepdiff",
+                }
+            ],
+        }
+        child_files = {
+            "profiles.yaml": yaml.dump(
+                {
+                    "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+                    "tools": {
+                        "chrome": {
+                            "image": "${TOOL_IMAGE_BASE}:chrome-${CHROME_IMAGE_TAG}",
+                            "container_name": "codefreedom-tools-chrome",
+                            "port": 9222,
+                        }
+                    },
+                },
+                sort_keys=False,
+            )
+        }
+
+        monkeypatch.setattr(
+            "codefreedom.recipe.plan.get_codefreedom_dir", lambda: cf_dir
+        )
+        monkeypatch.setattr(
+            "codefreedom.recipe.plan.get_config_dir", lambda: cf_dir / "config"
+        )
+        monkeypatch.setattr(
+            "codefreedom.recipe.plan._resolve_store",
+            lambda store, branch=None: tmp_path / "store",
+        )
+        monkeypatch.setattr(
+            "codefreedom.recipe.plan._resolve_recipe_branch",
+            lambda: "main",
+        )
+
+        def resolve_recipe(name, store_path=None):
+            if name == "_default":
+                return base_manifest, base_files
+            if name == "child":
+                return child_manifest, child_files
+            return None, {}
+
+        monkeypatch.setattr("codefreedom.recipe.plan._store_resolve_recipe", resolve_recipe)
+
+        from codefreedom.recipe.plan import init_recipe
+
+        rc = init_recipe("child")
+        assert rc == 0
+
+        recipe_yaml = yaml.safe_load((cf_dir / "config" / "recipe.yaml").read_text(encoding="utf-8"))
+        assert recipe_yaml["vars"]["TOOL_IMAGE_BASE"] == "docker.io/nilayparikh/codefreedom"
+        assert recipe_yaml["vars"]["CHROME_IMAGE_TAG"] == "latest"
+        assert recipe_yaml["vars"]["WEB_IMAGE_TAG"] == "latest"
+        assert recipe_yaml["vars"]["GITHUB_IMAGE_TAG"] == "latest"
+        assert recipe_yaml["vars"]["WEB_BRIDGE_IMAGE_TAG"] == "latest"
+
     def test_plan_recipe_with_generated_artifacts(self, tmp_path, monkeypatch, capsys):
         cf_dir = tmp_path / ".codefreedom"
         cf_dir.mkdir()
