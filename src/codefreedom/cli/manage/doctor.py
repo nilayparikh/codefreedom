@@ -593,10 +593,7 @@ def _check_tool_profile(name: str, label: str) -> CheckResult:
 # ── Section: Env Vars (Proxy) ──────────────────────────────────────────────
 
 
-def _resolve_env_var_value(
-    name: str,
-    env_files: list[Path] | None = None,
-) -> Tuple[Optional[str], Optional[str]]:
+def _resolve_env_var_value(name: str) -> Tuple[Optional[str], Optional[str]]:
     """Resolve an env var value from machine environment variables only.
 
     All secrets must come from machine environment variables with CF_CLI_* prefix.
@@ -608,10 +605,7 @@ def _resolve_env_var_value(
 
     Returns ``(value, source_description)`` or ``(None, None)`` if not found.
     """
-    return resolve_config_value(
-        name,
-        workspace_dir=Path.cwd(),
-    )
+    return resolve_config_value(name, workspace_dir=Path.cwd())
 
 
 @_section("Environment Variables (Proxy)")

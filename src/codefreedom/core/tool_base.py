@@ -66,7 +66,7 @@ def make_default_settings(
     return settings
 
 
-def dispatch_tool_run(
+def dispatch_tool_run(  # pylint: disable=too-many-arguments
     args: argparse.Namespace,
     *,
     load_profile: Callable[[], dict],
