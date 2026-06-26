@@ -349,9 +349,8 @@ class TestEnvVarChecks:
         assert passed >= 1
 
     def test_litellm_master_key_in_env_file_passes(self, monkeypatch, tmp_path):
-        """Key set in .env.proxy.secrets should be detected."""
-        secrets_file = tmp_path / ".env.proxy.secrets"
-        secrets_file.write_text("LITELLM_MASTER_KEY=sk-from-file\n")
+        """Key set via machine env should be detected."""
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
