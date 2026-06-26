@@ -332,25 +332,15 @@ class TestEnvVarChecks:
         passed, failed, warned = _run_checks()
         assert failed >= 1
 
-    def test_litellm_master_key_in_env_passes(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test-key")
-        monkeypatch.setattr(
-            "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
-        )
-        _clear_checks()
+    def test_litellm_master_key_in_machine_env_passes(self, monkeypatch, tmp_path):
+        """Bare ``LITELLM_MASTER_KEY`` in os.environ satisfies the doctor check.
 
-        @_section("Environment Variables (Proxy)")
-        def _check() -> CheckResult:
-            from codefreedom.cli.manage.doctor import _check_litellm_master_key
-
-            return _check_litellm_master_key()
-
-        passed, failed, warned = _run_checks()
-        assert passed >= 1
-
-    def test_litellm_master_key_in_env_file_passes(self, monkeypatch, tmp_path):
-        """Key set via machine env should be detected."""
-        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-env")
+        CodeFreedom no longer reads ``.env.user`` or ``.env.*.secrets`` files
+        for secrets — the doctor resolves solely from ``CF_CLI_*`` machine
+        overrides and bare ``os.environ``. This test pins that path.
+        """
+        monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-machine-env")
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )

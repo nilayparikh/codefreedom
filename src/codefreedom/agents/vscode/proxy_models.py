@@ -365,9 +365,8 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     out_path = Path(args.out) if args.out else None
     workspace_dir = Path.cwd()
 
-    # Load the full env chain so LITELLM_MASTER_KEY is resolved from ANY
-    # supported location: .env.proxy, .env.proxy.secrets, .env.secrets,
-    # .env.user, CF_CLI_LITELLM_MASTER_KEY, etc.
+    # Load the env chain so LITELLM_MASTER_KEY is resolved from CF_CLI_*
+    # overrides (highest priority) or bare os.environ.
     eprint(
         f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}..."
     )
@@ -385,8 +384,8 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     if not master_key:
         eprint(
             "[ERROR] LITELLM_MASTER_KEY is not set."
-            " Export it in your shell, or add it to ~/.codefreedom/.env.proxy.secrets,"
-            " or set CF_CLI_LITELLM_MASTER_KEY in your shell,"
+            " Export CF_CLI_LITELLM_MASTER_KEY (recommended) or"
+            " LITELLM_MASTER_KEY in your shell,"
             " then re-run this command."
         )
         return 1

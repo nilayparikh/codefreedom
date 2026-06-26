@@ -107,35 +107,29 @@ Inherited from `_default`. See [costeffective-coding tools](costeffective-coding
 
 ```text
 ~/.codefreedom/
-├── .env.claude.secrets          # Claude Code secrets
-├── .env.mimo.secrets            # MiMo Code secrets
-├── .env.opencode.secrets        # OpenCode secrets
-├── .env.proxy.secrets           # Proxy provider secrets (includes LOCAL_*)
-├── profiles/
-│   ├── claude-code.yaml         # Claude Code agent profiles
-│   ├── mimo-code.yaml           # MiMo Code agent profiles
-│   ├── open-code.yaml           # OpenCode agent profiles
-│   ├── chrome.yaml              # Chrome tool config
-│   ├── web.yaml                 # Web search tool config
-│   ├── github.yaml              # GitHub tool config
-│   └── web-bridge.yaml          # Web bridge tool config
-├── proxy/
-│   ├── docker-compose.yaml      # Container orchestration
-│   └── config/
-│       ├── config.yaml          # LiteLLM main config (includes local.yaml)
-│       ├── providers/
-│       │   ├── azure-foundry.yaml
-│       │   ├── opencode.yaml
-│       │   ├── openrouter.yaml
-│       │   └── local.yaml       # ← NEW: local Qwen models
-│       └── plugins/
-│           └── reasoning-efforts/
-│               └── reasoning-efforts-mapping.yaml
+├── config/
+│   ├── override.yaml           # User overrides (vars, common, tools, …)
+│   ├── profiles.yaml           # Unified agent + tool profiles
+│   └── proxy/
+│       ├── docker-compose.yaml  # Container orchestration
+│       └── config/
+│           ├── config.yaml          # LiteLLM main config (includes local.yaml)
+│           ├── providers/
+│           │   ├── azure-foundry.yaml
+│           │   ├── opencode.yaml
+│           │   ├── openrouter.yaml
+│           │   └── local.yaml       # ← NEW: local Qwen models
+│           └── plugins/
+│               └── reasoning-efforts/
+│                   └── reasoning-efforts-mapping.yaml
 └── scripts/
     └── costeffective-coding-with-local/
         ├── setup-secrets.sh
         └── setup-secrets.ps1
 ```
+
+Secrets are sourced from `CF_CLI_*` machine environment variables — no
+`.env.*.secrets` files are created or read by the recipe flow.
 
 ## Differences from costeffective-coding
 

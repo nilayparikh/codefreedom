@@ -128,7 +128,7 @@ jobs:
           cf --help
           codefreedom setup init costeffective-coding
 
-          test -f ~/.codefreedom/.env.user || { echo "MISSING: .env.user"; exit 1; }
+          test -f ~/.codefreedom/config/override.yaml || { echo "MISSING: override.yaml"; exit 1; }
           test -f ~/.codefreedom/config/proxy/config/config.yaml || { echo "MISSING: proxy config"; exit 1; }
           test -f ~/.codefreedom/config/proxy/docker-compose.yaml || { echo "MISSING: compose"; exit 1; }
           test -f ~/.codefreedom/config/profiles.yaml || { echo "MISSING: profiles.yaml"; exit 1; }

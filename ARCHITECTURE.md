@@ -204,7 +204,7 @@ main.py (parse)
     -> plan.py (plan_recipe: generate patch manifest, check secrets)
     -> user confirms
     -> apply.py (apply_recipe: merge files, validate secrets via _resolve_secret)
-      -> _resolve_secret: CF_CLI_* -> os.environ -> .env.user -> .env.*.secrets
+      -> _resolve_secret: CF_CLI_* -> os.environ (no .env files)
 ```
 
 ## Rules

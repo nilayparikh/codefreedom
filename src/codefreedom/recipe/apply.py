@@ -355,8 +355,6 @@ def _remove_orphans(
 
 def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     """Print a post-install summary — validate secrets, show advice, next steps."""
-    from codefreedom.recipe.plan import _find_env_secrets_targets
-
     name = manifest.get("name", "unknown")
     description = manifest.get("description", "")
     required = manifest.get("required_secrets", [])
@@ -371,12 +369,6 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
 
     _generate_recipe_instruction(manifest, cf_dir)
 
-    # ── Collect env files for secret resolution ────────────────────────
-    secrets_targets = _find_env_secrets_targets(manifest, cf_dir)
-    env_files: list[Path] = []
-    for target in secrets_targets:
-        env_files.append(cf_dir / target)
-
     # ── Validate required secrets ─────────────────────────────────────
     missing_count = 0
     if required:
@@ -386,7 +378,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
             var = secret.get("var", "?")
             prompt = secret.get("prompt", "")
 
-            value, source = _resolve_secret(var, env_files, cf_dir)
+            value, source = _resolve_secret(var)
             if value is not None:
                 label = f"  {green('[SET]')}   {var}"
                 if source:
@@ -406,14 +398,12 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
             print()
             first_var = required[0].get("var", "?")
             tip1 = (
-                "Tip: as machine env var use CF_CLI_<NAME> (e.g. CF_CLI_"
+                "Tip: export CF_CLI_<NAME> (e.g. CF_CLI_"
                 + first_var
-                + "),"
+                + ") in your shell:"
             )
             print(f"  {dim(tip1)}")
-            print(f"  {dim('     or use the bare name in a .env.*.secrets file.')}")
-            tip3 = "     Machine env vars take priority over secrets files."
-            print(f"  {dim(tip3)}")
+            print(f"  {dim('     CodeFreedom no longer reads .env files for secrets.')}")
 
     # ── Validate config vars ──────────────────────────────────────────
     if config_vars:
@@ -423,7 +413,7 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
             var = cfg.get("var", "?")
             prompt = cfg.get("prompt", "")
 
-            value, source = _resolve_secret(var, env_files, cf_dir)
+            value, source = _resolve_secret(var)
             if value is not None:
                 label = f"  {green('[SET]')}   {var}"
                 if source:
@@ -461,23 +451,17 @@ def _print_summary(manifest: Dict[str, Any], cf_dir: Path) -> None:
     print()
 
 
-def _resolve_secret(
-    name: str, env_files: list[Path], cf_dir: Path | None = None
-) -> tuple[str | None, str | None]:
-    """Resolve a secret across CF_CLI_* env, os.environ, and .env files.
+def _resolve_secret(name: str) -> tuple[str | None, str | None]:
+    """Resolve a secret from machine environment variables only.
+
+    CodeFreedom no longer reads ``.env.user`` or ``.env.*.secrets`` for
+    secret resolution — all secrets must come from the user's shell.
 
     Priority chain:
       1. ``CF_CLI_<NAME>`` in os.environ (highest priority)
-      2. ``NAME`` directly in os.environ
-      3. ``NAME=`` in .env.user (user-managed overrides)
-      4. ``NAME=`` in the provided env_files (ignoring CHANGE_ME)
+      2. ``<NAME>`` directly in os.environ
     """
-    workspace_dir = Path.cwd()
-    return resolve_config_value(
-        name,
-        workspace_dir=workspace_dir,
-        extra_env_files=env_files,
-    )
+    return resolve_config_value(name, workspace_dir=Path.cwd())
 
 
 def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None:
@@ -523,7 +507,9 @@ def _generate_recipe_instruction(manifest: Dict[str, Any], cf_dir: Path) -> None
     config_vars = manifest.get("config_vars", [])
     step = 1
     if required:
-        lines.append(f"{step}. Set required secrets in your `.secrets` files:")
+        lines.append(
+            f"{step}. Set required secrets via `CF_CLI_*` machine env vars:"
+        )
         for s in required:
             lines.append(f"   - `{s.get('var', '?')}`")
         lines.append("")
