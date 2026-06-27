@@ -47,61 +47,6 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
     eprint(f"{tag('MCP')} Wrote {mcp_path}")
 
 
-def _register_claude_mcp_servers(
-    workspace_dir: Path, acquired_tools: list[str]
-) -> None:
-    """Register MCP servers with Claude CLI via ``claude mcp add``.
-
-    For each acquired tool, looks up its MCP endpoint and registers it
-    with the Claude CLI so Claude Code can discover tool servers.
-    """
-    from codefreedom.tools.registry import _MCP_TOOLS
-
-    for tool_name in acquired_tools:
-        if tool_name not in _MCP_TOOLS:
-            continue
-
-        tool = _MCP_TOOLS[tool_name]
-        try:
-            port, path = tool.mcp_endpoint
-        except (FileNotFoundError, json.JSONDecodeError):
-            continue
-
-        if not path.startswith("/"):
-            path = "/" + path
-
-        from codefreedom.core.urls import build_endpoint_url
-
-        url = build_endpoint_url(port, path)
-        server_name = tool.mcp_server_name
-
-        try:
-            subprocess.run(
-                [
-                    "claude",
-                    "mcp",
-                    "add",
-                    "--transport",
-                    "http",
-                    server_name,
-                    url,
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            eprint(f"{tag('MCP')} Registered '{server_name}' with Claude CLI.")
-        except FileNotFoundError:
-            eprint(
-                f"{tag('WARN')} Claude CLI not found — skipping MCP registration."
-            )
-        except subprocess.CalledProcessError as exc:
-            eprint(
-                f"{tag('WARN')} Failed to register '{server_name}'"
-                f" with Claude CLI: {exc.stderr.strip()}"
-            )
-
-
 def find_claude_binary() -> str | None:
     """Locate the ``claude`` CLI binary on PATH."""
     return shutil.which("claude")

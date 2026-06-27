@@ -210,9 +210,9 @@ def run(args: argparse.Namespace) -> int:
 
     def _run(acquired_tools: list[str]) -> int:
         if acquired_tools:
-            from codefreedom.launcher import _register_claude_mcp_servers
+            from codefreedom.launcher import _write_mcp_json
 
-            _register_claude_mcp_servers(workspace_dir, acquired_tools)
+            _write_mcp_json(workspace_dir, acquired_tools)
         return run_local(profile_env, args.agent_args, dangerously_skip)
 
     return acquire_and_run(session_id, tools, profile_name, _run)

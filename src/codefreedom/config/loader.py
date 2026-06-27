@@ -342,6 +342,13 @@ def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
     # Step 3: Build resolution context from config layers + CF_CLI_*
     context = _build_context(merged, vars=all_vars)
 
+    # Step 3b: Resolve nested ${VAR} refs inside context values (recipe vars
+    # like PROXY_BASE_URL: "http://${LITELLM_BIND_HOST}:${LITELLM_PORT}").
+    # Without this, context values carry raw ${VAR} text into the final pass.
+    from codefreedom.config.interpolation import resolve_dict
+
+    context = resolve_dict(context, context)
+
     # Step 4: Single-pass ${VAR} resolution
     resolved = copy.deepcopy(merged)
     interpolate_all(resolved, context)
