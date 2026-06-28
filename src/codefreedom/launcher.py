@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 from codefreedom.core.config import get_codefreedom_dir
+from codefreedom.core.remote_validation import RemoteValidationError, validate_remote_tools_or_raise
 from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import load_tool_mcp_endpoints
 
@@ -38,6 +39,12 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
             existing = json.loads(mcp_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             existing = {}
+
+    try:
+        validate_remote_tools_or_raise(acquired_tools)
+    except RemoteValidationError as exc:
+        eprint(f"{tag('MCP')} {exc}")
+        raise
 
     servers = load_tool_mcp_endpoints(acquired_tools)
     existing.setdefault("mcpServers", {})

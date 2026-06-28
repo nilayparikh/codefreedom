@@ -21,6 +21,8 @@ class ChromeSettings(BaseModel, extra="forbid"):
     env: Optional[Dict[str, str]] = None
     mcp_port: Optional[int] = Field(default=None, ge=1024, le=65535)
     mcp_path: Optional[str] = None
+    bind_host: Optional[str] = None
+    remote_url: Optional[str] = None
 
 
 class ChromeConfig(BaseModel, extra="forbid"):

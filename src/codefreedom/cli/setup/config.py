@@ -15,6 +15,10 @@ from pathlib import Path
 import yaml
 
 from codefreedom.core.config import get_config_dir
+from codefreedom.core.remote_validation import (
+    validate_remote_proxy_url as _validate_remote_proxy_url,
+    validate_remote_tool_url as _validate_remote_tool_url,
+)
 from codefreedom.log import eprint, tag
 
 
@@ -143,11 +147,17 @@ def handle_args(args: argparse.Namespace) -> int:
         if getattr(args, "local", False):
             _set_nested(data, ["common", "proxy", "remote_url"], None)
         if getattr(args, "remote_url", None):
+            if not _validate_remote_proxy_url(args.remote_url):
+                eprint(f"{tag('CONFIG')} Remote proxy validation failed: {args.remote_url}.")
+                eprint("   Expected a working /v1/models endpoint. Settings were not saved.")
+                return 1
             _set_nested(data, ["common", "proxy", "remote_url"], args.remote_url)
         if getattr(args, "bind", None):
             _set_nested(data, ["common", "proxy", "bind_host"], args.bind)
         _write_override(data)
         eprint(f"{tag('CONFIG')} Proxy settings updated.")
+        if getattr(args, "remote_url", None):
+            eprint(f"{tag('CONFIG')} Remote proxy validated at {args.remote_url}.")
         return 0
 
     if target == "tools":
@@ -155,11 +165,17 @@ def handle_args(args: argparse.Namespace) -> int:
         if getattr(args, "local", False):
             _set_nested(data, ["tools", tool, "remote_url"], None)
         if getattr(args, "remote_url", None):
+            if not _validate_remote_tool_url(tool, args.remote_url):
+                eprint(f"{tag('CONFIG')} Remote tool validation failed for {tool}: {args.remote_url}.")
+                eprint("   Expected a working MCP endpoint responding to tools/list. Settings were not saved.")
+                return 1
             _set_nested(data, ["tools", tool, "remote_url"], args.remote_url)
         if getattr(args, "bind", None):
             _set_nested(data, ["tools", tool, "bind_host"], args.bind)
         _write_override(data)
         eprint(f"{tag('CONFIG')} Tool settings updated for {tool}.")
+        if getattr(args, "remote_url", None):
+            eprint(f"{tag('CONFIG')} Remote tool validated for {tool} at {args.remote_url}.")
         return 0
 
     if target == "bind":

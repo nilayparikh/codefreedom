@@ -211,8 +211,12 @@ def run(args: argparse.Namespace) -> int:
     def _run(acquired_tools: list[str]) -> int:
         if acquired_tools:
             from codefreedom.launcher import _write_mcp_json
+            from codefreedom.core.remote_validation import RemoteValidationError
 
-            _write_mcp_json(workspace_dir, acquired_tools)
+            try:
+                _write_mcp_json(workspace_dir, acquired_tools)
+            except RemoteValidationError:
+                return 1
         return run_local(profile_env, args.agent_args, dangerously_skip)
 
     return acquire_and_run(session_id, tools, profile_name, _run)
