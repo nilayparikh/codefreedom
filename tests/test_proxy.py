@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from codefreedom.cli.run.proxy import (
+    _configured_remote_proxy_url,
     _find_compose_file,
     _find_config_file,
     _validate,
@@ -165,6 +166,35 @@ class TestEnvIsSet:
         monkeypatch.setenv("CF_CLI_MY_KEY", "from-cf-cli")
         env = {"MY_KEY": "from-file"}
         assert _env_is_set("MY_KEY", env=env) is True
+
+
+class TestConfiguredRemoteProxyUrl:
+    def test_reads_common_proxy_remote_url_from_override(self, monkeypatch, tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "profiles.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "common": {
+                        "bind_address": "0.0.0.0",
+                        "proxy": {"bind_host": "${common.bind_address}", "bind_port": 4000},
+                    },
+                    "agents": {},
+                    "tools": {},
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+        (config_dir / "override.yaml").write_text(
+            yaml.safe_dump(
+                {"common": {"proxy": {"remote_url": "http://barsana:4000"}}},
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("codefreedom.cli.run.proxy.get_config_dir", lambda: config_dir)
+        assert _configured_remote_proxy_url() == "http://barsana:4000"
 
 
 class TestRun:

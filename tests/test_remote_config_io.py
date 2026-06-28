@@ -69,7 +69,7 @@ def test_proxy_start_stop_disabled_when_remote_configured(monkeypatch, tmp_path)
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
     _write_yaml(
         cf_home / "config" / "override.yaml",
-        {"proxy": {"remote_url": "http://m1.local:4000"}},
+        {"common": {"proxy": {"remote_url": "http://m1.local:4000"}}},
     )
 
     class Args:
