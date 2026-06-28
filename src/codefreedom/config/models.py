@@ -51,6 +51,44 @@ def unwrap_double_nested(data: dict[str, Any]) -> bool:
 _unwrap_double_nested = unwrap_double_nested
 
 
+def _strip_obsolete_profile_keys(data: dict[str, Any]) -> None:
+    """Remove decommissioned per-profile keys in-place.
+
+    The sandbox feature was removed but its keys (``sandbox``,
+    ``sandbox_images``) linger in merged config dicts because the deep
+    merge never deletes. Drop them from every profile entry under both
+    ``agents.<name>.profiles.<profile>`` (new format) and the legacy
+    top-level ``profiles.<...>`` form so validation stays strict.
+    """
+    agents = data.get("agents")
+    if isinstance(agents, dict):
+        for agent_val in agents.values():
+            if not isinstance(agent_val, dict):
+                continue
+            profiles = agent_val.get("profiles")
+            if not isinstance(profiles, dict):
+                continue
+            for profile_val in profiles.values():
+                if isinstance(profile_val, dict):
+                    for key in _OBSOLETE_PROFILE_KEYS:
+                        profile_val.pop(key, None)
+
+    top_profiles = data.get("profiles")
+    if isinstance(top_profiles, dict):
+        for key, val in top_profiles.items():
+            if not isinstance(val, dict):
+                continue
+            inner = val.get("profiles") if key in _AGENT_NAMES else None
+            if isinstance(inner, dict):
+                for profile_val in inner.values():
+                    if isinstance(profile_val, dict):
+                        for k in _OBSOLETE_PROFILE_KEYS:
+                            profile_val.pop(k, None)
+            else:
+                for k in _OBSOLETE_PROFILE_KEYS:
+                    val.pop(k, None)
+
+
 # ── Common Settings ──────────────────────────────────────────────────────
 
 class ProxySettings(BaseModel, extra="forbid"):
@@ -198,6 +236,17 @@ _LEGACY_COMMON_KEYS: frozenset[str] = frozenset({
     "proxy_env",   # old: {PROXY_BASE_URL, PROXY_API_KEY} -> now common.proxy.env / vars
     "tools",        # old: [chrome, web, ...] -> now top-level tools: dict
     "tool_images",  # old: {base, tag} -> now inline in tools.<name>.image
+    # Sandbox feature decommissioned: residual keys are dropped so that
+    # configs produced before the removal still validate.
+    "sandbox_images",
+    "sandbox_env",
+})
+
+# Obsolete per-profile keys dropped during normalization. The sandbox
+# feature is decommissioned; these keys only pollute the merged dict.
+_OBSOLETE_PROFILE_KEYS: frozenset[str] = frozenset({
+    "sandbox",
+    "sandbox_images",
 })
 
 
@@ -271,6 +320,9 @@ class ConfigModel(BaseModel, extra="forbid"):
                 common.pop(key, None)
             if not common:
                 data.pop("common", None)
+
+        # Strip obsolete per-profile keys (sandbox feature decommissioned).
+        _strip_obsolete_profile_keys(data)
 
         # 4a. If the file already uses the new format, keep it — but first
         # strip a stray "profiles" key merged from override.yaml and repair

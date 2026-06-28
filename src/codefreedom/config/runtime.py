@@ -40,6 +40,7 @@ class AgentRuntimeConfig:
     profile_env: dict[str, str]
     tools: list[str]
     settings: CodeFreedomSettings
+    schema_error: str = ""
 
 
 class CodeFreedomSettings:
@@ -49,13 +50,15 @@ class CodeFreedomSettings:
     proxy_bind_port: int = 4000
 
     def __init__(self) -> None:
+        from codefreedom.log import eprint, tag
+
         try:
             config = load_config()
             proxy_env = config.for_component("proxy")
             self.proxy_bind_host = proxy_env.get("LITELLM_BIND_HOST", "127.0.0.1")
             self.proxy_bind_port = int(proxy_env.get("LITELLM_PORT", "4000"))
-        except ConfigError:
-            pass
+        except ConfigError as exc:
+            eprint(f"{tag('CONFIG')} Failed to load config: {exc}")
 
         cf_cli_host = os.environ.get("CF_CLI_LITELLM_BIND_HOST")
         if cf_cli_host:
@@ -132,7 +135,11 @@ def resolve_agent_runtime(
 
     try:
         config = load_config(config_dir)
-    except ConfigError:
+    except ConfigError as exc:
+        from codefreedom.log import eprint, tag
+
+        eprint(f"{tag('CONFIG')} Failed to load configuration: {exc}")
+        eprint("   Run `cf doctor config` to diagnose. Agent will start with defaults only.")
         return AgentRuntimeConfig(
             agent=agent,
             workspace_dir=workspace_dir,
@@ -141,6 +148,7 @@ def resolve_agent_runtime(
             profile_env={},
             tools=[],
             settings=CodeFreedomSettings(),
+            schema_error=str(exc),
         )
 
     if not validate_profile:

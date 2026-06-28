@@ -90,6 +90,112 @@ class TestConfigLoading:
         agent_cfg = config.for_agent("claude-code")
         assert agent_cfg.env["KEY"] == "val"
 
+    def test_obsolete_sandbox_keys_stripped(self, tmp_path):
+        """Decommissioned sandbox keys (common + per-profile) are stripped.
+
+        Regression: PR #145 removed the sandbox fields from the schema but
+        kept ``extra="forbid"``. Configs produced before the removal still
+        carry ``common.sandbox_images``, ``common.sandbox_env``, and
+        per-profile ``sandbox``/``sandbox_images`` keys, which made
+        ``load_config`` raise ``SchemaValidationError``. That error was
+        swallowed by ``resolve_agent_runtime``, silently dropping the
+        entire profile env (PROXY_API_KEY, models, tools) and causing
+        agents to start with no proxy/models or a 401 from the proxy.
+        """
+        _write(tmp_path, {
+            "common": {
+                "sandbox_images": {
+                    "default": "docker.io/test:latest",
+                    "cuda": "docker.io/test:cuda-latest",
+                },
+                "sandbox_env": {"IS_SANDBOX": "1"},
+            },
+            "agents": {
+                "mimo-code": {
+                    "profiles": {
+                        "default": {
+                            "env": {"MIMOCODE_MIMO_ONLY": "1"},
+                            "sandbox_images": {"default": "docker.io/test:latest"},
+                            "sandbox": {"env": {"MIMOCODE_DISABLE_GIT": "0"}},
+                        },
+                    },
+                },
+            },
+        })
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("mimo-code")
+        assert agent_cfg.env["MIMOCODE_MIMO_ONLY"] == "1"
+
+    def test_obsolete_sandbox_keys_stripped_legacy_format(self, tmp_path):
+        """Sandbox keys stripped from legacy ``profiles:`` form too.
+
+        The new-format strip (``agents.<a>.profiles.<p>``) is tested above;
+        the legacy ``_normalize_legacy_format`` paths wrap ``profiles:``
+        into ``agents:`` *after* the stripper runs. This guarantees the
+        per-profile cleaner visits both shapes for the same input file.
+        """
+        _write(tmp_path, {
+            "common": {
+                "sandbox_images": {"default": "docker.io/x:latest"},
+                "sandbox_env": {"IS_SANDBOX": "1"},
+            },
+            "profiles": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {
+                            "env": {"KEY": "val"},
+                            "sandbox": {"env": {"LEGACY": "1"}},
+                            "sandbox_images": {"default": "docker.io/x:latest"},
+                        },
+                    },
+                },
+            },
+        })
+        config = load_config(tmp_path)
+        assert config.for_agent("claude-code").env["KEY"] == "val"
+
+    def test_obsolete_sandbox_keys_stripped_via_override_merge(self, tmp_path):
+        """Override.yaml contributing residual sandbox keys is also stripped.
+
+        The deep merge never deletes, so an override layer written by an
+        older recipe can re-introduce ``common.sandbox_*`` / per-profile
+        ``sandbox`` even when the base is clean. The normalizer must strip
+        across the *merged* dict, not just the base.
+        """
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"KEY": "val"}}}}}
+        })
+        _write_override(tmp_path, {
+            "common": {
+                "sandbox_images": {"default": "docker.io/x:latest"},
+                "sandbox_env": {"IS_SANDBOX": "1"},
+            },
+            "agents": {
+                "claude-code": {
+                    "profiles": {
+                        "default": {"sandbox": {"env": {"X": "1"}}},
+                    },
+                },
+            },
+        })
+        config = load_config(tmp_path)
+        assert config.for_agent("claude-code").env["KEY"] == "val"
+
+    def test_obsolete_sandbox_keys_stripped_flat_format(self, tmp_path):
+        """Flat ``profiles: {default: {...}}`` legacy form also strips sandbox."""
+        _write(tmp_path, {
+            "common": {"sandbox_env": {"IS_SANDBOX": "1"}},
+            "profiles": {
+                "default": {
+                    "env": {"KEY": "val"},
+                    "sandbox": {"env": {"X": "1"}},
+                    "sandbox_images": {"default": "docker.io/x:latest"},
+                },
+            },
+        })
+        config = load_config(tmp_path)
+        assert config.for_agent("claude-code").env["KEY"] == "val"
+
     def test_mixed_format_override_merge(self, tmp_path):
         """Override with flat profiles: + base with agent-keyed profiles: merges correctly."""
         _write(tmp_path, {
