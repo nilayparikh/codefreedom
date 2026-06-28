@@ -28,6 +28,7 @@ class ProxySettings(BaseModel):
     bind_host: str
     bind_port: int
     public_base_url: str
+    remote_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -46,8 +47,9 @@ class AgentRuntimeConfig:
 class CodeFreedomSettings:
     """Runtime settings — proxy bind host/port from load_config() + CF_CLI_*."""
 
-    proxy_bind_host: str = "127.0.0.1"
+    proxy_bind_host: str = "0.0.0.0"
     proxy_bind_port: int = 4000
+    proxy_remote_url: str | None = None
 
     def __init__(self) -> None:
         from codefreedom.log import eprint, tag
@@ -55,12 +57,13 @@ class CodeFreedomSettings:
         try:
             config = load_config()
             proxy_env = config.for_component("proxy")
-            self.proxy_bind_host = proxy_env.get("LITELLM_BIND_HOST", "127.0.0.1")
+            self.proxy_bind_host = proxy_env.get("LITELLM_BIND_HOST", "0.0.0.0")
             self.proxy_bind_port = int(proxy_env.get("LITELLM_PORT", "4000"))
+            self.proxy_remote_url = proxy_env.get("PROXY_BASE_URL") or None
         except ConfigError as exc:
             eprint(f"{tag('CONFIG')} Failed to load config: {exc}")
 
-        cf_cli_host = os.environ.get("CF_CLI_LITELLM_BIND_HOST")
+        cf_cli_host = os.environ.get("CF_CLI_LITELLM_BIND_HOST") or os.environ.get("CF_CLI_BIND_ADDRESS")
         if cf_cli_host:
             self.proxy_bind_host = cf_cli_host
         cf_cli_port = os.environ.get("CF_CLI_LITELLM_PORT")
@@ -74,10 +77,12 @@ class CodeFreedomSettings:
     def proxy(self) -> ProxySettings:
         host = self.proxy_bind_host
         port = self.proxy_bind_port
+        public_base_url = self.proxy_remote_url or f"http://{host}:{port}"
         return ProxySettings(
             bind_host=host,
             bind_port=port,
-            public_base_url=f"http://{host}:{port}",
+            public_base_url=public_base_url,
+            remote_url=self.proxy_remote_url,
         )
 
     def proxy_provenance(self) -> dict[str, ResolvedValue]:

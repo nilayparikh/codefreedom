@@ -101,6 +101,7 @@ Test files mirror source structure and are split by responsibility:
 | `test_http_client.py` | HTTP client operations | integration |
 | `test_config_display.py` | Config display/formatting | unit |
 | `test_settings.py` | Settings loading and resolution | unit |
+| `test_remote_config_io.py` | Remote proxy/tool configuration | integration |
 | `test_git_helpers.py` | Git workflow helpers | unit |
 | `test_git_io.py` | Git workflow I/O operations | integration |
 | `test_lint_configs.py` | Lint configuration validation | unit |

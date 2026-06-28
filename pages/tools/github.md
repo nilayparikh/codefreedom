@@ -26,6 +26,8 @@ github:
   image: docker.io/nilayparikh/codefreedom:github-latest
   container_name: codefreedom-tools-github
   port: 8129
+  bind_host: "0.0.0.0"
+  remote_url: "http://192.168.1.5:8129"
   env:
     GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN}
 ```
@@ -35,6 +37,8 @@ github:
 | `image` | `codefreedom:github-latest` | Docker image (wraps `ghcr.io/github/github-mcp-server`) |
 | `container_name` | `codefreedom-tools-github` | Docker container name |
 | `port` | `8129` | Host port (`0` = auto-pick from 8100–8199) |
+| `bind_host` | `0.0.0.0` | Bind address (all interfaces) |
+| `remote_url` | `None` | Remote GitHub MCP endpoint URL |
 | `env.GITHUB_PERSONAL_ACCESS_TOKEN` | — | Required. GitHub PAT |
 
 ## Environment Variables

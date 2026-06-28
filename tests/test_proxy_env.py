@@ -34,7 +34,7 @@ def _write_config(cf_home: Path, overrides: dict | None = None) -> None:
                 "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
                 "tools": {"chrome": {}, "web": {}, "github": {}, "web-bridge": {}, "git": {}},
                 "common": {
-                    "proxy": {"bind_host": "127.0.0.1", "bind_port": 4000},
+                    "proxy": {"bind_host": "0.0.0.0", "bind_port": 4000},
                     "suffix_id": "${SUFFIX_ID:-0000}",
                 },
             },
@@ -86,7 +86,7 @@ def test_falls_back_to_default_and_warns_on_config_error(monkeypatch, tmp_path):
     env = build_proxy_run_env()
 
     assert env["SUFFIX_ID"] == _DEFAULT_SUFFIX_ID
-    assert env["LITELLM_BIND_HOST"] == "127.0.0.1"
+    assert env["LITELLM_BIND_HOST"] == "0.0.0.0"
     assert env["LITELLM_PORT"] == "4000"
     assert env["COMPOSE_PROJECT_NAME"] == "codefreedom-" + _DEFAULT_SUFFIX_ID
 

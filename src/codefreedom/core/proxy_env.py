@@ -39,7 +39,7 @@ from codefreedom.log import eprint, tag
 # ``ProxySettings.bind_host``/``bind_port``/``CommonSection.suffix_id`` so the
 # fallback is indistinguishable from the schema default.
 _DEFAULT_SUFFIX_ID = "0000"
-_DEFAULT_BIND_HOST = "127.0.0.1"
+_DEFAULT_BIND_HOST = "0.0.0.0"
 _DEFAULT_BIND_PORT = "4000"
 _DEFAULT_PROJECT_NAME = f"codefreedom-{_DEFAULT_SUFFIX_ID}"
 
@@ -72,7 +72,7 @@ def build_proxy_run_env() -> dict[str, str]:
     except ConfigError as exc:
         eprint(
             f"{tag('PROXY')} Warning: proxy config could not be loaded ({exc}); "
-            "using schema defaults (suffix=0000, 127.0.0.1:4000)."
+            "using schema defaults (suffix=0000, 0.0.0.0:4000)."
         )
 
     merged.update(proxy_env)

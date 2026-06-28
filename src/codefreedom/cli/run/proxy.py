@@ -30,6 +30,8 @@ from typing import Dict, List, Optional
 # ~/.codefreedom at a tmp_path. Proxy env resolution now lives in
 # :mod:`codefreedom.core.proxy_env`, but the import keeps the historical test
 # patch surface stable.
+from codefreedom.config import load_config
+from codefreedom.config.errors import ConfigError
 from codefreedom.core.config import get_codefreedom_dir  # noqa: F401
 from codefreedom.core.config import get_config_dir
 from codefreedom.docker.pull import pull_if_stale
@@ -86,6 +88,19 @@ def run(args: argparse.Namespace) -> int:
         return 1
 
 
+def _configured_remote_proxy_url() -> str | None:
+    try:
+        proxy_env = load_config().for_component("proxy")
+    except ConfigError:
+        return None
+    remote_url = proxy_env.get("PROXY_BASE_URL", "")
+    bind_host = proxy_env.get("LITELLM_BIND_HOST", "")
+    bind_port = proxy_env.get("LITELLM_PORT", "")
+    if remote_url and remote_url != f"http://{bind_host}:{bind_port}":
+        return remote_url
+    return None
+
+
 def _load_proxy_env_files() -> Dict[str, str]:
     """Load proxy env from machine environment variables only.
 
@@ -138,6 +153,11 @@ def _start(args: argparse.Namespace) -> int:
     compose process environment for this run only (they do not edit
     .env.proxy).
     """
+    remote_url = _configured_remote_proxy_url()
+    if remote_url:
+        eprint(f"{tag('PROXY')} Remote proxy configured at {remote_url}.")
+        eprint("   Remove remote settings to run the proxy locally.")
+        return 1
     return _start_compose(args)
 
 
@@ -369,6 +389,11 @@ def _build_compose_env() -> dict[str, str]:
 
 def _stop() -> int:
     """Stop the LiteLLM proxy."""
+    remote_url = _configured_remote_proxy_url()
+    if remote_url:
+        eprint(f"{tag('PROXY')} Remote proxy configured at {remote_url}.")
+        eprint("   Remove remote settings to run the proxy locally.")
+        return 1
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(
@@ -401,6 +426,11 @@ def _restart() -> int:
     preserves container state, picks up compose-file changes; does not
     pull a new image).
     """
+    remote_url = _configured_remote_proxy_url()
+    if remote_url:
+        eprint(f"{tag('PROXY')} Remote proxy configured at {remote_url}.")
+        eprint("   Remove remote settings to run the proxy locally.")
+        return 1
     compose_file = _find_compose_file()
     if not compose_file:
         eprint(

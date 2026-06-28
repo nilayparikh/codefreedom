@@ -35,8 +35,8 @@ That fragmentation creates three compounding risks:
 ## What You Get
 
 - **Switch models instantly** — DeepSeek for drafting, GPT for reasoning, free models for testing. Same command, different profile.
-- **Self-hosted proxy** — One local endpoint (`localhost:4000`) routes to any LLM provider.
-- **Browser and API tools** — Headless Chrome, web search, GitHub API — all as Docker containers.
+- **Self-hosted proxy** — One local endpoint (`localhost:4000`) routes to any LLM provider. Configure remote access for multi-machine setups.
+- **Browser and API tools** — Headless Chrome, web search, GitHub API — all as Docker containers. Supports remote endpoints.
 
 ## How It Works
 

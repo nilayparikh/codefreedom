@@ -46,6 +46,19 @@ cf run agent list
 ## Configuration Commands
 
 ```bash
+# Proxy config
+cf setup config proxy --remote-url http://192.168.1.5:4000  # Remote proxy
+cf setup config proxy --local             # Switch back to local
+cf setup config proxy --bind 127.0.0.1    # Loopback-only bind
+
+# Tool config
+cf setup config tools chrome --remote-url http://192.168.1.5:9223  # Remote tool
+cf setup config tools chrome --local      # Switch back to local
+cf setup config tools chrome --bind 127.0.0.1  # Loopback-only bind
+
+# Global bind address
+cf setup config bind --address 0.0.0.0    # Default: all interfaces
+
 # VS Code config
 cf setup config vscode --host HOST [--port PORT] [--name NAME] [--out PATH]
 ```

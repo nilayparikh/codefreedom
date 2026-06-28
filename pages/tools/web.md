@@ -29,6 +29,8 @@ web:
   image: docker.io/nilayparikh/codefreedom:web-latest
   container_name: codefreedom-web
   port: 8420
+  bind_host: "0.0.0.0"
+  remote_url: "http://192.168.1.5:8420"
   env: {}
   search_cooldown_seconds: 10.0
   search_engines:
@@ -53,6 +55,8 @@ web:
 | `image` | `codefreedom:web-latest` | Docker image |
 | `container_name` | `codefreedom-web` | Docker container name |
 | `port` | `8420` | MCP server port |
+| `bind_host` | `0.0.0.0` | Bind address (all interfaces) |
+| `remote_url` | `None` | Remote Web endpoint URL |
 | `search_cooldown_seconds` | `10.0` | Delay between searches |
 | `search_engines` | Choice of your search engine | Map of engine name → `{url, parser}` |
 | `parser_registry` | `standard` | CSS selectors for result extraction |

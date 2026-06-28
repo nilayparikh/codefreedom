@@ -63,6 +63,8 @@ def _load_profile() -> dict:
         "port": _DEFAULT_PORT,
         "mcp_path": "/mcp",
         "data_dir": tool_data_dir("web"),
+        "bind_host": "0.0.0.0",
+        "remote_url": "",
         "env": {},
         "search_engines": {},
         "parser_registry": {},
@@ -78,6 +80,8 @@ def _load_profile() -> dict:
             "search_engines",
             "parser_registry",
             "search_cooldown_seconds",
+            "bind_host",
+            "remote_url",
         ],
     )
 
@@ -101,6 +105,7 @@ def start(settings: dict) -> int:
 
     container_name = settings["container_name"]
     port = settings["port"]
+    bind_host = settings.get("bind_host", "0.0.0.0")
 
     if container_is_running(container_name):
         eprint(f"{tag('WEB')} Container '{container_name}' is already running.")
@@ -127,7 +132,7 @@ def start(settings: dict) -> int:
         "--memory-swap",
         "2g",
         "-p",
-        f"{port}:8420",
+        f"{bind_host}:{port}:8420",
         "-v",
         f"{resolved_data}:/userdata",
     ]

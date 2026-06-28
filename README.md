@@ -109,9 +109,11 @@ See the [full documentation](https://nilayparikh.github.io/codefreedom/) for pro
 | Feature | Details |
 |---------|---------|
 | LLM proxy | Self-hosted LiteLLM image (embedded PostgreSQL, multi-provider routing) |
+| Remote proxy | Configure clients to use a remote proxy via `proxy.remote_url` |
 | Agent launcher | Claude Code, MiMoCode, OpenCode |
 | Profiles | Model switching, env inheritance, isolation |
 | Browser tools | Chrome (CDP + MCP), Camoufox stealth browser (MCP), GitHub MCP, Web Bridge |
+| Remote tools | Configure MCP endpoints to use remote tool servers |
 | Backup & restore | Config backups with diff preview and selective restore |
 
 ## Requirements

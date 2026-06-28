@@ -180,6 +180,7 @@ main.py (parse)
     -> docker compose up -d starts:
        - litellm (:4000)    -- codefreedom:litellm-latest (embedded PG, plugins)
        - web-bridge (:8500) -- codefreedom:web-bridge -> Camoufox MCP
+    -> if proxy.remote_url is set: refuse with "use --local to override"
 ```
 
 ### `cf run tools start -c -w`
@@ -187,6 +188,7 @@ main.py (parse)
 ```text
 main.py (parse)
   -> tools.py (parse tool flags, delegate to registry)
+    -> if tool.remote_url is set: skip (log remote URL)
     -> registry.py (start_all_tools: start Chrome + Web containers)
       -> core/container.py (Docker API calls via facade)
 ```

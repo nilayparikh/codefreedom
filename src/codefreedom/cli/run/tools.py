@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import argparse
 
+from codefreedom.config import load_config
+from codefreedom.config.errors import ConfigError
 from codefreedom.log import eprint, tag
 from codefreedom.tools.registry import (
     get_all_tool_status,
@@ -27,8 +29,32 @@ from codefreedom.tools.registry import (
 _TOOL_NAMES: set[str] = {"chrome", "web", "github", "web-bridge"}
 
 
+def _remote_tools(selected: set[str] | None = None) -> dict[str, str]:
+    try:
+        config = load_config()
+    except ConfigError:
+        return {}
+    remote: dict[str, str] = {}
+    for tool_name in _TOOL_NAMES:
+        if selected and tool_name not in selected:
+            continue
+        tool_cfg = config.for_tool(tool_name)
+        remote_url = str(tool_cfg.extra.get("remote_url", "") or "")
+        if remote_url:
+            remote[tool_name] = remote_url
+    return remote
+
+
 def start_all(selected: set[str] | None = None) -> int:
     """Start tools (no-op if already running). Returns exit code."""
+    remote = _remote_tools(selected)
+    if remote:
+        for tool_name, remote_url in remote.items():
+            eprint(f"{tag('TOOLS')} Tool '{tool_name}' is configured remote at {remote_url}.")
+        eprint("   Remove remote settings to run those tools locally.")
+        selected = {name for name in (selected or _TOOL_NAMES) if name not in remote}
+        if not selected:
+            return 1
     eprint(f"{tag('TOOLS')} Starting tools...")
     rc = start_all_tools(selected)
     if rc == 0:
@@ -38,6 +64,14 @@ def start_all(selected: set[str] | None = None) -> int:
 
 def stop_all(selected: set[str] | None = None) -> int:
     """Stop tools. Returns exit code."""
+    remote = _remote_tools(selected)
+    if remote:
+        for tool_name, remote_url in remote.items():
+            eprint(f"{tag('TOOLS')} Tool '{tool_name}' is configured remote at {remote_url}.")
+        eprint("   Remove remote settings to run those tools locally.")
+        selected = {name for name in (selected or _TOOL_NAMES) if name not in remote}
+        if not selected:
+            return 1
     eprint(f"{tag('TOOLS')} Stopping tools...")
     rc = stop_all_tools(selected)
     if rc == 0:

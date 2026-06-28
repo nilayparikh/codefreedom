@@ -109,6 +109,8 @@ def load_config(config_dir: Path) -> ResolvedConfig:
 - **No `.env` files.** All config comes from YAML files + `CF_CLI_*` machine env vars.
 - **Resolution chain** (lowest → highest priority): `profiles.yaml` → `recipe.yaml` → `override.yaml` → `CF_CLI_*`.
 - **Interpolation happens at runtime** on every `load_config()` call. Files store literal `${VAR}` placeholders.
+- **Bind address** is configured via `common.bind_address` in `override.yaml` or `CF_CLI_BIND_ADDRESS` env var. Default: `0.0.0.0` (all interfaces).
+- **Remote URL** is configured per-component: `proxy.remote_url` or `tools.<tool>.remote_url` in `override.yaml`.
 
 ## 9. Agent Module Pattern
 
