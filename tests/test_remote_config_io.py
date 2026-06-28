@@ -164,6 +164,37 @@ def test_setup_config_tool_remote_refuses_unreachable(monkeypatch, tmp_path):
     assert not (cf_home / "config" / "override.yaml").exists()
 
 
+def test_setup_config_proxy_remote_refuses_localhost(monkeypatch, tmp_path):
+    cf_home = tmp_path / ".codefreedom"
+    monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
+
+    class Args:
+        config_target = "proxy"
+        remote_url = "http://127.0.0.1:4000"
+        local = False
+        bind = None
+
+    assert handle_args(Args()) == 1
+    assert not (cf_home / "config" / "override.yaml").exists()
+
+
+def test_setup_config_tool_remote_refuses_localhost(monkeypatch, tmp_path):
+    cf_home = tmp_path / ".codefreedom"
+    monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
+
+    class Args:
+        config_target = "tools"
+        tool = "chrome"
+        remote_url = "http://127.0.0.1:9223/mcp"
+        local = False
+        bind = None
+
+    assert handle_args(Args()) == 1
+    assert not (cf_home / "config" / "override.yaml").exists()
+
+
 def test_write_mcp_json_uses_remote_tool_url(monkeypatch, tmp_path):
     cf_home = tmp_path / ".codefreedom"
     workspace = tmp_path / "workspace"

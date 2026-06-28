@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from codefreedom.core.agent_runtime import fetch_proxy_models
@@ -12,12 +13,21 @@ class RemoteValidationError(Exception):
     """Raised when a configured remote endpoint is unreachable or invalid."""
 
 
+def _is_local_remote_url(url: str) -> bool:
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    return host in {"127.0.0.1", "localhost", "0.0.0.0"}
+
+
 def validate_remote_proxy_url(url: str) -> bool:
+    if _is_local_remote_url(url):
+        return False
     models = fetch_proxy_models(url)
     return bool(models)
 
 
 def validate_remote_tool_url(_tool: str, url: str) -> bool:
+    if _is_local_remote_url(url):
+        return False
     payload = json.dumps(
         {
             "jsonrpc": "2.0",
