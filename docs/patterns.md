@@ -45,6 +45,9 @@ Default container names: `codefreedom-chrome`, `codefreedom-web`, `codefreedom-t
 - Default: **stateless** (no database). Optional PostgreSQL unlocks Admin UI.
 - Provider config: `~/.codefreedom/proxy/config/providers/*.yaml`
 - **Docker-only** — no native mode, no `litellm` extra in `pyproject.toml`.
+- Default bind address: `0.0.0.0` (all interfaces, remote-accessible).
+- Override via `common.bind_address` in `override.yaml` or `CF_CLI_BIND_ADDRESS` env var.
+- Remote proxy: set `proxy.remote_url` in `override.yaml` to route clients to a remote proxy.
 
 ## 5. Configuration Management
 
@@ -54,6 +57,15 @@ Default container names: `codefreedom-chrome`, `codefreedom-web`, `codefreedom-t
 - Recipes declare `vars:` (dynamic key-value pairs) and `required_secrets` / `config_vars`.
 - No `.env` files — secrets come exclusively from `CF_CLI_*` machine env vars.
 - `override.yaml` mirrors the full `profiles.yaml` schema — any value can be overridden, not just `env`.
+
+## 6. Remote Components
+
+Components (proxy and tools) can be configured as remote:
+
+- **Proxy:** `proxy.remote_url` in `override.yaml` — clients use `PROXY_BASE_URL` from config instead of local detection.
+- **Tools:** `tools.<tool>.remote_url` in `override.yaml` — MCP endpoints use the remote URL verbatim.
+- **Bind address:** `common.bind_address` controls server-side bind (default `0.0.0.0`). Client-side URL stays `127.0.0.1` for local access.
+- When remote, lifecycle commands (`start`/`stop`/`restart`) are refused — use `--local` to override.
 
 ## 6. Version Source of Truth
 

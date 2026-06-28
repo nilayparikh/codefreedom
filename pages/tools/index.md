@@ -53,10 +53,23 @@ chrome:
   port: 9222
   mcp_port: 9223
   mcp_path: /mcp
+  bind_host: "0.0.0.0"
+  remote_url: "http://192.168.1.5:9223"
   env:
     CHROME_DEBUG_PORT: '9222'
     MCP_PORT: '9223'
 ```
+
+### Common Settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `bind_host` | `0.0.0.0` | Bind address (all interfaces) |
+| `remote_url` | `None` | Remote tool endpoint URL |
+
+**Bind address:** Controls which network interface the tool listens on. Default `0.0.0.0` makes it accessible from any network. Set to `127.0.0.1` for loopback-only.
+
+**Remote URL:** When set, MCP endpoints use this URL instead of the local container. Lifecycle commands (`start`/`stop`/`restart`) are refused for remote tools — use `--local` to override.
 
 Profiles are deployed by recipes. Use `cf s i` to initialize.
 

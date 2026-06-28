@@ -49,7 +49,7 @@ Key environment variables set by CodeFreedom:
 
 | Variable | Purpose |
 | --- | --- |
-| `ANTHROPIC_BASE_URL` | Points to your local proxy (`http://localhost:4000`) |
+| `ANTHROPIC_BASE_URL` | Points to your proxy (`http://localhost:4000` or remote URL from `proxy.remote_url`) |
 | `ANTHROPIC_AUTH_TOKEN` | Proxy authentication key |
 | `CLAUDE_MODEL` | Default model from your profile |
 

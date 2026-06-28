@@ -55,6 +55,8 @@ def _load_profile() -> dict:
         "container_name": _DEFAULT_CONTAINER_NAME,
         "port": _DEFAULT_PORT,
         "data_dir": tool_data_dir("web-bridge"),
+        "bind_host": "0.0.0.0",
+        "remote_url": "",
         "env": {},
     }
     return load_tool_profile(
@@ -62,6 +64,7 @@ def _load_profile() -> dict:
         settings,
         schema_class=WebBridgeConfig,
         env_port_var="CODEFREEDOM_WEB_BRIDGE_PORT",
+        extra_keys=["bind_host", "remote_url"],
     )
 
 
@@ -85,6 +88,7 @@ def start(settings: dict) -> int:
 
     container_name = settings["container_name"]
     port = settings["port"]
+    bind_host = settings.get("bind_host", "0.0.0.0")
 
     if container_is_running(container_name):
         eprint(f"{tag('WEB-BRIDGE')} Container '{container_name}' is already running.")
@@ -96,7 +100,7 @@ def start(settings: dict) -> int:
     resolved_data = resolve_data_dir(settings["data_dir"])
     docker_args = [
         "-p",
-        f"{port}:8500",
+        f"{bind_host}:{port}:8500",
         "-v",
         f"{resolved_data}:/app/data",
     ]

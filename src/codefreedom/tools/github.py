@@ -94,6 +94,8 @@ def _load_profile() -> dict:
         "container_name": _DEFAULT_CONTAINER_NAME,
         "port": _DEFAULT_PORT,
         "data_dir": tool_data_dir("github"),
+        "bind_host": "0.0.0.0",
+        "remote_url": "",
         "env": {},
     }
     return load_tool_profile(
@@ -101,6 +103,7 @@ def _load_profile() -> dict:
         settings,
         schema_class=GithubConfig,
         env_port_var="CODEFREEDOM_GITHUB_PORT",
+        extra_keys=["bind_host", "remote_url"],
     )
 
 
@@ -142,6 +145,7 @@ def start(settings: dict) -> int:
         return 1
 
     host_port = settings["port"]
+    bind_host = settings.get("bind_host", "0.0.0.0")
     if host_port == 0:
         host_port = _find_free_port()
 
@@ -149,7 +153,7 @@ def start(settings: dict) -> int:
 
     docker_args = [
         "-p",
-        f"0.0.0.0:{host_port}:8082",
+        f"{bind_host}:{host_port}:8082",
         "-v",
         f"{resolve_data_dir(settings['data_dir'])}:/data",
     ]

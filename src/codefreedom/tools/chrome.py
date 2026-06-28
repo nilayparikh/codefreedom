@@ -54,6 +54,8 @@ def _load_profile() -> dict:
         "mcp_path": "/mcp",
         "cdp_proxy_port": 9220,
         "data_dir": tool_data_dir("chrome"),
+        "bind_host": "0.0.0.0",
+        "remote_url": "",
         "env": {},
     }
     return load_tool_profile(
@@ -61,7 +63,7 @@ def _load_profile() -> dict:
         settings,
         schema_class=ChromeConfig,
         env_port_var="CODEFREEDOM_CHROME_PORT",
-        extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port"],
+        extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port", "bind_host", "remote_url"],
         env_port_vars={
             "mcp_port": "CODEFREEDOM_CHROME_MCP_PORT",
             "cdp_proxy_port": "CODEFREEDOM_CHROME_CDP_PROXY_PORT",
@@ -89,6 +91,7 @@ def start(settings: dict) -> int:
 
     container_name = settings["container_name"]
     port = settings["port"]
+    bind_host = settings.get("bind_host", "0.0.0.0")
     env_vars = settings.get("env", {})
 
     if container_is_running(container_name):
@@ -115,9 +118,9 @@ def start(settings: dict) -> int:
     docker_args = [
         "--shm-size=512m",
         "-p",
-        f"0.0.0.0:{port}:{cdp_proxy_port}",
+        f"{bind_host}:{port}:{cdp_proxy_port}",
         "-p",
-        f"0.0.0.0:{mcp_port}:{mcp_port}",
+        f"{bind_host}:{mcp_port}:{mcp_port}",
         "-v",
         f"{resolved_data}:/data/chrome",
     ]

@@ -325,6 +325,13 @@ Priority (lowest to highest):
 
 All layers support `${VAR}` and `${VAR:-default}` interpolation. Empty-string values in `CF_CLI_*` are valid overrides (do NOT fall through to default). No `.env` files are read — all configuration comes from YAML + `CF_CLI_*` env vars.
 
+**Bind address:** Configure via `common.bind_address` in `override.yaml` or `CF_CLI_BIND_ADDRESS` env var. Default: `0.0.0.0` (all interfaces, remote-accessible).
+
+**Remote URL:** Configure per-component in `override.yaml`:
+
+- `proxy.remote_url` — clients use remote proxy instead of local
+- `tools.<tool>.remote_url` — MCP endpoints use remote tool URL
+
 ### Tool Module Pattern
 
 All tool modules (chrome, web, github, web_bridge) follow this structure:
@@ -408,6 +415,15 @@ Tool profiles use `.yaml` files. Legacy `.json` profiles for chrome/web are stil
 ### Proxy is Docker-only — no native mode
 
 The proxy always runs via `docker compose`. No native Python path. Do not reintroduce native-mode logic.
+
+### Remote components
+
+Components (proxy and tools) can be configured as remote:
+
+- **Proxy:** `proxy.remote_url` in `override.yaml` — clients use `PROXY_BASE_URL` from config instead of local detection.
+- **Tools:** `tools.<tool>.remote_url` in `override.yaml` — MCP endpoints use the remote URL verbatim.
+- **Bind address:** `common.bind_address` controls server-side bind (default `0.0.0.0`). Client-side URL stays `127.0.0.1` for local access.
+- When remote, lifecycle commands (`start`/`stop`/`restart`) are refused — use `--local` to override.
 
 ### CustomLogger callbacks: reference `instance`, not the class
 
@@ -524,13 +540,13 @@ Apply with: `cf s i -pa <recipe-name>`
 
 ## MCP Servers
 
-Configured in `.mcp.json`:
+Configured in `.mcp.json`. Endpoints use `127.0.0.1` for local access. For remote access, configure `remote_url` per-tool:
 
-| Server | Endpoint |
-|---|---|
-| Chrome DevTools | `http://127.0.0.1:9223/mcp` |
-| Web (Camoufox) | `http://127.0.0.1:8420/mcp` |
-| GitHub | `http://127.0.0.1:8129/mcp` |
+| Server | Endpoint | Remote Config |
+|---|---|---|
+| Chrome DevTools | `http://127.0.0.1:9223/mcp` | `tools.chrome.remote_url` |
+| Web (Camoufox) | `http://127.0.0.1:8420/mcp` | `tools.web.remote_url` |
+| GitHub | `http://127.0.0.1:8129/mcp` | `tools.github.remote_url` |
 
 ## Internal Specs
 

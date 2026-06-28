@@ -25,6 +25,8 @@ web_bridge:
   image: docker.io/nilayparikh/codefreedom:web-bridge-latest
   container_name: codefreedom-web-bridge
   port: 8500
+  bind_host: "0.0.0.0"
+  remote_url: "http://192.168.1.5:8500"
   env:
     MCP_WEB_URL: ${MCP_WEB_URL:-http://host.docker.internal:8420/mcp}
     WEB_BRIDGE_COOLDOWN_SECONDS: ${WEB_BRIDGE_COOLDOWN_SECONDS:-2.0}
@@ -36,6 +38,8 @@ web_bridge:
 | `image` | `codefreedom:web-bridge-latest` | Docker image |
 | `container_name` | `codefreedom-web-bridge` | Docker container name |
 | `port` | `8500` | Host port |
+| `bind_host` | `0.0.0.0` | Bind address (all interfaces) |
+| `remote_url` | `None` | Remote Web Bridge endpoint URL |
 
 ## Environment Variables
 

@@ -39,7 +39,7 @@ cf r ag oc                               # Launch
 
 CodeFreedom automates the entire OpenCode setup:
 
-1. **Detects the proxy** at `PROXY_BASE_URL` (default: `http://localhost:4000`)
+1. **Detects the proxy** at `PROXY_BASE_URL` (default: `http://localhost:4000` or remote URL from `proxy.remote_url`)
 2. **Fetches model list** from the proxy's `/v1/models` endpoint
 3. **Generates config** at `~/.codefreedom/open-code/config/opencode.json`
 4. **Sets `OPENCODE_CONFIG`** env var to point at the generated config

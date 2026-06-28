@@ -762,6 +762,13 @@ def load_tool_profile(
         except ValidationError as exc:
             eprint(f"[{log_tag}] Warning: validation issue in profile: {exc}")
 
+    common_section = raw.get("common", {}) or {}
+    common_bind_address = "0.0.0.0"
+    if isinstance(common_section, dict):
+        bind_address = common_section.get("bind_address")
+        if isinstance(bind_address, str) and bind_address:
+            common_bind_address = bind_address
+
     # Standard keys (image/container_name/data_dir are strings; port coerced
     # so interpolated "${VAR:-9222}" → "9222" is accepted as int 9222).
     for key in ("image", "container_name", "data_dir"):
@@ -778,6 +785,16 @@ def load_tool_profile(
                 defaults["port"] = int(env_port)
             except (ValueError, TypeError):
                 pass
+    bind_host = cfg.get("bind_host")
+    if isinstance(bind_host, str) and bind_host:
+        defaults["bind_host"] = bind_host
+    else:
+        defaults["bind_host"] = common_bind_address
+
+    remote_url = cfg.get("remote_url")
+    if isinstance(remote_url, str) and remote_url:
+        defaults["remote_url"] = remote_url
+
     if isinstance(cfg.get("env"), dict):
         defaults["env"] = cfg["env"]
 
@@ -801,6 +818,9 @@ def load_tool_profile(
         elif key == "search_cooldown_seconds":
             if isinstance(val, (int, float)) and val >= 0:
                 defaults[key] = float(val)
+        elif key in ("bind_host", "remote_url"):
+            if isinstance(val, str) and val:
+                defaults[key] = val
         elif isinstance(val, (str, int, float)) and val:
             defaults[key] = val
 

@@ -140,6 +140,11 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
 
         tool = _MCP_TOOLS[tool_name]
         try:
+            settings = _KNOWN_TOOLS[tool_name][0]()
+            remote_url = settings.get("remote_url")
+            if remote_url:
+                servers[tool.mcp_server_name] = {"type": "http", "url": remote_url}
+                continue
             port, path = tool.mcp_endpoint
         except FileNotFoundError:
             eprint(

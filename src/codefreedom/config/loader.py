@@ -144,9 +144,15 @@ class ResolvedConfig:
             if val is not None and val != "":
                 defaults[key] = val
 
-        extra: dict[str, Any] = {}
+        common_bind_address = self.common.bind_address
+
+        extra: dict[str, Any] = {
+            "bind_host": cfg.get("bind_host") or common_bind_address,
+        }
+        if cfg.get("remote_url"):
+            extra["remote_url"] = cfg.get("remote_url")
         for key, val in cfg.items():
-            if key in ("image", "container_name", "port", "env"):
+            if key in ("image", "container_name", "port", "bind_host", "remote_url", "env"):
                 continue
             extra[key] = val
 
@@ -164,8 +170,10 @@ class ResolvedConfig:
         if name == "proxy":
             proxy = self.common.proxy
             env: Dict[str, str] = {}
-            env["LITELLM_BIND_HOST"] = proxy.bind_host
+            env["LITELLM_BIND_HOST"] = proxy.bind_host or self.common.bind_address
             env["LITELLM_PORT"] = str(proxy.bind_port)
+            if proxy.remote_url:
+                env["PROXY_BASE_URL"] = proxy.remote_url
             env.update(proxy.env)
             env["COMPOSE_PROJECT_NAME"] = f"codefreedom-{self.common.suffix_id}"
             env["SUFFIX_ID"] = self.common.suffix_id
@@ -334,7 +342,10 @@ def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
     # CommonSection.suffix_id defaults to "${SUFFIX_ID:-0000}" — if the merged dict
     # has no common section (or an empty one), seed it so interpolation can resolve.
     merged.setdefault("common", {})
+    merged["common"].setdefault("bind_address", "0.0.0.0")
     merged["common"].setdefault("suffix_id", "${SUFFIX_ID:-0000}")
+    merged["common"].setdefault("proxy", {})
+    merged["common"]["proxy"].setdefault("bind_host", merged["common"].get("bind_address", "0.0.0.0"))
     merged["common"].setdefault("postgres", {})
     merged["common"]["postgres"].setdefault("host_port", "${POSTGRES_HOST_PORT:-5433}")
     merged["common"]["postgres"].setdefault("password", "${POSTGRES_PASSWORD:-pgpassword}")

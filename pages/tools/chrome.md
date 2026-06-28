@@ -28,6 +28,8 @@ chrome:
   port: 9222
   mcp_port: 9223
   mcp_path: /mcp
+  bind_host: "0.0.0.0"
+  remote_url: "http://192.168.1.5:9223"
   env:
     CHROME_DEBUG_PORT: '9222'
     MCP_PORT: '9223'
@@ -40,6 +42,8 @@ chrome:
 | `port` | `9222` | CDP debug port (host) |
 | `mcp_port` | `9223` | MCP server port (host) |
 | `mcp_path` | `/mcp` | MCP endpoint path |
+| `bind_host` | `0.0.0.0` | Bind address (all interfaces) |
+| `remote_url` | `None` | Remote Chrome endpoint URL |
 | `cdp_proxy_port` | `9220` | CDP proxy port (container internal) |
 
 ## Environment Variables

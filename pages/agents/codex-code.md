@@ -40,7 +40,7 @@ cf r ag cx                               # Launch
 
 CodeFreedom automates the entire Codex setup:
 
-1. **Detects the proxy** at `PROXY_BASE_URL` (default: `http://localhost:4000`)
+1. **Detects the proxy** at `PROXY_BASE_URL` (default: `http://localhost:4000` or remote URL from `proxy.remote_url`)
 2. **Fetches model list** from the proxy's `/v1/models` endpoint
 3. **Generates config** at `~/.codefreedom/codex-code/home/config.toml`
 4. **Generates model catalog** at `~/.codefreedom/codex-code/home/model_catalog.json`

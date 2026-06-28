@@ -214,3 +214,37 @@ The LiteLLM proxy runs at `localhost:4000` via Docker Compose.
 
 Secrets are sourced from `CF_CLI_*` machine environment variables — no
 `.env.*.secrets` files are created or read by the recipe flow.
+
+## Bind Address & Remote Access
+
+All services (proxy and tools) bind to `0.0.0.0` by default, making them accessible from any network interface. This allows remote clients to connect using the host's IP address.
+
+To restrict to loopback-only (local access only):
+
+```bash
+# Via CLI
+cf setup config bind --address 127.0.0.1
+
+# Or via override.yaml
+common:
+  bind_address: "127.0.0.1"
+
+# Or via env var
+export CF_CLI_BIND_ADDRESS=127.0.0.1
+```
+
+**Remote proxy:** Configure clients to use a remote proxy instead of the local one:
+
+```bash
+cf setup config proxy --remote-url http://192.168.1.5:4000
+```
+
+**Remote tools:** Configure MCP to use remote tool endpoints:
+
+```bash
+cf setup config tools chrome --remote-url http://192.168.1.5:9223
+cf setup config tools web --remote-url http://192.168.1.5:8420
+cf setup config tools github --remote-url http://192.168.1.5:8129
+```
+
+When a component is configured remote, local lifecycle commands (`start`/`stop`/`restart`) are refused — use `--local` to override.

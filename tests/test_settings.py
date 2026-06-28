@@ -19,9 +19,9 @@ from codefreedom.config.runtime import (
 def test_load_codefreedom_settings_defaults(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / ".codefreedom"))
     settings = load_codefreedom_settings(tmp_path)
-    assert settings.proxy.bind_host == "127.0.0.1"
+    assert settings.proxy.bind_host == "0.0.0.0"
     assert settings.proxy.bind_port == 4000
-    assert settings.proxy.public_base_url == "http://127.0.0.1:4000"
+    assert settings.proxy.public_base_url == "http://0.0.0.0:4000"
 
 
 def test_load_codefreedom_settings_env_override(monkeypatch, tmp_path: Path) -> None:
@@ -257,7 +257,7 @@ def test_codefreedom_settings_surfaces_schema_error(
 
     settings = CodeFreedomSettings()
 
-    assert settings.proxy_bind_host == "127.0.0.1"
+    assert settings.proxy_bind_host == "0.0.0.0"
     assert settings.proxy_bind_port == 4000
     assert "[CONFIG]" in capsys.readouterr().err
 

@@ -41,6 +41,34 @@ All Docker workflows are manual trigger only (`workflow_dispatch`).
 
 The proxy always runs via `docker compose` against `~/.codefreedom/config/proxy/docker-compose.yaml`. No host-side `litellm` install is required.
 
+## Bind Address
+
+All Docker services (proxy and tools) bind to `0.0.0.0` by default, making them accessible from any network interface. This allows remote clients to connect using the host's IP address.
+
+To restrict to loopback-only (local access only), set the bind address:
+
+```bash
+# Via CLI
+cf setup config bind --address 127.0.0.1
+
+# Or via override.yaml
+common:
+  bind_address: "127.0.0.1"
+
+# Or via env var
+export CF_CLI_BIND_ADDRESS=127.0.0.1
+```
+
+**Remote access:** When services bind to `0.0.0.0`, remote clients can connect using the host's IP. Configure remote access per-component:
+
+```bash
+# Remote proxy
+cf setup config proxy --remote-url http://192.168.1.5:4000
+
+# Remote tool
+cf setup config tools chrome --remote-url http://192.168.1.5:9223
+```
+
 ## Patches
 
 Patches in `docker/litellm/patches/` are applied during image build. If you change LiteLLM and a patch can no longer find its target, the build fails loudly -- do not silently fall back.

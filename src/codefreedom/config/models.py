@@ -92,8 +92,9 @@ def _strip_obsolete_profile_keys(data: dict[str, Any]) -> None:
 # ── Common Settings ──────────────────────────────────────────────────────
 
 class ProxySettings(BaseModel, extra="forbid"):
-    bind_host: str = "127.0.0.1"
+    bind_host: str = "0.0.0.0"
     bind_port: int = 4000
+    remote_url: Optional[str] = None
     env: Dict[str, str] = Field(default_factory=dict)
 
 
@@ -105,6 +106,7 @@ class PostgresSettings(BaseModel, extra="forbid"):
 
 
 class CommonSection(BaseModel, extra="forbid"):
+    bind_address: str = "0.0.0.0"
     proxy: ProxySettings = Field(default_factory=ProxySettings)
     postgres: PostgresSettings = Field(default_factory=PostgresSettings)
     suffix_id: str = "${SUFFIX_ID:-0000}"
@@ -201,6 +203,8 @@ class ToolDefinition(BaseModel, extra="allow"):
     image: Optional[str] = None
     container_name: Optional[str] = None
     port: Optional[int] = None
+    bind_host: Optional[str] = None
+    remote_url: Optional[str] = None
     env: Dict[str, str] = Field(default_factory=dict)
 
 
