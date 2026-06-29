@@ -16,6 +16,38 @@ from codefreedom.log import eprint
 
 _DEFAULT_PROXY_URL = "http://localhost:4000"
 
+# Canonical proxy API key env-var names (highest → lowest priority).
+# ``PROXY_API_KEY`` is the canonical name; the ``LITELLM_MASTER_KEY`` entries
+# are legacy fallbacks so existing setups keep working after the rename.
+_PROXY_API_KEY_NAMES: tuple[str, ...] = (
+    "PROXY_API_KEY",
+    "CF_CLI_PROXY_API_KEY",
+    "LITELLM_MASTER_KEY",
+    "CF_CLI_LITELLM_MASTER_KEY",
+)
+
+
+def resolve_proxy_api_key(env: dict[str, str] | None = None) -> str:
+    """Resolve the proxy API key used to authenticate against the LiteLLM proxy.
+
+    Checks the canonical ``PROXY_API_KEY`` name first (machine env
+    ``CF_CLI_PROXY_API_KEY``), then falls back to the legacy
+    ``LITELLM_MASTER_KEY`` names so existing setups keep working. Returns an
+    empty string when no key is found.
+
+    When *env* is provided (e.g. a merged ``base_env`` that already had
+    ``CF_CLI_*`` overrides applied/stripped) only *env* is consulted, so the
+    caller's override semantics (e.g. an empty-string ``CF_CLI_*`` override
+    winning over a bare value) are preserved. When *env* is ``None``,
+    :data:`os.environ` is used directly.
+    """
+    sources: dict[str, str] = env if env is not None else dict(os.environ)
+    for name in _PROXY_API_KEY_NAMES:
+        val = sources.get(name, "")
+        if val:
+            return val
+    return ""
+
 
 def detect_proxy_url(base_env: dict[str, str]) -> str:
     """Detect the proxy URL from environment or fall back to the default.
@@ -73,7 +105,7 @@ def fetch_proxy_models_with_status(
         if exc.status_code in (401, 403):
             if secrets_hint is not None:
                 eprint(
-                    f"[{label}] Proxy returned {exc.status_code} — is LITELLM_MASTER_KEY set "
+                    f"[{label}] Proxy returned {exc.status_code} — is PROXY_API_KEY set "
                     f"in {secrets_hint}?"
                 )
             return [], PROXY_AUTH_REQUIRED

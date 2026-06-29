@@ -39,6 +39,32 @@ def _codefreedom_test_home(tmp_path):  # type: ignore[misc]
         os.environ.pop("CODEFREEDOM_TOOL_HOME", None)
 
 
+# Proxy API key env-var names that must be isolated from the real machine
+# environment. ``resolve_proxy_api_key`` checks all of these, so a stray
+# machine export would leak into tests and shadow the values a test sets
+# explicitly. Cleared before each test; tests that need a key ``setenv`` it.
+_PROXY_API_KEY_ENV_NAMES = (
+    "PROXY_API_KEY",
+    "CF_CLI_PROXY_API_KEY",
+    "LITELLM_MASTER_KEY",
+    "CF_CLI_LITELLM_MASTER_KEY",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_proxy_api_key():
+    """Clear proxy-API-key env vars so tests start from a clean slate."""
+    saved = {name: os.environ.get(name) for name in _PROXY_API_KEY_ENV_NAMES}
+    for name in _PROXY_API_KEY_ENV_NAMES:
+        os.environ.pop(name, None)
+    yield
+    for name, val in saved.items():
+        if val is not None:
+            os.environ[name] = val
+        else:
+            os.environ.pop(name, None)
+
+
 # ── Shared fixtures ─────────────────────────────────────────────────────
 
 

@@ -272,20 +272,23 @@ class ImageRouterLogger(CustomLogger):
 
     @staticmethod
     def _resolve_master_key() -> str:
-        """Resolve ``LITELLM_MASTER_KEY`` from the env chain.
+        """Resolve the proxy master key from the container env chain.
 
-        Checks ``LITELLM_MASTER_KEY`` first, then
-        ``CF_CLI_LITELLM_MASTER_KEY`` (the CodeFreedom CLI override).
-        Falls back to ``"sk-codefreedom-local"`` (the container default)
-        as a last resort so the VLM call always has a non-empty bearer
-        token.  Never returns an empty string.
+        Checks ``LITELLM_MASTER_KEY`` (LiteLLM's convention) first, then
+        ``PROXY_API_KEY`` (CodeFreedom's canonical name), then the
+        ``CF_CLI_*`` overrides. Falls back to ``"sk-codefreedom-local"``
+        (the container default) as a last resort so the VLM call always
+        has a non-empty bearer token.  Never returns an empty string.
         """
-        key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
-        if key:
-            return key
-        key = os.environ.get("CF_CLI_LITELLM_MASTER_KEY", "").strip()
-        if key:
-            return key
+        for name in (
+            "LITELLM_MASTER_KEY",
+            "PROXY_API_KEY",
+            "CF_CLI_LITELLM_MASTER_KEY",
+            "CF_CLI_PROXY_API_KEY",
+        ):
+            key = os.environ.get(name, "").strip()
+            if key:
+                return key
         return "sk-codefreedom-local"
 
     async def _call_vlm(
@@ -395,7 +398,7 @@ class ImageRouterLogger(CustomLogger):
         if not master_key:
             self._warn(
                 "no-master-key",
-                "LITELLM_MASTER_KEY is not set; skipping VLM routing",
+                "LITELLM_MASTER_KEY/PROXY_API_KEY is not set; skipping VLM routing",
             )
             return data
 

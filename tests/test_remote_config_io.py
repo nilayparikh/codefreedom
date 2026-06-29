@@ -268,7 +268,7 @@ def test_setup_config_proxy_remote_401_saves_key_from_env(monkeypatch, tmp_path)
     cf_home = tmp_path / ".codefreedom"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
-    monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-test-123")
+    monkeypatch.setenv("CF_CLI_PROXY_API_KEY", "sk-test-123")
 
     from codefreedom.core.agent_runtime import PROXY_AUTH_REQUIRED, PROXY_OK
 
@@ -291,14 +291,13 @@ def test_setup_config_proxy_remote_401_saves_key_from_env(monkeypatch, tmp_path)
         data = yaml.safe_load(f)
 
     assert data["common"]["proxy"]["remote_url"] == "http://localhost:4000"
-    assert data["common"]["proxy"]["env"]["LITELLM_MASTER_KEY"] == "${LITELLM_MASTER_KEY}"
+    assert data["common"]["proxy"]["env"]["PROXY_API_KEY"] == "${PROXY_API_KEY}"
 
 
 def test_setup_config_proxy_remote_401_saves_key_from_prompt(monkeypatch, tmp_path):
     cf_home = tmp_path / ".codefreedom"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
-    monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
 
     from codefreedom.core.agent_runtime import PROXY_AUTH_REQUIRED, PROXY_OK
 
@@ -309,7 +308,7 @@ def test_setup_config_proxy_remote_401_saves_key_from_prompt(monkeypatch, tmp_pa
         lambda url, api_key="": next(probes),
     )
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._resolve_proxy_master_key", lambda: "sk-from-prompt"
+        "codefreedom.cli.setup.config._resolve_proxy_api_key_interactive", lambda: "sk-from-prompt"
     )
 
     class Args:
@@ -323,14 +322,14 @@ def test_setup_config_proxy_remote_401_saves_key_from_prompt(monkeypatch, tmp_pa
     with open(cf_home / "config" / "override.yaml", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
-    assert data["common"]["proxy"]["env"]["LITELLM_MASTER_KEY"] == "${LITELLM_MASTER_KEY}"
+    assert data["common"]["proxy"]["env"]["PROXY_API_KEY"] == "${PROXY_API_KEY}"
 
 
 def test_setup_config_proxy_remote_401_rejected_key_fails(monkeypatch, tmp_path):
     cf_home = tmp_path / ".codefreedom"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
-    monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-wrong")
+    monkeypatch.setenv("CF_CLI_PROXY_API_KEY", "sk-wrong")
 
     from codefreedom.core.agent_runtime import PROXY_AUTH_REQUIRED
 
@@ -353,7 +352,6 @@ def test_setup_config_proxy_remote_401_no_key_fails(monkeypatch, tmp_path):
     cf_home = tmp_path / ".codefreedom"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
-    monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
 
     from codefreedom.core.agent_runtime import PROXY_AUTH_REQUIRED
 
@@ -361,7 +359,7 @@ def test_setup_config_proxy_remote_401_no_key_fails(monkeypatch, tmp_path):
         "codefreedom.cli.setup.config._probe_remote_proxy",
         lambda url, api_key="": PROXY_AUTH_REQUIRED,
     )
-    monkeypatch.setattr("codefreedom.cli.setup.config._resolve_proxy_master_key", lambda: None)
+    monkeypatch.setattr("codefreedom.cli.setup.config._resolve_proxy_api_key_interactive", lambda: None)
 
     class Args:
         config_target = "proxy"
@@ -383,7 +381,7 @@ def test_setup_config_proxy_local_removes_key_marker(monkeypatch, tmp_path):
             "common": {
                 "proxy": {
                     "remote_url": "http://localhost:4000",
-                    "env": {"LITELLM_MASTER_KEY": "${LITELLM_MASTER_KEY}"},
+                    "env": {"PROXY_API_KEY": "${PROXY_API_KEY}"},
                 }
             }
         },
@@ -401,7 +399,7 @@ def test_setup_config_proxy_local_removes_key_marker(monkeypatch, tmp_path):
         data = yaml.safe_load(f)
 
     assert "remote_url" not in data["common"]["proxy"]
-    assert "LITELLM_MASTER_KEY" not in data["common"]["proxy"].get("env", {})
+    assert "PROXY_API_KEY" not in data["common"]["proxy"].get("env", {})
     assert "env" not in data["common"]["proxy"]
 
 
@@ -415,7 +413,7 @@ def test_setup_config_proxy_local_preserves_user_key(monkeypatch, tmp_path):
             "common": {
                 "proxy": {
                     "remote_url": "http://localhost:4000",
-                    "env": {"LITELLM_MASTER_KEY": "sk-user-literal", "OTHER": "x"},
+                    "env": {"PROXY_API_KEY": "sk-user-literal", "OTHER": "x"},
                 }
             }
         },
@@ -432,5 +430,5 @@ def test_setup_config_proxy_local_preserves_user_key(monkeypatch, tmp_path):
     with open(cf_home / "config" / "override.yaml", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
-    assert data["common"]["proxy"]["env"]["LITELLM_MASTER_KEY"] == "sk-user-literal"
+    assert data["common"]["proxy"]["env"]["PROXY_API_KEY"] == "sk-user-literal"
     assert data["common"]["proxy"]["env"]["OTHER"] == "x"

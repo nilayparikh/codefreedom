@@ -78,6 +78,15 @@ def build_proxy_run_env() -> dict[str, str]:
     merged.update(proxy_env)
     merged = apply_cf_cli_overrides(merged)
 
+    # Container bridge: the LiteLLM container reads ``LITELLM_MASTER_KEY`` for
+    # auth (LiteLLM's own convention). CodeFreedom's canonical secret is
+    # ``PROXY_API_KEY``. Mirror whichever is set so the container always
+    # receives its master key, regardless of which name the user exported.
+    bridge_key = merged.get("LITELLM_MASTER_KEY") or merged.get("PROXY_API_KEY", "")
+    if bridge_key:
+        merged.setdefault("LITELLM_MASTER_KEY", bridge_key)
+        merged.setdefault("PROXY_API_KEY", bridge_key)
+
     host = merged.get("LITELLM_BIND_HOST", _DEFAULT_BIND_HOST)
     port = merged.get("LITELLM_PORT", _DEFAULT_BIND_PORT)
     merged.setdefault("PROXY_PUBLIC_BASE_URL", f"http://{host}:{port}")

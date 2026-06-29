@@ -609,9 +609,20 @@ def _resolve_env_var_value(name: str) -> Tuple[Optional[str], Optional[str]]:
 
 
 @_section("Environment Variables (Proxy)")
-def _check_litellm_master_key() -> CheckResult:
-    return _check_env_var(
-        "LITELLM_MASTER_KEY", "Proxy master key", "CF_CLI_LITELLM_MASTER_KEY"
+def _check_proxy_api_key() -> CheckResult:
+    """Check that the proxy API key is set (PROXY_API_KEY, legacy fallback)."""
+    value, _source = _resolve_env_var_value("PROXY_API_KEY")
+    if value is not None:
+        return _ok("PROXY_API_KEY is set (Proxy API key)")
+    # Legacy fallback: existing setups may still export LITELLM_MASTER_KEY.
+    value, _source = _resolve_env_var_value("LITELLM_MASTER_KEY")
+    if value is not None:
+        return _ok(
+            "LITELLM_MASTER_KEY is set (legacy — rename to PROXY_API_KEY)"
+        )
+    return _fail(
+        "PROXY_API_KEY is not set (Proxy API key)",
+        "Export CF_CLI_PROXY_API_KEY=... in your shell",
     )
 
 

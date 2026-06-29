@@ -295,9 +295,11 @@ def cmd_config(args: argparse.Namespace) -> int:
 
     # ── Ensure proxy API key is available ──────────────────────────────
     if not profile_env.get("PROXY_API_KEY"):
-        master_key = base_env.get("LITELLM_MASTER_KEY", "")
-        if master_key:
-            profile_env["PROXY_API_KEY"] = master_key
+        from codefreedom.core.agent_runtime import resolve_proxy_api_key
+
+        api_key = resolve_proxy_api_key(base_env)
+        if api_key:
+            profile_env["PROXY_API_KEY"] = api_key
 
     proxy_url = _detect_proxy_url(profile_env)
     config = _generate_opencode_config(proxy_url, profile_env)
@@ -424,9 +426,11 @@ def run(args: argparse.Namespace) -> int:
     # ── Ensure proxy API key is available ──────────────────────────────
     # Safety net: re-inject from base_env in case resolve failed
     if not profile_env.get("PROXY_API_KEY"):
-        master_key = runtime.base_env.get("LITELLM_MASTER_KEY", "")
-        if master_key:
-            profile_env["PROXY_API_KEY"] = master_key
+        from codefreedom.core.agent_runtime import resolve_proxy_api_key
+
+        api_key = resolve_proxy_api_key(runtime.base_env)
+        if api_key:
+            profile_env["PROXY_API_KEY"] = api_key
 
     # ── Tools: acquire if declared in profile ────────────────────────────
     session_id = generate_session_id(mode)

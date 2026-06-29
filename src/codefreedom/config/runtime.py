@@ -179,11 +179,11 @@ def resolve_agent_runtime(
 
     profile_env = dict(agent_cfg.env)
     if not profile_env.get("PROXY_API_KEY"):
-        master_key = os.environ.get("LITELLM_MASTER_KEY") or os.environ.get(
-            "CF_CLI_LITELLM_MASTER_KEY", ""
-        )
-        if master_key:
-            profile_env["PROXY_API_KEY"] = master_key
+        from codefreedom.core.agent_runtime import resolve_proxy_api_key
+
+        api_key = resolve_proxy_api_key(dict(os.environ))
+        if api_key:
+            profile_env["PROXY_API_KEY"] = api_key
 
     return AgentRuntimeConfig(
         agent=agent,

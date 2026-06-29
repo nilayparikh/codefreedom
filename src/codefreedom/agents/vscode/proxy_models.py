@@ -31,7 +31,7 @@ from codefreedom.log import eprint, tag
 # Default VS Code input reference inserted into the generated `apiKey` field.
 # VS Code replaces this at runtime with a value the user stored via the input
 # variable system.  Users should run VS Code's "Add Secret Input" command and
-# paste this same key to wire the actual LITELLM_MASTER_KEY.
+# paste this same key to wire the actual PROXY_API_KEY.
 _VSCODE_APIKEY_PLACEHOLDER = "${input:codefreedom.litellm.master_key}"
 
 # Default field fallbacks when the proxy /v1/model/info response omits a
@@ -157,17 +157,15 @@ def _load_alias_models(codefreedom_dir: Optional[Path] = None) -> Set[str]:
 
 
 def _resolve_master_key() -> Optional[str]:
-    """Return LITELLM_MASTER_KEY from the canonical :func:`get_env` chain.
+    """Return the proxy API key from the canonical :func:`get_env` chain.
 
-    Delegates to :func:`get_env` (``component="proxy"``) so the same
-    precedence applies as everywhere else — env files, shared configs,
-    ``os.environ``, and ``CF_CLI_*`` overrides.
-
-    This is a convenience wrapper; ``cmd_vscode_proxy_config`` accesses
-    the key directly from ``get_env()``.
+    Delegates to :func:`resolve_proxy_api_key` so the same precedence
+    applies as everywhere else — ``PROXY_API_KEY`` (canonical) with a
+    legacy ``LITELLM_MASTER_KEY`` fallback.
     """
-    merged = apply_cf_cli_overrides(dict(os.environ))
-    key = merged.get("LITELLM_MASTER_KEY", "").strip()
+    from codefreedom.core.agent_runtime import resolve_proxy_api_key
+
+    key = resolve_proxy_api_key(apply_cf_cli_overrides(dict(os.environ))).strip()
     return key if key else None
 
 
@@ -355,7 +353,7 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     """Generate a chatLanguageModels.json entry from the running proxy.
 
     Entry point for ``codefreedom setup config vscode proxy config``.  Probes the proxy
-    at /health/liveliness, fetches /v1/model/info with LITELLM_MASTER_KEY,
+    at /health/liveliness, fetches /v1/model/info with PROXY_API_KEY,
     and emits a JSON object that can be dropped into VS Code's user-level
     ``chatLanguageModels.json`` file (a list of provider entries).
     """
@@ -365,7 +363,7 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     out_path = Path(args.out) if args.out else None
     workspace_dir = Path.cwd()
 
-    # Load the env chain so LITELLM_MASTER_KEY is resolved from CF_CLI_*
+    # Load the env chain so PROXY_API_KEY is resolved from CF_CLI_*
     # overrides (highest priority) or bare os.environ.
     eprint(
         f"{tag('VSCODE')} Loading env chain (proxy component) from {workspace_dir}..."
@@ -380,12 +378,12 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
         )
         return 1
 
-    master_key = base_env.get("LITELLM_MASTER_KEY", "").strip()
+    master_key = (base_env.get("PROXY_API_KEY") or base_env.get("LITELLM_MASTER_KEY", "")).strip()
     if not master_key:
         eprint(
-            "[ERROR] LITELLM_MASTER_KEY is not set."
-            " Export CF_CLI_LITELLM_MASTER_KEY (recommended) or"
-            " LITELLM_MASTER_KEY in your shell,"
+            "[ERROR] PROXY_API_KEY is not set."
+            " Export CF_CLI_PROXY_API_KEY (recommended) or"
+            " PROXY_API_KEY in your shell,"
             " then re-run this command."
         )
         return 1
@@ -398,8 +396,8 @@ def cmd_vscode_proxy_config(args: argparse.Namespace) -> int:
     except HTTPStatusError as exc:
         if exc.status_code in (401, 403):
             eprint(
-                f"[ERROR] Proxy rejected the master key (HTTP {exc.status_code})."
-                " Check LITELLM_MASTER_KEY."
+                f"[ERROR] Proxy rejected the API key (HTTP {exc.status_code})."
+                " Check PROXY_API_KEY."
             )
         else:
             eprint(f"{tag('ERROR')} /v1/model/info returned HTTP {exc.status_code}.")

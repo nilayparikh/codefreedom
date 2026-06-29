@@ -10,11 +10,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
 import yaml
 
+from codefreedom.core.agent_runtime import resolve_proxy_api_key as _resolve_proxy_api_key
 from codefreedom.core.config import get_config_dir
 from codefreedom.core.remote_validation import (
     PROXY_AUTH_REQUIRED as _PROXY_AUTH_REQUIRED,
@@ -24,8 +24,8 @@ from codefreedom.core.remote_validation import (
 )
 from codefreedom.log import eprint, tag
 
-_PROXY_MASTER_KEY_ENV = "CF_CLI_LITELLM_MASTER_KEY"
-_PROXY_MASTER_KEY_REF = "${LITELLM_MASTER_KEY}"
+_PROXY_API_KEY_ENV = "CF_CLI_PROXY_API_KEY"
+_PROXY_API_KEY_REF = "${PROXY_API_KEY}"
 
 
 def _override_path() -> Path:
@@ -63,7 +63,7 @@ def _set_nested(data: dict, path: list[str], value) -> None:
 
 
 def _remove_proxy_master_key_marker(data: dict) -> None:
-    """Remove the ``${LITELLM_MASTER_KEY}`` interpolation marker we added.
+    """Remove the ``${PROXY_API_KEY}`` interpolation marker we added.
 
     Only drops the entry when it still equals our marker, so a user-set
     literal value is never clobbered. Clears an empty ``env`` dict afterwards
@@ -71,26 +71,26 @@ def _remove_proxy_master_key_marker(data: dict) -> None:
     """
     proxy = data.get("common", {}).get("proxy", {})
     env = proxy.get("env")
-    if isinstance(env, dict) and env.get("LITELLM_MASTER_KEY") == _PROXY_MASTER_KEY_REF:
-        env.pop("LITELLM_MASTER_KEY", None)
+    if isinstance(env, dict) and env.get("PROXY_API_KEY") == _PROXY_API_KEY_REF:
+        env.pop("PROXY_API_KEY", None)
         if not env:
             proxy.pop("env", None)
 
 
-def _resolve_proxy_master_key() -> str | None:
-    """Resolve a LiteLLM master key for an authenticated remote proxy.
+def _resolve_proxy_api_key_interactive() -> str | None:
+    """Resolve a proxy API key for an authenticated remote proxy.
 
-    Checks ``CF_CLI_LITELLM_MASTER_KEY`` in the machine env first (the
-    recommended, non-interactive path). Falls back to an interactive prompt.
+    Checks the canonical ``CF_CLI_PROXY_API_KEY`` (and legacy fallback) via
+    :func:`resolve_proxy_api_key` first. Falls back to an interactive prompt.
     Returns the key, or ``None`` if none was provided / input was cancelled.
     """
-    key = os.environ.get(_PROXY_MASTER_KEY_ENV, "").strip()
+    key = _resolve_proxy_api_key().strip()
     if key:
         return key
-    eprint(f"{tag('CONFIG')} Remote proxy requires a master key (401).")
-    eprint(f"   Export {_PROXY_MASTER_KEY_ENV} in your shell and re-run, or paste it now.")
+    eprint(f"{tag('CONFIG')} Remote proxy requires an API key (401).")
+    eprint(f"   Export {_PROXY_API_KEY_ENV} in your shell and re-run, or paste it now.")
     try:
-        key = input("   Master key: ").strip()
+        key = input("   API key: ").strip()
     except (EOFError, KeyboardInterrupt):
         return None
     return key or None
@@ -100,9 +100,9 @@ def _configure_remote_proxy(data: dict, url: str) -> str | None:
     """Probe a remote proxy URL and persist it, resolving auth on 401.
 
     On success, mutates *data* to set ``common.proxy.remote_url`` and, when a
-    master key was needed, ``common.proxy.env.LITELLM_MASTER_KEY`` as the
-    ``${LITELLM_MASTER_KEY}`` interpolation reference (the actual secret stays
-    in the ``CF_CLI_LITELLM_MASTER_KEY`` machine env). Returns a truthy status
+    master key was needed, ``common.proxy.env.PROXY_API_KEY`` as the
+    ``${PROXY_API_KEY}`` interpolation reference (the actual secret stays
+    in the ``CF_CLI_PROXY_API_KEY`` machine env). Returns a truthy status
     string on success, or ``None`` on failure (after printing the reason).
     """
     status = _probe_remote_proxy(url)
@@ -114,25 +114,25 @@ def _configure_remote_proxy(data: dict, url: str) -> str | None:
         eprint("   Expected a working /v1/models endpoint. Settings were not saved.")
         return None
 
-    key = _resolve_proxy_master_key()
+    key = _resolve_proxy_api_key_interactive()
     if not key:
-        eprint(f"{tag('CONFIG')} No master key provided. Settings were not saved.")
-        eprint(f"   Export {_PROXY_MASTER_KEY_ENV} and re-run.")
+        eprint(f"{tag('CONFIG')} No API key provided. Settings were not saved.")
+        eprint(f"   Export {_PROXY_API_KEY_ENV} and re-run.")
         return None
     status = _probe_remote_proxy(url, api_key=key)
     if status != _PROXY_OK:
         eprint(f"{tag('CONFIG')} Remote proxy validation failed: {url}.")
         if status == _PROXY_AUTH_REQUIRED:
-            eprint("   The provided master key was rejected (401/403).")
+            eprint("   The provided API key was rejected (401/403).")
         else:
             eprint("   Expected a working /v1/models endpoint. Settings were not saved.")
         return None
 
     _set_nested(data, ["common", "proxy", "remote_url"], url)
-    _set_nested(data, ["common", "proxy", "env", "LITELLM_MASTER_KEY"], _PROXY_MASTER_KEY_REF)
-    eprint(f"{tag('SECRETS')} Saved master key reference as {_PROXY_MASTER_KEY_REF}.")
+    _set_nested(data, ["common", "proxy", "env", "PROXY_API_KEY"], _PROXY_API_KEY_REF)
+    eprint(f"{tag('SECRETS')} Saved API key reference as {_PROXY_API_KEY_REF}.")
     eprint(
-        f"   Keep {_PROXY_MASTER_KEY_ENV} exported; the value is read at runtime."
+        f"   Keep {_PROXY_API_KEY_ENV} exported; the value is read at runtime."
     )
     return status
 
