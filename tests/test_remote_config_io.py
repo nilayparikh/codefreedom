@@ -164,10 +164,15 @@ def test_setup_config_tool_remote_refuses_unreachable(monkeypatch, tmp_path):
     assert not (cf_home / "config" / "override.yaml").exists()
 
 
-def test_setup_config_proxy_remote_refuses_localhost(monkeypatch, tmp_path):
+def test_setup_config_proxy_remote_accepts_localhost_portforward(monkeypatch, tmp_path):
     cf_home = tmp_path / ".codefreedom"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
+
+    monkeypatch.setattr(
+        "codefreedom.cli.setup.config._validate_remote_proxy_url",
+        lambda url: True,
+    )
 
     class Args:
         config_target = "proxy"
@@ -175,14 +180,24 @@ def test_setup_config_proxy_remote_refuses_localhost(monkeypatch, tmp_path):
         local = False
         bind = None
 
-    assert handle_args(Args()) == 1
-    assert not (cf_home / "config" / "override.yaml").exists()
+    assert handle_args(Args()) == 0
+
+    with open(cf_home / "config" / "override.yaml", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    assert data["common"]["proxy"]["remote_url"] == "http://127.0.0.1:4000"
+    assert _configured_remote_proxy_url() == "http://127.0.0.1:4000"
 
 
-def test_setup_config_tool_remote_refuses_localhost(monkeypatch, tmp_path):
+def test_setup_config_tool_remote_accepts_localhost_portforward(monkeypatch, tmp_path):
     cf_home = tmp_path / ".codefreedom"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
+
+    monkeypatch.setattr(
+        "codefreedom.cli.setup.config._validate_remote_tool_url",
+        lambda tool, url: True,
+    )
 
     class Args:
         config_target = "tools"
@@ -191,8 +206,8 @@ def test_setup_config_tool_remote_refuses_localhost(monkeypatch, tmp_path):
         local = False
         bind = None
 
-    assert handle_args(Args()) == 1
-    assert not (cf_home / "config" / "override.yaml").exists()
+    assert handle_args(Args()) == 0
+    assert _remote_tools({"chrome"}) == {"chrome": "http://127.0.0.1:9223/mcp"}
 
 
 def test_write_mcp_json_uses_remote_tool_url(monkeypatch, tmp_path):
