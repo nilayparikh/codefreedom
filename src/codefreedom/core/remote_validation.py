@@ -45,7 +45,13 @@ def validate_remote_proxy_url(url: str, api_key: str = "") -> bool:
     return probe_remote_proxy(url, api_key) == PROXY_OK
 
 
-def validate_remote_tool_url(_tool: str, url: str) -> bool:
+def validate_remote_tool_url(_tool: str, url: str) -> list[str]:
+    """Probe a remote MCP endpoint via ``tools/list`` and return method names.
+
+    Returns a list of tool/method names from the JSON-RPC ``result.tools``
+    array. An empty list means the endpoint is unreachable, returned an
+    error, or has no tools — callers treat empty as failure (``if not ...``).
+    """
     payload = json.dumps(
         {
             "jsonrpc": "2.0",
@@ -63,9 +69,14 @@ def validate_remote_tool_url(_tool: str, url: str) -> bool:
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             body = json.loads(resp.read().decode("utf-8"))
-            return isinstance(body, dict) and "result" in body
+            if not isinstance(body, dict) or "result" not in body:
+                return []
+            tools = body.get("result", {}).get("tools", [])
+            if not isinstance(tools, list):
+                return []
+            return [str(t.get("name", "?")) for t in tools if isinstance(t, dict)]
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
-        return False
+        return []
 
 
 def validate_remote_tools_or_raise(acquired_tools: list[str]) -> None:

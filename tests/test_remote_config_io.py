@@ -52,8 +52,8 @@ def test_setup_config_proxy_remote_updates_override(monkeypatch, tmp_path):
         bind = None
 
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._probe_remote_proxy",
-        lambda url, api_key="": PROXY_OK,
+        "codefreedom.cli.setup.config._fetch_proxy_models_with_status",
+        lambda url, api_key="": ([{"id": "m1"}], PROXY_OK),
     )
     assert handle_args(Args()) == 0
 
@@ -100,7 +100,7 @@ def test_setup_config_tool_remote_updates_override(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         "codefreedom.cli.setup.config._validate_remote_tool_url",
-        lambda tool, url: True,
+        lambda tool, url: ["click", "screenshot"],
     )
 
     assert handle_args(Args()) == 0
@@ -131,8 +131,8 @@ def test_setup_config_proxy_remote_refuses_unreachable(monkeypatch, tmp_path):
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._probe_remote_proxy",
-        lambda url, api_key="": PROXY_UNREACHABLE,
+        "codefreedom.cli.setup.config._fetch_proxy_models_with_status",
+        lambda url, api_key="": ([], PROXY_UNREACHABLE),
     )
 
     class Args:
@@ -151,7 +151,7 @@ def test_setup_config_tool_remote_refuses_unreachable(monkeypatch, tmp_path):
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
     monkeypatch.setattr(
         "codefreedom.cli.setup.config._validate_remote_tool_url",
-        lambda tool, url: False,
+        lambda tool, url: [],
     )
 
     class Args:
@@ -171,8 +171,8 @@ def test_setup_config_proxy_remote_accepts_localhost_portforward(monkeypatch, tm
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
 
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._probe_remote_proxy",
-        lambda url, api_key="": PROXY_OK,
+        "codefreedom.cli.setup.config._fetch_proxy_models_with_status",
+        lambda url, api_key="": ([{"id": "m1"}], PROXY_OK),
     )
 
     class Args:
@@ -197,7 +197,7 @@ def test_setup_config_tool_remote_accepts_localhost_portforward(monkeypatch, tmp
 
     monkeypatch.setattr(
         "codefreedom.cli.setup.config._validate_remote_tool_url",
-        lambda tool, url: True,
+        lambda tool, url: ["click", "screenshot"],
     )
 
     class Args:
@@ -272,12 +272,12 @@ def test_setup_config_proxy_remote_401_saves_key_from_env(monkeypatch, tmp_path)
 
     from codefreedom.core.agent_runtime import PROXY_AUTH_REQUIRED, PROXY_OK
 
-    probes = iter([PROXY_AUTH_REQUIRED, PROXY_OK])
+    probes = iter([([], PROXY_AUTH_REQUIRED), ([{"id": "m1"}], PROXY_OK)])
 
-    def _probe(url, api_key=""):
+    def _fetch(url, api_key=""):
         return next(probes)
 
-    monkeypatch.setattr("codefreedom.cli.setup.config._probe_remote_proxy", _probe)
+    monkeypatch.setattr("codefreedom.cli.setup.config._fetch_proxy_models_with_status", _fetch)
 
     class Args:
         config_target = "proxy"
@@ -301,10 +301,10 @@ def test_setup_config_proxy_remote_401_saves_key_from_prompt(monkeypatch, tmp_pa
 
     from codefreedom.core.agent_runtime import PROXY_AUTH_REQUIRED, PROXY_OK
 
-    probes = iter([PROXY_AUTH_REQUIRED, PROXY_OK])
+    probes = iter([([], PROXY_AUTH_REQUIRED), ([{"id": "m1"}], PROXY_OK)])
 
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._probe_remote_proxy",
+        "codefreedom.cli.setup.config._fetch_proxy_models_with_status",
         lambda url, api_key="": next(probes),
     )
     monkeypatch.setattr(
@@ -334,8 +334,8 @@ def test_setup_config_proxy_remote_401_rejected_key_fails(monkeypatch, tmp_path)
     from codefreedom.core.agent_runtime import PROXY_AUTH_REQUIRED
 
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._probe_remote_proxy",
-        lambda url, api_key="": PROXY_AUTH_REQUIRED,
+        "codefreedom.cli.setup.config._fetch_proxy_models_with_status",
+        lambda url, api_key="": ([], PROXY_AUTH_REQUIRED),
     )
 
     class Args:
@@ -356,8 +356,8 @@ def test_setup_config_proxy_remote_401_no_key_fails(monkeypatch, tmp_path):
     from codefreedom.core.agent_runtime import PROXY_AUTH_REQUIRED
 
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._probe_remote_proxy",
-        lambda url, api_key="": PROXY_AUTH_REQUIRED,
+        "codefreedom.cli.setup.config._fetch_proxy_models_with_status",
+        lambda url, api_key="": ([], PROXY_AUTH_REQUIRED),
     )
     monkeypatch.setattr("codefreedom.cli.setup.config._resolve_proxy_api_key_interactive", lambda: None)
 

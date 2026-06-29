@@ -64,7 +64,9 @@ def test_validate_remote_tool_url_allows_localhost_when_reachable():
             return False
 
         def read(self):
-            return json.dumps({"result": {"tools": []}}).encode("utf-8")
+            return json.dumps(
+                {"result": {"tools": [{"name": "click"}, {"name": "screenshot"}]}}
+            ).encode("utf-8")
 
     def _fake_urlopen(req, timeout):
         captured["url"] = req.full_url
@@ -73,8 +75,9 @@ def test_validate_remote_tool_url_allows_localhost_when_reachable():
         return _FakeResp()
 
     with patch.object(remote_validation.urllib.request, "urlopen", side_effect=_fake_urlopen):
-        assert remote_validation.validate_remote_tool_url("chrome", "http://127.0.0.1:9223/mcp") is True
+        result = remote_validation.validate_remote_tool_url("chrome", "http://127.0.0.1:9223/mcp")
 
+    assert result == ["click", "screenshot"]
     assert captured["url"] == "http://127.0.0.1:9223/mcp"
     assert captured["data"]["method"] == "tools/list"
     assert captured["timeout"] == 5
@@ -87,7 +90,7 @@ def test_validate_remote_tool_url_rejects_when_unreachable():
         raise urllib.error.URLError("no route")
 
     with patch.object(remote_validation.urllib.request, "urlopen", side_effect=_raise):
-        assert remote_validation.validate_remote_tool_url("chrome", "http://127.0.0.1:9223/mcp") is False
+        assert remote_validation.validate_remote_tool_url("chrome", "http://127.0.0.1:9223/mcp") == []
 
 
 def test_validate_remote_tools_or_raise_skips_endpoints_without_url():

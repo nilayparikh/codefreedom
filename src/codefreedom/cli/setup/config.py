@@ -14,12 +14,14 @@ from pathlib import Path
 
 import yaml
 
-from codefreedom.core.agent_runtime import resolve_proxy_api_key as _resolve_proxy_api_key
+from codefreedom.core.agent_runtime import (
+    fetch_proxy_models_with_status as _fetch_proxy_models_with_status,
+    resolve_proxy_api_key as _resolve_proxy_api_key,
+)
 from codefreedom.core.config import get_config_dir
 from codefreedom.core.remote_validation import (
     PROXY_AUTH_REQUIRED as _PROXY_AUTH_REQUIRED,
     PROXY_OK as _PROXY_OK,
-    probe_remote_proxy as _probe_remote_proxy,
     validate_remote_tool_url as _validate_remote_tool_url,
 )
 from codefreedom.log import eprint, tag
@@ -96,6 +98,15 @@ def _resolve_proxy_api_key_interactive() -> str | None:
     return key or None
 
 
+def _display_proxy_models(url: str, models: list[dict]) -> None:
+    """Print the count and names of models available at a remote proxy."""
+    count = len(models)
+    names = [str(m.get("id", "?")) for m in models if isinstance(m, dict)]
+    eprint(f"{tag('PROXY')} {count} model(s) available at {url}.")
+    if names:
+        eprint(f"   {', '.join(names)}")
+
+
 def _configure_remote_proxy(data: dict, url: str) -> str | None:
     """Probe a remote proxy URL and persist it, resolving auth on 401.
 
@@ -105,9 +116,10 @@ def _configure_remote_proxy(data: dict, url: str) -> str | None:
     in the ``CF_CLI_PROXY_API_KEY`` machine env). Returns a truthy status
     string on success, or ``None`` on failure (after printing the reason).
     """
-    status = _probe_remote_proxy(url)
+    models, status = _fetch_proxy_models_with_status(url)
     if status == _PROXY_OK:
         _set_nested(data, ["common", "proxy", "remote_url"], url)
+        _display_proxy_models(url, models)
         return status
     if status != _PROXY_AUTH_REQUIRED:
         eprint(f"{tag('CONFIG')} Remote proxy validation failed: {url}.")
@@ -119,7 +131,7 @@ def _configure_remote_proxy(data: dict, url: str) -> str | None:
         eprint(f"{tag('CONFIG')} No API key provided. Settings were not saved.")
         eprint(f"   Export {_PROXY_API_KEY_ENV} and re-run.")
         return None
-    status = _probe_remote_proxy(url, api_key=key)
+    models, status = _fetch_proxy_models_with_status(url, api_key=key)
     if status != _PROXY_OK:
         eprint(f"{tag('CONFIG')} Remote proxy validation failed: {url}.")
         if status == _PROXY_AUTH_REQUIRED:
@@ -134,6 +146,7 @@ def _configure_remote_proxy(data: dict, url: str) -> str | None:
     eprint(
         f"   Keep {_PROXY_API_KEY_ENV} exported; the value is read at runtime."
     )
+    _display_proxy_models(url, models)
     return status
 
 
@@ -244,18 +257,21 @@ def handle_args(args: argparse.Namespace) -> int:
         tool = getattr(args, "tool")
         if getattr(args, "local", False):
             _set_nested(data, ["tools", tool, "remote_url"], None)
-        if getattr(args, "remote_url", None):
-            if not _validate_remote_tool_url(tool, args.remote_url):
-                eprint(f"{tag('CONFIG')} Remote tool validation failed for {tool}: {args.remote_url}.")
+        remote_url = getattr(args, "remote_url", None)
+        if remote_url:
+            methods = _validate_remote_tool_url(tool, remote_url)
+            if not methods:
+                eprint(f"{tag('CONFIG')} Remote tool validation failed for {tool}: {remote_url}.")
                 eprint("   Expected a working MCP endpoint responding to tools/list. Settings were not saved.")
                 return 1
-            _set_nested(data, ["tools", tool, "remote_url"], args.remote_url)
+            _set_nested(data, ["tools", tool, "remote_url"], remote_url)
         if getattr(args, "bind", None):
             _set_nested(data, ["tools", tool, "bind_host"], args.bind)
         _write_override(data)
         eprint(f"{tag('CONFIG')} Tool settings updated for {tool}.")
-        if getattr(args, "remote_url", None):
-            eprint(f"{tag('CONFIG')} Remote tool validated for {tool} at {args.remote_url}.")
+        if remote_url:
+            eprint(f"{tag('MCP')} Remote MCP validated for {tool} at {remote_url}.")
+            eprint(f"   {len(methods)} method(s) available: {', '.join(methods)}")
         return 0
 
     if target == "bind":
