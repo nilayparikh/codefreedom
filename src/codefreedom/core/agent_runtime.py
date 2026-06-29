@@ -36,20 +36,27 @@ def detect_proxy_url(base_env: dict[str, str]) -> str:
     )
 
 
-def fetch_proxy_models(
+PROXY_OK = "ok"
+PROXY_AUTH_REQUIRED = "auth_required"
+PROXY_UNREACHABLE = "unreachable"
+
+
+def fetch_proxy_models_with_status(
     proxy_url: str,
     api_key: str = "",
     *,
     label: str = "AGENT",
     secrets_hint: str | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], str]:
     """Fetch the model list from the LiteLLM proxy ``/v1/models`` endpoint.
 
     If *api_key* is provided it is sent as a ``Bearer`` token so the
     call succeeds even when the proxy requires authentication.
 
-    Returns a list of model dicts (with at least an ``id`` key).
-    Returns an empty list if the proxy is unreachable or returns an error.
+    Returns a ``(models, status)`` tuple where *models* is a list of model
+    dicts (with at least an ``id`` key, empty on failure) and *status* is one
+    of :data:`PROXY_OK`, :data:`PROXY_AUTH_REQUIRED` (401/403), or
+    :data:`PROXY_UNREACHABLE` (network error, non-JSON, other HTTP status).
 
     On 401/403 responses, prints a hint via ``eprint`` using *label*
     (e.g. ``MIMO``) and *secrets_hint* (a path such as
@@ -59,17 +66,39 @@ def fetch_proxy_models(
 
     models_url = f"{proxy_url.rstrip('/')}/v1/models"
     try:
-        data = get_json(models_url, timeout=5, bearer=api_key)
-        return data.get("data", [])
+        data = get_json(models_url, timeout=5, bearer=api_key or None)
+        models = data.get("data", [])
+        return models, PROXY_OK if models else PROXY_UNREACHABLE
     except HTTPStatusError as exc:
-        if exc.status_code in (401, 403) and secrets_hint is not None:
-            eprint(
-                f"[{label}] Proxy returned {exc.status_code} — is LITELLM_MASTER_KEY set "
-                f"in {secrets_hint}?"
-            )
-        return []
-    except (HTTPError, json.JSONDecodeError):
-        return []
+        if exc.status_code in (401, 403):
+            if secrets_hint is not None:
+                eprint(
+                    f"[{label}] Proxy returned {exc.status_code} — is LITELLM_MASTER_KEY set "
+                    f"in {secrets_hint}?"
+                )
+            return [], PROXY_AUTH_REQUIRED
+        return [], PROXY_UNREACHABLE
+    except (HTTPError, json.JSONDecodeError, TimeoutError):
+        return [], PROXY_UNREACHABLE
+
+
+def fetch_proxy_models(
+    proxy_url: str,
+    api_key: str = "",
+    *,
+    label: str = "AGENT",
+    secrets_hint: str | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch the model list from the LiteLLM proxy ``/v1/models`` endpoint.
+
+    Thin wrapper over :func:`fetch_proxy_models_with_status` returning only
+    the model list (empty on any failure). Kept for backward compatibility
+    with existing callers (mimo, opencode, codex, pi, git/llm, vscode).
+    """
+    models, _status = fetch_proxy_models_with_status(
+        proxy_url, api_key, label=label, secrets_hint=secrets_hint
+    )
+    return models
 
 
 def build_provider_models(

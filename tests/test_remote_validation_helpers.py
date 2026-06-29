@@ -6,24 +6,51 @@ from unittest.mock import patch
 import pytest
 
 from codefreedom.core import remote_validation
+from codefreedom.core.agent_runtime import PROXY_AUTH_REQUIRED, PROXY_OK, PROXY_UNREACHABLE
 
 pytestmark = pytest.mark.unit
 
 
 def test_validate_remote_proxy_url_allows_localhost_when_reachable():
-    with patch.object(remote_validation, "fetch_proxy_models", return_value=[{"id": "m1"}]) as mock:
+    with patch.object(
+        remote_validation, "fetch_proxy_models_with_status",
+        return_value=([{"id": "m1"}], PROXY_OK),
+    ) as mock:
         assert remote_validation.validate_remote_proxy_url("http://127.0.0.1:4000") is True
-    mock.assert_called_once_with("http://127.0.0.1:4000")
+    mock.assert_called_once_with("http://127.0.0.1:4000", "")
 
 
 def test_validate_remote_proxy_url_allows_localhost_hostname_when_reachable():
-    with patch.object(remote_validation, "fetch_proxy_models", return_value=[{"id": "m1"}]):
+    with patch.object(
+        remote_validation, "fetch_proxy_models_with_status",
+        return_value=([{"id": "m1"}], PROXY_OK),
+    ):
         assert remote_validation.validate_remote_proxy_url("http://localhost:4000") is True
 
 
 def test_validate_remote_proxy_url_rejects_when_unreachable():
-    with patch.object(remote_validation, "fetch_proxy_models", return_value=[]):
+    with patch.object(
+        remote_validation, "fetch_proxy_models_with_status",
+        return_value=([], PROXY_UNREACHABLE),
+    ):
         assert remote_validation.validate_remote_proxy_url("http://127.0.0.1:4000") is False
+
+
+def test_validate_remote_proxy_url_passes_api_key_through():
+    with patch.object(
+        remote_validation, "fetch_proxy_models_with_status",
+        return_value=([{"id": "m1"}], PROXY_OK),
+    ) as mock:
+        assert remote_validation.validate_remote_proxy_url("http://127.0.0.1:4000", "sk-1") is True
+    mock.assert_called_once_with("http://127.0.0.1:4000", "sk-1")
+
+
+def test_probe_remote_proxy_reports_auth_required():
+    with patch.object(
+        remote_validation, "fetch_proxy_models_with_status",
+        return_value=([], PROXY_AUTH_REQUIRED),
+    ):
+        assert remote_validation.probe_remote_proxy("http://127.0.0.1:4000") == PROXY_AUTH_REQUIRED
 
 
 def test_validate_remote_tool_url_allows_localhost_when_reachable():

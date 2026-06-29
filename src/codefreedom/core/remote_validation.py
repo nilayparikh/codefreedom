@@ -5,16 +5,44 @@ import json
 import urllib.error
 import urllib.request
 
-from codefreedom.core.agent_runtime import fetch_proxy_models
+from codefreedom.core.agent_runtime import (
+    PROXY_AUTH_REQUIRED,
+    PROXY_OK,
+    PROXY_UNREACHABLE,
+    fetch_proxy_models_with_status,
+)
+
+__all__ = [
+    "RemoteValidationError",
+    "PROXY_OK",
+    "PROXY_AUTH_REQUIRED",
+    "PROXY_UNREACHABLE",
+    "probe_remote_proxy",
+    "validate_remote_proxy_url",
+    "validate_remote_tool_url",
+    "validate_remote_tools_or_raise",
+]
 
 
 class RemoteValidationError(Exception):
     """Raised when a configured remote endpoint is unreachable or invalid."""
 
 
-def validate_remote_proxy_url(url: str) -> bool:
-    models = fetch_proxy_models(url)
-    return bool(models)
+def probe_remote_proxy(url: str, api_key: str = "") -> str:
+    """Probe a remote LiteLLM proxy and report its reachability/auth state.
+
+    Returns one of :data:`PROXY_OK` (reachable, authenticated, has models),
+    :data:`PROXY_AUTH_REQUIRED` (endpoint responded 401/403), or
+    :data:`PROXY_UNREACHABLE` (network error, non-JSON, other HTTP status).
+    Delegates to :func:`fetch_proxy_models_with_status` so the proxy model
+    fetch stays a single source of truth.
+    """
+    _models, status = fetch_proxy_models_with_status(url, api_key)
+    return status
+
+
+def validate_remote_proxy_url(url: str, api_key: str = "") -> bool:
+    return probe_remote_proxy(url, api_key) == PROXY_OK
 
 
 def validate_remote_tool_url(_tool: str, url: str) -> bool:

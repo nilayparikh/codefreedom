@@ -10,16 +10,22 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import yaml
 
 from codefreedom.core.config import get_config_dir
 from codefreedom.core.remote_validation import (
-    validate_remote_proxy_url as _validate_remote_proxy_url,
+    PROXY_AUTH_REQUIRED as _PROXY_AUTH_REQUIRED,
+    PROXY_OK as _PROXY_OK,
+    probe_remote_proxy as _probe_remote_proxy,
     validate_remote_tool_url as _validate_remote_tool_url,
 )
 from codefreedom.log import eprint, tag
+
+_PROXY_MASTER_KEY_ENV = "CF_CLI_LITELLM_MASTER_KEY"
+_PROXY_MASTER_KEY_REF = "${LITELLM_MASTER_KEY}"
 
 
 def _override_path() -> Path:
@@ -54,6 +60,81 @@ def _set_nested(data: dict, path: list[str], value) -> None:
         cur.pop(path[-1], None)
     else:
         cur[path[-1]] = value
+
+
+def _remove_proxy_master_key_marker(data: dict) -> None:
+    """Remove the ``${LITELLM_MASTER_KEY}`` interpolation marker we added.
+
+    Only drops the entry when it still equals our marker, so a user-set
+    literal value is never clobbered. Clears an empty ``env`` dict afterwards
+    to keep ``override.yaml`` tidy.
+    """
+    proxy = data.get("common", {}).get("proxy", {})
+    env = proxy.get("env")
+    if isinstance(env, dict) and env.get("LITELLM_MASTER_KEY") == _PROXY_MASTER_KEY_REF:
+        env.pop("LITELLM_MASTER_KEY", None)
+        if not env:
+            proxy.pop("env", None)
+
+
+def _resolve_proxy_master_key() -> str | None:
+    """Resolve a LiteLLM master key for an authenticated remote proxy.
+
+    Checks ``CF_CLI_LITELLM_MASTER_KEY`` in the machine env first (the
+    recommended, non-interactive path). Falls back to an interactive prompt.
+    Returns the key, or ``None`` if none was provided / input was cancelled.
+    """
+    key = os.environ.get(_PROXY_MASTER_KEY_ENV, "").strip()
+    if key:
+        return key
+    eprint(f"{tag('CONFIG')} Remote proxy requires a master key (401).")
+    eprint(f"   Export {_PROXY_MASTER_KEY_ENV} in your shell and re-run, or paste it now.")
+    try:
+        key = input("   Master key: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    return key or None
+
+
+def _configure_remote_proxy(data: dict, url: str) -> str | None:
+    """Probe a remote proxy URL and persist it, resolving auth on 401.
+
+    On success, mutates *data* to set ``common.proxy.remote_url`` and, when a
+    master key was needed, ``common.proxy.env.LITELLM_MASTER_KEY`` as the
+    ``${LITELLM_MASTER_KEY}`` interpolation reference (the actual secret stays
+    in the ``CF_CLI_LITELLM_MASTER_KEY`` machine env). Returns a truthy status
+    string on success, or ``None`` on failure (after printing the reason).
+    """
+    status = _probe_remote_proxy(url)
+    if status == _PROXY_OK:
+        _set_nested(data, ["common", "proxy", "remote_url"], url)
+        return status
+    if status != _PROXY_AUTH_REQUIRED:
+        eprint(f"{tag('CONFIG')} Remote proxy validation failed: {url}.")
+        eprint("   Expected a working /v1/models endpoint. Settings were not saved.")
+        return None
+
+    key = _resolve_proxy_master_key()
+    if not key:
+        eprint(f"{tag('CONFIG')} No master key provided. Settings were not saved.")
+        eprint(f"   Export {_PROXY_MASTER_KEY_ENV} and re-run.")
+        return None
+    status = _probe_remote_proxy(url, api_key=key)
+    if status != _PROXY_OK:
+        eprint(f"{tag('CONFIG')} Remote proxy validation failed: {url}.")
+        if status == _PROXY_AUTH_REQUIRED:
+            eprint("   The provided master key was rejected (401/403).")
+        else:
+            eprint("   Expected a working /v1/models endpoint. Settings were not saved.")
+        return None
+
+    _set_nested(data, ["common", "proxy", "remote_url"], url)
+    _set_nested(data, ["common", "proxy", "env", "LITELLM_MASTER_KEY"], _PROXY_MASTER_KEY_REF)
+    eprint(f"{tag('SECRETS')} Saved master key reference as {_PROXY_MASTER_KEY_REF}.")
+    eprint(
+        f"   Keep {_PROXY_MASTER_KEY_ENV} exported; the value is read at runtime."
+    )
+    return status
 
 
 def build_parser(parent: argparse.ArgumentParser) -> None:
@@ -146,18 +227,17 @@ def handle_args(args: argparse.Namespace) -> int:
     if target == "proxy":
         if getattr(args, "local", False):
             _set_nested(data, ["common", "proxy", "remote_url"], None)
-        if getattr(args, "remote_url", None):
-            if not _validate_remote_proxy_url(args.remote_url):
-                eprint(f"{tag('CONFIG')} Remote proxy validation failed: {args.remote_url}.")
-                eprint("   Expected a working /v1/models endpoint. Settings were not saved.")
+            _remove_proxy_master_key_marker(data)
+        remote_url = getattr(args, "remote_url", None)
+        if remote_url:
+            if not _configure_remote_proxy(data, remote_url):
                 return 1
-            _set_nested(data, ["common", "proxy", "remote_url"], args.remote_url)
         if getattr(args, "bind", None):
             _set_nested(data, ["common", "proxy", "bind_host"], args.bind)
         _write_override(data)
         eprint(f"{tag('CONFIG')} Proxy settings updated.")
-        if getattr(args, "remote_url", None):
-            eprint(f"{tag('CONFIG')} Remote proxy validated at {args.remote_url}.")
+        if remote_url:
+            eprint(f"{tag('CONFIG')} Remote proxy validated at {remote_url}.")
         return 0
 
     if target == "tools":
