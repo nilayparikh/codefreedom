@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from unittest.mock import patch
 
 import pytest
@@ -54,42 +53,45 @@ def test_probe_remote_proxy_reports_auth_required():
 
 
 def test_validate_remote_tool_url_allows_localhost_when_reachable():
-    captured: dict = {}
+    init_resp = (
+        {"result": {"protocolVersion": "2024-11-05", "capabilities": {}}},
+        {"mcp-session-id": "sess-123"},
+    )
+    list_resp = (
+        {"result": {"tools": [{"name": "click"}, {"name": "screenshot"}]}},
+        {},
+    )
+    responses = iter([init_resp, list_resp])
 
-    class _FakeResp:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def read(self):
-            return json.dumps(
-                {"result": {"tools": [{"name": "click"}, {"name": "screenshot"}]}}
-            ).encode("utf-8")
-
-    def _fake_urlopen(req, timeout):
-        captured["url"] = req.full_url
-        captured["data"] = json.loads(req.data.decode("utf-8"))
-        captured["timeout"] = timeout
-        return _FakeResp()
-
-    with patch.object(remote_validation.urllib.request, "urlopen", side_effect=_fake_urlopen):
+    with patch.object(remote_validation, "_mcp_post", side_effect=lambda *a, **kw: next(responses)):
         result = remote_validation.validate_remote_tool_url("chrome", "http://127.0.0.1:9223/mcp")
 
     assert result == ["click", "screenshot"]
-    assert captured["url"] == "http://127.0.0.1:9223/mcp"
-    assert captured["data"]["method"] == "tools/list"
-    assert captured["timeout"] == 5
+
+
+def test_validate_remote_tool_url_handles_sse_response():
+    sse_body = (
+        'event: message\n'
+        'data: {"result":{"tools":[{"name":"click"},{"name":"fill"}]}}\n'
+    ).encode("utf-8")
+    with patch.object(remote_validation, "_mcp_post") as mock_post:
+        mock_post.side_effect = [
+            (remote_validation._parse_mcp_response(sse_body), {"mcp-session-id": "s1"}),
+            (remote_validation._parse_mcp_response(sse_body), {}),
+        ]
+        result = remote_validation.validate_remote_tool_url("chrome", "http://127.0.0.1:9223/mcp")
+
+    assert result == ["click", "fill"]
 
 
 def test_validate_remote_tool_url_rejects_when_unreachable():
-    import urllib.error
+    with patch.object(remote_validation, "_mcp_post", return_value=(None, {})):
+        assert remote_validation.validate_remote_tool_url("chrome", "http://127.0.0.1:9223/mcp") == []
 
-    def _raise(req, timeout):
-        raise urllib.error.URLError("no route")
 
-    with patch.object(remote_validation.urllib.request, "urlopen", side_effect=_raise):
+def test_validate_remote_tool_url_rejects_when_initialize_fails():
+    error_resp = ({"error": {"code": -32000, "message": "bad"}}, {})
+    with patch.object(remote_validation, "_mcp_post", return_value=error_resp):
         assert remote_validation.validate_remote_tool_url("chrome", "http://127.0.0.1:9223/mcp") == []
 
 
@@ -100,10 +102,8 @@ def test_validate_remote_tools_or_raise_skips_endpoints_without_url():
 
 
 def test_validate_remote_tools_or_raise_raises_when_unreachable():
-    import urllib.error
-
     endpoints = {"mcpServers": {"chrome": {"url": "http://127.0.0.1:9223/mcp"}}}
     with patch("codefreedom.tools.registry.load_tool_mcp_endpoints", return_value=endpoints), \
-            patch.object(remote_validation.urllib.request, "urlopen", side_effect=urllib.error.URLError("nope")):
+            patch.object(remote_validation, "_mcp_post", return_value=(None, {})):
         with pytest.raises(remote_validation.RemoteValidationError):
             remote_validation.validate_remote_tools_or_raise(["chrome"])
