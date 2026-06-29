@@ -687,13 +687,14 @@ def run(args: argparse.Namespace) -> int:
 
     from codefreedom.cli.common import acquire_and_run
 
-    def _run(acquired_tools: list[str]) -> int:
+    def _run(acquired_tools: list[str], active_mcp_tools: list[str] | None = None) -> int:
+        declared = list(dict.fromkeys(acquired_tools + (active_mcp_tools or [])))
         return run_local(
             profile_env,
             args.agent_args,
             workspace_dir,
             extensions=extensions,
-            acquired_tools=acquired_tools,
+            acquired_tools=declared,
             lsp_servers=lsp_servers,
         )
 

@@ -107,7 +107,7 @@ Override aliases via `LITELLM_MODEL_ALIAS_*` env vars.
 
 | Secret | Description | How to get |
 | --- | --- | --- |
-| `LITELLM_MASTER_KEY` | Proxy auth key | `openssl rand -hex 32` (default: `sk-codefreedom-local`) |
+| `PROXY_API_KEY` | Proxy auth key | `openssl rand -hex 32` (default: `sk-codefreedom-local`) |
 | `MICROSOFT_FOUNDRY_API_KEY` | Azure Foundry API key | Azure AI Foundry portal |
 | `OPENCODE_ZEN_API_KEY` | OpenCode API key | OpenCode dashboard |
 | `OPENROUTER_API_KEY` | OpenRouter API key | <https://openrouter.ai/keys> |

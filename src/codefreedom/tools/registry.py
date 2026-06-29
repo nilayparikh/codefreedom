@@ -12,6 +12,7 @@ import secrets
 from typing import Callable, Protocol
 
 from codefreedom.log import eprint, tag
+from codefreedom.tools.mcp import build_claude_mcp_servers, is_mcp_tool
 
 # ── Tool handler dispatch ─────────────────────────────────────────────────────
 # Each tool maps to (load_settings, start, stop) — existing functions from
@@ -90,11 +91,18 @@ def acquire_tools(_session_id: str, tools: list[str], _profile: str) -> list[str
     Tools use static container names from their profile and check Docker
     directly for real state — no /proc tracking.  Returns the list of
     successfully started tools.
+
+    When a tool has ``remote_url`` set in its profile, the local Docker
+    container is **not** started — the remote endpoint is used verbatim.
     """
     acquired: list[str] = []
 
     for tool_name in tools:
         if tool_name not in _KNOWN_TOOLS:
+            if is_mcp_tool(tool_name):
+                acquired.append(tool_name)
+                eprint(f"{tag('TOOLS')} MCP '{tool_name}' activated.")
+                continue
             eprint(f"{tag('TOOLS')} Unknown tool '{tool_name}' -- skipping.")
             continue
 
@@ -106,10 +114,16 @@ def acquire_tools(_session_id: str, tools: list[str], _profile: str) -> list[str
             eprint(f"{tag('TOOLS')} Failed to load settings for '{tool_name}': {exc}")
             continue
 
+        remote_url = str(settings.get("remote_url", "") or "")
+        if remote_url:
+            acquired.append(tool_name)
+            eprint(f"{tag('TOOLS')} Tool '{tool_name}' using remote endpoint: {remote_url}")
+            continue
+
         result = _start(settings)
         if result != 0:
             eprint(
-                f"[TOOLS] Tool '{tool_name}' failed to start (exit {result}) — skipping."
+                f"{tag('TOOLS')} Tool '{tool_name}' failed to start (exit {result}) — skipping."
             )
             continue
 
@@ -127,12 +141,8 @@ def release_tools(_session_id: str, _tools: list[str]) -> None:
 
 
 def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
-    """Build MCP server entries for acquired tools.
-
-    Dispatches to each tool's class for its MCP endpoint spec — no
-    hardcoded port/path knowledge lives here.
-    """
-    servers: dict[str, dict] = {}
+    """Build MCP server entries for acquired tools."""
+    servers = build_claude_mcp_servers(acquired_tools)
 
     for tool_name in acquired_tools:
         if tool_name not in _MCP_TOOLS:

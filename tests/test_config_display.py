@@ -17,7 +17,7 @@ class TestSecretDetection:
     """Tests for is_secret_key — detect secret-like env var names."""
 
     def test_key_with_token(self):
-        assert is_secret_key("LITELLM_MASTER_KEY") is True
+        assert is_secret_key("PROXY_API_KEY") is True
 
     def test_key_with_secret(self):
         assert is_secret_key("API_SECRET") is True
@@ -29,7 +29,7 @@ class TestSecretDetection:
         assert is_secret_key("AWS_CREDENTIAL") is True
 
     def test_non_secret_key(self):
-        assert is_secret_key("LITELLM_PORT") is False
+        assert is_secret_key("PROXY_PORT") is False
 
     def test_non_secret_key_lowercase(self):
         assert is_secret_key("some_random_setting") is False
@@ -162,11 +162,11 @@ class TestFormatResolvedConfig:
         """Source labels appear when show_source=True."""
         profiles = tmp_path / "profiles.yaml"
         profiles.write_text(yaml.dump({
-            "vars": {"LITELLM_PORT": "4000"},
+            "vars": {"PROXY_PORT": "4000"},
             "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
             "tools": {"chrome": {}},
         }))
         output = format_resolved_config(tmp_path, show_source=True)
-        # LITELLM_PORT is in profiles.yaml vars, but also defaults to 4000
+        # PROXY_PORT is in profiles.yaml vars, but also defaults to 4000
         # so source could be default or profiles.yaml depending on resolution
         assert "(default)" in output or "(profiles.yaml)" in output

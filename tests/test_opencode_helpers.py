@@ -15,23 +15,13 @@ class TestDetectProxyUrl:
         from codefreedom.cli.opencode import _detect_proxy_url
 
         monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
         assert _detect_proxy_url({}) == "http://localhost:4000"
 
     def test_from_base_env_proxy_url(self, monkeypatch):
         from codefreedom.cli.opencode import _detect_proxy_url
 
         monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
         url = _detect_proxy_url({"PROXY_BASE_URL": "http://my-proxy:5000"})
-        assert url == "http://my-proxy:5000"
-
-    def test_from_base_env_litellm_url(self, monkeypatch):
-        from codefreedom.cli.opencode import _detect_proxy_url
-
-        monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
-        url = _detect_proxy_url({"LITELLM_BASE_URL": "http://my-proxy:5000"})
         assert url == "http://my-proxy:5000"
 
 

@@ -189,9 +189,15 @@ def validate_remote_tools_or_raise(acquired_tools: list[str]) -> None:
     from codefreedom.tools.registry import load_tool_mcp_endpoints
 
     endpoints = load_tool_mcp_endpoints(acquired_tools).get("mcpServers", {})
-    for server in endpoints.values():
+    failures: list[str] = []
+    for server_name, server in endpoints.items():
         url = server.get("url")
         if not url:
             continue
-        if not validate_remote_tool_url("tool", str(url)):
-            raise RemoteValidationError(f"Remote MCP endpoint is unavailable: {url}")
+        methods, error = probe_remote_tool(str(url))
+        if not methods:
+            failures.append(f"{server_name} ({url}): {error}")
+    if failures:
+        raise RemoteValidationError(
+            "Remote MCP endpoint(s) unavailable:\n  " + "\n  ".join(failures)
+        )

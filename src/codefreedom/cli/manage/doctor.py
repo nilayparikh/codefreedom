@@ -478,43 +478,43 @@ def _check_compose_pg_volume() -> CheckResult:
 # ── Section: Docker Images ─────────────────────────────────────────────────
 
 
-def _get_litellm_image() -> str:
-    """Return the LiteLLM image, honouring the resolved config (override.yaml)."""
+def _get_proxy_image() -> str:
+    """Return the proxy image, honouring the resolved config (override.yaml)."""
     try:
         from codefreedom.config import load_config
 
         proxy_env = load_config().for_component("proxy")
         merged_env = apply_cf_cli_overrides(dict(os.environ))
         return proxy_env.get(
-            "LITELLM_IMAGE",
+            "PROXY_IMAGE",
             merged_env.get(
-                "LITELLM_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
+                "PROXY_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
             ),
         )
     except Exception:
         return os.environ.get(
-            "LITELLM_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
+            "PROXY_IMAGE", "docker.io/nilayparikh/codefreedom:litellm-latest"
         )
 
 
-def _get_litellm_container_name() -> str:
-    """Return the LiteLLM container name (with suffix) per resolved config.
+def _get_proxy_container_name() -> str:
+    """Return the proxy container name (with suffix) per resolved config.
 
     Reads ``SUFFIX_ID`` from ``load_config().for_component('proxy')`` rather
     than bare ``os.environ`` so a user-set ``override.yaml`` ``SUFFIX_ID``
     actually affects doctor diagnostics (parity with ``cf run proxy start``).
     """
     try:
-        from codefreedom.core.proxy_env import build_proxy_run_env, litellm_container_name
+        from codefreedom.core.proxy_env import build_proxy_run_env, proxy_container_name
 
-        return litellm_container_name(build_proxy_run_env())
+        return proxy_container_name(build_proxy_run_env())
     except Exception:
-        return os.environ.get("LITELLM_CONTAINER_NAME", "litellm-codefreedom")
+        return os.environ.get("PROXY_CONTAINER_NAME", "codefreedom-proxy")
 
 
 @_section("Docker Images")
 def _check_litellm_image() -> CheckResult:
-    return _check_image_available(_get_litellm_image(), "LiteLLM proxy")
+    return _check_image_available(_get_proxy_image(), "LiteLLM proxy")
 
 
 @_section("Docker Images")
@@ -711,7 +711,7 @@ def _check_claude_env_var(name: str, label: str) -> CheckResult:
 
 @_section("Proxy Status")
 def _check_proxy_running() -> CheckResult:
-    container = _get_litellm_container_name()
+    container = _get_proxy_container_name()
     try:
         result = subprocess.run(
             [
@@ -799,17 +799,17 @@ def _check_proxy_port() -> CheckResult:
     """Read the resolved LiteLLM port from config (override.yaml > recipe > default).
 
     Previously this hard-coded ``4000`` and so the doctor would insist the
-    proxy is on 4000 even when the user had overridden ``LITELLM_PORT`` —
+    proxy is on 4000 even when the user had overridden ``PROXY_PORT`` —
     the inverse of the same masking bug fixed in ``cli/run/proxy.py``.
     """
     try:
         from codefreedom.config import load_config
 
         proxy_env = load_config().for_component("proxy")
-        port = int(proxy_env.get("LITELLM_PORT", "4000"))
+        port = int(proxy_env.get("PROXY_PORT", "4000"))
     except Exception:
         port = 4000
-    hint = "LiteLLM port (from override.yaml vars.LITELLM_PORT or default)"
+        hint = "Proxy port (from override.yaml vars.PROXY_PORT or default)"
     return _check_port(port, "LiteLLM proxy", hint)
 
 

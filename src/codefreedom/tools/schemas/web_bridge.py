@@ -17,6 +17,8 @@ class WebBridgeSettings(BaseModel, extra="forbid"):
     port: Optional[int] = Field(default=None, ge=1024, le=65535)
     data_dir: Optional[str] = None
     env: Optional[Dict[str, str]] = None
+    bind_host: Optional[str] = None
+    remote_url: Optional[str] = None
 
 
 class WebBridgeConfig(BaseModel, extra="forbid"):

@@ -15,45 +15,21 @@ class TestDetectProxyUrl:
         from codefreedom.cli.mimo import _detect_proxy_url
 
         monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
         assert _detect_proxy_url({}) == "http://localhost:4000"
 
     def test_from_base_env_proxy_url(self, monkeypatch):
         from codefreedom.cli.mimo import _detect_proxy_url
 
         monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
         url = _detect_proxy_url({"PROXY_BASE_URL": "http://my-proxy:5000"})
-        assert url == "http://my-proxy:5000"
-
-    def test_from_base_env_litellm_url(self, monkeypatch):
-        from codefreedom.cli.mimo import _detect_proxy_url
-
-        monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
-        url = _detect_proxy_url({"LITELLM_BASE_URL": "http://my-proxy:5000"})
         assert url == "http://my-proxy:5000"
 
     def test_env_var_overrides_base_env(self, monkeypatch):
         from codefreedom.cli.mimo import _detect_proxy_url
 
         monkeypatch.setenv("PROXY_BASE_URL", "http://env-proxy:9000")
-        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
         url = _detect_proxy_url({"PROXY_BASE_URL": "http://base-proxy:8000"})
         assert url == "http://base-proxy:8000"
-
-    def test_proxy_base_url_takes_priority_over_litellm(self, monkeypatch):
-        from codefreedom.cli.mimo import _detect_proxy_url
-
-        monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
-        url = _detect_proxy_url(
-            {
-                "PROXY_BASE_URL": "http://proxy:4000",
-                "LITELLM_BASE_URL": "http://litellm:4000",
-            }
-        )
-        assert url == "http://proxy:4000"
 
 
 class TestMimoEnvLoading:

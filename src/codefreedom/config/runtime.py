@@ -57,16 +57,16 @@ class CodeFreedomSettings:
         try:
             config = load_config()
             proxy_env = config.for_component("proxy")
-            self.proxy_bind_host = proxy_env.get("LITELLM_BIND_HOST", "0.0.0.0")
-            self.proxy_bind_port = int(proxy_env.get("LITELLM_PORT", "4000"))
+            self.proxy_bind_host = proxy_env.get("PROXY_BIND_HOST", "0.0.0.0")
+            self.proxy_bind_port = int(proxy_env.get("PROXY_PORT", "4000"))
             self.proxy_remote_url = proxy_env.get("PROXY_BASE_URL") or None
         except ConfigError as exc:
             eprint(f"{tag('CONFIG')} Failed to load config: {exc}")
 
-        cf_cli_host = os.environ.get("CF_CLI_LITELLM_BIND_HOST") or os.environ.get("CF_CLI_BIND_ADDRESS")
+        cf_cli_host = os.environ.get("CF_CLI_PROXY_BIND_HOST") or os.environ.get("CF_CLI_BIND_ADDRESS")
         if cf_cli_host:
             self.proxy_bind_host = cf_cli_host
-        cf_cli_port = os.environ.get("CF_CLI_LITELLM_PORT")
+        cf_cli_port = os.environ.get("CF_CLI_PROXY_PORT")
         if cf_cli_port:
             try:
                 self.proxy_bind_port = int(cf_cli_port)
@@ -86,8 +86,8 @@ class CodeFreedomSettings:
         )
 
     def proxy_provenance(self) -> dict[str, ResolvedValue]:
-        host = _resolved_env_value("LITELLM_BIND_HOST", self.proxy.bind_host)
-        port = _resolved_env_value("LITELLM_PORT", str(self.proxy.bind_port))
+        host = _resolved_env_value("PROXY_BIND_HOST", self.proxy.bind_host)
+        port = _resolved_env_value("PROXY_PORT", str(self.proxy.bind_port))
         public_url = ResolvedValue(
             self.proxy.public_base_url,
             "derived:proxy.bind_host+proxy.bind_port",

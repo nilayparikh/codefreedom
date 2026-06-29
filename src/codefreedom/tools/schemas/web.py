@@ -33,6 +33,9 @@ class WebSettings(BaseModel, extra="forbid"):
     port: Optional[int] = None
     data_dir: Optional[str] = None
     env: Optional[Dict[str, str]] = None
+    mcp_path: Optional[str] = None
+    bind_host: Optional[str] = None
+    remote_url: Optional[str] = None
     search_cooldown_seconds: Optional[float] = Field(default=None, ge=0)
     search_engines: Optional[Dict[str, EngineConfig]] = None
     parser_registry: Optional[Dict[str, ParserConfig]] = None

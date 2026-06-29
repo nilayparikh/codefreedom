@@ -757,8 +757,9 @@ def load_tool_profile(
 
     if schema_class is not None:
         schema_key = tool_key.replace("-", "_")
+        validate_cfg = {k: v for k, v in cfg.items() if k != "kind"}
         try:
-            schema_class.model_validate({schema_key: cfg}, strict=False)
+            schema_class.model_validate({schema_key: validate_cfg}, strict=False)
         except ValidationError as exc:
             eprint(f"[{log_tag}] Warning: validation issue in profile: {exc}")
 

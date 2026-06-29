@@ -42,8 +42,8 @@ def test_full_agent_path_with_legacy_sandbox_keys(
     (cf_dir / "config").mkdir(parents=True)
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_dir))
     monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-int-789")
-    monkeypatch.setenv("CF_CLI_LITELLM_BIND_HOST", "127.0.0.1")
-    monkeypatch.setenv("CF_CLI_LITELLM_PORT", "4000")
+    monkeypatch.setenv("CF_CLI_PROXY_BIND_HOST", "127.0.0.1")
+    monkeypatch.setenv("CF_CLI_PROXY_PORT", "4000")
     _write(cf_dir, "profiles.yaml", {
         "common": {
             "sandbox_images": {
@@ -52,8 +52,8 @@ def test_full_agent_path_with_legacy_sandbox_keys(
             },
             "sandbox_env": {"IS_SANDBOX": "1"},
             "proxy": {
-                "bind_host": "${LITELLM_BIND_HOST:-127.0.0.1}",
-                "bind_port": "${LITELLM_PORT:-4000}",
+                "bind_host": "${PROXY_BIND_HOST:-127.0.0.1}",
+                "bind_port": "${PROXY_PORT:-4000}",
                 "env": {
                     "PROXY_BASE_URL": "${PROXY_BASE_URL}",
                     "PROXY_API_KEY": "${LITELLM_MASTER_KEY}",
@@ -84,7 +84,7 @@ def test_full_agent_path_with_legacy_sandbox_keys(
     })
     _write(cf_dir, "recipe.yaml", {
         "name": "test",
-        "vars": [{"PROXY_BASE_URL": "http://${LITELLM_BIND_HOST}:${LITELLM_PORT}"}],
+        "vars": [{"PROXY_BASE_URL": "http://${PROXY_BIND_HOST}:${PROXY_PORT}"}],
     })
 
     runtime = resolve_agent_runtime(

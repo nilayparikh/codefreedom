@@ -194,3 +194,61 @@ def test_recipe_yaml_vars_feed_runtime_tool_interpolation(monkeypatch, tmp_path)
 
     assert settings["image"] == "docker.io/nilayparikh/codefreedom:chrome-latest"
 
+
+def test_kind_discriminator_does_not_trigger_validation_warning(monkeypatch, tmp_path, capsys):
+    """The ``kind: tool`` discriminator in profiles.yaml must not cause a
+    schema validation warning — it is metadata, not a container setting."""
+    cf_home = tmp_path / ".codefreedom"
+    monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    cdir = _config_dir(cf_home)
+    profiles = _base_profiles()
+    profiles["tools"]["chrome"]["kind"] = "tool"
+    _write_yaml(cdir / "profiles.yaml", profiles)
+
+    from codefreedom.tools.schemas.chrome import ChromeConfig
+
+    load_tool_profile(
+        "chrome",
+        {"image": "default:img", "container_name": "default",
+         "port": 9222, "mcp_port": 9223, "mcp_path": "/mcp", "data_dir": "", "env": {}},
+        schema_class=ChromeConfig,
+        extra_keys=["mcp_port", "mcp_path", "cdp_proxy_port"],
+    )
+
+    captured = capsys.readouterr()
+    assert "validation issue" not in captured.err
+
+
+def test_github_schema_accepts_remote_url(monkeypatch, tmp_path, capsys):
+    """GithubSettings must accept ``remote_url`` without a validation warning."""
+    cf_home = tmp_path / ".codefreedom"
+    monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    cdir = _config_dir(cf_home)
+    _write_yaml(cdir / "profiles.yaml", {
+        "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+        "tools": {
+            "github": {
+                "kind": "tool",
+                "image": "img:github-latest",
+                "container_name": "codefreedom-tools-github",
+                "port": 8129,
+                "remote_url": "http://localhost:8129/mcp",
+            },
+        },
+        "common": {"suffix_id": "${SUFFIX_ID:-0000}"},
+    })
+
+    from codefreedom.tools.schemas.github import GithubConfig
+
+    settings = load_tool_profile(
+        "github",
+        {"image": "default:img", "container_name": "default",
+         "port": 0, "data_dir": "", "env": {}, "bind_host": "0.0.0.0", "remote_url": ""},
+        schema_class=GithubConfig,
+        extra_keys=["bind_host", "remote_url"],
+    )
+
+    captured = capsys.readouterr()
+    assert "validation issue" not in captured.err
+    assert settings["remote_url"] == "http://localhost:8129/mcp"
+
