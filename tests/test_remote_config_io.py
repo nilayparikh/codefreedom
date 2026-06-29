@@ -99,8 +99,8 @@ def test_setup_config_tool_remote_updates_override(monkeypatch, tmp_path):
         bind = None
 
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._validate_remote_tool_url",
-        lambda tool, url: ["click", "screenshot"],
+        "codefreedom.cli.setup.config._probe_remote_tool",
+        lambda url: (["click", "screenshot"], ""),
     )
 
     assert handle_args(Args()) == 0
@@ -150,8 +150,8 @@ def test_setup_config_tool_remote_refuses_unreachable(monkeypatch, tmp_path):
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._validate_remote_tool_url",
-        lambda tool, url: [],
+        "codefreedom.cli.setup.config._probe_remote_tool",
+        lambda url: ([], "initialize: endpoint unreachable"),
     )
 
     class Args:
@@ -196,8 +196,8 @@ def test_setup_config_tool_remote_accepts_localhost_portforward(monkeypatch, tmp
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
 
     monkeypatch.setattr(
-        "codefreedom.cli.setup.config._validate_remote_tool_url",
-        lambda tool, url: ["click", "screenshot"],
+        "codefreedom.cli.setup.config._probe_remote_tool",
+        lambda url: (["click", "screenshot"], ""),
     )
 
     class Args:

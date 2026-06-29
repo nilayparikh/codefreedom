@@ -95,6 +95,22 @@ def test_validate_remote_tool_url_rejects_when_initialize_fails():
         assert remote_validation.validate_remote_tool_url("chrome", "http://127.0.0.1:9223/mcp") == []
 
 
+def test_probe_remote_tool_returns_error_diagnostic():
+    with patch.object(remote_validation, "_mcp_post", return_value=(None, {})):
+        methods, error = remote_validation.probe_remote_tool("http://127.0.0.1:9223/mcp")
+    assert methods == []
+    assert "unreachable" in error
+
+
+def test_probe_remote_tool_returns_server_error_diagnostic():
+    error_resp = ({"error": {"code": -32000, "message": "No valid session"}}, {})
+    with patch.object(remote_validation, "_mcp_post", return_value=error_resp):
+        methods, error = remote_validation.probe_remote_tool("http://127.0.0.1:9223/mcp")
+    assert methods == []
+    assert "server error" in error
+    assert "No valid session" in error
+
+
 def test_validate_remote_tools_or_raise_skips_endpoints_without_url():
     endpoints = {"mcpServers": {"a": {"url": None}, "b": {}}}
     with patch("codefreedom.tools.registry.load_tool_mcp_endpoints", return_value=endpoints):

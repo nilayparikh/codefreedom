@@ -22,7 +22,7 @@ from codefreedom.core.config import get_config_dir
 from codefreedom.core.remote_validation import (
     PROXY_AUTH_REQUIRED as _PROXY_AUTH_REQUIRED,
     PROXY_OK as _PROXY_OK,
-    validate_remote_tool_url as _validate_remote_tool_url,
+    probe_remote_tool as _probe_remote_tool,
 )
 from codefreedom.log import eprint, tag
 
@@ -259,10 +259,11 @@ def handle_args(args: argparse.Namespace) -> int:
             _set_nested(data, ["tools", tool, "remote_url"], None)
         remote_url = getattr(args, "remote_url", None)
         if remote_url:
-            methods = _validate_remote_tool_url(tool, remote_url)
+            methods, error = _probe_remote_tool(remote_url)
             if not methods:
                 eprint(f"{tag('CONFIG')} Remote tool validation failed for {tool}: {remote_url}.")
-                eprint("   Expected a working MCP endpoint responding to tools/list. Settings were not saved.")
+                eprint(f"   {error}")
+                eprint("   Settings were not saved.")
                 return 1
             _set_nested(data, ["tools", tool, "remote_url"], remote_url)
         if getattr(args, "bind", None):
