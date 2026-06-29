@@ -12,6 +12,11 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+# No-proxy opener — bypasses system proxy settings (Windows IE/Edge registry,
+# macOS system proxy, Linux HTTP_PROXY env) so localhost and port-forwarded
+# endpoints are always reached directly. Built once at import time.
+_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 # ── Exception hierarchy ───────────────────────────────────────────────────────
 
 
@@ -69,7 +74,7 @@ def _do_get(
     for k, v in (headers or {}).items():
         req.add_header(k, v)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _NO_PROXY_OPENER.open(req, timeout=timeout) as resp:
             raw_headers = dict(resp.headers.items())
             body = resp.read()
             return Response(

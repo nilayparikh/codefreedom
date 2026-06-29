@@ -315,9 +315,7 @@ class TestPostgresChecks:
 
 class TestEnvVarChecks:
 
-    def test_litellm_master_key_missing_fails(self, monkeypatch, tmp_path):
-        monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
-        monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
+    def test_proxy_api_key_missing_fails(self, monkeypatch, tmp_path):
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
@@ -325,22 +323,21 @@ class TestEnvVarChecks:
 
         @_section("Environment Variables (Proxy)")
         def _check() -> CheckResult:
-            from codefreedom.cli.manage.doctor import _check_litellm_master_key
+            from codefreedom.cli.manage.doctor import _check_proxy_api_key
 
-            return _check_litellm_master_key()
+            return _check_proxy_api_key()
 
         passed, failed, warned = _run_checks()
         assert failed >= 1
 
-    def test_litellm_master_key_in_machine_env_passes(self, monkeypatch, tmp_path):
-        """Bare ``LITELLM_MASTER_KEY`` in os.environ satisfies the doctor check.
+    def test_proxy_api_key_in_machine_env_passes(self, monkeypatch, tmp_path):
+        """Bare ``PROXY_API_KEY`` in os.environ satisfies the doctor check.
 
         CodeFreedom no longer reads ``.env.user`` or ``.env.*.secrets`` files
         for secrets — the doctor resolves solely from ``CF_CLI_*`` machine
         overrides and bare ``os.environ``. This test pins that path.
         """
-        monkeypatch.delenv("CF_CLI_LITELLM_MASTER_KEY", raising=False)
-        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-from-machine-env")
+        monkeypatch.setenv("PROXY_API_KEY", "sk-from-machine-env")
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
@@ -348,17 +345,16 @@ class TestEnvVarChecks:
 
         @_section("Environment Variables (Proxy)")
         def _check() -> CheckResult:
-            from codefreedom.cli.manage.doctor import _check_litellm_master_key
+            from codefreedom.cli.manage.doctor import _check_proxy_api_key
 
-            return _check_litellm_master_key()
+            return _check_proxy_api_key()
 
         passed, failed, warned = _run_checks()
         assert passed >= 1
 
-    def test_litellm_master_key_cf_cli_override_passes(self, monkeypatch, tmp_path):
-        """CF_CLI_LITELLM_MASTER_KEY in os.environ should satisfy the check."""
-        monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-cf-cli-override")
-        monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+    def test_proxy_api_key_cf_cli_override_passes(self, monkeypatch, tmp_path):
+        """CF_CLI_PROXY_API_KEY in os.environ should satisfy the check."""
+        monkeypatch.setenv("CF_CLI_PROXY_API_KEY", "sk-cf-cli-override")
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
@@ -366,17 +362,16 @@ class TestEnvVarChecks:
 
         @_section("Environment Variables (Proxy)")
         def _check() -> CheckResult:
-            from codefreedom.cli.manage.doctor import _check_litellm_master_key
+            from codefreedom.cli.manage.doctor import _check_proxy_api_key
 
-            return _check_litellm_master_key()
+            return _check_proxy_api_key()
 
         passed, failed, warned = _run_checks()
         assert passed >= 1
 
-    def test_litellm_master_key_cf_cli_wins_over_direct(self, monkeypatch, tmp_path):
-        """CF_CLI_LITELLM_MASTER_KEY should be detected even when LITELLM_MASTER_KEY is also set."""
-        monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-cf-cli-wins")
-        monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-direct")
+    def test_proxy_api_key_legacy_litellm_fallback_passes(self, monkeypatch, tmp_path):
+        """Legacy ``CF_CLI_LITELLM_MASTER_KEY`` still satisfies the check."""
+        monkeypatch.setenv("CF_CLI_LITELLM_MASTER_KEY", "sk-legacy")
         monkeypatch.setattr(
             "codefreedom.cli.manage.doctor.get_codefreedom_dir", lambda: tmp_path
         )
@@ -384,9 +379,9 @@ class TestEnvVarChecks:
 
         @_section("Environment Variables (Proxy)")
         def _check() -> CheckResult:
-            from codefreedom.cli.manage.doctor import _check_litellm_master_key
+            from codefreedom.cli.manage.doctor import _check_proxy_api_key
 
-            return _check_litellm_master_key()
+            return _check_proxy_api_key()
 
         passed, failed, warned = _run_checks()
         assert passed >= 1

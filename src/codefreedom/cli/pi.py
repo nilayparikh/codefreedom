@@ -663,9 +663,11 @@ def run(args: argparse.Namespace) -> int:
 
     # ── Ensure proxy API key is available ──────────────────────────────
     if not profile_env.get("PROXY_API_KEY"):
-        master_key = runtime.base_env.get("LITELLM_MASTER_KEY", "")
-        if master_key:
-            profile_env["PROXY_API_KEY"] = master_key
+        from codefreedom.core.agent_runtime import resolve_proxy_api_key
+
+        api_key = resolve_proxy_api_key(runtime.base_env)
+        if api_key:
+            profile_env["PROXY_API_KEY"] = api_key
 
     # ── Read extensions from profile ─────────────────────────────────
     extensions = _read_profile_extensions(profile_name, profiles_path)

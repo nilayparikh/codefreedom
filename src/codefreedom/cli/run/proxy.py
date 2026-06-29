@@ -90,15 +90,9 @@ def run(args: argparse.Namespace) -> int:
 
 def _configured_remote_proxy_url() -> str | None:
     try:
-        proxy_env = load_config().for_component("proxy")
+        return load_config().common.proxy.remote_url
     except ConfigError:
         return None
-    remote_url = proxy_env.get("PROXY_BASE_URL", "")
-    bind_host = proxy_env.get("LITELLM_BIND_HOST", "")
-    bind_port = proxy_env.get("LITELLM_PORT", "")
-    if remote_url and remote_url != f"http://{bind_host}:{bind_port}":
-        return remote_url
-    return None
 
 
 def _load_proxy_env_files() -> Dict[str, str]:

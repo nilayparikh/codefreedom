@@ -23,8 +23,10 @@ def _load_proxy_settings(work_dir: Path | None = None) -> tuple[str, str]:
 
     env = apply_cf_cli_overrides(dict(os.environ))
 
+    from codefreedom.core.agent_runtime import resolve_proxy_api_key
+
     proxy_url = env.get("LITELLM_BASE_URL", "http://localhost:4000")
-    api_key = env.get("LITELLM_MASTER_KEY", "")
+    api_key = resolve_proxy_api_key(env)
 
     return proxy_url.rstrip("/"), api_key
 
@@ -72,7 +74,7 @@ def generate_message(
         if e.response.status_code == 401:
             eprint(
                 f"{tag('ERROR')} Proxy authentication failed. "
-                "Check your profile has LITELLM_MASTER_KEY set."
+                "Check your profile has PROXY_API_KEY set."
             )
         else:
             eprint(f"{tag('ERROR')} LLM call failed: {e}")

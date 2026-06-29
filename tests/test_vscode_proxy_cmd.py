@@ -57,7 +57,7 @@ class TestCmdVscodeGenerate:
         result = cmd_vscode_proxy_config(_args())
         assert result == 1
         captured = capsys.readouterr()
-        assert "LITELLM_MASTER_KEY" in captured.err
+        assert "PROXY_API_KEY" in captured.err
 
     def test_401_from_proxy_returns_1(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))

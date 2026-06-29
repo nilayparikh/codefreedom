@@ -489,9 +489,11 @@ def cmd_config(args: argparse.Namespace) -> int:
         return 1
 
     if not profile_env.get("PROXY_API_KEY"):
-        master_key = base_env.get("LITELLM_MASTER_KEY", "")
-        if master_key:
-            profile_env["PROXY_API_KEY"] = master_key
+        from codefreedom.core.agent_runtime import resolve_proxy_api_key
+
+        api_key = resolve_proxy_api_key(base_env)
+        if api_key:
+            profile_env["PROXY_API_KEY"] = api_key
 
     proxy_url = _detect_proxy_url(profile_env)
     config_content, _ = _generate_codex_config(proxy_url, profile_env)
@@ -548,9 +550,11 @@ def run(args: argparse.Namespace) -> int:
         return 1
 
     if not profile_env.get("PROXY_API_KEY"):
-        master_key = runtime.base_env.get("LITELLM_MASTER_KEY", "")
-        if master_key:
-            profile_env["PROXY_API_KEY"] = master_key
+        from codefreedom.core.agent_runtime import resolve_proxy_api_key
+
+        api_key = resolve_proxy_api_key(runtime.base_env)
+        if api_key:
+            profile_env["PROXY_API_KEY"] = api_key
 
     session_id = generate_session_id(mode)
 
