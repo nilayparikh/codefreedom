@@ -302,7 +302,7 @@ class TestRun:
         assert result == 1
 
     def test_start_overrides_port_and_host_in_env(self, monkeypatch, tmp_path):
-        """`--port` and `--host` must set LITELLM_PORT/LITELLM_BIND_HOST
+        """`--port` and `--host` must set PROXY_PORT/PROXY_BIND_HOST
         in the subprocess env (for this run only — does not edit .env.proxy)."""
         compose = tmp_path / "config" / "proxy" / "docker-compose.yaml"
         compose.parent.mkdir(parents=True)
@@ -334,8 +334,8 @@ class TestRun:
         )
         result = run(args)
         assert result == 0
-        assert captured_env.get("LITELLM_PORT") == "4001"
-        assert captured_env.get("LITELLM_BIND_HOST") == "127.0.0.1"
+        assert captured_env.get("PROXY_PORT") == "4001"
+        assert captured_env.get("PROXY_BIND_HOST") == "127.0.0.1"
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ def _load_proxy_settings(work_dir: Path | None = None) -> tuple[str, str]:
 
     from codefreedom.core.agent_runtime import resolve_proxy_api_key
 
-    proxy_url = env.get("LITELLM_BASE_URL", "http://localhost:4000")
+    proxy_url = env.get("PROXY_BASE_URL", "http://localhost:4000")
     api_key = resolve_proxy_api_key(env)
 
     return proxy_url.rstrip("/"), api_key

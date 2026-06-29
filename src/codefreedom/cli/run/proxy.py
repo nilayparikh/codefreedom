@@ -153,7 +153,7 @@ def _build_proxy_env() -> Dict[str, str]:
 def _start(args: argparse.Namespace) -> int:
     """Start the LiteLLM proxy via `docker compose up -d`.
 
-    --port and --host override LITELLM_PORT / LITELLM_BIND_HOST in the
+    --port and --host override PROXY_PORT / PROXY_BIND_HOST in the
     compose process environment for this run only (they do not edit
     .env.proxy).
     """
@@ -321,27 +321,27 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
     merged_env = _build_proxy_env()
     if args is not None:
         if getattr(args, "port", None):
-            merged_env["LITELLM_PORT"] = str(args.port)
+            merged_env["PROXY_PORT"] = str(args.port)
         if getattr(args, "host", None):
-            merged_env["LITELLM_BIND_HOST"] = args.host
+            merged_env["PROXY_BIND_HOST"] = args.host
 
-    # Derive the LiteLLM container name. SUFFIX_ID and COMPOSE_PROJECT_NAME
+    # Derive the proxy container name. SUFFIX_ID and COMPOSE_PROJECT_NAME
     # are already resolved by ``_build_proxy_env`` (and hence
     # ``for_component("proxy")`` → ``common.suffix_id``); we only need to
     # append the suffix to the base container name. Re-deriving
     # COMPOSE_PROJECT_NAME here would overwrite the already-resolved value.
-    from codefreedom.core.proxy_env import litellm_container_name
+    from codefreedom.core.proxy_env import proxy_container_name
 
-    litellm_name = litellm_container_name(merged_env)
-    merged_env["LITELLM_CONTAINER_NAME"] = litellm_name
+    proxy_name = proxy_container_name(merged_env)
+    merged_env["PROXY_CONTAINER_NAME"] = proxy_name
 
     # Ensure the shared `codefreedom` bridge network exists (external network
     # referenced by docker-compose.yaml).  All proxy instances share this
     # network regardless of SUFFIX_ID.
     _ensure_codefreedom_network()
 
-    litellm_image = merged_env.get("LITELLM_IMAGE", _DEFAULT_LITELLM_IMAGE)
-    pull_if_stale(litellm_image, label="PROXY")
+    proxy_image = merged_env.get("PROXY_IMAGE", _DEFAULT_PROXY_IMAGE)
+    pull_if_stale(proxy_image, label="PROXY")
 
     result = subprocess.run(
         [
@@ -360,11 +360,11 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         check=False,
     )
     if result.returncode == 0:
-        host = merged_env.get("LITELLM_BIND_HOST", "127.0.0.1")
-        port = merged_env.get("LITELLM_PORT", "4000")
+        host = merged_env.get("PROXY_BIND_HOST", "127.0.0.1")
+        port = merged_env.get("PROXY_PORT", "4000")
         eprint(
             f"{tag('PROXY')} Proxy started at http://{host}:{port}"
-            f" ({litellm_name})"
+            f" ({proxy_name})"
         )
     else:
         eprint(f"{tag('PROXY')} Failed to start. Check docker logs.")
@@ -454,8 +454,8 @@ def _restart() -> int:
     if result.returncode == 0:
         # Read host/port from env (resolved at build time, not /proc)
         merged_env = _build_proxy_env()
-        host = merged_env.get("LITELLM_BIND_HOST", "127.0.0.1")
-        port = merged_env.get("LITELLM_PORT", "4000")
+        host = merged_env.get("PROXY_BIND_HOST", "127.0.0.1")
+        port = merged_env.get("PROXY_PORT", "4000")
         eprint(f"{tag('PROXY')} Proxy restarted at http://{host}:{port}")
     else:
         eprint(f"{tag('PROXY')} Failed to restart. Check docker logs.")
@@ -488,8 +488,8 @@ def _status() -> int:
 
 # ── Database URL check ───────────────────────────────────────────────────────
 
-_DEFAULT_LITELLM_IMAGE = "docker.io/nilayparikh/codefreedom:litellm-latest"
-_GHCR_LITELLM_IMAGE = "ghcr.io/nilayparikh/codefreedom:litellm-latest"
+_DEFAULT_PROXY_IMAGE = "docker.io/nilayparikh/codefreedom:litellm-latest"
+_GHCR_PROXY_IMAGE = "ghcr.io/nilayparikh/codefreedom:litellm-latest"
 
 
 def _warn_database_url(
@@ -506,22 +506,22 @@ def _warn_database_url(
     Only warn when:
     - ``database_url`` is missing from both config.yaml *and* the host env,
       AND
-    - ``LITELLM_IMAGE`` is overridden to a *non*-codefreedom image (meaning
+    - ``PROXY_IMAGE`` is overridden to a *non*-codefreedom image (meaning
       the embedded PG is not present).
     """
     if in_config or in_env:
         return  # database_url is explicitly configured — all good
 
-    # Check which litellm image is in use
-    litellm_image = proxy_env.get("LITELLM_IMAGE")
-    if not litellm_image:
-        litellm_image = os.environ.get("LITELLM_IMAGE")
+    # Check which proxy image is in use
+    proxy_image = proxy_env.get("PROXY_IMAGE")
+    if not proxy_image:
+        proxy_image = os.environ.get("PROXY_IMAGE")
 
     using_codefreedom_image = (
-        litellm_image is None
-        or _DEFAULT_LITELLM_IMAGE in litellm_image
-        or _GHCR_LITELLM_IMAGE in litellm_image
-        or "nilayparikh/codefreedom:litellm" in litellm_image
+        proxy_image is None
+        or _DEFAULT_PROXY_IMAGE in proxy_image
+        or _GHCR_PROXY_IMAGE in proxy_image
+        or "nilayparikh/codefreedom:litellm" in proxy_image
     )
 
     if using_codefreedom_image:
@@ -536,7 +536,7 @@ def _warn_database_url(
             "   The codefreedom litellm image (default) ships"
             " embedded PG that auto-sets it."
         )
-        eprint(f"   You are using: {litellm_image}")
+        eprint(f"   You are using: {proxy_image}")
 
 
 # ── Validate ─────────────────────────────────────────────────────────────────

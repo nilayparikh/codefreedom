@@ -2,7 +2,7 @@
 
 Regression tests for the bug where a stray ``SUFFIX_ID`` already present in
 the shell environment silently won over the user's ``override.yaml``
-``vars.SUFFIX_ID`` value, producing ``litellm-codefreedom-0000`` even when
+``vars.SUFFIX_ID`` value, producing ``codefreedom-proxy-0000`` even when
 ``SUFFIX_ID: "windemo"`` was configured.
 
 Marker: integration (writes YAML to ``tmp_path``-scoped ``CODEFREEDOM_HOME``).
@@ -18,7 +18,7 @@ import yaml
 from codefreedom.core.proxy_env import (
     _DEFAULT_SUFFIX_ID,
     build_proxy_run_env,
-    litellm_container_name,
+    proxy_container_name,
 )
 
 pytestmark = pytest.mark.integration
@@ -60,7 +60,7 @@ def test_override_yaml_suffix_id_wins_over_bare_os_environ(monkeypatch, tmp_path
 
     assert env["SUFFIX_ID"] == "windemo"
     assert env["COMPOSE_PROJECT_NAME"] == "codefreedom-windemo"
-    assert litellm_container_name(env) == "litellm-codefreedom-windemo"
+    assert proxy_container_name(env) == "codefreedom-proxy-windemo"
 
 
 def test_cf_cli_suffix_id_wins_over_override_yaml(monkeypatch, tmp_path):
@@ -86,36 +86,36 @@ def test_falls_back_to_default_and_warns_on_config_error(monkeypatch, tmp_path):
     env = build_proxy_run_env()
 
     assert env["SUFFIX_ID"] == _DEFAULT_SUFFIX_ID
-    assert env["LITELLM_BIND_HOST"] == "0.0.0.0"
-    assert env["LITELLM_PORT"] == "4000"
+    assert env["PROXY_BIND_HOST"] == "0.0.0.0"
+    assert env["PROXY_PORT"] == "4000"
     assert env["COMPOSE_PROJECT_NAME"] == "codefreedom-" + _DEFAULT_SUFFIX_ID
 
 
 def test_cli_port_host_flags_reflected_in_proxy_url(monkeypatch, tmp_path):
-    """CF_CLI_LITELLM_* reflected in PROXY_PUBLIC_BASE_URL."""
+    """CF_CLI_PROXY_* reflected in PROXY_PUBLIC_BASE_URL."""
     cf_home = tmp_path / ".codefreedom"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_config(cf_home)
-    monkeypatch.setenv("CF_CLI_LITELLM_BIND_HOST", "0.0.0.0")
-    monkeypatch.setenv("CF_CLI_LITELLM_PORT", "4300")
+    monkeypatch.setenv("CF_CLI_PROXY_BIND_HOST", "0.0.0.0")
+    monkeypatch.setenv("CF_CLI_PROXY_PORT", "4300")
 
     env = build_proxy_run_env()
 
-    assert env["LITELLM_BIND_HOST"] == "0.0.0.0"
-    assert env["LITELLM_PORT"] == "4300"
+    assert env["PROXY_BIND_HOST"] == "0.0.0.0"
+    assert env["PROXY_PORT"] == "4300"
     assert env["PROXY_PUBLIC_BASE_URL"] == "http://0.0.0.0:4300"
 
 
-def test_litellm_container_name_no_double_suffix(monkeypatch, tmp_path):
+def test_proxy_container_name_no_double_suffix(monkeypatch, tmp_path):
     """On restart, base already carrying the suffix isn't suffixed again."""
     cf_home = tmp_path / ".codefreedom"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
     _write_config(cf_home, overrides={"vars": {"SUFFIX_ID": "windemo"}})
 
     env = build_proxy_run_env()
-    name1 = litellm_container_name(env)
-    assert name1 == "litellm-codefreedom-windemo"
+    name1 = proxy_container_name(env)
+    assert name1 == "codefreedom-proxy-windemo"
 
-    env["LITELLM_CONTAINER_NAME"] = name1
-    name2 = litellm_container_name(env)
-    assert name2 == "litellm-codefreedom-windemo"
+    env["PROXY_CONTAINER_NAME"] = name1
+    name2 = proxy_container_name(env)
+    assert name2 == "codefreedom-proxy-windemo"

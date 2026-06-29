@@ -26,8 +26,8 @@ def test_load_codefreedom_settings_defaults(monkeypatch, tmp_path: Path) -> None
 
 def test_load_codefreedom_settings_env_override(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / ".codefreedom"))
-    monkeypatch.setenv("CF_CLI_LITELLM_BIND_HOST", "0.0.0.0")
-    monkeypatch.setenv("CF_CLI_LITELLM_PORT", "4100")
+    monkeypatch.setenv("CF_CLI_PROXY_BIND_HOST", "0.0.0.0")
+    monkeypatch.setenv("CF_CLI_PROXY_PORT", "4100")
     settings = load_codefreedom_settings(tmp_path)
     assert settings.proxy.bind_host == "0.0.0.0"
     assert settings.proxy.bind_port == 4100
@@ -36,23 +36,23 @@ def test_load_codefreedom_settings_env_override(monkeypatch, tmp_path: Path) -> 
 
 def test_proxy_provenance_reports_env_source(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / ".codefreedom"))
-    monkeypatch.setenv("CF_CLI_LITELLM_PORT", "4200")
+    monkeypatch.setenv("CF_CLI_PROXY_PORT", "4200")
     settings = load_codefreedom_settings(tmp_path)
     provenance = settings.proxy_provenance()
     assert provenance["bind_port"].value == "4200"
-    assert provenance["bind_port"].source == "CF_CLI_*:LITELLM_PORT"
+    assert provenance["bind_port"].source == "CF_CLI_*:PROXY_PORT"
 
 
 def test_build_proxy_env_uses_canonical_proxy_settings(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / ".codefreedom"))
-    monkeypatch.setenv("CF_CLI_LITELLM_BIND_HOST", "0.0.0.0")
-    monkeypatch.setenv("CF_CLI_LITELLM_PORT", "4300")
+    monkeypatch.setenv("CF_CLI_PROXY_BIND_HOST", "0.0.0.0")
+    monkeypatch.setenv("CF_CLI_PROXY_PORT", "4300")
     monkeypatch.chdir(tmp_path)
     env = proxy_module._build_proxy_env()
-    assert env["LITELLM_BIND_HOST"] == "0.0.0.0"
-    assert env["LITELLM_PORT"] == "4300"
+    assert env["PROXY_BIND_HOST"] == "0.0.0.0"
+    assert env["PROXY_PORT"] == "4300"
     assert env["PROXY_PUBLIC_BASE_URL"] == "http://0.0.0.0:4300"
 
 
@@ -210,11 +210,11 @@ def test_resolve_agent_runtime_with_legacy_sandbox_keys_loads_full_env(
             "sandbox_images": {"default": "docker.io/x:latest"},
             "sandbox_env": {"IS_SANDBOX": "1"},
             "proxy": {
-                "bind_host": "${LITELLM_BIND_HOST:-127.0.0.1}",
-                "bind_port": "${LITELLM_PORT:-4000}",
+                "bind_host": "${PROXY_BIND_HOST:-127.0.0.1}",
+                "bind_port": "${PROXY_PORT:-4000}",
                 "env": {
                     "PROXY_BASE_URL": "${PROXY_BASE_URL}",
-                    "PROXY_API_KEY": "${LITELLM_MASTER_KEY}",
+                    "PROXY_API_KEY": "${PROXY_API_KEY}",
                 },
             },
         },

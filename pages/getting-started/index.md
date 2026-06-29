@@ -63,7 +63,7 @@ This adds `CF_CLI_*` environment variables to your shell profile:
 
 ```text
 # >>> codefreedom:costeffective-coding secrets >>>
-export CF_CLI_LITELLM_MASTER_KEY="sk-..."
+export CF_CLI_PROXY_API_KEY="sk-..."
 export CF_CLI_MICROSOFT_FOUNDRY_API_BASE="https://...services.ai.azure.com/openai/v1"
 export CF_CLI_MICROSOFT_FOUNDRY_API_KEY="..."
 export CF_CLI_OPENCODE_ZEN_API_KEY="..."

@@ -55,15 +55,11 @@ def detect_proxy_url(base_env: dict[str, str]) -> str:
     Checks (in order):
     1. ``PROXY_BASE_URL`` in the merged env
     2. ``PROXY_BASE_URL`` in ``os.environ``
-    3. ``LITELLM_BASE_URL`` (legacy) in the merged env
-    4. ``LITELLM_BASE_URL`` (legacy) in ``os.environ``
-    5. Default ``http://localhost:4000``
+    3. Default ``http://localhost:4000``
     """
     return (
         base_env.get("PROXY_BASE_URL")
         or os.environ.get("PROXY_BASE_URL")
-        or base_env.get("LITELLM_BASE_URL")
-        or os.environ.get("LITELLM_BASE_URL")
         or _DEFAULT_PROXY_URL
     )
 

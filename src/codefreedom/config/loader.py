@@ -170,8 +170,8 @@ class ResolvedConfig:
         if name == "proxy":
             proxy = self.common.proxy
             env: Dict[str, str] = {}
-            env["LITELLM_BIND_HOST"] = proxy.bind_host or self.common.bind_address
-            env["LITELLM_PORT"] = str(proxy.bind_port)
+            env["PROXY_BIND_HOST"] = proxy.bind_host or self.common.bind_address
+            env["PROXY_PORT"] = str(proxy.bind_port)
             if proxy.remote_url:
                 env["PROXY_BASE_URL"] = proxy.remote_url
             env.update(proxy.env)
@@ -354,7 +354,7 @@ def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
     context = _build_context(merged, vars=all_vars)
 
     # Step 3b: Resolve nested ${VAR} refs inside context values (recipe vars
-    # like PROXY_BASE_URL: "http://${LITELLM_BIND_HOST}:${LITELLM_PORT}").
+    # like PROXY_BASE_URL: "http://${PROXY_BIND_HOST}:${PROXY_PORT}").
     # Without this, context values carry raw ${VAR} text into the final pass.
     from codefreedom.config.interpolation import resolve_dict
 

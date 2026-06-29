@@ -63,7 +63,7 @@ All `costeffective-coding` secrets are also required:
 
 | Secret | Description |
 | --- | --- |
-| `LITELLM_MASTER_KEY` | Proxy auth key |
+| `PROXY_API_KEY` | Proxy auth key |
 | `MICROSOFT_FOUNDRY_API_KEY` | Azure Foundry API key |
 | `OPENCODE_ZEN_API_KEY` | OpenCode API key |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
