@@ -624,13 +624,15 @@ def _coerce_int(val: Any) -> int | None:
 
 
 def _layer_profiles_yaml() -> tuple[dict, dict]:
-    """Read ``profiles.yaml`` with ``recipe.yaml`` and ``override.yaml`` context.
+    """Read ``profiles.yaml`` with ``recipe.yaml``, ``override.yaml``, and
+    optional ``.cf.yaml`` (per-folder override) context.
 
     Returns ``(merged_raw, interpolation_ctx)`` where ``merged_raw`` already has
-    override's ``tools`` / ``common`` deep-merged into the profiles dict, and
-    ``interpolation_ctx`` is the context used for ``${VAR}`` resolution with:
-    ``os.environ`` < flattened ``common`` < ``recipe.yaml`` ``vars`` <
-    ``override.yaml`` ``vars`` < ``CF_CLI_*`` (highest).
+    override's and (if present) .cf.yaml's ``tools`` / ``common`` deep-merged
+    into the profiles dict, and ``interpolation_ctx`` is the context used for
+    ``${VAR}`` resolution with: ``os.environ`` < flattened ``common`` <
+    ``recipe.yaml`` ``vars`` < ``override.yaml`` ``vars`` < ``.cf.yaml``
+    ``vars`` < ``CF_CLI_*`` (highest).
     """
     profile_path = get_profiles_path()
     if not profile_path.exists():
@@ -696,12 +698,44 @@ def _layer_profiles_yaml() -> tuple[dict, dict]:
                     else:
                         raw[section] = override[section]
 
+    cf_yaml_path_env = os.environ.get("CF_CLI_CF_YAML", "").strip()
+    cf_yaml_vars: dict[str, Any] = {}
+    if cf_yaml_path_env:
+        cf_yaml_path = Path(cf_yaml_path_env).expanduser()
+        if cf_yaml_path.exists():
+            try:
+                with open(cf_yaml_path, encoding="utf-8") as f:
+                    cf_yaml = yaml.safe_load(f) or {}
+            except (yaml.YAMLError, OSError) as exc:
+                eprint(
+                    f"{tag('TOOLS')} Warning: failed to read {cf_yaml_path}: {exc}"
+                )
+                cf_yaml = {}
+            if isinstance(cf_yaml, dict):
+                cf_yaml_vars = cf_yaml.get("vars", {}) or {}
+                if isinstance(cf_yaml_vars, list):
+                    merged_vars: dict[str, Any] = {}
+                    for item in cf_yaml_vars:
+                        if isinstance(item, dict):
+                            merged_vars.update(item)
+                    cf_yaml_vars = merged_vars
+                if not isinstance(cf_yaml_vars, dict):
+                    cf_yaml_vars = {}
+                for section in ("common", "tools"):
+                    if isinstance(cf_yaml.get(section), dict):
+                        base = raw.setdefault(section, {})
+                        if isinstance(base, dict):
+                            raw[section] = _merge_deep(base, cf_yaml[section])
+                        else:
+                            raw[section] = cf_yaml[section]
+
     ctx = dict(os.environ)
     common_section = raw.get("common", {})
     if isinstance(common_section, dict):
         ctx.update(_flatten_dict(common_section, prefix="common"))
     ctx.update(recipe_vars)
     ctx.update(override_vars)
+    ctx.update(cf_yaml_vars)
     ctx = apply_cf_cli_overrides(ctx)
     return raw, ctx
 

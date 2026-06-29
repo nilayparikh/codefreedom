@@ -258,6 +258,116 @@ class TestConfigLoading:
         assert agent_cfg.env["B"] == "override"
 
 
+class TestCfYamlLayer:
+    """``load_config(cf_yaml_path=...)`` — per-folder override layer.
+
+    .cf.yaml is the highest-precedence YAML layer, above override.yaml
+    and below CF_CLI_* machine env. The path is explicit (no auto-
+    discovery) so callers must opt in.
+    """
+
+    def test_cf_yaml_overrides_override(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "base"}}}}}
+        })
+        _write_override(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "override"}}}}}
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump(
+            {"agents": {"claude-code": {"profiles": {"default": {"env": {"A": "cf_yaml"}}}}}},
+            default_flow_style=False, sort_keys=False,
+        ))
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "cf_yaml"
+
+    def test_cf_yaml_merges_without_removing_overridden_keys(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1", "B": "2"}}}}}
+        })
+        _write_override(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "ov"}}}}}
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump(
+            {"agents": {"claude-code": {"profiles": {"default": {"env": {"B": "cf"}}}}}},
+            default_flow_style=False, sort_keys=False,
+        ))
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "ov"
+        assert agent_cfg.env["B"] == "cf"
+
+    def test_no_cf_yaml_path_means_no_layer(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1"}}}}}
+        })
+        _write_override(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "ov"}}}}}
+        })
+
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "ov"
+
+    def test_missing_cf_yaml_path_is_silent(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1"}}}}}
+        })
+
+        config = load_config(tmp_path, cf_yaml_path=tmp_path / "missing.yaml")
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "1"
+
+    def test_cf_yaml_can_add_new_agent(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1"}}}}}
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump(
+            {"agents": {"open-code": {"profiles": {"default": {"env": {"B": "2"}}}}}},
+            default_flow_style=False, sort_keys=False,
+        ))
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        assert "open-code" in config.agents
+        assert config.for_agent("open-code").env["B"] == "2"
+        assert config.for_agent("claude-code").env["A"] == "1"
+
+    def test_cf_yaml_can_override_vars(self, tmp_path):
+        _write(tmp_path, {
+            "vars": {"SUFFIX_ID": "from_profiles"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+        })
+        _write_override(tmp_path, {
+            "vars": {"SUFFIX_ID": "from_override"},
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text("vars:\n  SUFFIX_ID: from_cf_yaml\n", encoding="utf-8")
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        assert config.common.suffix_id == "from_cf_yaml"
+
+    def test_cf_cli_still_wins_over_cf_yaml(self, tmp_path, monkeypatch):
+        """CF_CLI_* is the highest priority layer; ${VAR} refs in cf.yaml resolve from it."""
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "base"}}}}}
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump(
+            {"agents": {"claude-code": {"profiles": {"default": {"env": {"A": "${A}"}}}}}},
+            default_flow_style=False, sort_keys=False,
+        ))
+        monkeypatch.setenv("CF_CLI_A", "from_cf_cli")
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "from_cf_cli"
+
+
 class TestProfileEnv:
     """Tests for profile env resolution with ${VAR} interpolation."""
 

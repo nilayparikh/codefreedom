@@ -72,6 +72,7 @@ cf setup init -p NAME                      # Preview a recipe
 cf setup init -pa NAME                     # Plan + apply interactively (prompts to confirm)
 cf setup init -a PLAN_ID                   # Apply a plan
 cf setup init --store URL                  # Custom recipe store
+cf setup init -f PATH                      # Write override.yaml copy to <PATH>/.cf.yaml
 ```
 
 ## Proxy Commands

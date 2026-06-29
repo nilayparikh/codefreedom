@@ -340,6 +340,14 @@ def _build_init_args(p: argparse.ArgumentParser) -> None:
     group.add_argument("-l", "--list", action="store_true", help="List all available recipes from the repository")
     p.add_argument("-s", "--store", type=str, metavar="URL_OR_PATH", default=None, help="Custom recipe store: GitHub URL or local folder path")
     p.add_argument("--staging", action="store_true", help="Use recipes from the 'staging' branch instead of 'main'")
+    p.add_argument(
+        "-f", "--folder",
+        type=str, metavar="PATH", default=None,
+        help=(
+            "Write a copy of override.yaml to <PATH>/.cf.yaml (folder-specific override layer). "
+            "Activate by exporting CF_CLI_CF_YAML=<PATH>/.cf.yaml or passing --folder to subsequent cf commands."
+        ),
+    )
 
 
 def _build_proxy_args(p: argparse.ArgumentParser) -> None:
@@ -401,6 +409,7 @@ def _dispatch_config(args) -> None:
 def _dispatch_init(args) -> None:
     store = getattr(args, "store", None)
     staging = getattr(args, "staging", False)
+    folder = getattr(args, "folder", None)
 
     if getattr(args, "list", False):
         from codefreedom.cli.setup.recipe import list_recipes
@@ -410,7 +419,7 @@ def _dispatch_init(args) -> None:
         sys.exit(apply_plan(args.apply))
     if getattr(args, "plan_and_apply", None):
         from codefreedom.cli.setup.recipe import plan_and_apply_recipe
-        sys.exit(plan_and_apply_recipe(args.plan_and_apply, store=store, staging=staging))
+        sys.exit(plan_and_apply_recipe(args.plan_and_apply, store=store, staging=staging, folder=folder))
     if getattr(args, "plan", None):
         from codefreedom.cli.setup.recipe import plan_recipe
         sys.exit(plan_recipe(args.plan, store=store, staging=staging))
@@ -419,7 +428,7 @@ def _dispatch_init(args) -> None:
         eprint(f"{tag('ERROR')} A recipe name is required. Use 'cf s i -l' to list available recipes.")
         sys.exit(2)
     from codefreedom.cli.setup.recipe import init_recipe
-    sys.exit(init_recipe(args.recipe, store=store, staging=staging))
+    sys.exit(init_recipe(args.recipe, store=store, staging=staging, folder=folder))
 
 
 def _dispatch_deinit(args) -> None:

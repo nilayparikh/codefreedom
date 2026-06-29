@@ -293,18 +293,26 @@ def _build_context(merged: dict, vars: Dict[str, str] | None = None) -> Dict[str
 
 # ── Public API ──────────────────────────────────────────────────────────
 
-def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
+def load_config(
+    config_dir: Optional[Path] = None,
+    cf_yaml_path: Optional[Path] = None,
+) -> ResolvedConfig:
     """Load and resolve the full CodeFreedom configuration.
 
     Args:
         config_dir: Path to the config directory
             (defaults to ``~/.codefreedom/config``).
+        cf_yaml_path: Optional path to a per-folder ``.cf.yaml`` override
+            file. When provided (or when ``CF_CLI_CF_YAML`` is set in the
+            environment) the file is loaded as the highest-precedence YAML
+            layer, above ``override.yaml`` and below ``CF_CLI_*``.
 
     Resolution order (later wins):
       1. ``profiles.yaml`` (recipe-provided defaults)
       2. ``override.yaml`` (user overrides — same schema)
-      3. Machine env (``os.environ``)
-      4. ``CF_CLI_*`` overrides (highest priority, prefix stripped)
+      3. ``.cf.yaml`` (per-folder override — same schema, optional)
+      4. Machine env (``os.environ``)
+      5. ``CF_CLI_*`` overrides (highest priority, prefix stripped)
 
     Returns:
         Frozen :class:`ResolvedConfig` with all ${VAR} resolved.
@@ -318,14 +326,20 @@ def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
     if config_dir is None:
         config_dir = _get_config_dir()
 
+    if cf_yaml_path is None:
+        env_path = os.environ.get("CF_CLI_CF_YAML", "").strip()
+        if env_path:
+            cf_yaml_path = Path(env_path).expanduser()
+
     # Step 1: Load YAML layers (lowest → highest precedence)
     base = _load_yaml_die(config_dir / "profiles.yaml")
     recipe = _load_yaml_optional(config_dir / "recipe.yaml")
     override = _load_yaml_optional(config_dir / "override.yaml")
+    cf_yaml = _load_yaml_optional(cf_yaml_path) if cf_yaml_path else {}
 
     # Extract vars from each layer (list-of-dicts or flat dict)
     all_vars: Dict[str, str] = {}
-    for layer in (base, recipe, override):
+    for layer in (base, recipe, override, cf_yaml):
         raw = layer.pop("vars", None)
         if isinstance(raw, list):
             for item in raw:
@@ -337,6 +351,7 @@ def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
     # Step 2: Full structural merge (later wins)
     merged = _merge_deep(base, recipe)
     merged = _merge_deep(merged, override)
+    merged = _merge_deep(merged, cf_yaml)
 
     # Ensure common section exists with defaults so ${VAR} refs are interpolated.
     # CommonSection.suffix_id defaults to "${SUFFIX_ID:-0000}" — if the merged dict

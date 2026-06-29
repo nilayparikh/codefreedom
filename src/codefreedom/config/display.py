@@ -106,10 +106,11 @@ def resolve_value_source(
 
     Priority order (first match wins):
       1. CF_CLI_* env var
-      2. override.yaml vars
-      3. recipe.yaml vars
-      4. profiles.yaml vars
-      5. Default (model default)
+      2. ``.cf.yaml`` vars (per-folder override, if registered)
+      3. override.yaml vars
+      4. recipe.yaml vars
+      5. profiles.yaml vars
+      6. Default (model default)
     """
     # Strip prefix to get bare var name for CF_CLI check
     bare_key = key.rsplit(".", 1)[-1] if "." in key else key
@@ -120,10 +121,19 @@ def resolve_value_source(
         return "env"
 
     # Check config layers
+    cf_yaml_path = os.environ.get("CF_CLI_CF_YAML", "").strip()
+    cf_yaml_vars: Dict[str, str] = {}
+    if cf_yaml_path:
+        cf_yaml_path_obj = Path(cf_yaml_path).expanduser()
+        cf_yaml_vars = _extract_vars(
+            _load_layer(cf_yaml_path_obj.parent, cf_yaml_path_obj.name)
+        )
     override_vars = _extract_vars(_load_layer(config_dir, "override.yaml"))
     recipe_vars = _extract_vars(_load_layer(config_dir, "recipe.yaml"))
     profiles_vars = _extract_vars(_load_layer(config_dir, "profiles.yaml"))
 
+    if bare_key in cf_yaml_vars:
+        return ".cf.yaml"
     if bare_key in override_vars:
         return "override.yaml"
     if bare_key in recipe_vars:
@@ -221,24 +231,30 @@ def format_resolved_config(
     if config_dir is None:
         config_dir = _get_config_dir()
 
+    cf_yaml_env = os.environ.get("CF_CLI_CF_YAML", "").strip()
+    cf_yaml_path: Optional[Path] = Path(cf_yaml_env).expanduser() if cf_yaml_env else None
+
     # Load layers to get vars for source tracking
     base = _load_yaml_die(config_dir / "profiles.yaml")
     recipe = _load_yaml_optional(config_dir / "recipe.yaml")
     override = _load_yaml_optional(config_dir / "override.yaml")
+    cf_yaml = _load_yaml_optional(cf_yaml_path) if cf_yaml_path else {}
 
     # Extract vars from each layer (before popping for merge)
     profiles_vars = _extract_vars(base)
     recipe_vars = _extract_vars(recipe)
     override_vars = _extract_vars(override)
+    cf_yaml_vars = _extract_vars(cf_yaml)
 
     all_vars: Dict[str, str] = {}
-    for layer in (base, recipe, override):
+    for layer in (base, recipe, override, cf_yaml):
         raw = layer.pop("vars", None)
         if isinstance(raw, dict):
             all_vars.update({str(k): str(v) for k, v in raw.items()})
 
     merged = _merge_deep(base, recipe)
     merged = _merge_deep(merged, override)
+    merged = _merge_deep(merged, cf_yaml)
 
     # Strip recipe metadata that isn't part of config schema
     for key in ("name", "description", "version", "files", "dirs",
@@ -283,7 +299,10 @@ def format_resolved_config(
     # Vars section — show each var with its resolved value and source layer
     vars_display: Dict[str, Any] = {}
     for var_name, final_value in all_vars.items():
-        if var_name in override_vars:
+        if var_name in cf_yaml_vars:
+            source = ".cf.yaml"
+            raw_value = cf_yaml_vars[var_name]
+        elif var_name in override_vars:
             source = "override.yaml"
             raw_value = override_vars[var_name]
         elif var_name in recipe_vars:
