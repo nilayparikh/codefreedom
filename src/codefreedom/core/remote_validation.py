@@ -12,6 +12,10 @@ from codefreedom.core.agent_runtime import (
     fetch_proxy_models_with_status,
 )
 
+# No-proxy opener — bypasses system proxy settings so localhost and
+# port-forwarded MCP endpoints are reached directly on all platforms.
+_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 __all__ = [
     "RemoteValidationError",
     "PROXY_OK",
@@ -104,7 +108,7 @@ def _mcp_post(
         },
         method="POST",
     )
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    opener = _NO_PROXY_OPENER
     try:
         with opener.open(req, timeout=timeout) as resp:
             headers = {k.lower(): v for k, v in resp.headers.items()}
