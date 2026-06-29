@@ -16,6 +16,7 @@ from codefreedom.cli.git.config import (
     is_signed_commit,
     load_git_config,
 )
+from codefreedom.cli.git.specs import CONVENTIONAL_COMMITS_SPEC
 from codefreedom.log import eprint, tag
 
 _CONVENTIONAL_TYPES = [
@@ -32,53 +33,210 @@ _CONVENTIONAL_TYPES = [
     "revert",
 ]
 
+_CONVENTIONAL_TYPE_DOCS = {
+    "feat": "A new feature for the user",
+    "fix": "A bug fix",
+    "docs": "Documentation-only changes",
+    "style": "Formatting, whitespace, or missing semicolons (no code change)",
+    "refactor": "A code change that neither fixes a bug nor adds a feature",
+    "perf": "A code change that improves performance",
+    "test": "Adding or fixing tests",
+    "build": "Build system or external dependency changes",
+    "ci": "CI configuration files and scripts",
+    "chore": "Other changes that do not modify src or test files",
+    "revert": "Reverts a previous commit",
+}
+
 _VALID_MSG_RE = re.compile(
     r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
     r"(?:\([a-zA-Z0-9_\-/]+\))?:\s+.+$"
 )
+_TYPE_AT_START_RE = re.compile(
+    r"^\s*(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
+    r"(?:\(([a-zA-Z0-9_\-/]*)\))?\s*:",
+)
 _MAX_RETRIES = 2
+_RETRY_PREVIEW_CHARS = 240
 
 
 def _build_commit_system_prompt(
     config: dict,
     no_scope: bool = False,
 ) -> str:
-    """Build the system prompt for commit message generation."""
+    """Build the system prompt for commit message generation.
+
+    The full Conventional Commits spec is bundled inline as a "skill"
+    so the model has the reference available without URL lookups.
+    """
     modules = get_modules(config)
     conventional = is_conventional_commit(config)
 
-    parts = ["You are a git commit message generator.", ""]
+    parts: list[str] = []
 
     if conventional:
-        if modules:
-            parts.append(f"Available modules/scopes: {', '.join(modules)}")
-            parts.append("Pick the most relevant module for the scope.")
-        else:
-            parts.append("Infer the scope from the changed files.")
+        parts.extend([
+            "You are a git commit message generator.",
+            "Apply the Conventional Commits spec that follows INLINE — do "
+            "NOT visit any URL; the spec is provided below.",
+            "",
+        ])
+
+        parts.append(CONVENTIONAL_COMMITS_SPEC)
         parts.append("")
+
+        if modules:
+            parts.extend([
+                "## Available scopes (for this project)",
+                ", ".join(modules),
+                "Pick the most relevant scope. Lowercase only.",
+                "",
+            ])
+        else:
+            parts.extend([
+                "## Scope",
+                "Infer the scope from the changed files (a short lowercase "
+                "noun). Use a short, stable name; if none fits well, omit it.",
+                "",
+            ])
 
         if no_scope:
-            parts.append("Output format (no scope):")
-            parts.append("TYPE: DESCRIPTION")
-            parts.append("")
-            parts.append(f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}")
+            parts.extend([
+                "## Output format (no scope)",
+                "TYPE: DESCRIPTION",
+                "  - TYPE is mandatory.",
+                "  - DESCRIPTION is mandatory; see the inline spec for rules.",
+                "",
+            ])
         else:
-            parts.append("Output format:")
-            parts.append("TYPE(SCOPE): DESCRIPTION")
-            parts.append("")
-            parts.append(f"TYPE must be one of: {', '.join(_CONVENTIONAL_TYPES)}")
-            parts.append("SCOPE is the module/area affected.")
+            parts.extend([
+                "## Output format",
+                "TYPE(SCOPE): DESCRIPTION",
+                "  - TYPE is mandatory (from the spec).",
+                "  - SCOPE is optional but recommended (lowercase noun).",
+                "  - DESCRIPTION is mandatory (see inline spec).",
+                "",
+            ])
 
-        parts.append("")
-        parts.append(
-            "DESCRIPTION should be a short imperative description (max 72 chars)."
-        )
-        parts.append("Output ONLY the commit message, nothing else.")
+        parts.extend([
+            "## Strict output rules for this task",
+            "- Output ONE single line — no body, no trailers, no bullet points.",
+            "- No code fences, no quotes, no \"Here is the commit message:\" prefix.",
+            "- No markdown, no backticks, no leading bullet.",
+            "- The very first character of your reply must be the type word.",
+            "- Do NOT include ``, reasoning, or chain-of-thought blocks "
+            "in your final output. If your model emits them, strip them "
+            "and return only the final commit message line.",
+            "- Do NOT include any role tags like [user], [assistant], or "
+            "chat-format tokens in your final output.",
+            "- Do NOT include any explanation, apology, or commentary.",
+        ])
     else:
-        parts.append("Generate a short, clear commit message describing the changes.")
-        parts.append("Output ONLY the commit message, nothing else.")
+        parts.extend([
+            "You are a git commit message generator.",
+            "Generate a short, clear commit message describing the changes.",
+            "Output ONLY the commit message — no quotes, no code fences, no prefix.",
+            "Do NOT include `` blocks, role tags, or any extra text.",
+        ])
 
     return "\n".join(parts)
+
+
+def _build_retry_user_prompt(
+    previous_response: str,
+    error_reason: str,
+    original_user_prompt: str,
+) -> str:
+    """Build the user prompt sent on a retry attempt.
+
+    Surfaces the exact previous response and the specific validation
+    failure so the LLM can self-correct instead of guessing.
+    """
+    preview = previous_response.strip()
+    if len(preview) > _RETRY_PREVIEW_CHARS:
+        preview = preview[:_RETRY_PREVIEW_CHARS] + "..."
+    safe_preview = preview if preview else "<empty response>"
+
+    return (
+        "Your previous response did not match the required format.\n\n"
+        "## Your previous response (verbatim)\n"
+        f"```\n{safe_preview}\n```\n\n"
+        "## Why it failed\n"
+        f"{error_reason}\n\n"
+        "## How to fix\n"
+        "Reply with ONE single line that starts with one of the allowed "
+        "types (feat, fix, chore, docs, style, refactor, perf, test, "
+        "build, ci, revert), followed by an optional (scope) in lowercase, "
+        "then ': ' and an imperative description (max 72 chars). "
+        "Do not include quotes, code fences, or any other text.\n\n"
+        "## Examples of valid messages\n"
+        "feat(auth): add user login validation\n"
+        "fix(api): handle null response\n"
+        "chore: update dependencies\n\n"
+        "## Original task\n"
+        f"{original_user_prompt}"
+    )
+
+
+def _validate_commit_message(candidate: str) -> tuple[str, str | None]:
+    """Validate a rendered commit message against the conventional spec.
+
+    Returns ``(candidate, None)`` when the message is valid, or
+    ``(candidate, error_reason)`` describing the specific failure.
+    The candidate is returned in both cases so the caller can still use
+    it as a last resort.
+    """
+    if not candidate or not candidate.strip():
+        return candidate, "Response was empty (no text returned by the LLM)."
+
+    if "\n" in candidate:
+        first_line, *_ = candidate.split("\n")
+        if not first_line.strip():
+            return candidate, (
+                "Response was empty on the first line; the LLM must output "
+                "the commit message as the very first line."
+            )
+
+    first_line = candidate.split("\n", 1)[0].strip()
+
+    if not first_line:
+        return candidate, (
+            "First line is blank; the commit message must be on the first line."
+        )
+
+    m = _TYPE_AT_START_RE.match(first_line)
+    if not m:
+        allowed = ", ".join(_CONVENTIONAL_TYPES)
+        return candidate, (
+            f"First line does not start with a valid Conventional Commits type. "
+            f"Allowed types: {allowed}. "
+            f"Got: {first_line!r}."
+        )
+
+    commit_type = m.group(1)
+    scope = m.group(2) or ""
+    prefix = f"{commit_type}({scope})" if scope else commit_type
+
+    description = first_line[m.end():].strip()
+    if not description:
+        return candidate, (
+            f"Description is empty after '{prefix}:'. "
+            "A short imperative description is mandatory."
+        )
+
+    if not _VALID_MSG_RE.match(candidate):
+        return candidate, (
+            f"Message did not match the strict Conventional Commits pattern. "
+            f"Expected: {prefix}: lowercase imperative description "
+            "(max 72 chars)."
+        )
+
+    if len(first_line) > 72:
+        return candidate, (
+            f"Subject line is {len(first_line)} chars; the Conventional Commits "
+            "spec recommends no more than 72."
+        )
+
+    return candidate, None
 
 
 def _prompt_user(message: str, default: str = "y") -> str:
@@ -187,6 +345,8 @@ def _generate_commit_message(
 
     eprint(f"{tag('COMMIT')} Generating commit message via {model}...")
 
+    original_user_prompt = user_prompt
+
     for attempt in range(_MAX_RETRIES + 1):
         response = llm.generate_message(
             model,
@@ -205,25 +365,38 @@ def _generate_commit_message(
         if no_scope:
             candidate = templates.strip_scope(candidate)
 
-        if _VALID_MSG_RE.match(candidate):
-            return candidate, -1
+        validated, error_reason = _validate_commit_message(candidate)
+        if error_reason is None:
+            return validated, -1
 
         if attempt < _MAX_RETRIES:
+            preview = response.strip()
+            if len(preview) > _RETRY_PREVIEW_CHARS:
+                preview = preview[:_RETRY_PREVIEW_CHARS] + "..."
+            preview = preview if preview else "<empty>"
             eprint(
                 f"{tag('WARN')} Malformed commit message "
                 f"(attempt {attempt + 1}/{_MAX_RETRIES + 1}), retrying..."
             )
-            user_prompt = (
-                f"Your previous response was malformed:\n{candidate}\n\n"
-                "Follow the required format exactly.\n\n"
-                f"{user_prompt}"
+            eprint(f"   LLM returned: {preview}")
+            eprint(f"   Reason: {error_reason}")
+            user_prompt = _build_retry_user_prompt(
+                previous_response=response,
+                error_reason=error_reason,
+                original_user_prompt=original_user_prompt,
             )
         else:
+            preview = response.strip()
+            if len(preview) > _RETRY_PREVIEW_CHARS:
+                preview = preview[:_RETRY_PREVIEW_CHARS] + "..."
+            preview = preview if preview else "<empty>"
             eprint(
                 f"{tag('WARN')} LLM produced malformed message after "
                 f"{_MAX_RETRIES + 1} attempts — using as-is."
             )
-            return candidate, -1
+            eprint(f"   LLM returned: {preview}")
+            eprint(f"   Last failure: {error_reason}")
+            return validated, -1
 
     return "", 1
 

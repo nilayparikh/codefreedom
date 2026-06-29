@@ -1,8 +1,10 @@
-"""Integration tests for the ``cf s i -f <folder>`` flag and .cf.yaml wiring.
+"""Integration tests for the ``cf s folder [path]`` subcommand and .cf.yaml wiring.
 
 End-to-end coverage of:
-  - ``cf setup init --folder <path>`` writes ``<path>/.cf.yaml`` from
-    the current ``override.yaml``.
+  - ``cf setup folder <path>`` writes ``<path>/.cf.yaml`` from the
+    current ``override.yaml`` (default path is current directory).
+  - The standalone ``seed_cf_yaml()`` public entry point.
+  - Argparse wiring: ``cf s folder``, ``cf s f``, ``--force``.
   - ``load_config(cf_yaml_path=...)`` reads .cf.yaml as the highest
     YAML layer (above override.yaml, below CF_CLI_*).
   - The display layer reports the .cf.yaml source correctly.
@@ -12,14 +14,14 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from unittest import mock
 
 import pytest
 import yaml
 
-from codefreedom.cli.main import _build_init_args, _dispatch_init
+from codefreedom.cli.main import _build_folder_args, _dispatch_folder
 from codefreedom.config import load_config
 from codefreedom.config.display import resolve_value_source
+from codefreedom.recipe.plan import seed_cf_yaml
 
 pytestmark = pytest.mark.integration
 
@@ -31,53 +33,30 @@ def _write_yaml(path: Path, data: dict) -> None:
     )
 
 
-class TestInitRecipeWithFolderFlag:
-    def test_folder_flag_writes_cf_yaml(self, tmp_path: Path, monkeypatch, capsys) -> None:
-        """``cf s i -f <folder>`` (with no recipe) creates ``<folder>/.cf.yaml``.
+def _seed_config_dir(cf_dir: Path, override: dict | None = None) -> Path:
+    """Create a minimal ``override.yaml`` under ``cf_dir/config``.
 
-        We can't reach ``init_recipe`` without a real recipe network fetch,
-        so we exercise the dispatch + flag plumbing with a mocked
-        ``init_recipe`` and a seeded ``override.yaml`` in CODEFREEDOM_HOME.
-        """
-        cf_dir = tmp_path / ".codefreedom"
-        config_dir = cf_dir / "config"
-        config_dir.mkdir(parents=True)
-        _write_yaml(config_dir / "override.yaml", {
-            "vars": {"SUFFIX_ID": "demo"},
-            "tools": {"chrome": {}},
-        })
-        monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_dir))
+    Returns the config dir (so callers can pass it to ``seed_cf_yaml``).
+    """
+    config_dir = cf_dir / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    _write_yaml(config_dir / "override.yaml", override or {
+        "vars": {"SUFFIX_ID": "demo"},
+        "tools": {"chrome": {}},
+    })
+    return config_dir
 
-        target_folder = tmp_path / "myproject"
 
-        captured: dict = {}
+class TestSeedCfYamlPublic:
+    def test_seed_writes_cf_yaml_to_target(self, tmp_path: Path, monkeypatch) -> None:
+        config_dir = _seed_config_dir(tmp_path / "cf")
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / "cf"))
 
-        def fake_init(name, store=None, staging=False, folder=None):
-            captured["name"] = name
-            captured["folder"] = folder
-            from codefreedom.recipe.plan import _write_cf_yaml
-            _write_cf_yaml(config_dir, folder)
-            return 0
+        target = tmp_path / "myproject"
+        rc = seed_cf_yaml(config_dir=config_dir, folder=str(target))
 
-        with mock.patch(
-            "codefreedom.cli.setup.recipe.init_recipe", side_effect=fake_init
-        ):
-            with pytest.raises(SystemExit) as exc_info:
-                _dispatch_init(argparse.Namespace(
-                    recipe="my-recipe",
-                    list=False,
-                    apply=None,
-                    plan_and_apply=None,
-                    plan=None,
-                    store=None,
-                    staging=False,
-                    folder=str(target_folder),
-                ))
-
-        assert exc_info.value.code == 0
-        assert captured["folder"] == str(target_folder)
-
-        out = target_folder / ".cf.yaml"
+        assert rc == 0
+        out = target / ".cf.yaml"
         assert out.is_file()
         loaded = yaml.safe_load(out.read_text(encoding="utf-8"))
         assert loaded == {
@@ -85,69 +64,145 @@ class TestInitRecipeWithFolderFlag:
             "tools": {"chrome": {}},
         }
 
-    def test_folder_flag_refuses_overwrite(self, tmp_path: Path, monkeypatch, capsys) -> None:
-        """Existing ``<folder>/.cf.yaml`` is left alone — init warns and continues."""
-        cf_dir = tmp_path / ".codefreedom"
-        config_dir = cf_dir / "config"
-        config_dir.mkdir(parents=True)
-        _write_yaml(config_dir / "override.yaml", {
-            "vars": {"SUFFIX_ID": "fresh"},
-        })
-        monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_dir))
+    def test_seed_defaults_to_cwd(self, tmp_path: Path, monkeypatch) -> None:
+        config_dir = _seed_config_dir(tmp_path / "cf")
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / "cf"))
+        monkeypatch.chdir(tmp_path)
 
-        target_folder = tmp_path / "myproject"
-        target_folder.mkdir()
-        existing = target_folder / ".cf.yaml"
-        existing.write_text(
-            "vars:\n  SUFFIX_ID: user_kept\n",
-            encoding="utf-8",
-        )
+        rc = seed_cf_yaml(config_dir=config_dir)
 
-        from codefreedom.recipe.plan import _write_cf_yaml
-        _write_cf_yaml(config_dir, str(target_folder))
+        assert rc == 0
+        assert (tmp_path / ".cf.yaml").is_file()
 
+    def test_seed_refuses_overwrite_without_force(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        config_dir = _seed_config_dir(tmp_path / "cf")
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / "cf"))
+
+        target = tmp_path / "out"
+        target.mkdir()
+        existing = target / ".cf.yaml"
+        existing.write_text("vars:\n  SUFFIX_ID: user_kept\n", encoding="utf-8")
+
+        rc = seed_cf_yaml(config_dir=config_dir, folder=str(target))
+
+        assert rc == 1
         kept = yaml.safe_load(existing.read_text(encoding="utf-8"))
         assert kept == {"vars": {"SUFFIX_ID": "user_kept"}}
 
-    def test_folder_flag_creates_missing_folder(self, tmp_path: Path, monkeypatch) -> None:
-        cf_dir = tmp_path / ".codefreedom"
-        config_dir = cf_dir / "config"
+    def test_seed_force_overwrites(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        config_dir = _seed_config_dir(
+            tmp_path / "cf",
+            override={"vars": {"SUFFIX_ID": "fresh"}},
+        )
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / "cf"))
+
+        target = tmp_path / "out"
+        target.mkdir()
+        existing = target / ".cf.yaml"
+        existing.write_text("vars:\n  SUFFIX_ID: stale\n", encoding="utf-8")
+
+        rc = seed_cf_yaml(config_dir=config_dir, folder=str(target), force=True)
+
+        assert rc == 0
+        loaded = yaml.safe_load(existing.read_text(encoding="utf-8"))
+        assert loaded == {"vars": {"SUFFIX_ID": "fresh"}}
+
+    def test_seed_fails_when_override_missing(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """No override.yaml in config_dir — return failure (no crash)."""
+        config_dir = tmp_path / "cf" / "config"
         config_dir.mkdir(parents=True)
-        _write_yaml(config_dir / "override.yaml", {"vars": {"SUFFIX_ID": "x"}})
-        monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_dir))
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / "cf"))
 
-        target = tmp_path / "deep" / "nested" / "out"
-        assert not target.exists()
+        rc = seed_cf_yaml(config_dir=config_dir, folder=str(tmp_path / "out"))
+        assert rc == 1
+        assert not (tmp_path / "out" / ".cf.yaml").exists()
 
-        from codefreedom.recipe.plan import _write_cf_yaml
-        _write_cf_yaml(config_dir, str(target))
 
-        assert target.is_dir()
+class TestDispatchFolder:
+    def test_dispatch_writes_cf_yaml_to_arg_path(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        _seed_config_dir(tmp_path / "cf")
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / "cf"))
+
+        target = tmp_path / "myproject"
+
+        with pytest.raises(SystemExit) as exc_info:
+            _dispatch_folder(argparse.Namespace(path=str(target), force=False))
+
+        assert exc_info.value.code == 0
         assert (target / ".cf.yaml").is_file()
 
+    def test_dispatch_defaults_to_cwd(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        _seed_config_dir(tmp_path / "cf")
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / "cf"))
+        monkeypatch.chdir(tmp_path)
 
-class TestArgparseFolderFlag:
-    def test_folder_flag_is_parsed(self) -> None:
-        """``-f <path>`` and ``--folder <path>`` populate ``args.folder``."""
+        with pytest.raises(SystemExit) as exc_info:
+            _dispatch_folder(argparse.Namespace(path=".", force=False))
+
+        assert exc_info.value.code == 0
+        assert (tmp_path / ".cf.yaml").is_file()
+
+    def test_dispatch_force_overwrites(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        _seed_config_dir(
+            tmp_path / "cf",
+            override={"vars": {"SUFFIX_ID": "from_init"}},
+        )
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path / "cf"))
+
+        target = tmp_path / "out"
+        target.mkdir()
+        (target / ".cf.yaml").write_text(
+            "vars:\n  SUFFIX_ID: user_kept\n", encoding="utf-8"
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            _dispatch_folder(argparse.Namespace(path=str(target), force=True))
+
+        assert exc_info.value.code == 0
+        loaded = yaml.safe_load((target / ".cf.yaml").read_text(encoding="utf-8"))
+        assert loaded == {"vars": {"SUFFIX_ID": "from_init"}}
+
+
+class TestArgparseFolderCommand:
+    def test_path_is_positional_and_optional(self) -> None:
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers(dest="cmd")
-        init = sub.add_parser("init")
-        _build_init_args(init)
+        folder = sub.add_parser("folder")
+        _build_folder_args(folder)
 
-        ns = parser.parse_args(["init", "-f", "/tmp/foo"])
-        assert ns.folder == "/tmp/foo"
+        ns = parser.parse_args(["folder"])
+        assert ns.path == "."
+        assert ns.force is False
 
-        ns2 = parser.parse_args(["init", "--folder", "/tmp/bar"])
-        assert ns2.folder == "/tmp/bar"
-
-    def test_folder_flag_optional(self) -> None:
+    def test_path_explicit(self) -> None:
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers(dest="cmd")
-        init = sub.add_parser("init")
-        _build_init_args(init)
+        folder = sub.add_parser("folder")
+        _build_folder_args(folder)
 
-        ns = parser.parse_args(["init"])
-        assert ns.folder is None
+        ns = parser.parse_args(["folder", "/tmp/myproj"])
+        assert ns.path == "/tmp/myproj"
+
+    def test_force_flag(self) -> None:
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        folder = sub.add_parser("folder")
+        _build_folder_args(folder)
+
+        ns = parser.parse_args(["folder", ".", "--force"])
+        assert ns.force is True
 
 
 class TestCfYamlEndToEnd:

@@ -121,12 +121,12 @@ def resolve_value_source(
         return "env"
 
     # Check config layers
-    cf_yaml_path = os.environ.get("CF_CLI_CF_YAML", "").strip()
+    from codefreedom.config.loader import _resolve_cf_yaml_path
+    cf_yaml_path = _resolve_cf_yaml_path()
     cf_yaml_vars: Dict[str, str] = {}
     if cf_yaml_path:
-        cf_yaml_path_obj = Path(cf_yaml_path).expanduser()
         cf_yaml_vars = _extract_vars(
-            _load_layer(cf_yaml_path_obj.parent, cf_yaml_path_obj.name)
+            _load_layer(cf_yaml_path.parent, cf_yaml_path.name)
         )
     override_vars = _extract_vars(_load_layer(config_dir, "override.yaml"))
     recipe_vars = _extract_vars(_load_layer(config_dir, "recipe.yaml"))
@@ -223,24 +223,31 @@ def format_resolved_config(
     Builds the display dict directly from merged+interpolated layers,
     skipping ConfigModel validation so extra recipe fields don't block output.
     """
-    from codefreedom.core.config import get_config_dir as _get_config_dir
-    from codefreedom.config.loader import _build_context, _merge_deep, _load_yaml_die, _load_yaml_optional
     from codefreedom.config.interpolation import interpolate_all
     import copy
 
     if config_dir is None:
+        from codefreedom.core.config import get_config_dir as _get_config_dir
         config_dir = _get_config_dir()
 
-    cf_yaml_env = os.environ.get("CF_CLI_CF_YAML", "").strip()
-    cf_yaml_path: Optional[Path] = Path(cf_yaml_env).expanduser() if cf_yaml_env else None
+    from codefreedom.config.loader import (
+        _build_context,
+        _load_yaml_die,
+        _load_yaml_optional,
+        _resolve_cf_yaml_path,
+    )
 
-    # Load layers to get vars for source tracking
+    # Load layers to get vars for source tracking. The order matches
+    # load_config(): profiles (lowest) < recipe < override < .cf.yaml.
+    # The auto-discovered .cf.yaml path comes from the same resolver
+    # the unified config uses, so display and runtime agree on what
+    # file (if any) provides the per-folder layer.
     base = _load_yaml_die(config_dir / "profiles.yaml")
     recipe = _load_yaml_optional(config_dir / "recipe.yaml")
     override = _load_yaml_optional(config_dir / "override.yaml")
+    cf_yaml_path = _resolve_cf_yaml_path()
     cf_yaml = _load_yaml_optional(cf_yaml_path) if cf_yaml_path else {}
 
-    # Extract vars from each layer (before popping for merge)
     profiles_vars = _extract_vars(base)
     recipe_vars = _extract_vars(recipe)
     override_vars = _extract_vars(override)
@@ -252,6 +259,7 @@ def format_resolved_config(
         if isinstance(raw, dict):
             all_vars.update({str(k): str(v) for k, v in raw.items()})
 
+    from codefreedom.config.loader import _merge_deep
     merged = _merge_deep(base, recipe)
     merged = _merge_deep(merged, override)
     merged = _merge_deep(merged, cf_yaml)
@@ -270,7 +278,6 @@ def format_resolved_config(
 
     context = _build_context(merged, vars=all_vars)
 
-    # Interpolate the merged dict directly (no validation)
     resolved = copy.deepcopy(merged)
     interpolate_all(resolved, context)
 

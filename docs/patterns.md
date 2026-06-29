@@ -23,7 +23,7 @@ No `.env` files. All configuration comes from YAML + `CF_CLI_*` env vars.
 
 `${VAR}` interpolation happens at runtime on every `load_config()` call. Files are stored with literal `${VAR}` placeholders — no install-time baking. Empty-string values in `CF_CLI_*` are valid overrides (do NOT fall through to default).
 
-**Per-folder `.cf.yaml`:** Use `cf s i -f <folder>` (or `cf setup init -f <folder>`) to copy the current `override.yaml` into `<folder>/.cf.yaml`. Same schema as `override.yaml`; sits one layer above it. Activate it by exporting `CF_CLI_CF_YAML=<path>` or by passing `cf_yaml_path=` to `load_config()`. The existing block-schema `.cf.yaml` used by the `git` module (`git:` block) is unaffected: it lives in a disjoint top-level key and is read by `cli/git/config.py`, not by `load_config`.
+**Per-folder `.cf.yaml`:** Use `cf s folder <path>` (alias `cf s f`) to copy the current `override.yaml` into `<path>/.cf.yaml`. Same schema as `override.yaml`; sits one layer above it. Default path is the current directory. Activate it by exporting `CF_CLI_CF_YAML=<path>` or by passing `cf_yaml_path=` to `load_config()`. Existing `.cf.yaml` files are preserved by default — pass `--force` to overwrite. The existing block-schema `.cf.yaml` used by the `git` module (`git:` block) is unaffected: it lives in a disjoint top-level key and is read by `cli/git/config.py`, not by `load_config`.
 
 ## 3. Tools are Shared Infrastructure
 

@@ -51,3 +51,4 @@ pages/raw/
 .pi/
 .commandcode/
 docs/commandcode/
+.cf.yaml

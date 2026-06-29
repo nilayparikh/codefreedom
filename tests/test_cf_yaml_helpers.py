@@ -1,6 +1,6 @@
 """Unit tests for the ``_write_cf_yaml`` recipe helper.
 
-The helper is invoked by ``cf setup init --folder <path>`` to copy the
+The helper is invoked by ``cf setup folder [path]`` to copy the
 active ``override.yaml`` into a local ``.cf.yaml`` so the user can
 edit per-folder overrides without touching the global config.
 
