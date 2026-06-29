@@ -22,7 +22,7 @@ pytestmark = pytest.mark.unit
 @pytest.fixture
 def secrets():
     return [
-        {"var": "LITELLM_MASTER_KEY", "prompt": "Proxy key", "default": "sk-local"},
+        {"var": "PROXY_API_KEY", "prompt": "Proxy key", "default": "sk-local"},
         {"var": "OPENROUTER_API_KEY", "prompt": "OpenRouter key"},
     ]
 
@@ -34,7 +34,7 @@ def config_vars():
 
 @pytest.fixture
 def service_groups():
-    return [{"name": "LiteLLM Proxy", "requires": ["LITELLM_MASTER_KEY"]}]
+    return [{"name": "LiteLLM Proxy", "requires": ["PROXY_API_KEY"]}]
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def test_render_bash_setup_script_contains_secret_prompts(secrets, config_vars, 
         config_vars=config_vars,
         service_groups=service_groups,
     )
-    assert "LITELLM_MASTER_KEY" in script
+    assert "PROXY_API_KEY" in script
     assert "OPENROUTER_API_KEY" in script
     assert "Proxy key" in script
     assert "OpenRouter key" in script
@@ -130,7 +130,7 @@ def test_render_powershell_setup_script_contains_secret_prompts(secrets, config_
         config_vars=config_vars,
         service_groups=service_groups,
     )
-    assert "LITELLM_MASTER_KEY" in script
+    assert "PROXY_API_KEY" in script
     assert "OPENROUTER_API_KEY" in script
     assert "Proxy key" in script
     assert "Read-Host" in script
@@ -175,7 +175,7 @@ def test_render_powershell_setup_script_empty_inputs():
 
 def test_render_env_template_has_placeholders(secrets):
     template = render_env_template(secrets)
-    assert "LITELLM_MASTER_KEY=" in template
+    assert "PROXY_API_KEY=" in template
     assert "OPENROUTER_API_KEY=" in template
     assert "CHANGE_ME" in template
 
@@ -192,7 +192,7 @@ def test_render_env_template_no_default(secrets):
 
 def test_render_env_template_with_default(secrets):
     template = render_env_template(secrets)
-    assert "LITELLM_MASTER_KEY=sk-local" in template
+    assert "PROXY_API_KEY=sk-local" in template
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
