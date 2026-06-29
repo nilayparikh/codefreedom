@@ -45,16 +45,30 @@ def _remote_tools(selected: set[str] | None = None) -> dict[str, str]:
     return remote
 
 
+def _filter_remote(selected: set[str] | None) -> tuple[set[str] | None, bool]:
+    """Print remote-tool warnings and return the local-only subset.
+
+    Returns ``(filtered_selected, should_return)``.  When
+    ``should_return`` is True, every selected tool is remote and the
+    caller should short-circuit with exit code 1.
+    """
+    remote = _remote_tools(selected)
+    if not remote:
+        return selected, False
+    for tool_name, remote_url in remote.items():
+        eprint(f"{tag('TOOLS')} Tool '{tool_name}' is configured remote at {remote_url}.")
+    eprint("   Remove remote settings to run those tools locally.")
+    filtered = {name for name in (selected or _TOOL_NAMES) if name not in remote}
+    if not filtered:
+        return None, True
+    return filtered, False
+
+
 def start_all(selected: set[str] | None = None) -> int:
     """Start tools (no-op if already running). Returns exit code."""
-    remote = _remote_tools(selected)
-    if remote:
-        for tool_name, remote_url in remote.items():
-            eprint(f"{tag('TOOLS')} Tool '{tool_name}' is configured remote at {remote_url}.")
-        eprint("   Remove remote settings to run those tools locally.")
-        selected = {name for name in (selected or _TOOL_NAMES) if name not in remote}
-        if not selected:
-            return 1
+    selected, should_return = _filter_remote(selected)
+    if should_return:
+        return 1
     eprint(f"{tag('TOOLS')} Starting tools...")
     rc = start_all_tools(selected)
     if rc == 0:
@@ -64,14 +78,9 @@ def start_all(selected: set[str] | None = None) -> int:
 
 def stop_all(selected: set[str] | None = None) -> int:
     """Stop tools. Returns exit code."""
-    remote = _remote_tools(selected)
-    if remote:
-        for tool_name, remote_url in remote.items():
-            eprint(f"{tag('TOOLS')} Tool '{tool_name}' is configured remote at {remote_url}.")
-        eprint("   Remove remote settings to run those tools locally.")
-        selected = {name for name in (selected or _TOOL_NAMES) if name not in remote}
-        if not selected:
-            return 1
+    selected, should_return = _filter_remote(selected)
+    if should_return:
+        return 1
     eprint(f"{tag('TOOLS')} Stopping tools...")
     rc = stop_all_tools(selected)
     if rc == 0:

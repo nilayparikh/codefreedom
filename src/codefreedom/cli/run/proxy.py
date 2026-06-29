@@ -95,6 +95,16 @@ def _configured_remote_proxy_url() -> str | None:
         return None
 
 
+def _refuse_if_remote() -> bool:
+    """Return True (and print a message) when the proxy is configured remote."""
+    remote_url = _configured_remote_proxy_url()
+    if not remote_url:
+        return False
+    eprint(f"{tag('PROXY')} Remote proxy configured at {remote_url}.")
+    eprint("   Remove remote settings to run the proxy locally.")
+    return True
+
+
 def _load_proxy_env_files() -> Dict[str, str]:
     """Load proxy env from machine environment variables only.
 
@@ -147,10 +157,7 @@ def _start(args: argparse.Namespace) -> int:
     compose process environment for this run only (they do not edit
     .env.proxy).
     """
-    remote_url = _configured_remote_proxy_url()
-    if remote_url:
-        eprint(f"{tag('PROXY')} Remote proxy configured at {remote_url}.")
-        eprint("   Remove remote settings to run the proxy locally.")
+    if _refuse_if_remote():
         return 1
     return _start_compose(args)
 
@@ -383,10 +390,7 @@ def _build_compose_env() -> dict[str, str]:
 
 def _stop() -> int:
     """Stop the LiteLLM proxy."""
-    remote_url = _configured_remote_proxy_url()
-    if remote_url:
-        eprint(f"{tag('PROXY')} Remote proxy configured at {remote_url}.")
-        eprint("   Remove remote settings to run the proxy locally.")
+    if _refuse_if_remote():
         return 1
     compose_file = _find_compose_file()
     if not compose_file:
@@ -420,10 +424,7 @@ def _restart() -> int:
     preserves container state, picks up compose-file changes; does not
     pull a new image).
     """
-    remote_url = _configured_remote_proxy_url()
-    if remote_url:
-        eprint(f"{tag('PROXY')} Remote proxy configured at {remote_url}.")
-        eprint("   Remove remote settings to run the proxy locally.")
+    if _refuse_if_remote():
         return 1
     compose_file = _find_compose_file()
     if not compose_file:
