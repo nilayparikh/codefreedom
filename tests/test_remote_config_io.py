@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -232,9 +233,30 @@ def test_write_mcp_json_uses_remote_tool_url(monkeypatch, tmp_path):
     assert data["mcpServers"]["chrome-devtools"]["url"] == "http://m1.local:9223/mcp"
 
 
-def test_agent_launch_fails_fast_when_remote_tools_invalid(monkeypatch, tmp_path):
+def test_write_mcp_json_writes_file_even_when_validation_fails(monkeypatch, tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    from codefreedom.core.remote_validation import RemoteValidationError
+
+    monkeypatch.setattr(
+        "codefreedom.launcher.validate_remote_tools_or_raise",
+        lambda tools: (_ for _ in ()).throw(RemoteValidationError("bad remote tool")),
+    )
+    monkeypatch.setattr(
+        "codefreedom.launcher.load_tool_mcp_endpoints",
+        lambda names: {"mcpServers": {"sentry": {"type": "http", "url": "https://mcp.sentry.dev/mcp"}}},
+    )
+
+    _write_mcp_json(workspace, ["sentry"])
+    assert (workspace / ".mcp.json").exists(), ".mcp.json must be written even when validation fails"
+    data = json.loads((workspace / ".mcp.json").read_text(encoding="utf-8"))
+    assert data["mcpServers"]["sentry"]["url"] == "https://mcp.sentry.dev/mcp"
+
+
+def test_agent_launch_proceeds_when_remote_tools_invalid(monkeypatch, tmp_path):
     cf_home = tmp_path / ".codefreedom"
     monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    monkeypatch.chdir(tmp_path)
     _write_yaml(cf_home / "config" / "profiles.yaml", _base_profiles())
     _write_yaml(
         cf_home / "config" / "override.yaml",
@@ -261,7 +283,8 @@ def test_agent_launch_fails_fast_when_remote_tools_invalid(monkeypatch, tmp_path
         dangerously_skip_permissions=False,
         agent_args=[],
     )
-    assert run(args) == 1
+    assert run(args) == 0
+    assert (tmp_path / ".mcp.json").exists(), ".mcp.json must be written even when remote validation fails"
 
 
 def test_setup_config_proxy_remote_401_saves_key_from_env(monkeypatch, tmp_path):

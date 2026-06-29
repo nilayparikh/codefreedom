@@ -43,8 +43,8 @@ def _write_mcp_json(workspace_dir: Path, acquired_tools: list[str]) -> None:
     try:
         validate_remote_tools_or_raise(acquired_tools)
     except RemoteValidationError as exc:
-        eprint(f"{tag('MCP')} {exc}")
-        raise
+        eprint(f"{tag('MCP')} Warning: {exc}")
+        eprint(f"{tag('MCP')} Writing .mcp.json anyway — the agent will retry at runtime.")
 
     servers = load_tool_mcp_endpoints(acquired_tools)
     existing.setdefault("mcpServers", {})

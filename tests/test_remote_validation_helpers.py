@@ -123,3 +123,17 @@ def test_validate_remote_tools_or_raise_raises_when_unreachable():
             patch.object(remote_validation, "_mcp_post", return_value=(None, {})):
         with pytest.raises(remote_validation.RemoteValidationError):
             remote_validation.validate_remote_tools_or_raise(["chrome"])
+
+
+def test_validate_remote_tools_or_raise_reports_all_failures():
+    endpoints = {"mcpServers": {
+        "chrome": {"url": "http://127.0.0.1:9223/mcp"},
+        "sentry": {"url": "https://mcp.sentry.dev/mcp"},
+    }}
+    with patch("codefreedom.tools.registry.load_tool_mcp_endpoints", return_value=endpoints), \
+            patch.object(remote_validation, "_mcp_post", return_value=(None, {})):
+        with pytest.raises(remote_validation.RemoteValidationError) as exc_info:
+            remote_validation.validate_remote_tools_or_raise(["chrome", "sentry"])
+    msg = str(exc_info.value)
+    assert "chrome" in msg
+    assert "sentry" in msg
