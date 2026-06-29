@@ -240,4 +240,63 @@ class TestToolRegistryMcpEndpointsDispatch:
         endpoints = load_tool_mcp_endpoints([])
         assert endpoints == {"mcpServers": {}}
 
+
+class TestAcquireToolsRemoteUrl:
+    """When remote_url is set, acquire_tools must skip local container start."""
+
+    def test_remote_url_skips_docker_start(self, monkeypatch):
+        from codefreedom.tools import registry
+        from codefreedom.tools.registry import acquire_tools
+
+        def fake_load_profile():
+            return {
+                "image": "img",
+                "container_name": "test-chrome",
+                "port": 9222,
+                "remote_url": "http://remote.local:9223/mcp",
+                "env": {},
+            }
+
+        start_calls: list = []
+
+        def fake_start(settings):
+            start_calls.append(settings)
+            return 0
+
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "chrome", (fake_load_profile, fake_start, lambda s: 0)
+        )
+
+        acquired = acquire_tools("session-1", ["chrome"], "default")
+        assert acquired == ["chrome"]
+        assert start_calls == [], "start() must not be called when remote_url is set"
+
+    def test_no_remote_url_starts_docker(self, monkeypatch):
+        from codefreedom.tools import registry
+        from codefreedom.tools.registry import acquire_tools
+
+        def fake_load_profile():
+            return {
+                "image": "img",
+                "container_name": "test-chrome",
+                "port": 9222,
+                "remote_url": "",
+                "env": {},
+            }
+
+        start_calls: list = []
+
+        def fake_start(settings):
+            start_calls.append(settings)
+            return 0
+
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "chrome", (fake_load_profile, fake_start, lambda s: 0)
+        )
+
+        acquired = acquire_tools("session-1", ["chrome"], "default")
+        assert acquired == ["chrome"]
+        assert len(start_calls) == 1, "start() must be called when no remote_url"
+
+
 pytestmark = pytest.mark.integration

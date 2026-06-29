@@ -91,6 +91,9 @@ def acquire_tools(_session_id: str, tools: list[str], _profile: str) -> list[str
     Tools use static container names from their profile and check Docker
     directly for real state — no /proc tracking.  Returns the list of
     successfully started tools.
+
+    When a tool has ``remote_url`` set in its profile, the local Docker
+    container is **not** started — the remote endpoint is used verbatim.
     """
     acquired: list[str] = []
 
@@ -111,10 +114,16 @@ def acquire_tools(_session_id: str, tools: list[str], _profile: str) -> list[str
             eprint(f"{tag('TOOLS')} Failed to load settings for '{tool_name}': {exc}")
             continue
 
+        remote_url = str(settings.get("remote_url", "") or "")
+        if remote_url:
+            acquired.append(tool_name)
+            eprint(f"{tag('TOOLS')} Tool '{tool_name}' using remote endpoint: {remote_url}")
+            continue
+
         result = _start(settings)
         if result != 0:
             eprint(
-                f"[TOOLS] Tool '{tool_name}' failed to start (exit {result}) — skipping."
+                f"{tag('TOOLS')} Tool '{tool_name}' failed to start (exit {result}) — skipping."
             )
             continue
 
