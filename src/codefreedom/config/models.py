@@ -195,17 +195,23 @@ class AgentDefinition(BaseModel, extra="forbid"):
 # ── Tool configuration ──────────────────────────────────────────────────
 
 class ToolDefinition(BaseModel, extra="allow"):
-    """Settings for a single tool (chrome, web, github, web-bridge, git).
-
-    Uses extra="allow" because each tool has different fields.
-    Consumers access fields via getattr or .model_extra.
-    """
+    """Settings for a single tool or MCP entry."""
+    kind: Optional[str] = None
+    transport: Optional[str] = None
     image: Optional[str] = None
     container_name: Optional[str] = None
     port: Optional[int] = None
     bind_host: Optional[str] = None
     remote_url: Optional[str] = None
     env: Dict[str, str] = Field(default_factory=dict)
+    command: Optional[List[str]] = None
+    url: Optional[str] = None
+    headers: Dict[str, str] = Field(default_factory=dict)
+    environment: Dict[str, str] = Field(default_factory=dict)
+    cwd: Optional[str] = None
+    enabled: Optional[bool] = None
+    timeout: Optional[int] = None
+    server_name: Optional[str] = None
 
 
 # ── Top-level config model ─────────────────────────────────────────────
@@ -386,6 +392,19 @@ class ConfigModel(BaseModel, extra="forbid"):
                             f"references unknown tool '{tool_name}'. "
                             f"Known tools: {sorted(known_tools)}"
                         )
+        for tool_name, cfg in self.tools.items():
+            kind = str(cfg.get("kind") or "tool") if isinstance(cfg, dict) else "tool"
+            if kind != "mcp":
+                continue
+            transport = str(cfg.get("transport") or "").lower()
+            if transport not in {"local", "remote"}:
+                raise ValueError(
+                    f"Tool '{tool_name}' kind 'mcp' requires transport 'local' or 'remote'."
+                )
+            if transport == "local" and not cfg.get("command"):
+                raise ValueError(f"Tool '{tool_name}' transport 'local' requires command.")
+            if transport == "remote" and not cfg.get("url"):
+                raise ValueError(f"Tool '{tool_name}' transport 'remote' requires url.")
         return self
 
     @classmethod

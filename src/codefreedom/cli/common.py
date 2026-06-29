@@ -277,7 +277,7 @@ def acquire_and_run(
     session_id: str,
     tools: list[str],
     profile_name: str,
-    run_fn: Callable[[list[str]], int],
+    run_fn: Callable[[list[str], list[str]], int],
 ) -> int:
     """Acquire tools, run function, and release tools.
 
@@ -296,14 +296,18 @@ def acquire_and_run(
     from codefreedom.tools.registry import acquire_tools, release_tools
 
     acquired_tools: list[str] = []
+    active_mcp_tools: list[str] = []
     if tools:
+        from codefreedom.tools.mcp import get_mcp_definitions
+
         eprint(f"{tag('TOOLS')} Profile '{profile_name}' declares tools: {', '.join(tools)}")
+        active_mcp_tools = [entry["name"] for entry in get_mcp_definitions(tools)]
         acquired_tools = acquire_tools(session_id, tools, profile_name)
         if acquired_tools:
             eprint(f"{tag('TOOLS')} Running: {', '.join(acquired_tools)}")
 
     try:
-        return run_fn(acquired_tools)
+        return run_fn(acquired_tools, active_mcp_tools)
     finally:
         if acquired_tools:
             release_tools(session_id, acquired_tools)

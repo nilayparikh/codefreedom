@@ -325,12 +325,8 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def _update_mimocode_mcp(tools: List[str]) -> None:
-    """Register MCP servers in MiMoCode config.
-
-    Writes tool endpoints into ``~/.config/mimocode/mimocode.jsonc``
-    using the ``"type": "remote"`` format required by MiMoCode/OpenCode.
-    Preserves existing non-tool MCP entries.
-    """
+    """Register MCP servers in MiMoCode config."""
+    from codefreedom.tools.mcp import build_opencode_mcp_entries
     from codefreedom.tools.registry import _MCP_TOOLS
 
     if not tools:
@@ -350,6 +346,8 @@ def _update_mimocode_mcp(tools: List[str]) -> None:
 
     existing.setdefault("mcp", {})
     before_keys = set(existing["mcp"].keys())
+
+    existing["mcp"].update(build_opencode_mcp_entries(tools))
 
     for tool_name in tools:
         if tool_name not in _MCP_TOOLS:
@@ -443,14 +441,13 @@ def run(args: argparse.Namespace) -> int:
 
     from codefreedom.cli.common import acquire_and_run
 
-    def _run(acquired_tools: list[str]) -> int:
-        # Write .mcp.json so the agent discovers MCP tool endpoints
-        if acquired_tools:
+    def _run(acquired_tools: list[str], active_mcp_tools: list[str] | None = None) -> int:
+        declared = list(dict.fromkeys(acquired_tools + (active_mcp_tools or [])))
+        if declared:
             from codefreedom.launcher import _write_mcp_json
 
-            _write_mcp_json(workspace_dir, acquired_tools)
-            # Also register MCP servers in mimocode.jsonc for MiMoCode
-            _update_mimocode_mcp(acquired_tools)
+            _write_mcp_json(workspace_dir, declared)
+            _update_mimocode_mcp(declared)
         return run_local(profile_env, args.agent_args)
 
     return acquire_and_run(session_id, tools, profile_name, _run)

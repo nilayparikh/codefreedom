@@ -171,13 +171,10 @@ def _inject_default_model(
 
 
 def _update_codex_mcp(tools: list[str], codex_home: Path) -> None:
-    """Register MCP servers in codex config.toml.
-
-    Writes tool endpoints into ``config.toml`` using the TOML format
-    required by Codex CLI. Preserves existing non-tool MCP entries.
-    """
+    """Register MCP servers in codex config.toml."""
     import tomlkit
 
+    from codefreedom.tools.mcp import build_codex_mcp_entries
     from codefreedom.tools.registry import _MCP_TOOLS
 
     if not tools:
@@ -195,6 +192,12 @@ def _update_codex_mcp(tools: list[str], codex_home: Path) -> None:
 
     existing.setdefault("mcp_servers", tomlkit.table())
     before_keys = set(existing["mcp_servers"].keys())
+
+    for name, definition in build_codex_mcp_entries(tools).items():
+        server_table = tomlkit.table()
+        for key, value in definition.items():
+            server_table.add(key, value)
+        existing["mcp_servers"][name] = server_table
 
     for tool_name in tools:
         if tool_name not in _MCP_TOOLS:
@@ -560,13 +563,14 @@ def run(args: argparse.Namespace) -> int:
 
     from codefreedom.cli.common import acquire_and_run
 
-    def _run(acquired_tools: list[str]) -> int:
-        if acquired_tools:
+    def _run(acquired_tools: list[str], active_mcp_tools: list[str] | None = None) -> int:
+        declared = list(dict.fromkeys(acquired_tools + (active_mcp_tools or [])))
+        if declared:
             from codefreedom.launcher import _write_mcp_json
 
-            _write_mcp_json(workspace_dir, acquired_tools)
+            _write_mcp_json(workspace_dir, declared)
         return run_local(
-            profile_env, args.agent_args, acquired_tools=acquired_tools
+            profile_env, args.agent_args, acquired_tools=declared
         )
 
     return acquire_and_run(session_id, tools, profile_name, _run)
