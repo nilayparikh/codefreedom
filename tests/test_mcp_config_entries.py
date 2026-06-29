@@ -24,16 +24,17 @@ def test_config_model_accepts_local_and_remote_mcp_tools() -> None:
                 "open-code": {
                     "profiles": {
                         "default": {
-                            "tools": ["docker-mcp", "context7"],
+                            "tools": ["dockerhub", "context7"],
                         }
                     }
                 }
             },
             "tools": {
-                "docker-mcp": {
+                "dockerhub": {
                     "kind": "mcp",
                     "transport": "local",
-                    "command": ["docker", "mcp", "gateway", "run"],
+                    "command": ["docker", "run", "-i", "--rm", "mcp/dockerhub"],
+                    "environment": {"HUB_PAT_TOKEN": "secret"},
                 },
                 "context7": {
                     "kind": "mcp",
@@ -43,7 +44,7 @@ def test_config_model_accepts_local_and_remote_mcp_tools() -> None:
             },
         }
     )
-    assert cfg.tools["docker-mcp"]["transport"] == "local"
+    assert cfg.tools["dockerhub"]["transport"] == "local"
     assert cfg.tools["context7"]["transport"] == "remote"
 
 
@@ -55,13 +56,13 @@ def test_config_model_rejects_invalid_mcp_tool() -> None:
                     "open-code": {
                         "profiles": {
                             "default": {
-                                "tools": ["docker-mcp"],
+                                "tools": ["dockerhub"],
                             }
                         }
                     }
                 },
                 "tools": {
-                    "docker-mcp": {
+                    "dockerhub": {
                         "kind": "mcp",
                         "transport": "local",
                     }
@@ -73,11 +74,11 @@ def test_config_model_rejects_invalid_mcp_tool() -> None:
 def test_builders_render_local_and_remote_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
     class DummyConfig:
         tools = {
-            "docker-mcp": {
+            "dockerhub": {
                 "kind": "mcp",
                 "transport": "local",
-                "command": ["docker", "mcp", "gateway", "run"],
-                "environment": {"A": "B"},
+                "command": ["docker", "run", "-i", "--rm", "mcp/dockerhub", "--transport=stdio", "--username=test-user"],
+                "environment": {"HUB_PAT_TOKEN": "secret"},
                 "timeout": 5000,
             },
             "context7": {
@@ -90,20 +91,20 @@ def test_builders_render_local_and_remote_mcp(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr("codefreedom.tools.mcp.load_config", lambda: DummyConfig())
 
-    claude = build_claude_mcp_servers(["docker-mcp", "context7"])
-    assert claude["docker-mcp"]["type"] == "stdio"
-    assert claude["docker-mcp"]["command"] == "docker"
-    assert claude["docker-mcp"]["args"] == ["mcp", "gateway", "run"]
+    claude = build_claude_mcp_servers(["dockerhub", "context7"])
+    assert claude["dockerhub"]["type"] == "stdio"
+    assert claude["dockerhub"]["command"] == "docker"
+    assert claude["dockerhub"]["args"] == ["run", "-i", "--rm", "mcp/dockerhub", "--transport=stdio", "--username=test-user"]
     assert claude["context7"]["type"] == "http"
 
-    opencode = build_opencode_mcp_entries(["docker-mcp", "context7"])
-    assert opencode["docker-mcp"]["type"] == "local"
-    assert opencode["docker-mcp"]["command"] == ["docker", "mcp", "gateway", "run"]
+    opencode = build_opencode_mcp_entries(["dockerhub", "context7"])
+    assert opencode["dockerhub"]["type"] == "local"
+    assert opencode["dockerhub"]["command"] == ["docker", "run", "-i", "--rm", "mcp/dockerhub", "--transport=stdio", "--username=test-user"]
     assert opencode["context7"]["type"] == "remote"
 
-    codex = build_codex_mcp_entries(["docker-mcp", "context7"])
-    assert codex["docker-mcp"]["command"] == "docker"
-    assert codex["docker-mcp"]["args"] == ["mcp", "gateway", "run"]
+    codex = build_codex_mcp_entries(["dockerhub", "context7"])
+    assert codex["dockerhub"]["command"] == "docker"
+    assert codex["dockerhub"]["args"] == ["run", "-i", "--rm", "mcp/dockerhub", "--transport=stdio", "--username=test-user"]
     assert codex["context7"]["url"] == "https://mcp.context7.com/mcp"
 
 
@@ -112,10 +113,11 @@ def test_write_mcp_json_supports_local_and_remote(monkeypatch: pytest.MonkeyPatc
         "codefreedom.launcher.load_tool_mcp_endpoints",
         lambda names: {
             "mcpServers": {
-                "docker-mcp": {
+                "dockerhub": {
                     "type": "stdio",
                     "command": "docker",
-                    "args": ["mcp", "gateway", "run"],
+                    "args": ["run", "-i", "--rm", "mcp/dockerhub", "--transport=stdio", "--username=test-user"],
+                    "env": {"HUB_PAT_TOKEN": "secret"},
                 },
                 "context7": {
                     "type": "http",
@@ -128,13 +130,15 @@ def test_write_mcp_json_supports_local_and_remote(monkeypatch: pytest.MonkeyPatc
         "codefreedom.launcher.validate_remote_tools_or_raise",
         lambda names: None,
     )
-    _write_mcp_json(tmp_path, ["docker-mcp", "context7"])
+    _write_mcp_json(tmp_path, ["dockerhub", "context7"])
     data = json.loads((tmp_path / ".mcp.json").read_text(encoding="utf-8"))
-    assert data["mcpServers"]["docker-mcp"]["command"] == "docker"
+    assert data["mcpServers"]["dockerhub"]["command"] == "docker"
     assert data["mcpServers"]["context7"]["url"] == "https://mcp.context7.com/mcp"
 
 
-def test_full_profiles_yaml_with_docker_mcp(tmp_path: Path) -> None:
+def test_full_profiles_yaml_with_dockerhub_mcp_and_interpolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CF_CLI_DOCKERHUB_USERNAME", "test-user")
+    monkeypatch.setenv("CF_CLI_DOCKERHUB_PAT_TOKEN", "secret-token")
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "profiles.yaml").write_text(
@@ -149,7 +153,7 @@ agents:
         env: {}
         tools:
           - chrome
-          - docker-mcp
+          - dockerhub
       bare:
         env: {}
 
@@ -160,31 +164,63 @@ tools:
     port: 9222
     mcp_port: 9223
     mcp_path: /mcp
-  docker-mcp:
+  dockerhub:
     kind: mcp
     transport: local
     command:
       - docker
-      - mcp
-      - gateway
       - run
+      - -i
+      - --rm
+      - mcp/dockerhub
+      - --transport=stdio
+      - --username=${DOCKERHUB_USERNAME}
+    environment:
+      HUB_PAT_TOKEN: ${DOCKERHUB_PAT_TOKEN}
     enabled: true
 """,
         encoding="utf-8",
     )
 
     config = load_config(config_dir)
-    assert "docker-mcp" in config.tools
-    assert config.tools["docker-mcp"]["kind"] == "mcp"
+    monkeypatch.setattr("codefreedom.tools.mcp.load_config", lambda: config)
+    assert "dockerhub" in config.tools
+    assert config.tools["dockerhub"]["kind"] == "mcp"
 
     runtime = config.for_agent("open-code", profile="default")
-    assert "docker-mcp" in runtime.tools
+    assert "dockerhub" in runtime.tools
 
-    servers = build_claude_mcp_servers(["docker-mcp"])
-    assert servers["docker-mcp"]["type"] == "stdio"
-    assert servers["docker-mcp"]["command"] == "docker"
-    assert servers["docker-mcp"]["args"] == ["mcp", "gateway", "run"]
+    servers = build_claude_mcp_servers(["dockerhub"])
+    assert servers["dockerhub"]["type"] == "stdio"
+    assert servers["dockerhub"]["command"] == "docker"
+    assert servers["dockerhub"]["args"] == ["run", "-i", "--rm", "mcp/dockerhub", "--transport=stdio", "--username=test-user"]
 
-    opencode_entries = build_opencode_mcp_entries(["docker-mcp"])
-    assert opencode_entries["docker-mcp"]["type"] == "local"
-    assert opencode_entries["docker-mcp"]["command"] == ["docker", "mcp", "gateway", "run"]
+    opencode_entries = build_opencode_mcp_entries(["dockerhub"])
+    assert opencode_entries["dockerhub"]["type"] == "local"
+    assert opencode_entries["dockerhub"]["command"] == ["docker", "run", "-i", "--rm", "mcp/dockerhub", "--transport=stdio", "--username=test-user"]
+    assert opencode_entries["dockerhub"]["environment"] == {"HUB_PAT_TOKEN": "secret-token"}
+
+
+def test_npx_local_mcp_renders_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyConfig:
+        tools = {
+            "filesystem": {
+                "kind": "mcp",
+                "transport": "local",
+                "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/home/user"],
+            },
+            "sentry": {
+                "kind": "mcp",
+                "transport": "remote",
+                "url": "https://mcp.sentry.dev/mcp",
+            },
+        }
+
+    monkeypatch.setattr("codefreedom.tools.mcp.load_config", lambda: DummyConfig())
+
+    servers = build_claude_mcp_servers(["filesystem", "sentry"])
+    assert servers["filesystem"]["type"] == "stdio"
+    assert servers["filesystem"]["command"] == "npx"
+    assert servers["filesystem"]["args"] == ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"]
+    assert servers["sentry"]["type"] == "http"
+    assert servers["sentry"]["url"] == "https://mcp.sentry.dev/mcp"
