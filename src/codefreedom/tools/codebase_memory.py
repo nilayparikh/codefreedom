@@ -64,7 +64,7 @@ def _load_profile() -> dict:
         "data_dir": tool_data_dir("codebase-memory"),
         "bind_host": "0.0.0.0",
         "remote_url": "",
-        "enable_ui": False,
+        "enable_ui": True,
         "log_level": _DEFAULT_LOG_LEVEL,
         "auto_index": False,
         "env": {},

@@ -23,7 +23,7 @@ class CodebaseMemorySettings(BaseModel, extra="forbid"):
     env: Optional[Dict[str, str]] = None
     bind_host: Optional[str] = None
     remote_url: Optional[str] = None
-    enable_ui: Optional[bool] = None
+    enable_ui: bool = True
     log_level: Optional[str] = None
     auto_index: Optional[bool] = None
 
