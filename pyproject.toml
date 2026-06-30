@@ -32,7 +32,7 @@ dependencies = [
     "PyYAML>=6.0",
     "types-PyYAML",
     "deepdiff>=7.0",
-    "pydantic>=2.0",
+    "pydantic>=2.13.4",
     "GitPython>=3.1.50",
 
     "httpx>=0.28",
