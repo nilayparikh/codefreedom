@@ -1,6 +1,6 @@
 """Disable responses-API auto-routing for Azure models.
 
-LiteLLM 1.87.x auto-routes GPT-5.x chat completions through the Azure
+LiteLLM 1.87+ auto-routes GPT-5.x chat completions through the Azure
 Responses API when reasoning_effort + tools or reasoning_summary are
 present (see litellm/main.py responses_api_bridge_check, line ~1003).
 
@@ -31,12 +31,23 @@ def patch_responses_azure() -> bool:
     with open(main_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Idempotent: already patched
-    if 'custom_llm_provider == "openai"' in content:
+    # Idempotency check: look for the post-patch state WITH its next line
+    # of surrounding context.  The bare 'custom_llm_provider == "openai"'
+    # string is too generic — main.py has ~8 unrelated occurrences in
+    # v1.90.0, so a substring match reports a false positive.
+    #
+    # The target is the start of an `if (` block whose next sub-condition
+    # is `and model_info.get("mode") != "responses"`.  That combination
+    # is unique to the responses_api_bridge_check site.
+    _POST_PATCH = (
+        'custom_llm_provider == "openai"\n'
+        "        and model_info.get(\"mode\") != \"responses\""
+    )
+    if _POST_PATCH in content:
         print("[patch:azure-responses] Already patched, skipping.")
         return True
 
-    # The exact condition to patch.  LiteLLM 1.87.x uses this:
+    # The exact condition to patch.  LiteLLM 1.87.x and 1.90.x both use:
     #   custom_llm_provider in ("openai", "azure")
     # We replace it with:
     #   custom_llm_provider == "openai"
