@@ -459,6 +459,7 @@ def _build_tools_args(p: argparse.ArgumentParser) -> None:
         grp.add_argument("-w", "--web", action="store_true", help="Include Web search")
         grp.add_argument("-g", "--github", action="store_true", help="Include GitHub MCP")
         grp.add_argument("--web-bridge", action="store_true", help="Include Web bridge")
+        grp.add_argument("-m", "--codebase-memory", action="store_true", help="Include Codebase Memory MCP")
 
     sub.add_parser("status", help="Show tool status (default if no action given)")
     _add_filters(sub.add_parser("start", help="Start all (or filtered) tools"))

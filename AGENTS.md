@@ -390,6 +390,7 @@ Tools are shared infrastructure. First session starts them, last session stops t
 | Chrome | `docker/chrome/Dockerfile.Chrome` | Headless Chromium |
 | Web | `docker/web/Dockerfile.Web` | Camoufox MCP |
 | GitHub MCP | `docker/github/Dockerfile.Github` | GitHub API tools |
+| Codebase Memory MCP | `docker/codebase-memory/Dockerfile.Codebase-memory` | Local code knowledge graph (14 MCP tools) |
 | LiteLLM | `docker/litellm/Dockerfile.LitellmFinal` | LLM proxy + PG |
 | LiteLLM Base | `docker/litellm/Dockerfile.LitellmBase` | LiteLLM base image |
 | PG Base | `docker/litellm/Dockerfile.PgBase` | PostgreSQL base image |
@@ -550,6 +551,7 @@ Configured in `.mcp.json`. Endpoints use `127.0.0.1` for local access. For remot
 | Chrome DevTools | `http://127.0.0.1:9223/mcp` | `tools.chrome.remote_url` |
 | Web (Camoufox) | `http://127.0.0.1:8420/mcp` | `tools.web.remote_url` |
 | GitHub | `http://127.0.0.1:8129/mcp` | `tools.github.remote_url` |
+| Codebase Memory | `http://127.0.0.1:8330/mcp` | `tools.codebase_memory.remote_url` |
 
 ## Internal Specs
 

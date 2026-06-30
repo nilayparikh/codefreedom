@@ -8,7 +8,7 @@ Usage:
 
 Teardown steps:
   1. Stop the proxy (docker compose down)
-  2. Stop all tools (chrome, web, github, web-bridge)
+  2. Stop all tools (chrome, web, github, web-bridge, codebase-memory)
   3. Find and remove any remaining CodeFreedom Docker containers (orphaned
      containers, etc.)
   4. Remove the shared ``codefreedom`` Docker network
