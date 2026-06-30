@@ -27,7 +27,7 @@ on:
         type: boolean
         default: true
       litellm_base_tag:
-        description: "Override litellm-base image tag (e.g. litellm-base-v1.87.1)"
+        description: "Override litellm-base image tag (e.g. litellm-base-v1.90.0)"
         required: false
         default: ""
 

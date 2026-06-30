@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       litellm_tag:
-        description: "LiteLLM git tag (e.g. v1.87.1)"
+        description: "LiteLLM git tag (e.g. v1.90.0)"
         required: true
-        default: "v1.87.1"
+        default: "v1.90.0"
       pg_base_tag:
         description: "PG base image tag (e.g. litellm-pg-base-v18.4)"
         required: true
