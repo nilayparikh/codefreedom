@@ -141,7 +141,35 @@ class TestWebBridgeToolMcpEndpoint:
         assert path == "/search"
 
 
+class TestCodebaseMemoryToolMcpEndpoint:
+    def test_defaults_when_no_profile(self):
+        from codefreedom.tools.codebase_memory import CodebaseMemoryTool
 
+        tool = CodebaseMemoryTool()
+        assert tool.mcp_server_name == "codebase-memory"
+        port, path = tool.mcp_endpoint
+        assert port == 8330
+        assert path == "/mcp"
+
+    def test_custom_port_from_profile(self):
+        from codefreedom.tools.codebase_memory import CodebaseMemoryTool
+
+        write_tool_profile(
+            "codebase-memory",
+            {
+                "codebase-memory": {
+                    "image": "codefreedom:codebase-memory",
+                    "container_name": "codefreedom-cbm",
+                    "port": 9753,
+                    "data_dir": "~/sandbox/cbm",
+                    "env": {},
+                }
+            },
+        )
+        tool = CodebaseMemoryTool()
+        port, path = tool.mcp_endpoint
+        assert port == 9753
+        assert path == "/mcp"
 
 
 class TestToolRegistryMcpEndpointsDispatch:
@@ -218,13 +246,14 @@ class TestToolRegistryMcpEndpointsDispatch:
                 }
             },
         )
-        endpoints = load_tool_mcp_endpoints(["chrome", "web", "github", "web-bridge"])
+        endpoints = load_tool_mcp_endpoints(["chrome", "web", "github", "web-bridge", "codebase-memory"])
         servers = endpoints["mcpServers"]
-        assert len(servers) == 4
+        assert len(servers) == 5
         assert servers["chrome-devtools"]["url"] == "http://127.0.0.1:9223/mcp"
         assert servers["web"]["url"] == "http://127.0.0.1:8420/mcp"
         assert servers["github"]["url"] == "http://127.0.0.1:8082/mcp"
         assert servers["web-bridge"]["url"] == "http://127.0.0.1:8500/search"
+        assert servers["codebase-memory"]["url"] == "http://127.0.0.1:8330/mcp"
 
     def test_unknown_tool_skipped(self):
         from codefreedom.tools.registry import load_tool_mcp_endpoints

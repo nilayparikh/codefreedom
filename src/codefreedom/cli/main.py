@@ -362,6 +362,7 @@ def _build_tools_args(p: argparse.ArgumentParser) -> None:
     tools_group.add_argument("-w", "--web", action="store_true", help="Include Web search")
     tools_group.add_argument("-g", "--github", action="store_true", help="Include GitHub MCP")
     tools_group.add_argument("--web-bridge", action="store_true", help="Include Web bridge")
+    tools_group.add_argument("-m", "--codebase-memory", action="store_true", help="Include Codebase Memory MCP")
 
 
 def _build_doctor_args(p: argparse.ArgumentParser) -> None:

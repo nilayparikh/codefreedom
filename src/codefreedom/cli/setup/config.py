@@ -207,7 +207,7 @@ def build_parser(parent: argparse.ArgumentParser) -> None:
         "tools",
         help="Configure local or remote tool settings",
     )
-    tools_parser.add_argument("tool", choices=["chrome", "web", "github", "web-bridge"])
+    tools_parser.add_argument("tool", choices=["chrome", "web", "github", "web-bridge", "codebase-memory"])
     tools_parser.add_argument("--remote-url", "-remote-url", type=str, default=None, help="Remote tool URL")
     tools_parser.add_argument("--local", "-local", action="store_true", help="Remove remote tool URL")
     tools_parser.add_argument("--bind", "-bind", type=str, default=None, metavar="HOST", help="Tool bind host")

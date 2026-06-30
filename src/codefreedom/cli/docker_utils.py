@@ -74,6 +74,22 @@ TOOL_INFO: Dict[str, dict] = {
         "docs_url": "https://nilayparikh.github.io/codefreedom/tools/github/",
         "profile_name": "github.yaml",
     },
+    "codebase-memory": {
+        "name": "Codebase Memory MCP",
+        "description": (
+            "Codebase knowledge graph for AI agents — indexes source code "
+            "into a persistent graph and exposes 14 structural MCP tools "
+            "(index_repository, search_graph, trace_path, query_graph, "
+            "get_architecture, get_code_snippet, search_code, detect_changes, "
+            "manage_adr, list_projects, delete_project, index_status, "
+            "get_graph_schema, ingest_traces). All processing is local."
+        ),
+        "third_party": [
+            ("codebase-memory-mcp", "DeusData"),
+        ],
+        "docs_url": "https://nilayparikh.github.io/codefreedom/tools/codebase-memory/",
+        "profile_name": "codebase_memory.yaml",
+    },
 }
 
 # ── Disclaimers ──────────────────────────────────────────────────────────────
@@ -94,6 +110,7 @@ _TAG_MAP: Dict[str, str] = {
     "chrome": "CHROME",
     "web": "WEB",
     "github": "GITHUB",
+    "codebase-memory": "CODEBASE-MEMORY",
 }
 
 
@@ -418,6 +435,7 @@ _CODEFREEDOM_CONTAINER_PATTERNS: list[str] = [
     "codefreedom-chrome",
     "codefreedom-web",
     "codefreedom-tools-github",
+    "codefreedom-tools-codebase-memory",
     "codefreedom-",
 ]
 

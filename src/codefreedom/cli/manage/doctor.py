@@ -359,6 +359,19 @@ def _get_github_settings() -> dict:
     )
 
 
+def _get_codebase_memory_settings() -> dict:
+    return _load_tool_settings(
+        "codebase-memory",
+        {
+            "image": "docker.io/nilayparikh/codefreedom:codebase-memory-latest",
+            "container_name": "codefreedom-tools-codebase-memory",
+            "port": 8330,
+            "data_dir": "",
+            "env": {},
+        },
+    )
+
+
 def _get_web_bridge_settings() -> dict:
     return _load_tool_settings(
         "web-bridge",
@@ -558,6 +571,11 @@ def _check_web_profile() -> CheckResult:
 @_section("Tool Profiles")
 def _check_github_profile() -> CheckResult:
     return _check_tool_profile("github", "GitHub MCP")
+
+
+@_section("Tool Profiles")
+def _check_codebase_memory_profile() -> CheckResult:
+    return _check_tool_profile("codebase-memory", "Codebase Memory MCP")
 
 
 def _check_tool_profile(name: str, label: str) -> CheckResult:

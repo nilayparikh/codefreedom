@@ -136,6 +136,11 @@ class ResolvedConfig:
                 "container_name": "codefreedom-web-bridge",
                 "port": 8500,
             },
+            "codebase-memory": {
+                "image": "docker.io/nilayparikh/codefreedom:codebase-memory-latest",
+                "container_name": "codefreedom-tools-codebase-memory",
+                "port": 8330,
+            },
         }.get(name, {})
 
         defaults = dict(_defaults)

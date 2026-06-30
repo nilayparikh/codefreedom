@@ -38,6 +38,11 @@ from codefreedom.tools.web_bridge import (  # noqa: E402
     start as web_bridge_start,
     stop as web_bridge_stop,
 )
+from codefreedom.tools.codebase_memory import (  # noqa: E402
+    _load_profile as codebase_memory_load_profile,
+    start as codebase_memory_start,
+    stop as codebase_memory_stop,
+)
 
 _KNOWN_TOOLS: dict[
     str, tuple[Callable[[], dict], Callable[[dict], int], Callable[[dict], int]]
@@ -46,6 +51,7 @@ _KNOWN_TOOLS: dict[
     "web": (web_load_profile, web_start, web_stop),
     "github": (github_load_profile, github_start, github_stop),
     "web-bridge": (web_bridge_load_profile, web_bridge_start, web_bridge_stop),
+    "codebase-memory": (codebase_memory_load_profile, codebase_memory_start, codebase_memory_stop),
 }
 
 
@@ -62,12 +68,14 @@ from codefreedom.tools.chrome import ChromeTool  # noqa: E402
 from codefreedom.tools.web import WebTool  # noqa: E402
 from codefreedom.tools.github import GithubTool  # noqa: E402
 from codefreedom.tools.web_bridge import WebBridgeTool  # noqa: E402
+from codefreedom.tools.codebase_memory import CodebaseMemoryTool  # noqa: E402
 
 _MCP_TOOLS: dict[str, _McpTool] = {
     "chrome": ChromeTool(),
     "web": WebTool(),
     "github": GithubTool(),
     "web-bridge": WebBridgeTool(),
+    "codebase-memory": CodebaseMemoryTool(),
 }
 
 # ── Session ID generation ─────────────────────────────────────────────────────

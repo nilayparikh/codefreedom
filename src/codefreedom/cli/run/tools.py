@@ -26,7 +26,7 @@ from codefreedom.tools.registry import (
     stop_all_tools,
 )
 
-_TOOL_NAMES: set[str] = {"chrome", "web", "github", "web-bridge"}
+_TOOL_NAMES: set[str] = {"chrome", "web", "github", "web-bridge", "codebase-memory"}
 
 
 def _remote_tools(selected: set[str] | None = None) -> dict[str, str]:

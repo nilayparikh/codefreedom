@@ -13,7 +13,7 @@ Services (filter which images to check):
     chrome     Chrome browser tool image
     web        Web search tool image
     proxy      LiteLLM proxy and web-bridge images
-    tools      Chrome + Web + GitHub MCP tool images (shortcut)
+    tools      Chrome + Web + GitHub MCP + Codebase Memory tool images (shortcut)
     all        Everything (default)
 """
 
@@ -53,6 +53,7 @@ _SERVICE_DESCRIPTIONS: dict[str, str] = {
     "chrome": "tool: chrome",
     "web": "tool: web",
     "github": "tool: github",
+    "codebase-memory": "tool: codebase-memory",
     "litellm": "proxy: litellm",
     "web-bridge": "proxy: web-bridge",
 }
@@ -616,8 +617,9 @@ def _filter_by_service(
         "web": ["web"],
         "litellm": ["litellm"],
         "web-bridge": ["web-bridge"],
+        "codebase-memory": ["codebase-memory"],
         "proxy": ["litellm", "web-bridge"],
-        "tools": ["chrome", "web", "github"],
+        "tools": ["chrome", "web", "github", "codebase-memory"],
     }
 
     matched = []

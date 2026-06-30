@@ -1,0 +1,155 @@
+# ── CodeFreedom: Docker Codebase Memory MCP Bridge ───────────────────────────
+# Builds and publishes the Codebase Memory MCP Bridge image.
+# Trigger: manual dispatch only.
+#
+# Tags: codebase-memory-v{semver}, codebase-memory-v{cbm_version}, codebase-memory-latest
+# Platforms: linux/arm64, linux/amd64
+# Registries: docker.io/nilayparikh/codefreedom · ghcr.io/nilayparikh/codefreedom
+# ────────────────────────────────────────────────────────────────────────────────
+
+name: Docker Codebase Memory
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (e.g. v0.2.1, beta)"
+        required: true
+        type: string
+      cbm_version:
+        description: "Upstream codebase-memory-mcp release to bake in (e.g. 0.8.1)"
+        required: true
+        type: string
+        default: "0.8.1"
+      latest:
+        description: "Tag as latest"
+        required: false
+        type: boolean
+        default: true
+
+env:
+  DOCKER_HUB_REPO: nilayparikh/codefreedom
+  GHCR_REPO: ghcr.io/nilayparikh/codefreedom
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4
+        with:
+          platforms: arm64,amd64
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^ARG IMAGE_VERSION=' docker/codebase-memory/Dockerfile.Codebase-memory | head -1 | sed 's/.*=\(.*\)/\1/')
+          MAJOR_MINOR=$(echo "${VERSION}" | cut -d. -f1,2)
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
+          echo "📦 Version: v${VERSION}"
+          echo "📦 Upstream codebase-memory-mcp: v${{ inputs.cbm_version }}"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        with:
+          username: ${{ vars.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6
+        with:
+          images: |
+            ${{ env.DOCKER_HUB_REPO }}
+            ${{ env.GHCR_REPO }}
+          tags: |
+            type=raw,value=codebase-memory-${{ inputs.tag }}
+            type=raw,value=codebase-memory-latest,enable=${{ inputs.latest }}
+          labels: |
+            org.opencontainers.image.title=CodeFreedom - Codebase Memory MCP Bridge
+            org.opencontainers.image.description=HTTP MCP bridge over codebase-memory-mcp stdio — 14 local code-intelligence tools (indexing, search, trace, query, architecture) on port 8330
+            org.opencontainers.image.version=v${{ steps.version.outputs.version }}
+            com.codefreedom.platform=Codebase Memory
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
+        with:
+          context: docker/codebase-memory/
+          file: docker/codebase-memory/Dockerfile.Codebase-memory
+          platforms: linux/arm64,linux/amd64
+          build-args: |
+            IMAGE_VERSION=${{ steps.version.outputs.version }}
+            CBM_VERSION=${{ inputs.cbm_version }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=CodebaseMemory
+          cache-to: type=gha,mode=max,scope=CodebaseMemory
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32  # v4
+        with:
+          subject-name: ${{ env.GHCR_REPO }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Sign Docker Hub image
+        uses: ./.github/actions/cosign-sign
+        with:
+          image: docker.io/${{ env.DOCKER_HUB_REPO }}@${{ steps.build.outputs.digest }}
+
+      - name: Sign GHCR image
+        uses: ./.github/actions/cosign-sign
+        with:
+          image: ${{ env.GHCR_REPO }}@${{ steps.build.outputs.digest }}
+
+  verify:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        with:
+          username: ${{ vars.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Docker Hub signature
+        uses: ./.github/actions/cosign-verify
+        with:
+          image: docker.io/${{ env.DOCKER_HUB_REPO }}@${{ needs.build.outputs.digest }}
+
+      - name: Verify GHCR signature
+        uses: ./.github/actions/cosign-verify
+        with:
+          image: ${{ env.GHCR_REPO }}@${{ needs.build.outputs.digest }}

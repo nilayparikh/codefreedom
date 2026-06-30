@@ -13,6 +13,7 @@ Tools are persistent Docker containers that code agents connect to via MCP (Mode
 | [Web](web.md) | Web search and page fetching via Camoufox | `http://127.0.0.1:8420/mcp` | 8420 |
 | [GitHub](github.md) | GitHub API access (repos, issues, PRs) | `http://127.0.0.1:8129/mcp` | 8129 |
 | [Web Bridge](web-bridge.md) | SearXNG bridge for LiteLLM web search interception | `http://127.0.0.1:8500/search` | 8500 |
+| [Codebase Memory](codebase-memory.md) | Local code knowledge graph (indexing, search, trace, query) | `http://127.0.0.1:8330/mcp` | 8330 (+ 9749 optional UI) |
 
 ## Manage All Tools
 
@@ -79,10 +80,11 @@ Each tool stores persistent data under `~/.codefreedom/tools/<tool>/`:
 
 ```text
 ~/.codefreedom/tools/
-├── chrome/          # Chrome profile, cookies, extensions
-├── web/             # Camoufox profile data
-├── github/          # GitHub MCP cache
-└── web-bridge/      # Bridge state
+├── chrome/                # Chrome profile, cookies, extensions
+├── web/                   # Camoufox profile data
+├── github/                # GitHub MCP cache
+├── web-bridge/            # Bridge state
+└── codebase-memory/       # SQLite graph + per-project indexes
 ```
 
 ## Third-Party Notices

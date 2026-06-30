@@ -115,6 +115,7 @@ nav:
               - Web: tools/web.md
               - GitHub: tools/github.md
               - Web Bridge: tools/web-bridge.md
+              - Codebase Memory: tools/codebase-memory.md
       - Legal:
               - License: license.md
               - Terms: terms.md

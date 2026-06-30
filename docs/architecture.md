@@ -88,6 +88,7 @@ Each layer calls only the layer below it. No cross-layer or sideways calls.
 | `web` | `src/codefreedom/tools/web.py` | Camoufox MCP tool |
 | `web_bridge` | `src/codefreedom/tools/web_bridge.py` | Web bridge tool |
 | `github` | `src/codefreedom/tools/github.py` | GitHub MCP tool |
+| `codebase_memory` | `src/codefreedom/tools/codebase_memory.py` | Codebase Memory MCP tool (14 structural code-intelligence tools) |
 | `schemas/` | `src/codefreedom/tools/schemas/` | Per-tool Pydantic schemas |
 
 ### Agents (VS Code config generation)

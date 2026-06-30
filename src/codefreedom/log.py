@@ -95,7 +95,7 @@ _TAG_CYAN = frozenset({
     "COMMIT", "PUSH", "LSP", "LEAN-CTX", "CODEX", "PI",
     "CHROME", "CLEAN", "EXEC", "GITHUB", "INIT", "MIMO",
     "OPENCODE", "PROFILE", "PROFILES", "RUN", "UPDATE",
-    "WEB", "WEB-BRIDGE",
+    "WEB", "WEB-BRIDGE", "CODEBASE-MEMORY",
 })
 
 
