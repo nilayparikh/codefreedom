@@ -28,24 +28,30 @@ from __future__ import annotations
 import os, sys
 
 HEADING_OLD = (
-    "        print(  # noqa\n"
+    '        print(  # noqa: T201\n'
     '            "\\033[32mLiteLLM: Proxy initialized with Search Tools:\\033[0m"\n'
-    "        )  # noqa\n"
+    "        )\n"
 )
 
 HEADING_NEW = (
     '        if not getattr(self, "_search_tools_printed", False):\n'
     "            self._search_tools_printed = True\n"
-    "            print(  # noqa\n"
+    '            print(  # noqa: T201\n'
     '                "\\033[32mLiteLLM: Proxy initialized with Search Tools:\\033[0m"\n'
-    "            )  # noqa\n"
+    "            )\n"
 )
 
-TOOLNAME_OLD = '            print(f"\\033[32m    {search_tool_name} ({search_provider})\\033[0m")  # noqa\n'
+TOOLNAME_OLD = (
+    '            print(  # noqa: T201\n'
+    '                f"\\033[32m    {search_tool_name} ({search_provider})\\033[0m"\n'
+    "            )\n"
+)
 
 TOOLNAME_NEW = (
     '            if not getattr(self, "_search_tools_printed", False):\n'
-    '                print(f"\\033[32m    {search_tool_name} ({search_provider})\\033[0m")  # noqa\n'
+    '                print(  # noqa: T201\n'
+    '                    f"\\033[32m    {search_tool_name} ({search_provider})\\033[0m"\n'
+    "                )\n"
 )
 
 

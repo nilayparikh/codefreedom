@@ -28,7 +28,7 @@ docker build \
 
 # Stage 2 -- LiteLLM base (rebuild on LITELLM_TAG, patch, or plugin changes)
 docker build \
-  -t nilayparikh/codefreedom:litellm-base-v1.87.1 \
+  -t nilayparikh/codefreedom:litellm-base-v1.90.0 \
   -f docker/litellm/Dockerfile.LitellmBase docker/litellm/
 
 # Stage 3 -- Final runtime image (fast, ~1-2 min)
@@ -45,10 +45,10 @@ docker build \
 | `PG_SOURCE_URL`    | `https://github.com/postgres/postgres.git`   | PgBase | PG source repo          |
 | `PG_TAG`           | `REL_18_4`                                   | PgBase | PG git tag              |
 | `LITELLM_FORK_URL` | `https://github.com/nilayparikh/litellm.git` | Base   | LiteLLM git fork        |
-| `LITELLM_TAG`      | `v1.87.1`                                    | Base   | Pinned LiteLLM git tag  |
+| `LITELLM_TAG`      | `v1.90.0`                                    | Base   | Pinned LiteLLM git tag  |
 | `IMAGE_VERSION`    | `1.0.0`                                      | Final  | OCI image version label |
 | `PG_BASE_IMAGE`    | `nilayparikh/codefreedom:litellm-pg-base-latest` | Base | PG base image       |
-| `LITELLM_BASE_IMAGE` | `nilayparikh/codefreedom:litellm-base-v1.87.1` | Final | LiteLLM base image  |
+| `LITELLM_BASE_IMAGE` | `nilayparikh/codefreedom:litellm-base-v1.90.0` | Final | LiteLLM base image  |
 
 Override any arg at build time with `--build-arg`.
 
