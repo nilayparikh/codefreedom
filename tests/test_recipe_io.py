@@ -665,3 +665,79 @@ def test_plan_recipe_splits_by_key(monkeypatch, tmp_path, capsys):
     expected_mimo = os.path.join("config", "profiles", "mimo-code.yaml")
     assert expected_claude in captured.out
     assert expected_mimo in captured.out
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# plan_and_apply_recipe (cf s i install)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPlanAndApplyRecipe:
+    def _patch_plan_module(self, monkeypatch, tmp_path, *, plan_rc=0):
+        from codefreedom.recipe import plan as plan_module
+
+        cf_dir = tmp_path / ".codefreedom"
+        cf_dir.mkdir()
+        monkeypatch.setattr(plan_module, "get_codefreedom_dir", lambda: cf_dir)
+        monkeypatch.setattr(plan_module, "plan_recipe", lambda *a, **k: plan_rc)
+        monkeypatch.setattr(plan_module, "init_recipe", lambda *a, **k: 0)
+        return plan_module
+
+    def test_yes_flag_skips_prompt_and_applies(self, monkeypatch, tmp_path):
+        plan_module = self._patch_plan_module(monkeypatch, tmp_path)
+        init_calls: list[tuple[str, dict]] = []
+        plan_module.init_recipe = lambda name, **kw: (init_calls.append((name, kw)) or 0)
+
+        def _fail_input(*_a, **_k):
+            raise AssertionError("input() should not be called when yes=True")
+
+        import builtins
+        monkeypatch.setattr(builtins, "input", _fail_input)
+
+        rc = plan_module.plan_and_apply_recipe("test", yes=True)
+        assert rc == 0
+        assert len(init_calls) == 1
+        assert init_calls[0][0] == "test"
+
+    def test_no_yes_flag_prompts_user(self, monkeypatch, tmp_path):
+        plan_module = self._patch_plan_module(monkeypatch, tmp_path)
+        init_calls: list[tuple[str, dict]] = []
+        plan_module.init_recipe = lambda name, **kw: (init_calls.append((name, kw)) or 0)
+
+        prompts: list[str] = []
+
+        def _capture_input(prompt=""):
+            prompts.append(prompt)
+            return "n"
+
+        import builtins
+        monkeypatch.setattr(builtins, "input", _capture_input)
+
+        rc = plan_module.plan_and_apply_recipe("test")
+        assert rc == 1
+        assert init_calls == []
+        assert prompts and "Apply this plan" in prompts[0]
+
+    def test_no_yes_flag_user_confirms(self, monkeypatch, tmp_path):
+        plan_module = self._patch_plan_module(monkeypatch, tmp_path)
+        init_calls: list[tuple[str, dict]] = []
+        plan_module.init_recipe = lambda name, **kw: (init_calls.append((name, kw)) or 0)
+
+        import builtins
+        monkeypatch.setattr(builtins, "input", lambda _prompt="": "y")
+
+        rc = plan_module.plan_and_apply_recipe("test")
+        assert rc == 0
+        assert len(init_calls) == 1
+
+    def test_plan_failure_short_circuits_apply(self, monkeypatch, tmp_path):
+        plan_module = self._patch_plan_module(monkeypatch, tmp_path, plan_rc=1)
+        init_calls: list[tuple[str, dict]] = []
+        plan_module.init_recipe = lambda name, **kw: (init_calls.append((name, kw)) or 0)
+
+        import builtins
+        monkeypatch.setattr(builtins, "input", lambda _prompt="": "y")
+
+        rc = plan_module.plan_and_apply_recipe("test", yes=True)
+        assert rc == 1
+        assert init_calls == []

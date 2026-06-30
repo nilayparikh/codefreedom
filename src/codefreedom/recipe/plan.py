@@ -565,15 +565,23 @@ def plan_and_apply_recipe(
     name: str,
     store: Optional[str] = None,
     staging: bool = False,
+    yes: bool = False,
 ) -> int:
     """Plan a recipe, show the preview, then apply after user confirmation.
 
     This is the ``cf setup init --plan-and-apply <name>`` (or ``-pa <name>``)
     workflow — a single command that replaces the two-step plan + apply.
+
+    When ``yes`` is True the confirmation prompt is skipped (for CI / non-
+    interactive use). EOFError and KeyboardInterrupt also bypass the prompt
+    and abort cleanly.
     """
     rc = plan_recipe(name, store=store, staging=staging)
     if rc != 0:
         return rc
+
+    if yes:
+        return init_recipe(name, store=store, staging=staging)
 
     try:
         answer = input(f"\n{tag('RECIPE')} Apply this plan? [y/N] ").strip().lower()

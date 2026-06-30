@@ -362,6 +362,10 @@ def _build_init_args(p: argparse.ArgumentParser) -> None:
         description="Install a recipe: resolve the recipe, generate a plan, and apply it in one step.",
     )
     install_p.add_argument("recipe", metavar="RECIPE", help="Recipe name to install (e.g., costeffective-coding)")
+    install_p.add_argument(
+        "-y", "--yes", action="store_true",
+        help="Skip confirmation prompt (for non-interactive/CI use)",
+    )
     _add_store_args(install_p)
     p.set_defaults(init_command="install", action_recipe="install")
 
@@ -487,8 +491,9 @@ def _dispatch_init(args) -> None:
         if not recipe:
             eprint(f"{tag('ERROR')} A recipe name is required. Use 'cf setup init list' to list available recipes.")
             sys.exit(2)
+        yes = getattr(args, "yes", False)
         from codefreedom.cli.setup.recipe import plan_and_apply_recipe
-        sys.exit(plan_and_apply_recipe(recipe, store=store, staging=staging))
+        sys.exit(plan_and_apply_recipe(recipe, store=store, staging=staging, yes=yes))
 
     if cmd in ("plan", "p"):
         recipe = getattr(args, "recipe", None)
