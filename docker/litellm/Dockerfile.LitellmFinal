@@ -8,7 +8,7 @@
 # ─────────────────────────────────────────────────────────────────────────
 
 ARG IMAGE_VERSION=1.0.0
-ARG LITELLM_BASE_IMAGE=nilayparikh/codefreedom:litellm-base-v1.87.1
+ARG LITELLM_BASE_IMAGE=ghcr.io/nilayparikh/codefreedom:litellm-base-v1.87.1
 
 FROM ${LITELLM_BASE_IMAGE} AS litellm-base
 

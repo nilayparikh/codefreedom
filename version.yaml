@@ -14,5 +14,5 @@
 #   - final: {version} (e.g., 0.2.2)
 
 version: "0.2.2"
-dev: 1
+dev: 2
 rc: 1

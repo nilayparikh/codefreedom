@@ -42,6 +42,8 @@ jobs:
         with:
           platforms: arm64,amd64
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+        with:
+          image: mirror.gcr.io/moby/buildkit:buildx-stable-1
 
       - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4
@@ -81,7 +83,7 @@ jobs:
           platforms: linux/arm64,linux/amd64
           build-args: |
             LITELLM_TAG=${{ inputs.litellm_tag }}
-            PG_BASE_IMAGE=${{ env.DOCKER_HUB_REPO }}:${{ inputs.pg_base_tag }}
+            PG_BASE_IMAGE=${{ env.GHCR_REPO }}:${{ inputs.pg_base_tag }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
