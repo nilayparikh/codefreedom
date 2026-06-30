@@ -126,7 +126,7 @@ jobs:
 
           codefreedom --help
           cf --help
-          codefreedom setup init costeffective-coding
+          codefreedom setup init install costeffective-coding
 
           test -f ~/.codefreedom/config/override.yaml || { echo "MISSING: override.yaml"; exit 1; }
           test -f ~/.codefreedom/config/proxy/config/config.yaml || { echo "MISSING: proxy config"; exit 1; }
