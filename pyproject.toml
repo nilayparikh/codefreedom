@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=82.0.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -31,9 +31,9 @@ keywords = [
 dependencies = [
     "PyYAML>=6.0",
     "types-PyYAML",
-    "deepdiff>=7.0",
-    "pydantic>=2.0",
-    "GitPython>=3.1.43",
+    "deepdiff>=9.1.0",
+    "pydantic>=2.13.4",
+    "GitPython>=3.1.50",
 
     "httpx>=0.28",
     "docker>=7.1.0",
@@ -62,7 +62,7 @@ dev = [
     "mypy>=1.0",
     "ruff>=0.1",
     "pytest>=7.0",
-    "pytest-cov>=5.0",
+    "pytest-cov>=7.1.0",
     "types-PyYAML",
     "httpx>=0.28",
     "fastapi>=0.138.0",

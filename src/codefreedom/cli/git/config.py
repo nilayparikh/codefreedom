@@ -1,4 +1,25 @@
-"""Configuration loading for cf git — global git.yaml + project .cf.yaml."""
+"""Configuration loading for cf git — global config + project .cf.yaml.
+
+Resolution order (later wins):
+
+  1. ``_DEFAULTS`` (built-in)
+  2. ``tools.git`` from ``profiles.yaml`` (recipe defaults)
+  3. ``tools.git`` from ``override.yaml`` (user overrides)
+  4. ``tools.git`` from ``.cf.yaml`` (per-folder override — explicit
+     ``CF_CLI_CF_YAML`` env var or auto-discovered by
+     :func:`codefreedom.config.load_config`)
+  5. ``CF_CLI_*`` machine env (highest priority)
+  6. Legacy ``git:`` block from ``.cf.yaml`` (deprecated; merged in last
+     so the new ``tools.git`` schema always wins when both are present)
+
+The new ``tools.git`` schema matches the unified config loader and is the
+recommended path. The legacy ``git:`` block is preserved for backward
+compatibility with pre-0.3 configs and remains the fallback for users
+who haven't migrated.
+
+All .cf.yaml discovery is centralized in :mod:`codefreedom.config.loader`
+— this module just consumes the unified config.
+"""
 
 from __future__ import annotations
 
@@ -25,24 +46,17 @@ _DEFAULTS: dict[str, Any] = {
 
 
 def load_global_git_config() -> dict[str, Any]:
-    """Load git config from the unified profiles.yaml (tools.git section)."""
-    path = get_config_dir() / "profiles.yaml"
-    if not path.exists():
-        return {}
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        if isinstance(data, dict):
-            tools = data.get("tools", {})
-            if isinstance(tools, dict):
-                return tools.get("git", {})
-    except Exception as e:
-        eprint(f"{tag('WARN')} Failed to load {path}: {e}")
-    return {}
+    """Load ``tools.git`` from the unified config (all 4 layers)."""
+    return _load_tools_git_via_load_config()
 
 
 def load_project_git_config(work_dir: Path | None = None) -> dict[str, Any]:
-    """Load git config from {git-root}/.cf.yaml."""
+    """Load the legacy ``git:`` block from ``{git-root}/.cf.yaml``.
+
+    Deprecated — use :func:`load_global_git_config` (or set
+    ``CF_CLI_CF_YAML``) so the new ``tools.git`` schema takes effect.
+    Retained for backward compatibility with pre-0.3 configs.
+    """
     root = get_git_root(work_dir)
     if root is None:
         return {}
@@ -59,13 +73,49 @@ def load_project_git_config(work_dir: Path | None = None) -> dict[str, Any]:
     return {}
 
 
+def _load_tools_git_via_load_config() -> dict[str, Any]:
+    """Read ``tools.git`` from the resolved config, falling back to empty.
+
+    Catches :class:`ConfigError` so a missing/invalid config never
+    breaks ``cf g cmt`` / ``cf g pr`` — the git module degrades to
+    ``_DEFAULTS`` instead.
+
+    The unified config loader handles ``.cf.yaml`` discovery centrally
+    (env var, walk-up from cwd) so this function does not duplicate
+    any path resolution.
+    """
+    try:
+        from codefreedom.config import load_config as _load_config
+        from codefreedom.config.errors import ConfigError
+
+        config = _load_config(config_dir=get_config_dir())
+        tools = config.tools
+        if isinstance(tools, dict):
+            git_cfg = tools.get("git", {})
+            if isinstance(git_cfg, dict):
+                return dict(git_cfg)
+    except ConfigError as exc:
+        eprint(f"{tag('WARN')} Failed to load git config: {exc}")
+    except Exception as exc:
+        eprint(f"{tag('WARN')} Unexpected error loading git config: {exc}")
+    return {}
+
+
 def load_git_config(work_dir: Path | None = None) -> dict[str, Any]:
-    """Load merged git config: defaults → global → project."""
+    """Load merged git config: defaults → legacy ``git:`` block → new schema.
+
+    Merge order (later wins):
+      1. ``_DEFAULTS`` (built-in)
+      2. Legacy ``git:`` block from ``{git-root}/.cf.yaml`` (deprecated)
+      3. ``tools.git`` from the unified config (all 4 layers — wins on
+         any key the legacy block also set, so the new schema always
+         takes precedence on conflicts).
+    """
     config = dict(_DEFAULTS)
-    global_cfg = load_global_git_config()
-    _deep_merge(config, global_cfg)
     project_cfg = load_project_git_config(work_dir)
     _deep_merge(config, project_cfg)
+    global_cfg = _load_tools_git_via_load_config()
+    _deep_merge(config, global_cfg)
     return config
 
 

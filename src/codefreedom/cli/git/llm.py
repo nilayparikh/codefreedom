@@ -97,10 +97,82 @@ _COMMIT_TYPE_RE = re.compile(
     re.MULTILINE,
 )
 
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+_UNCLOSED_THINK_RE = re.compile(r"<think>[^\n]*\n?", re.MULTILINE)
+_STRAY_CLOSE_RE = re.compile(r"</think>", re.MULTILINE)
+_CHAT_TOKEN_RE = re.compile(
+    r"^\s*\[?(user|assistant|system|human|ai)\]?\s*[:>]\s*",
+    re.IGNORECASE | re.MULTILINE,
+)
+_LEADING_LABELS_RE = re.compile(
+    r"^\s*(commit message|here'?s?\s+(the|my)\s+commit(\s+message)?|"
+    r"here'?s?\s+the\s+suggested\s+message|"
+    r"suggested\s+commit(\s+message)?|"
+    r"output|response|answer)\s*[:>]\s*\n?",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _strip_think_blocks(text: str) -> str:
+    """Remove `` blocks (and stray close tags) from a model response.
+
+    Reasoning models like Qwen3 emit their chain-of-thought inside
+    `` tags, and some of those tags leak into the ``content``
+    field. The parser needs the bare commit message / PR body.
+    """
+    if not text:
+        return text
+    cleaned = _THINK_BLOCK_RE.sub("", text)
+    cleaned = _UNCLOSED_THINK_RE.sub("", cleaned)
+    cleaned = _STRAY_CLOSE_RE.sub("", cleaned)
+    return cleaned.strip()
+
+
+def _strip_chat_tokens(text: str) -> str:
+    """Strip stray chat-format tokens like ``[user]:`` or ``[assistant]:``.
+
+    Some chat-tuned models emit the role tag as a prefix when the
+    upstream system prompt leaks. Removing the prefix lets the parser
+    see the actual answer.
+    """
+    if not text:
+        return text
+    return _CHAT_TOKEN_RE.sub("", text)
+
+
+def _strip_leading_labels(text: str) -> str:
+    """Strip conversational prefixes like ``Commit message:`` from a response.
+
+    The model is told to output only the message, but a chat-tuned
+    model will sometimes wrap the answer in a label.
+    """
+    if not text:
+        return text
+    cleaned = _LEADING_LABELS_RE.sub("", text, count=1)
+    return cleaned.strip()
+
+
+def clean_response(text: str) -> str:
+    """Apply all response cleanups: think blocks, chat tokens, labels.
+
+    Returns the bare answer text. Idempotent and safe to call on
+    already-clean input.
+    """
+    cleaned = _strip_think_blocks(text)
+    cleaned = _strip_chat_tokens(cleaned)
+    cleaned = _strip_leading_labels(cleaned)
+    return cleaned.strip()
+
 
 def parse_commit_response(text: str) -> dict[str, str]:
-    """Parse LLM response into {type, scope, description}."""
-    cleaned = text.strip()
+    """Parse LLM response into {type, scope, description}.
+
+    The response is first cleaned of `` reasoning blocks,
+    stray chat tokens, and conversational prefixes before parsing.
+    """
+    cleaned = clean_response(text)
+    if not cleaned:
+        return {"type": "chore", "scope": "", "description": ""}
     cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\n?|```$", "", cleaned, flags=re.MULTILINE)
     cleaned = re.sub(r"\$(?=(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)\b)", "", cleaned)
     cleaned = re.sub(r"(?<=\()\$", "", cleaned)
@@ -143,20 +215,25 @@ _PR_BODY_RE = re.compile(
 
 
 def parse_pr_response(text: str) -> dict[str, str]:
-    """Parse LLM response into {title, body}."""
-    title = ""
-    body = text.strip()
+    """Parse LLM response into {title, body}.
 
-    m_title = _PR_TITLE_RE.search(text)
+    The response is first cleaned of `` reasoning blocks,
+    stray chat tokens, and conversational prefixes before parsing.
+    """
+    cleaned = clean_response(text)
+    title = ""
+    body = cleaned
+
+    m_title = _PR_TITLE_RE.search(cleaned)
     if m_title:
         title = m_title.group(1).strip()
 
-    m_body = _PR_BODY_RE.search(text)
+    m_body = _PR_BODY_RE.search(cleaned)
     if m_body:
         body = m_body.group(1).strip()
 
     if not title:
-        lines = text.strip().split("\n")
+        lines = cleaned.split("\n")
         title = lines[0].strip() if lines else "Update"
 
     return {"title": title, "body": body}

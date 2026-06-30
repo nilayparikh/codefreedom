@@ -14,7 +14,6 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
-import yaml
 from pydantic import BaseModel
 
 from codefreedom.config.interpolation import interpolate_all
@@ -594,21 +593,6 @@ def _flatten_dict(d: dict, prefix: str = "") -> dict[str, str]:
     return items
 
 
-def _merge_deep(base: dict, overlay: dict) -> dict:
-    """Deep-merge ``overlay`` into ``base`` (overlay wins) and return ``base``.
-
-    Mirrors :func:`codefreedom.config.loader._merge_deep` for the local
-    tool-profile layering (we don't import that one to avoid a ``cli`` →
-    ``config`` private-API dependency).
-    """
-    for key, val in overlay.items():
-        if isinstance(val, dict) and isinstance(base.get(key), dict):
-            _merge_deep(base[key], val)
-        else:
-            base[key] = val
-    return base
-
-
 def _coerce_int(val: Any) -> int | None:
     """Coerce a YAML/interpolated port value to ``int`` (None if impossible)."""
     if isinstance(val, bool):
@@ -624,84 +608,43 @@ def _coerce_int(val: Any) -> int | None:
 
 
 def _layer_profiles_yaml() -> tuple[dict, dict]:
-    """Read ``profiles.yaml`` with ``recipe.yaml`` and ``override.yaml`` context.
+    """Layer the unified config the same way :func:`codefreedom.config.load_config` does.
 
-    Returns ``(merged_raw, interpolation_ctx)`` where ``merged_raw`` already has
-    override's ``tools`` / ``common`` deep-merged into the profiles dict, and
-    ``interpolation_ctx`` is the context used for ``${VAR}`` resolution with:
+    Returns ``(merged_raw, interpolation_ctx)`` where ``merged_raw`` mirrors
+    the resolved config's ``common`` and ``tools`` sections (deep-merged
+    across all four YAML layers — ``profiles.yaml``, ``recipe.yaml``,
+    ``override.yaml``, ``.cf.yaml``) and ``interpolation_ctx`` is the
+    context used for ``${VAR}`` resolution with:
     ``os.environ`` < flattened ``common`` < ``recipe.yaml`` ``vars`` <
-    ``override.yaml`` ``vars`` < ``CF_CLI_*`` (highest).
+    ``override.yaml`` ``vars`` < ``.cf.yaml`` ``vars`` < ``CF_CLI_*``
+    (highest).
+
+    This is a thin adapter over :func:`codefreedom.config.load_config` so
+    tool modules benefit from the same precedence chain and ``.cf.yaml``
+    auto-discovery as the rest of the CLI. The legacy in-function YAML
+    reader was removed in favor of this single source of truth — see
+    `AGENTS.md` (Environment Variable Chain) and `docs/patterns.md`.
     """
-    profile_path = get_profiles_path()
-    if not profile_path.exists():
-        return {}, {}
+    from codefreedom.config import load_config
 
     try:
-        with open(profile_path, encoding="utf-8") as f:
-            raw = yaml.safe_load(f) or {}
-    except (yaml.YAMLError, OSError) as exc:
-        eprint(f"{tag('TOOLS')} Warning: failed to read {profile_path}: {exc}")
+        config = load_config()
+    except Exception as exc:
+        eprint(f"{tag('TOOLS')} Warning: failed to load config: {exc}")
         return {}, {}
 
-    if not isinstance(raw, dict):
-        eprint(f"{tag('TOOLS')} Warning: invalid profile format in {profile_path}")
-        return {}, {}
+    raw: dict[str, Any] = {
+        "common": dict(config.common.model_dump()) if hasattr(config.common, "model_dump") else dict(config.common),
+        "tools": {k: dict(v) for k, v in (config.tools or {}).items()},
+    }
 
-    def _load_vars(path: Path) -> dict[str, Any]:
-        if not path.exists():
-            return {}
-        try:
-            with open(path, encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-        except (yaml.YAMLError, OSError) as exc:
-            eprint(f"{tag('TOOLS')} Warning: failed to read {path}: {exc}")
-            return {}
-        if not isinstance(data, dict):
-            return {}
-        raw_vars = data.get("vars", {}) or {}
-        if isinstance(raw_vars, list):
-            merged: dict[str, Any] = {}
-            for item in raw_vars:
-                if isinstance(item, dict):
-                    merged.update(item)
-            raw_vars = merged
-        return raw_vars if isinstance(raw_vars, dict) else {}
-
-    recipe_vars = _load_vars(profile_path.parent / "recipe.yaml")
-
-    override_path = profile_path.parent / "override.yaml"
-    override_vars: dict[str, Any] = {}
-    if override_path.exists():
-        try:
-            with open(override_path, encoding="utf-8") as f:
-                override = yaml.safe_load(f) or {}
-        except (yaml.YAMLError, OSError) as exc:
-            eprint(f"{tag('TOOLS')} Warning: failed to read {override_path}: {exc}")
-            override = {}
-        if isinstance(override, dict):
-            override_vars = override.get("vars", {}) or {}
-            if isinstance(override_vars, list):
-                merged: dict[str, Any] = {}
-                for item in override_vars:
-                    if isinstance(item, dict):
-                        merged.update(item)
-                override_vars = merged
-            if not isinstance(override_vars, dict):
-                override_vars = {}
-            for section in ("common", "tools"):
-                if isinstance(override.get(section), dict):
-                    base = raw.setdefault(section, {})
-                    if isinstance(base, dict):
-                        raw[section] = _merge_deep(base, override[section])
-                    else:
-                        raw[section] = override[section]
-
-    ctx = dict(os.environ)
+    ctx: dict[str, str] = dict(os.environ)
     common_section = raw.get("common", {})
     if isinstance(common_section, dict):
         ctx.update(_flatten_dict(common_section, prefix="common"))
-    ctx.update(recipe_vars)
-    ctx.update(override_vars)
+    common_vars = common_section.get("vars", {}) if isinstance(common_section, dict) else {}
+    if isinstance(common_vars, dict):
+        ctx.update({str(k): str(v) for k, v in common_vars.items()})
     ctx = apply_cf_cli_overrides(ctx)
     return raw, ctx
 

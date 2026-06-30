@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import copy
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -216,6 +217,33 @@ def _flatten_dict(d: dict, prefix: str = "") -> Dict[str, str]:
     return items
 
 
+def _escape_template_placeholders(data: Any) -> Any:
+    """Escape ``${...}`` placeholders in tool templates so the config
+    interpolator does not eat them.
+
+    Tool templates (e.g. ``tools.git.templates.commit_message``) use
+    ``${type}`` / ``${scope}`` / ``${description}`` as placeholders that
+    the LLM helper fills in later via ``render_template``. The
+    config-level ``${VAR}`` interpolator would otherwise resolve them to
+    empty strings (since ``type`` / ``scope`` / ``description`` are not
+    env vars), leaving the template as ``():``.
+
+    Walks ``tools.<name>.templates.*`` and rewrites ``${...}`` to
+    ``$${...}`` — the escape syntax that both this loader and
+    ``render_template`` understand. Mutates *data* in place. Already
+    escaped ``$${...}`` is left untouched.
+    """
+    if isinstance(data, dict):
+        for key, val in data.items():
+            if key == "templates" and isinstance(val, dict):
+                for tkey, tval in list(val.items()):
+                    if isinstance(tval, str):
+                        val[tkey] = re.sub(r"(?<!\$)\${", "$${", tval)
+            elif isinstance(val, dict):
+                _escape_template_placeholders(val)
+    return data
+
+
 def _merge_deep(base: Any, override: Any) -> Any:
     """Recursive deep merge. Override wins. None values are skipped."""
     if override is None:
@@ -268,6 +296,74 @@ def _load_yaml_optional(path: Path) -> dict:
     return {}
 
 
+_CF_YAML_WALK_MAX_DEPTH = 8
+
+
+def _resolve_cf_yaml_path(start: Path | None = None) -> Path | None:
+    """Resolve the per-folder ``.cf.yaml`` to layer over ``override.yaml``.
+
+    Resolution order (first match wins):
+      1. ``CF_CLI_CF_YAML`` env var — explicit user override (highest).
+         Setting it to the empty string explicitly opts out of the
+         walk-up discovery (the escape hatch tests use).
+      2. ``<start>/.cf.yaml`` walking up to ``_CF_YAML_WALK_MAX_DEPTH``
+         parents — auto-discovery so a local ``.cf.yaml`` "just works"
+         for every command that calls :func:`load_config`.
+      3. ``None`` — no ``.cf.yaml`` layer; ``override.yaml`` is the
+         highest YAML layer.
+
+    The walk-up is bounded so a misplaced file deep in the filesystem
+    does not slow startup. Use the env var (or pass ``cf_yaml_path=``
+    explicitly) for arbitrary locations.
+    """
+    if "CF_CLI_CF_YAML" in os.environ:
+        env_val = os.environ.get("CF_CLI_CF_YAML", "").strip()
+        if env_val:
+            return Path(env_val).expanduser()
+        return None
+    if start is None:
+        start = Path.cwd()
+    try:
+        start = start.resolve()
+    except OSError:
+        return None
+    current: Path | None = start
+    depth = 0
+    while current is not None and depth <= _CF_YAML_WALK_MAX_DEPTH:
+        candidate = current / ".cf.yaml"
+        if candidate.is_file():
+            return candidate
+        if current == current.parent:
+            break
+        current = current.parent
+        depth += 1
+    return None
+
+
+def _extract_vars(layer: Dict[str, Any]) -> Dict[str, str]:
+    """Extract the ``vars:`` dict from a single YAML layer.
+
+    Accepts both the flat-dict form ``vars: {KEY: val}`` (used by
+    ``profiles.yaml``/``override.yaml``) and the list-of-single-key-dicts
+    form ``vars: [{KEY: val}, ...]`` (used by ``.cf.yaml`` and some
+    recipe manifests). Mirrors the extraction logic in :func:`load_config`
+    so display and runtime agree on what each layer provides.
+
+    Non-dict, non-list values (and items that are not mappings) are
+    silently skipped — same behaviour as :func:`load_config`.
+    """
+    raw = layer.get("vars") if isinstance(layer, dict) else None
+    if isinstance(raw, list):
+        merged: Dict[str, str] = {}
+        for item in raw:
+            if isinstance(item, dict):
+                merged.update({str(k): str(v) for k, v in item.items()})
+        return merged
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    return {}
+
+
 def _build_context(merged: dict, vars: Dict[str, str] | None = None) -> Dict[str, str]:
     """Build the resolution context from config layers + CF_CLI_* overrides.
 
@@ -293,18 +389,28 @@ def _build_context(merged: dict, vars: Dict[str, str] | None = None) -> Dict[str
 
 # ── Public API ──────────────────────────────────────────────────────────
 
-def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
+def load_config(
+    config_dir: Optional[Path] = None,
+    cf_yaml_path: Optional[Path] = None,
+) -> ResolvedConfig:
     """Load and resolve the full CodeFreedom configuration.
 
     Args:
         config_dir: Path to the config directory
             (defaults to ``~/.codefreedom/config``).
+        cf_yaml_path: Optional path to a per-folder ``.cf.yaml`` override
+            file. When ``None``, the path is auto-resolved: first the
+            ``CF_CLI_CF_YAML`` env var is checked, then ``.cf.yaml`` is
+            looked for at the current working directory and walked up to
+            ``_CF_YAML_WALK_MAX_DEPTH`` parents. Pass an explicit path
+            to override the discovery; pass an empty string to disable it.
 
     Resolution order (later wins):
       1. ``profiles.yaml`` (recipe-provided defaults)
       2. ``override.yaml`` (user overrides — same schema)
-      3. Machine env (``os.environ``)
-      4. ``CF_CLI_*`` overrides (highest priority, prefix stripped)
+      3. ``.cf.yaml`` (per-folder override — same schema, optional)
+      4. Machine env (``os.environ``)
+      5. ``CF_CLI_*`` overrides (highest priority, prefix stripped)
 
     Returns:
         Frozen :class:`ResolvedConfig` with all ${VAR} resolved.
@@ -318,14 +424,20 @@ def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
     if config_dir is None:
         config_dir = _get_config_dir()
 
+    if cf_yaml_path is None:
+        cf_yaml_path = _resolve_cf_yaml_path()
+
     # Step 1: Load YAML layers (lowest → highest precedence)
     base = _load_yaml_die(config_dir / "profiles.yaml")
     recipe = _load_yaml_optional(config_dir / "recipe.yaml")
     override = _load_yaml_optional(config_dir / "override.yaml")
+    cf_yaml = _load_yaml_optional(cf_yaml_path) if cf_yaml_path else {}
 
-    # Extract vars from each layer (list-of-dicts or flat dict)
+    # Extract vars from each layer (list-of-dicts or flat dict).
+    # Pop from the layer dict so the deep merge below never sees the
+    # raw ``vars:`` list and trips schema validation.
     all_vars: Dict[str, str] = {}
-    for layer in (base, recipe, override):
+    for layer in (base, recipe, override, cf_yaml):
         raw = layer.pop("vars", None)
         if isinstance(raw, list):
             for item in raw:
@@ -337,6 +449,12 @@ def load_config(config_dir: Optional[Path] = None) -> ResolvedConfig:
     # Step 2: Full structural merge (later wins)
     merged = _merge_deep(base, recipe)
     merged = _merge_deep(merged, override)
+    merged = _merge_deep(merged, cf_yaml)
+
+    # Step 2b: Protect tool-template placeholders (e.g. ${type}, ${scope})
+    # from being eaten by the ${VAR} interpolator below. Tool templates
+    # use ${...} for LLM helper substitution, not env var resolution.
+    _escape_template_placeholders(merged)
 
     # Ensure common section exists with defaults so ${VAR} refs are interpolated.
     # CommonSection.suffix_id defaults to "${SUFFIX_ID:-0000}" — if the merged dict

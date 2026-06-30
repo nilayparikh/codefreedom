@@ -252,6 +252,16 @@ _LEGACY_COMMON_KEYS: frozenset[str] = frozenset({
     "sandbox_env",
 })
 
+# Legacy top-level ``git:`` block carried by old ``.cf.yaml`` files at the
+# git root. The new schema is ``tools.git`` (read by ``load_config``);
+# the old block is still read by ``cli.git.config.load_project_git_config``
+# for backward compat. Both can coexist in the same ``.cf.yaml``; the new
+# schema wins on conflicts, and we drop the legacy block here so it does
+# not trip the strict ``extra="forbid"`` validation.
+_LEGACY_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
+    "git",
+})
+
 # Obsolete per-profile keys dropped during normalization. The sandbox
 # feature is decommissioned; these keys only pollute the merged dict.
 _OBSOLETE_PROFILE_KEYS: frozenset[str] = frozenset({
@@ -318,6 +328,12 @@ class ConfigModel(BaseModel, extra="forbid"):
         # 1. Non-schema keys from override.yaml
         data.pop("comment", None)
         data.pop("vars", None)
+
+        # 1b. Legacy top-level keys (e.g. ``git:`` block from old .cf.yaml
+        # files) — read separately by the consuming module, dropped here so
+        # they don't trip the strict ``extra="forbid"`` validation.
+        for key in _LEGACY_TOP_LEVEL_KEYS:
+            data.pop(key, None)
 
         # 2. Recipe-manifest metadata that leaked in via load_config merge
         for key in RECIPE_MANIFEST_KEYS:

@@ -199,18 +199,20 @@ def build_parser(parent: argparse.ArgumentParser) -> None:
         "proxy",
         help="Configure local or remote proxy settings",
     )
-    proxy_parser.add_argument("--remote-url", "-remote-url", type=str, default=None, help="Remote proxy base URL")
-    proxy_parser.add_argument("--local", "-local", action="store_true", help="Remove remote proxy URL")
-    proxy_parser.add_argument("--bind", "-bind", type=str, default=None, metavar="HOST", help="Proxy bind host")
+    proxy_mode = proxy_parser.add_mutually_exclusive_group()
+    proxy_mode.add_argument("--remote-url", type=str, default=None, metavar="URL", help="Remote proxy base URL")
+    proxy_mode.add_argument("--local", action="store_true", help="Remove remote proxy URL")
+    proxy_parser.add_argument("--bind", type=str, default=None, metavar="HOST", help="Proxy bind host")
 
     tools_parser = subparsers.add_parser(
         "tools",
         help="Configure local or remote tool settings",
     )
     tools_parser.add_argument("tool", choices=["chrome", "web", "github", "web-bridge"])
-    tools_parser.add_argument("--remote-url", "-remote-url", type=str, default=None, help="Remote tool URL")
-    tools_parser.add_argument("--local", "-local", action="store_true", help="Remove remote tool URL")
-    tools_parser.add_argument("--bind", "-bind", type=str, default=None, metavar="HOST", help="Tool bind host")
+    tools_mode = tools_parser.add_mutually_exclusive_group()
+    tools_mode.add_argument("--remote-url", type=str, default=None, metavar="URL", help="Remote tool URL")
+    tools_mode.add_argument("--local", action="store_true", help="Remove remote tool URL")
+    tools_parser.add_argument("--bind", type=str, default=None, metavar="HOST", help="Tool bind host")
 
     bind_parser = subparsers.add_parser(
         "bind",

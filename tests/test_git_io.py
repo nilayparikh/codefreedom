@@ -82,6 +82,12 @@ class TestLoadProjectGitConfig:
 
 class TestLoadGitConfig:
     def test_resolution_order(self, tmp_path, monkeypatch):
+        """Legacy ``git:`` block fills keys the new schema doesn't set.
+
+        New ``tools.git`` schema is the canonical path — it wins on any
+        key it covers. The legacy block is a fallback for keys the new
+        schema doesn't touch.
+        """
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(
             "codefreedom.cli.git.config.get_git_root",
@@ -100,8 +106,197 @@ class TestLoadGitConfig:
             encoding="utf-8",
         )
         config = load_git_config(tmp_path)
-        assert config["model"] == "gpt-4o-mini"
+        assert config["model"] == "gpt-4o"
         assert config["signed_commit"] is True
+
+
+class TestLoadGitConfigNewSchema:
+    """``tools.git`` from override.yaml and .cf.yaml (full override schema)."""
+
+    def test_tools_git_in_override_wins(self, tmp_path, monkeypatch):
+        """``tools.git`` in ``override.yaml`` overrides ``profiles.yaml``."""
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_git_root",
+            lambda _=None: None,
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_config_dir",
+            lambda: tmp_path,
+        )
+        (tmp_path / "profiles.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "from_profiles"}}}),
+            encoding="utf-8",
+        )
+        (tmp_path / "override.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "from_override"}}}),
+            encoding="utf-8",
+        )
+        config = load_git_config(tmp_path)
+        assert get_model(config) == "from_override"
+
+    def test_tools_git_in_cf_yaml_wins(self, tmp_path, monkeypatch):
+        """``tools.git`` in ``.cf.yaml`` (explicit ``CF_CLI_CF_YAML``) wins."""
+        monkeypatch.setenv("CF_CLI_CF_YAML", str(tmp_path / ".cf.yaml"))
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_config_dir",
+            lambda: tmp_path,
+        )
+        (tmp_path / "profiles.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "from_profiles"}}}),
+            encoding="utf-8",
+        )
+        (tmp_path / ".cf.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "from_cf_yaml"}}}),
+            encoding="utf-8",
+        )
+        config = load_git_config(tmp_path)
+        assert get_model(config) == "from_cf_yaml"
+
+    def test_full_layering_chain(self, tmp_path, monkeypatch):
+        """End-to-end: defaults < profiles < override < .cf.yaml < CF_CLI_*.
+
+        CF_CLI_* overrides win when the YAML uses ``${VAR}`` interpolation.
+        Here ``.cf.yaml`` sets ``model: ${GIT_MODEL}`` and we set
+        ``CF_CLI_GIT_MODEL`` to verify the env var wins.
+        """
+        monkeypatch.setenv("CF_CLI_CF_YAML", str(tmp_path / ".cf.yaml"))
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_config_dir",
+            lambda: tmp_path,
+        )
+        (tmp_path / "profiles.yaml").write_text(
+            yaml.dump({"tools": {"git": {
+                "model": "from_profiles",
+                "signed_commit": True,
+                "conventional_commit": True,
+            }}}),
+            encoding="utf-8",
+        )
+        (tmp_path / "override.yaml").write_text(
+            yaml.dump({"tools": {"git": {"signed_commit": False}}}),
+            encoding="utf-8",
+        )
+        (tmp_path / ".cf.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "${GIT_MODEL}"}}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CF_CLI_GIT_MODEL", "from_cf_cli")
+
+        config = load_git_config(tmp_path)
+        assert get_model(config) == "from_cf_cli"
+        assert is_signed_commit(config) is False
+        assert is_conventional_commit(config) is True
+
+    def test_legacy_git_block_still_works(self, tmp_path, monkeypatch):
+        """Legacy ``git:`` block in .cf.yaml fills keys the new schema doesn't.
+
+        Backward compat: a user with an old config (legacy block only,
+        no ``tools.git`` in profiles.yaml) gets the legacy value.
+        """
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_git_root",
+            lambda _=None: tmp_path,
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_config_dir",
+            lambda: tmp_path,
+        )
+        (tmp_path / "profiles.yaml").write_text(
+            "agents: {}\n",
+            encoding="utf-8",
+        )
+        (tmp_path / ".cf.yaml").write_text(
+            yaml.dump({"git": {"model": "from_legacy_block"}}),
+            encoding="utf-8",
+        )
+        config = load_git_config(tmp_path)
+        assert get_model(config) == "from_legacy_block"
+
+    def test_new_schema_beats_legacy_block(self, tmp_path, monkeypatch):
+        """When both ``tools.git`` and ``git:`` block exist in .cf.yaml, new wins."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_git_root",
+            lambda _=None: tmp_path,
+        )
+        monkeypatch.setenv("CF_CLI_CF_YAML", str(tmp_path / ".cf.yaml"))
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_config_dir",
+            lambda: tmp_path,
+        )
+        (tmp_path / "profiles.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "from_profiles"}}}),
+            encoding="utf-8",
+        )
+        (tmp_path / ".cf.yaml").write_text(yaml.dump({
+            "git": {"model": "from_legacy_block"},
+            "tools": {"git": {"model": "from_new_schema"}},
+        }), encoding="utf-8")
+        config = load_git_config(tmp_path)
+        assert get_model(config) == "from_new_schema"
+
+    def test_cf_yaml_path_env_var_overrides(self, tmp_path, monkeypatch):
+        """``CF_CLI_CF_YAML`` env var beats git-root auto-discovery."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_git_root",
+            lambda _=None: tmp_path,
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_config_dir",
+            lambda: tmp_path,
+        )
+        (tmp_path / "profiles.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "from_profiles"}}}),
+            encoding="utf-8",
+        )
+        (tmp_path / ".cf.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "from_git_root"}}}),
+            encoding="utf-8",
+        )
+        other = tmp_path / "other"
+        other.mkdir()
+        (other / "custom.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "from_env_var"}}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CF_CLI_CF_YAML", str(other / "custom.yaml"))
+
+        config = load_git_config(tmp_path)
+        assert get_model(config) == "from_env_var"
+
+    def test_no_cf_yaml_falls_back_to_profiles(self, tmp_path, monkeypatch):
+        """Without .cf.yaml anywhere, the result is the profiles.yaml value."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_git_root",
+            lambda _=None: None,
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_config_dir",
+            lambda: tmp_path,
+        )
+        (tmp_path / "profiles.yaml").write_text(
+            yaml.dump({"tools": {"git": {"model": "from_profiles"}}}),
+            encoding="utf-8",
+        )
+        config = load_git_config(tmp_path)
+        assert get_model(config) == "from_profiles"
+
+    def test_missing_global_profiles_uses_defaults(self, tmp_path, monkeypatch):
+        """If everything is missing, fall back to hard-coded ``_DEFAULTS``."""
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_git_root",
+            lambda _=None: None,
+        )
+        monkeypatch.setattr(
+            "codefreedom.cli.git.config.get_config_dir",
+            lambda: tmp_path,
+        )
+        config = load_git_config(tmp_path)
+        assert get_model(config) == "gpt-4o-mini"
+        assert is_conventional_commit(config) is True
 
 
 class TestConfigHelpers:
