@@ -105,6 +105,11 @@ jobs:
           cache-from: type=gha,scope=CodebaseMemory
           cache-to: type=gha,mode=max,scope=CodebaseMemory
 
+      # NOTE: Base images (mirror.gcr.io/library/{alpine:3.20,python:3.13-slim})
+      # are pulled from Google's free Docker Hub mirror to avoid the per-IP
+      # rate limits on docker.io. No additional setup is required — mirror.gcr.io
+      # is a public registry.
+
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32  # v4
         with:

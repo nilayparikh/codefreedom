@@ -24,7 +24,7 @@ def _settings(**overrides) -> dict:
         "data_dir": "~/.codefreedom/tools/codebase-memory",
         "bind_host": "0.0.0.0",
         "remote_url": "",
-        "enable_ui": False,
+        "enable_ui": True,
         "log_level": "info",
         "auto_index": False,
         "env": {},
@@ -200,7 +200,7 @@ class TestSchema:
         s = CodebaseMemorySettings(image="x:latest")
         assert s.image == "x:latest"
         assert s.port is None
-        assert s.enable_ui is None
+        assert s.enable_ui is True
         assert s.log_level is None
 
     def test_log_level_validated(self):
