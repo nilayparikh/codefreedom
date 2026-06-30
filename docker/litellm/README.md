@@ -115,6 +115,7 @@ CustomLogger plugins baked into `/app/litellm-plugins/`. The entrypoint symlinks
 | Reasoning Efforts | `plugins/reasoning_efforts_mapping.py` | Translates reasoning-effort signals across provider standards |
 | System Message Merger | `plugins/system_message_merger.py` | Merges multiple system messages into one for models that require it |
 | Image Router | `plugins/image_router.py` | Routes image payloads through VLMs for text-only target models |
+| Empty-Auth Error Filter | `plugins/filter_empty_errors.py` | Drops unauthenticated / pre-routing failure rows from `LiteLLM_ErrorLogs` |
 
 ## Usage
 

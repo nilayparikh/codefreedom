@@ -58,6 +58,7 @@ RUN python patch_responses_azure.py
 COPY plugins/reasoning_efforts_mapping.py /app/litellm-plugins/reasoning_efforts_mapping.py
 COPY plugins/system_message_merger.py /app/litellm-plugins/system_message_merger.py
 COPY plugins/image_router.py /app/litellm-plugins/image_router.py
+COPY plugins/filter_empty_errors.py /app/litellm-plugins/filter_empty_errors.py
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends nodejs npm \

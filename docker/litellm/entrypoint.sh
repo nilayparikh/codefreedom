@@ -203,6 +203,18 @@ if [ -f "$PLUGIN3_SRC" ]; then
     fi
 fi
 
+PLUGIN4_SRC="/app/litellm-plugins/filter_empty_errors.py"
+PLUGIN4_DST="/app/litellm-config/plugins/filter-empty-errors/filter_empty_errors.py"
+if [ -f "$PLUGIN4_SRC" ]; then
+    mkdir -p "$(dirname "$PLUGIN4_DST")" 2>/dev/null || true
+    [ -f "$PLUGIN4_DST" ] && [ ! -L "$PLUGIN4_DST" ] && rm -f "$PLUGIN4_DST"
+    if ln -sf "$PLUGIN4_SRC" "$PLUGIN4_DST" 2>/dev/null; then
+        echo "[entrypoint] Plugin .py symlinked: $PLUGIN4_DST -> $PLUGIN4_SRC"
+    else
+        echo "[entrypoint] WARNING: Could not symlink filter-empty-errors plugin."
+    fi
+fi
+
 # ── Start LiteLLM ───────────────────────────────────────────────────────────
 echo "[entrypoint] Starting LiteLLM on $LITELLM_BIND_HOST:$LITELLM_PORT..."
 # --use_prisma_db_push: we already ran `prisma db push` above; tells LiteLLM
