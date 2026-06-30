@@ -340,6 +340,30 @@ def _resolve_cf_yaml_path(start: Path | None = None) -> Path | None:
     return None
 
 
+def _extract_vars(layer: Dict[str, Any]) -> Dict[str, str]:
+    """Extract the ``vars:`` dict from a single YAML layer.
+
+    Accepts both the flat-dict form ``vars: {KEY: val}`` (used by
+    ``profiles.yaml``/``override.yaml``) and the list-of-single-key-dicts
+    form ``vars: [{KEY: val}, ...]`` (used by ``.cf.yaml`` and some
+    recipe manifests). Mirrors the extraction logic in :func:`load_config`
+    so display and runtime agree on what each layer provides.
+
+    Non-dict, non-list values (and items that are not mappings) are
+    silently skipped — same behaviour as :func:`load_config`.
+    """
+    raw = layer.get("vars") if isinstance(layer, dict) else None
+    if isinstance(raw, list):
+        merged: Dict[str, str] = {}
+        for item in raw:
+            if isinstance(item, dict):
+                merged.update({str(k): str(v) for k, v in item.items()})
+        return merged
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    return {}
+
+
 def _build_context(merged: dict, vars: Dict[str, str] | None = None) -> Dict[str, str]:
     """Build the resolution context from config layers + CF_CLI_* overrides.
 
@@ -409,7 +433,9 @@ def load_config(
     override = _load_yaml_optional(config_dir / "override.yaml")
     cf_yaml = _load_yaml_optional(cf_yaml_path) if cf_yaml_path else {}
 
-    # Extract vars from each layer (list-of-dicts or flat dict)
+    # Extract vars from each layer (list-of-dicts or flat dict).
+    # Pop from the layer dict so the deep merge below never sees the
+    # raw ``vars:`` list and trips schema validation.
     all_vars: Dict[str, str] = {}
     for layer in (base, recipe, override, cf_yaml):
         raw = layer.pop("vars", None)

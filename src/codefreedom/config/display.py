@@ -72,14 +72,6 @@ def _load_layer(config_dir: Path, filename: str) -> Dict[str, Any]:
         return {}
 
 
-def _extract_vars(layer: Dict[str, Any]) -> Dict[str, str]:
-    """Extract vars dict from a layer (already popped before merge in load_config)."""
-    raw = layer.get("vars", {})
-    if isinstance(raw, dict):
-        return {str(k): str(v) for k, v in raw.items()}
-    return {}
-
-
 def _walk_values(data: Any, prefix: str = "") -> List[Tuple[str, Any]]:
     """Flatten nested dict into (dotted_key, value) pairs."""
     results: List[Tuple[str, Any]] = []
@@ -112,6 +104,8 @@ def resolve_value_source(
       5. profiles.yaml vars
       6. Default (model default)
     """
+    from codefreedom.config.loader import _extract_vars, _resolve_cf_yaml_path
+
     # Strip prefix to get bare var name for CF_CLI check
     bare_key = key.rsplit(".", 1)[-1] if "." in key else key
     cf_cli_key = f"CF_CLI_{bare_key}"
@@ -121,7 +115,6 @@ def resolve_value_source(
         return "env"
 
     # Check config layers
-    from codefreedom.config.loader import _resolve_cf_yaml_path
     cf_yaml_path = _resolve_cf_yaml_path()
     cf_yaml_vars: Dict[str, str] = {}
     if cf_yaml_path:
@@ -220,28 +213,35 @@ def format_resolved_config(
     Returns a multi-line string showing the config with interpolated
     values, redacted secrets, and source labels.
 
-    Builds the display dict directly from merged+interpolated layers,
-    skipping ConfigModel validation so extra recipe fields don't block output.
+    Resolved values come from :func:`codefreedom.config.load_config` —
+    the single source of truth shared with every other CLI command — so
+    ``.cf.yaml`` and the per-folder discovery walk behave identically
+    to ``cf run ...`` / ``cf setup ...``. Per-var source attribution is
+    derived by re-reading the raw YAML layers (since ``load_config``
+    strips ``vars:`` after merging).
     """
-    from codefreedom.config.interpolation import interpolate_all
-    import copy
-
     if config_dir is None:
         from codefreedom.core.config import get_config_dir as _get_config_dir
         config_dir = _get_config_dir()
 
+    from codefreedom.config import load_config
     from codefreedom.config.loader import (
         _build_context,
+        _extract_vars,
         _load_yaml_die,
         _load_yaml_optional,
         _resolve_cf_yaml_path,
     )
+    from codefreedom.config.interpolation import resolve_dict, resolve_var
 
-    # Load layers to get vars for source tracking. The order matches
-    # load_config(): profiles (lowest) < recipe < override < .cf.yaml.
-    # The auto-discovered .cf.yaml path comes from the same resolver
-    # the unified config uses, so display and runtime agree on what
-    # file (if any) provides the per-folder layer.
+    # ── Step 1: resolved values from the unified loader ────────────────────
+    config = load_config(config_dir)
+
+    # ── Step 2: raw layers for source attribution ────────────────────────
+    # The order mirrors load_config(): profiles (lowest) < recipe <
+    # override < .cf.yaml. The .cf.yaml path is auto-discovered via the
+    # same resolver load_config uses, so display and runtime agree on
+    # which file (if any) provides the per-folder layer.
     base = _load_yaml_die(config_dir / "profiles.yaml")
     recipe = _load_yaml_optional(config_dir / "recipe.yaml")
     override = _load_yaml_optional(config_dir / "override.yaml")
@@ -253,144 +253,122 @@ def format_resolved_config(
     override_vars = _extract_vars(override)
     cf_yaml_vars = _extract_vars(cf_yaml)
 
+    # Merged vars (later wins). Pop from the layer dicts so re-merging
+    # for context building below doesn't carry stale "vars:" entries.
     all_vars: Dict[str, str] = {}
     for layer in (base, recipe, override, cf_yaml):
-        raw = layer.pop("vars", None)
-        if isinstance(raw, dict):
-            all_vars.update({str(k): str(v) for k, v in raw.items()})
+        all_vars.update(_extract_vars(layer))
+        layer.pop("vars", None)
 
-    from codefreedom.config.loader import _merge_deep
-    merged = _merge_deep(base, recipe)
-    merged = _merge_deep(merged, override)
-    merged = _merge_deep(merged, cf_yaml)
-
-    # Strip recipe metadata that isn't part of config schema
-    for key in ("name", "description", "version", "files", "dirs",
-                "generated_artifacts", "required_secrets", "config_vars",
-                "advice", "common_blocks", "profile_presets", "tools_optional"):
-        merged.pop(key, None)
-
-    merged.setdefault("common", {})
-    merged["common"].setdefault("suffix_id", "${SUFFIX_ID:-0000}")
-    merged["common"].setdefault("postgres", {})
-    merged["common"]["postgres"].setdefault("host_port", "${POSTGRES_HOST_PORT:-5433}")
-    merged["common"]["postgres"].setdefault("password", "${POSTGRES_PASSWORD:-pgpassword}")
-
-    context = _build_context(merged, vars=all_vars)
-
-    resolved = copy.deepcopy(merged)
-    interpolate_all(resolved, context)
-
-    # Build display dict from resolved data
+    # ── Step 3: build display dict from the resolved model ────────────────
     display_dict: Dict[str, Any] = {}
 
-    # Common section — pick known fields from resolved.common
-    common_data = resolved.get("common", {})
+    # Common section — pick known fields from the resolved model
+    common_data = config.common.model_dump()
     common: Dict[str, Any] = {}
-    if isinstance(common_data, dict):
-        common["suffix_id"] = common_data.get("suffix_id", "")
-        proxy = common_data.get("proxy", {})
-        if isinstance(proxy, dict):
-            common["proxy.bind_host"] = proxy.get("bind_host", "127.0.0.1")
-            common["proxy.bind_port"] = str(proxy.get("bind_port", 4000))
-            proxy_env = proxy.get("env", {})
-            if proxy_env:
-                common["proxy.env"] = dict(proxy_env)
-        postgres = common_data.get("postgres", {})
-        if isinstance(postgres, dict):
-            common["postgres.host_port"] = postgres.get("host_port", "")
-            common["postgres.user"] = postgres.get("user", "")
-            common["postgres.password"] = postgres.get("password", "")
+    common["suffix_id"] = common_data.get("suffix_id", "")
+    proxy = common_data.get("proxy", {}) or {}
+    if proxy:
+        common["proxy.bind_host"] = proxy.get("bind_host", "127.0.0.1")
+        common["proxy.bind_port"] = str(proxy.get("bind_port", 4000))
+        proxy_env = proxy.get("env", {})
+        if proxy_env:
+            common["proxy.env"] = dict(proxy_env)
+    postgres = common_data.get("postgres", {}) or {}
+    if postgres:
+        common["postgres.host_port"] = postgres.get("host_port", "")
+        common["postgres.user"] = postgres.get("user", "")
+        common["postgres.password"] = postgres.get("password", "")
     display_dict["common"] = common
 
-    # Vars section — show each var with its resolved value and source layer
-    vars_display: Dict[str, Any] = {}
-    for var_name, final_value in all_vars.items():
-        if var_name in cf_yaml_vars:
-            source = ".cf.yaml"
-            raw_value = cf_yaml_vars[var_name]
-        elif var_name in override_vars:
-            source = "override.yaml"
-            raw_value = override_vars[var_name]
-        elif var_name in recipe_vars:
-            source = "recipe.yaml"
-            raw_value = recipe_vars[var_name]
-        elif var_name in profiles_vars:
-            source = "profiles.yaml"
-            raw_value = profiles_vars[var_name]
-        else:
-            source = "default"
-            raw_value = final_value
+    # Vars section — show each var with its resolved value and source layer.
+    # The raw_value is re-resolved against the merged context (built from
+    # the same vars + CF_CLI_* that load_config uses) so a var that
+    # references another var is shown interpolated. CF_CLI_* always wins
+    # both the source label and the displayed value.
+    if all_vars:
+        context = _build_context(common_data, vars=all_vars)
+        context = resolve_dict(context, context)
 
-        from codefreedom.config.interpolation import resolve_var
-        resolved_raw = resolve_var(raw_value, context)
+        vars_display: Dict[str, Any] = {}
+        for var_name, final_value in all_vars.items():
+            if var_name in cf_yaml_vars:
+                source = ".cf.yaml"
+                raw_value = cf_yaml_vars[var_name]
+            elif var_name in override_vars:
+                source = "override.yaml"
+                raw_value = override_vars[var_name]
+            elif var_name in recipe_vars:
+                source = "recipe.yaml"
+                raw_value = recipe_vars[var_name]
+            elif var_name in profiles_vars:
+                source = "profiles.yaml"
+                raw_value = profiles_vars[var_name]
+            else:
+                source = "default"
+                raw_value = final_value
 
-        cf_cli_key = f"CF_CLI_{var_name}"
-        if cf_cli_key in os.environ:
-            source = "CF_CLI_*"
-            resolved_raw = os.environ[cf_cli_key]
+            resolved_raw = resolve_var(raw_value, context)
 
-        vars_display[var_name] = {"value": resolved_raw, "source": source}
-    if vars_display:
+            cf_cli_key = f"CF_CLI_{var_name}"
+            if cf_cli_key in os.environ:
+                source = "CF_CLI_*"
+                resolved_raw = os.environ[cf_cli_key]
+
+            vars_display[var_name] = {"value": resolved_raw, "source": source}
         display_dict["vars"] = vars_display
 
-    # Agents section — walk resolved.agents (legacy format with profiles: key)
-    agents_data = resolved.get("agents", resolved.get("profiles", {}))
+    # Agents section — walk the resolved model (Pydantic AgentDefinition)
     agents_dict: Dict[str, Any] = {}
-    if isinstance(agents_data, dict):
-        for agent_name, agent_def in agents_data.items():
-            if not isinstance(agent_def, dict):
-                continue
-            agent_data: Dict[str, Any] = {}
-            # Unified format: agent_def.profiles.default.env
-            agent_profiles = agent_def.get("profiles", agent_def)
-            if isinstance(agent_profiles, dict):
-                for pname, pdata in agent_profiles.items():
-                    if not isinstance(pdata, dict):
-                        continue
-                    profile_data: Dict[str, Any] = {}
-                    env = pdata.get("env", {})
-                    if env:
-                        profile_data["env"] = dict(env)
-                    tools = pdata.get("tools")
-                    if tools:
-                        profile_data["tools"] = tools
-                    local = pdata.get("local", {})
-                    if isinstance(local, dict) and local.get("env"):
-                        profile_data["local.env"] = dict(local["env"])
-                    if profile_data:
-                        agent_data[pname] = profile_data
-            if agent_data:
-                agents_dict[agent_name] = agent_data
+    for agent_name, agent_def in config.agents.items():
+        agent_data: Dict[str, Any] = {}
+        for pname, profile in agent_def.profiles.items():
+            profile_data: Dict[str, Any] = {}
+            if profile.env:
+                profile_data["env"] = dict(profile.env)
+            if profile.tools:
+                profile_data["tools"] = list(profile.tools)
+            if profile.local and profile.local.env:
+                profile_data["local.env"] = dict(profile.local.env)
+            if profile_data:
+                agent_data[pname] = profile_data
+        if agent_data:
+            agents_dict[agent_name] = agent_data
     if agents_dict:
         display_dict["agents"] = agents_dict
 
-    # Tools section
-    tools_data = resolved.get("tools", {})
+    # Tools section — walk the resolved model (raw dicts by design)
     tools_dict: Dict[str, Any] = {}
-    if isinstance(tools_data, dict):
-        for tool_name, tool_cfg in tools_data.items():
-            if not isinstance(tool_cfg, dict):
+    for tool_name, tool_cfg in config.tools.items():
+        if not isinstance(tool_cfg, dict):
+            continue
+        tool_data: Dict[str, Any] = {}
+        for k in ("image", "container_name", "port", "mcp_port", "mcp_path"):
+            if k in tool_cfg:
+                v = tool_cfg[k]
+                tool_data[k] = str(v) if not isinstance(v, (dict, list)) else v
+        env = tool_cfg.get("env", {})
+        if env:
+            tool_data["env"] = dict(env)
+        for k, v in tool_cfg.items():
+            if k in ("image", "container_name", "port", "env", "mcp_port", "mcp_path"):
                 continue
-            tool_data: Dict[str, Any] = {}
-            for k in ("image", "container_name", "port", "mcp_port", "mcp_path"):
-                if k in tool_cfg:
-                    tool_data[k] = str(tool_cfg[k]) if not isinstance(tool_cfg[k], (dict, list)) else tool_cfg[k]
-            env = tool_cfg.get("env", {})
-            if env:
-                tool_data["env"] = dict(env)
-            # Extra fields
-            for k, v in tool_cfg.items():
-                if k not in ("image", "container_name", "port", "env", "mcp_port", "mcp_path"):
-                    if isinstance(v, (dict, list)):
-                        tool_data[k] = v
-                    else:
-                        tool_data[k] = str(v)
-            if tool_data:
-                tools_dict[tool_name] = tool_data
+            if isinstance(v, (dict, list)):
+                tool_data[k] = v
+            else:
+                tool_data[k] = str(v)
+        if tool_data:
+            tools_dict[tool_name] = tool_data
     if tools_dict:
         display_dict["tools"] = tools_dict
 
-    # Format tree
-    lines = _format_tree(display_dict, config_dir, context, indent=0, show_source=show_source)
+    # ── Step 4: format the tree ───────────────────────────────────────────
+    # The formatter needs a flat str→str context for any ${VAR} interpolation
+    # inside secret values; reuse the same one we built for the vars section.
+    format_context: Dict[str, str] = {}
+    if all_vars:
+        format_context = _build_context(common_data, vars=all_vars)
+        format_context = resolve_dict(format_context, format_context)
+
+    lines = _format_tree(display_dict, config_dir, format_context, indent=0, show_source=show_source)
     return "\n".join(lines)

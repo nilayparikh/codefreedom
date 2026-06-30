@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict
 
 import pytest
+import yaml
 
 
 from codefreedom.cli.manage.doctor import (
@@ -449,6 +450,48 @@ class TestResolveEnvVarValue:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Full run() integration test
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestCheckProxyPort:
+    """Regression tests for ``_check_proxy_port``.
+
+    The previous version defined ``hint`` only inside the ``except``
+    branch, so a healthy config would raise
+    ``UnboundLocalError: cannot access local variable 'hint' where it
+    is not associated with a value`` — crashing the entire check and
+    surfacing as a ``[FAIL] Exception: ...`` line in the doctor output.
+    """
+
+    def test_returns_check_result_on_happy_path(self, monkeypatch, tmp_path):
+        """A working config must not raise UnboundLocalError."""
+        from codefreedom.cli.manage.doctor import _check_proxy_port
+
+        # Provide a minimal profiles.yaml that load_config() can parse.
+        profiles = tmp_path / "profiles.yaml"
+        profiles.write_text(yaml.dump({
+            "common": {"proxy": {"bind_port": 5555}},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        monkeypatch.setattr(
+            "codefreedom.cli.manage.doctor.get_config_dir", lambda: tmp_path,
+        )
+
+        result = _check_proxy_port()
+        assert isinstance(result, CheckResult)
+
+    def test_falls_back_to_default_on_load_failure(self, monkeypatch):
+        """When load_config() raises, the check must still return a result."""
+        from codefreedom.cli.manage.doctor import _check_proxy_port
+
+        def _boom():
+            raise RuntimeError("synthetic load failure")
+
+        # ``load_config`` is imported lazily inside _check_proxy_port, so
+        # patch the source module — the import rebinds at call time.
+        monkeypatch.setattr("codefreedom.config.load_config", _boom)
+        result = _check_proxy_port()
+        assert isinstance(result, CheckResult)
 
 
 class TestRun:

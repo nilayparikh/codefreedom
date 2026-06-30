@@ -258,6 +258,45 @@ class TestConfigLoading:
         assert agent_cfg.env["B"] == "override"
 
 
+class TestExtractVars:
+    """``_extract_vars`` — the shared ``vars:`` parser used by both
+    :func:`load_config` and :func:`format_resolved_config`.
+
+    Both code paths must agree on the supported shapes (flat dict and
+    list-of-single-key-dicts) so a ``.cf.yaml`` written in the list form
+    — the form users actually type — contributes its vars to the resolved
+    config *and* the display.
+    """
+
+    def test_dict_form(self):
+        from codefreedom.config.loader import _extract_vars
+
+        assert _extract_vars({"vars": {"A": "1", "B": "2"}}) == {"A": "1", "B": "2"}
+
+    def test_list_of_dicts_form(self):
+        from codefreedom.config.loader import _extract_vars
+
+        layer = {
+            "vars": [
+                {"A": "1"},
+                {"B": "2", "C": "3"},
+            ]
+        }
+        assert _extract_vars(layer) == {"A": "1", "B": "2", "C": "3"}
+
+    def test_empty_when_missing(self):
+        from codefreedom.config.loader import _extract_vars
+
+        assert _extract_vars({}) == {}
+        assert _extract_vars({"vars": None}) == {}
+        assert _extract_vars({"vars": "not-a-dict"}) == {}
+
+    def test_skips_non_dict_items_in_list(self):
+        from codefreedom.config.loader import _extract_vars
+
+        assert _extract_vars({"vars": [{"A": "1"}, "junk", None]}) == {"A": "1"}
+
+
 class TestCfYamlLayer:
     """``load_config(cf_yaml_path=...)`` — per-folder override layer.
 
