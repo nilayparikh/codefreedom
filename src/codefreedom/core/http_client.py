@@ -91,6 +91,8 @@ def _do_get(
         ) from exc
     except urllib.error.URLError as exc:
         raise HTTPError(str(exc.reason)) from exc
+    except OSError as exc:
+        raise HTTPError(str(exc) or exc.__class__.__name__) from exc
 
 
 # ── Public API ───────────────────────────────────────────────────────────────

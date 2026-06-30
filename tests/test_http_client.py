@@ -120,6 +120,39 @@ class TestCheckHealth:
             assert check_health("http://example.com") is False
 
 
+class TestDoGet:
+    def test_connection_reset_becomes_http_error(self):
+        from codefreedom.core.http_client import _do_get
+
+        with patch(
+            "codefreedom.core.http_client._NO_PROXY_OPENER.open",
+            side_effect=ConnectionResetError(104, "Connection reset by peer"),
+        ):
+            with pytest.raises(HTTPError) as exc_info:
+                _do_get("http://example.com/")
+        assert "reset" in str(exc_info.value).lower() or "104" in str(exc_info.value)
+
+    def test_connection_refused_becomes_http_error(self):
+        from codefreedom.core.http_client import _do_get
+
+        with patch(
+            "codefreedom.core.http_client._NO_PROXY_OPENER.open",
+            side_effect=ConnectionRefusedError(111, "Connection refused"),
+        ):
+            with pytest.raises(HTTPError):
+                _do_get("http://example.com/")
+
+    def test_generic_oserror_becomes_http_error(self):
+        from codefreedom.core.http_client import _do_get
+
+        with patch(
+            "codefreedom.core.http_client._NO_PROXY_OPENER.open",
+            side_effect=OSError("boom"),
+        ):
+            with pytest.raises(HTTPError):
+                _do_get("http://example.com/")
+
+
 class TestGetResponse:
     def test_returns_response_object(self):
         resp = _make_response(body=b'{"ok":true}')
