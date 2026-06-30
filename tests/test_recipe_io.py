@@ -177,6 +177,26 @@ class TestSummary:
         captured = capsys.readouterr()
         assert "Recipe: minimal" in captured.out
 
+    def test_non_ascii_hint_does_not_crash(self, capsys, monkeypatch):
+        from codefreedom.cli.main import _configure_streams
+        _configure_streams()
+
+        manifest = {
+            "name": "ascii-test",
+            "description": "Cloud inference — DeepSeek, Azure",
+            "files": [],
+            "required_secrets": [
+                {
+                    "var": "CLINE_PASS_API_KEY",
+                    "prompt": "Cline Pass API key",
+                    "hint": "Create one at https://app.cline.bot → Settings → API Keys",
+                },
+            ],
+        }
+        _print_summary(manifest, Path("/tmp"))
+        captured = capsys.readouterr()
+        assert "CLINE_PASS_API_KEY" in captured.out
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Integration: Full Recipe Apply

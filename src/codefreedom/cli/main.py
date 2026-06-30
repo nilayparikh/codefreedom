@@ -28,6 +28,25 @@ from codefreedom.log import eprint, tag
 from codefreedom.cli.formatter import CodeFreedomHelpFormatter
 
 
+def _configure_streams() -> None:
+    """Reconfigure stdout/stderr to UTF-8 with replacement error handling.
+
+    Windows console uses cp1252 by default, which cannot encode common
+    Unicode characters (em-dash, right arrow, box-drawing) that may appear
+    in user-authored recipe content. Rather than crashing mid-install,
+    we coerce to UTF-8 and replace unencodable code points so a stale
+    ``recipe.yaml`` never bricks a CI run.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
+
 def _print_version() -> None:
     """Print version, Python, Docker, and dependency info."""
     import importlib.metadata
@@ -114,6 +133,7 @@ def _expand_pa_flag() -> None:
 
 
 def main() -> int:
+    _configure_streams()
     _expand_pa_flag()
     parser = argparse.ArgumentParser(
         prog="codefreedom",
