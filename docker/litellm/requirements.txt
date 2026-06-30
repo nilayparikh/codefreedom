@@ -72,6 +72,13 @@ tokenizers>=0.21.0,<1.0
 # --- Background jobs ---
 apscheduler==3.11.2
 
+# --- Redis (optional transaction buffer in LiteLLM v1.90+) ---
+# LiteLLM v1.90 unconditionally imports redis at module level in
+# litellm/_redis.py (the optional use_redis_transaction_buffer feature
+# in proxy_startup_event), even when the feature is disabled.  Add
+# redis to satisfy the import; the feature itself stays off by default.
+redis>=5.0,<6.0
+
 # --- Utility ---
 jinja2>=3.1.6,<4.0
 click>=8.0.0,<9.0
