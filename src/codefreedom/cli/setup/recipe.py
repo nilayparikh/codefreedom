@@ -17,6 +17,7 @@ from codefreedom.recipe.plan import (  # noqa: F401
     plan_and_apply_recipe,
     plan_recipe,
     seed_cf_yaml,
+    _unify_profiles_yaml,
 )
 from codefreedom.recipe.store import (  # noqa: F401
     _fetch_recipe_files,

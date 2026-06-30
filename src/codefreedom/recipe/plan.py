@@ -193,6 +193,12 @@ def init_recipe(
     # ── 2c. Ensure override.yaml exists (user-managed overrides file) ──
     _ensure_override_yaml(config_dir)
 
+    # ── 2d. Unify per-profile files into profiles.yaml ─────────────────
+    # Recipes ship profiles/<name>.yaml per agent and per tool. The
+    # loader reads the unified profiles.yaml, so build it here when the
+    # recipe did not provide one.
+    _unify_profiles_yaml(config_dir)
+
     # ── 3. What's Next summary ──────────────────────────────────────────
     _print_summary(manifest, config_dir)
     return 0
@@ -720,6 +726,99 @@ def _ensure_override_yaml(cf_dir: Path) -> None:
         yaml.dump(override_content, f, default_flow_style=False, sort_keys=False)
 
     print("  [CREATE] override.yaml (user-managed overrides)")
+
+
+_PROFILE_METADATA_KEYS = frozenset({"description", "notes"})
+
+
+def _unify_profiles_yaml(config_dir: Path) -> bool:
+    """Generate the unified ``profiles.yaml`` from per-agent / per-tool files.
+
+    Recipes ship a ``profiles/`` directory containing one YAML file per
+    agent (``profiles/claude-code.yaml``) and per tool
+    (``profiles/chrome.yaml``).  The unified ``profiles.yaml`` is the
+    single source of truth read by :func:`codefreedom.config.load_config`
+    — it groups everything under ``agents.<name>.profiles`` for agents
+    and ``tools.<name>`` for tools.
+
+    Behavior:
+      - If ``profiles.yaml`` already exists at the config root, do
+        nothing (the user or the recipe owns it).
+      - Otherwise, scan ``profiles/*.yaml`` and assemble the unified
+        file from per-agent and per-tool entries.
+      - Returns ``True`` when a file was written.
+
+    Per-agent detection
+      The file has a ``profiles`` key at the top level (the file's
+      ``description`` / ``notes`` are metadata and ignored).
+
+    Per-tool detection
+      The file has a single non-metadata top-level key (its name).  The
+      key becomes the tool name; underscores are converted to hyphens
+      to match the canonical ``codefreedom run tools <name>`` CLI
+      commands.  ``kind`` is inferred:
+
+      * ``kind: tool`` when the entry has an ``image`` field
+      * ``kind: cli`` when the entry has a ``model`` field and no image
+    """
+    import yaml
+
+
+    profiles_yaml = config_dir / "profiles.yaml"
+    if profiles_yaml.exists():
+        return False
+
+    profiles_dir = config_dir / "profiles"
+    if not profiles_dir.is_dir():
+        return False
+
+    agents: dict[str, Any] = {}
+    tools: dict[str, Any] = {}
+    for src in sorted(profiles_dir.glob("*.yaml")):
+        try:
+            data = yaml.safe_load(src.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            eprint(f"{tag('WARN')} Skipping {src.name}: YAML parse error: {exc}")
+            continue
+        if not isinstance(data, dict):
+            continue
+
+        if isinstance(data.get("profiles"), dict):
+            agent_name = src.stem
+            agents[agent_name] = {"profiles": data["profiles"]}
+            continue
+
+        content_keys = [k for k in data.keys() if k not in _PROFILE_METADATA_KEYS]
+        if len(content_keys) == 1:
+            tool_name = content_keys[0].replace("_", "-")
+            entry = dict(data[content_keys[0]])
+            if "kind" not in entry:
+                if "image" in entry:
+                    entry["kind"] = "tool"
+                elif "model" in entry:
+                    entry["kind"] = "cli"
+            tools[tool_name] = entry
+            continue
+
+        eprint(
+            f"{tag('WARN')} Skipping {src.name}: unrecognized profile layout "
+            f"(expected 'profiles:' key or a single tool block)."
+        )
+
+    if not agents and not tools:
+        return False
+
+    unified: dict[str, Any] = {}
+    if agents:
+        unified["agents"] = agents
+    if tools:
+        unified["tools"] = tools
+
+    config_dir.mkdir(parents=True, exist_ok=True)
+    with open(profiles_yaml, "w", encoding="utf-8") as f:
+        yaml.dump(unified, f, default_flow_style=False, sort_keys=False)
+    print(f"  {tag('CREATE')} profiles.yaml (unified from profiles/*.yaml)")
+    return True
 
 
 def _write_cf_yaml(cf_dir: Path, folder: Optional[str], force: bool = False) -> bool:
