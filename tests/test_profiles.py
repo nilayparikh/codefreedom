@@ -258,6 +258,318 @@ class TestConfigLoading:
         assert agent_cfg.env["B"] == "override"
 
 
+class TestExtractVars:
+    """``_extract_vars`` — the shared ``vars:`` parser used by both
+    :func:`load_config` and :func:`format_resolved_config`.
+
+    Both code paths must agree on the supported shapes (flat dict and
+    list-of-single-key-dicts) so a ``.cf.yaml`` written in the list form
+    — the form users actually type — contributes its vars to the resolved
+    config *and* the display.
+    """
+
+    def test_dict_form(self):
+        from codefreedom.config.loader import _extract_vars
+
+        assert _extract_vars({"vars": {"A": "1", "B": "2"}}) == {"A": "1", "B": "2"}
+
+    def test_list_of_dicts_form(self):
+        from codefreedom.config.loader import _extract_vars
+
+        layer = {
+            "vars": [
+                {"A": "1"},
+                {"B": "2", "C": "3"},
+            ]
+        }
+        assert _extract_vars(layer) == {"A": "1", "B": "2", "C": "3"}
+
+    def test_empty_when_missing(self):
+        from codefreedom.config.loader import _extract_vars
+
+        assert _extract_vars({}) == {}
+        assert _extract_vars({"vars": None}) == {}
+        assert _extract_vars({"vars": "not-a-dict"}) == {}
+
+    def test_skips_non_dict_items_in_list(self):
+        from codefreedom.config.loader import _extract_vars
+
+        assert _extract_vars({"vars": [{"A": "1"}, "junk", None]}) == {"A": "1"}
+
+
+class TestCfYamlLayer:
+    """``load_config(cf_yaml_path=...)`` — per-folder override layer.
+
+    .cf.yaml is the highest-precedence YAML layer, above override.yaml
+    and below CF_CLI_* machine env. The path is explicit (no auto-
+    discovery) so callers must opt in.
+    """
+
+    def test_cf_yaml_overrides_override(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "base"}}}}}
+        })
+        _write_override(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "override"}}}}}
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump(
+            {"agents": {"claude-code": {"profiles": {"default": {"env": {"A": "cf_yaml"}}}}}},
+            default_flow_style=False, sort_keys=False,
+        ))
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "cf_yaml"
+
+    def test_cf_yaml_merges_without_removing_overridden_keys(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1", "B": "2"}}}}}
+        })
+        _write_override(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "ov"}}}}}
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump(
+            {"agents": {"claude-code": {"profiles": {"default": {"env": {"B": "cf"}}}}}},
+            default_flow_style=False, sort_keys=False,
+        ))
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "ov"
+        assert agent_cfg.env["B"] == "cf"
+
+    def test_no_cf_yaml_path_means_no_layer(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1"}}}}}
+        })
+        _write_override(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "ov"}}}}}
+        })
+
+        config = load_config(tmp_path)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "ov"
+
+    def test_missing_cf_yaml_path_is_silent(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1"}}}}}
+        })
+
+        config = load_config(tmp_path, cf_yaml_path=tmp_path / "missing.yaml")
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "1"
+
+    def test_cf_yaml_can_add_new_agent(self, tmp_path):
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "1"}}}}}
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump(
+            {"agents": {"open-code": {"profiles": {"default": {"env": {"B": "2"}}}}}},
+            default_flow_style=False, sort_keys=False,
+        ))
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        assert "open-code" in config.agents
+        assert config.for_agent("open-code").env["B"] == "2"
+        assert config.for_agent("claude-code").env["A"] == "1"
+
+    def test_cf_yaml_can_override_vars(self, tmp_path):
+        _write(tmp_path, {
+            "vars": {"SUFFIX_ID": "from_profiles"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+        })
+        _write_override(tmp_path, {
+            "vars": {"SUFFIX_ID": "from_override"},
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text("vars:\n  SUFFIX_ID: from_cf_yaml\n", encoding="utf-8")
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        assert config.common.suffix_id == "from_cf_yaml"
+
+    def test_cf_cli_still_wins_over_cf_yaml(self, tmp_path, monkeypatch):
+        """CF_CLI_* is the highest priority layer; ${VAR} refs in cf.yaml resolve from it."""
+        _write(tmp_path, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "base"}}}}}
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump(
+            {"agents": {"claude-code": {"profiles": {"default": {"env": {"A": "${A}"}}}}}},
+            default_flow_style=False, sort_keys=False,
+        ))
+        monkeypatch.setenv("CF_CLI_A", "from_cf_cli")
+
+        config = load_config(tmp_path, cf_yaml_path=cf_yaml)
+        agent_cfg = config.for_agent("claude-code")
+        assert agent_cfg.env["A"] == "from_cf_cli"
+
+
+class TestCfYamlAutoDiscovery:
+    """Centralized .cf.yaml auto-discovery in :func:`load_config`.
+
+    When the caller does not pass ``cf_yaml_path`` and the env var is
+    unset, :func:`load_config` walks up from the cwd looking for a
+    ``.cf.yaml`` so every command (proxy, doctor, tools, git, ...)
+    benefits from the same precedence layer without per-module plumbing.
+    """
+
+    def test_env_var_overrides_walk_up(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CF_CLI_CF_YAML", str(tmp_path / "explicit.yaml"))
+        (tmp_path / "explicit.yaml").write_text(
+            yaml.dump({"vars": {"X": "from_env_var"}}), encoding="utf-8"
+        )
+        cwd_marker = tmp_path / ".cf.yaml"
+        cwd_marker.write_text(
+            yaml.dump({"vars": {"X": "from_cwd"}}), encoding="utf-8"
+        )
+        monkeypatch.chdir(tmp_path)
+
+        from codefreedom.config.loader import _resolve_cf_yaml_path
+        resolved = _resolve_cf_yaml_path()
+        assert resolved == tmp_path / "explicit.yaml"
+
+    def test_walk_up_finds_cwd_cf_yaml(self, tmp_path, monkeypatch):
+        (tmp_path / ".cf.yaml").write_text(
+            yaml.dump({"vars": {"X": "from_cwd"}}), encoding="utf-8"
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("CF_CLI_CF_YAML", raising=False)
+
+        from codefreedom.config.loader import _resolve_cf_yaml_path
+        resolved = _resolve_cf_yaml_path()
+        assert resolved == tmp_path / ".cf.yaml"
+
+    def test_walk_up_finds_parent_cf_yaml(self, tmp_path, monkeypatch):
+        """A .cf.yaml several directories up is still picked up."""
+        (tmp_path / ".cf.yaml").write_text(
+            yaml.dump({"vars": {"X": "from_parent"}}), encoding="utf-8"
+        )
+        deep = tmp_path / "a" / "b" / "c"
+        deep.mkdir(parents=True)
+        monkeypatch.chdir(deep)
+        monkeypatch.delenv("CF_CLI_CF_YAML", raising=False)
+
+        from codefreedom.config.loader import _resolve_cf_yaml_path
+        resolved = _resolve_cf_yaml_path()
+        assert resolved == tmp_path / ".cf.yaml"
+
+    def test_no_cf_yaml_returns_none(self, tmp_path, monkeypatch):
+        deep = tmp_path / "a" / "b"
+        deep.mkdir(parents=True)
+        monkeypatch.chdir(deep)
+        monkeypatch.delenv("CF_CLI_CF_YAML", raising=False)
+
+        from codefreedom.config.loader import _resolve_cf_yaml_path
+        assert _resolve_cf_yaml_path() is None
+
+    def test_walk_up_is_bounded(self, tmp_path, monkeypatch):
+        """Walk-up respects ``_CF_YAML_WALK_MAX_DEPTH`` and stops."""
+        (tmp_path / ".cf.yaml").write_text(
+            yaml.dump({"vars": {"X": "too_far"}}), encoding="utf-8"
+        )
+        deep = tmp_path
+        for _ in range(20):
+            deep = deep / "more"
+            deep.mkdir()
+        monkeypatch.chdir(deep)
+        monkeypatch.delenv("CF_CLI_CF_YAML", raising=False)
+
+        from codefreedom.config.loader import _resolve_cf_yaml_path
+        assert _resolve_cf_yaml_path() is None
+
+    def test_load_config_picks_up_cwd_cf_yaml(self, tmp_path, monkeypatch):
+        """``load_config()`` with no args auto-discovers ``.cf.yaml`` in cwd.
+
+        This is the contract every command relies on: a user drops
+        ``.cf.yaml`` in the cwd and ``cf r ag cc`` / ``cf g cmt`` /
+        ``cf m dr`` / ``cf run proxy`` all pick it up.
+        """
+        cf_home = tmp_path / "cf"
+        config_dir = cf_home / "config"
+        config_dir.mkdir(parents=True)
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+        _write(config_dir, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "base"}}}}}
+        })
+        _write_override(config_dir, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "ov"}}}}}
+        })
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(
+            yaml.dump({
+                "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "cf_yaml"}}}}}
+            }, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("CF_CLI_CF_YAML", raising=False)
+
+        config = load_config()
+        assert config.for_agent("claude-code").env["A"] == "cf_yaml"
+
+    def test_load_config_ignores_cwd_when_env_explicit(self, tmp_path, monkeypatch):
+        """``CF_CLI_CF_YAML=<other>`` overrides the cwd walk-up."""
+        cf_home = tmp_path / "cf"
+        config_dir = cf_home / "config"
+        config_dir.mkdir(parents=True)
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+        _write(config_dir, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "base"}}}}}
+        })
+        other = tmp_path / "other"
+        other.mkdir()
+        (other / "explicit.yaml").write_text(
+            yaml.dump({
+                "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "from_env"}}}}}
+            }, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        (tmp_path / ".cf.yaml").write_text(
+            yaml.dump({
+                "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "from_cwd"}}}}}
+            }, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CF_CLI_CF_YAML", str(other / "explicit.yaml"))
+
+        config = load_config()
+        assert config.for_agent("claude-code").env["A"] == "from_env"
+
+    def test_load_config_empty_env_disables_auto_discovery(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Setting ``CF_CLI_CF_YAML=""`` opts out of walk-up discovery.
+
+        This is the escape hatch the conftest fixture uses to keep
+        tests isolated from a stray ``.cf.yaml`` in the repo root.
+        """
+        cf_home = tmp_path / "cf"
+        config_dir = cf_home / "config"
+        config_dir.mkdir(parents=True)
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+        _write(config_dir, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "base"}}}}}
+        })
+        _write_override(config_dir, {
+            "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "ov"}}}}}
+        })
+        (tmp_path / ".cf.yaml").write_text(
+            yaml.dump({
+                "agents": {"claude-code": {"profiles": {"default": {"env": {"A": "from_cwd"}}}}}
+            }, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CF_CLI_CF_YAML", "")
+
+        config = load_config()
+        assert config.for_agent("claude-code").env["A"] == "ov"
+
+
 class TestProfileEnv:
     """Tests for profile env resolution with ${VAR} interpolation."""
 

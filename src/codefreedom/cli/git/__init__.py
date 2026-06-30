@@ -1,8 +1,8 @@
 """cf git — Git commit and PR workflow commands.
 
 Subcommands:
-    cf git cmt   — LLM-powered commit message generation and committing
-    cf git pr    — LLM-powered PR title/description generation and creation
+    cf git commit   — LLM-powered commit message generation and committing
+    cf git pr       — LLM-powered PR title/description generation and creation
 """
 
 from __future__ import annotations
@@ -17,10 +17,10 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     """Build the argument parser for cf git."""
     sub = parser.add_subparsers(dest="git_command", title="git commands")
 
-    # ── git cmt ──────────────────────────────────────────────────────────
+    # ── git commit ───────────────────────────────────────────────────────
     cmt = sub.add_parser(
-        "cmt",
-        aliases=["c"],
+        "commit",
+        aliases=["c", "cmt"],
         help="Generate commit message via LLM and commit",
         description="LLM-powered commit workflow: stage, generate message, confirm, commit.",
     )
@@ -71,10 +71,11 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     pr = sub.add_parser(
         "pr",
         aliases=["p"],
-        help="Generate PR title/description and create PR",
+        help="Generate PR title/description and create PR (default: create)",
         description="LLM-powered PR workflow: generate title and body, create PR.",
     )
     pr_sub = pr.add_subparsers(dest="pr_action", title="pr actions")
+    pr_sub.required = False
 
     pr_default = pr_sub.add_parser(
         "create",
@@ -91,12 +92,14 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     _add_pr_flags(pr_gen)
     pr_gen.set_defaults(func=_dispatch_pr_generate)
 
+    pr.set_defaults(pr_action="create", func=_dispatch_pr_create)
+
 
 def _add_pr_flags(parser: argparse.ArgumentParser) -> None:
     """Add shared flags to a PR subparser."""
     parser.add_argument(
-        "-s", "--source",
-        type=str, default=None,
+        "-f", "--from",
+        type=str, default=None, dest="source",
         help="Source branch (default: current branch)",
     )
     parser.add_argument(

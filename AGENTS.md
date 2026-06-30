@@ -115,8 +115,8 @@ Each layer calls only the layer below it. No cross-layer or sideways calls.
 ```text
 cf setup    (s)   init (i) | config (c) | deinit (di)
 cf run      (r)   agent (ag) | proxy (px) | tools (tl)
-cf manage   (m)   doctor (dr) | update (up) | admin (adm/ad)
-cf git      (g)   cmt (c) | pr (p)
+cf manage   (m)   doctor (dr) | update (up) | admin (adm)
+cf git      (g)   commit (c) | pr (p)
 ```
 
 ### Registered Agents
@@ -321,9 +321,12 @@ Priority (lowest to highest):
 1. `profiles.yaml` — recipe-managed defaults with `${VAR:-default}`
 2. `recipe.yaml` — recipe vars (override profiles)
 3. `override.yaml` — user overrides (same schema)
-4. `CF_CLI_*` — secrets from machine env (prefix stripped, highest priority)
+4. `.cf.yaml` — per-folder override (same schema, explicit path; see below)
+5. `CF_CLI_*` — secrets from machine env (prefix stripped, highest priority)
 
 All layers support `${VAR}` and `${VAR:-default}` interpolation. Empty-string values in `CF_CLI_*` are valid overrides (do NOT fall through to default). No `.env` files are read — all configuration comes from YAML + `CF_CLI_*` env vars.
+
+**Per-folder `.cf.yaml`:** Use `cf s folder <path>` (alias `cf s f`) to copy the current `override.yaml` into `<path>/.cf.yaml`. The file is the same schema as `override.yaml` and sits one layer above it. Activate it by exporting `CF_CLI_CF_YAML=<path>` (or by passing `cf_yaml_path=` to `load_config()`). Existing `.cf.yaml` files are not overwritten by default — pass `--force` to override. The git module's existing block-schema `.cf.yaml` (`git:` block) is unaffected: it lives in a different top-level key and is read by `cli/git/config.py`, not by `load_config`.
 
 **Bind address:** Configure via `common.bind_address` in `override.yaml` or `CF_CLI_BIND_ADDRESS` env var. Default: `0.0.0.0` (all interfaces, remote-accessible).
 
@@ -537,7 +540,7 @@ Recipes are config bundles from `github.com/nilayparikh/codefreedom-recipes`.
 
 Both recipes extend `_default` (base config with shared tool profiles, proxy config, plugins). `_default` is not directly visible to users — it is applied automatically as a base layer.
 
-Apply with: `cf s i -pa <recipe-name>`
+Apply with: `cf s i install <recipe-name>` (or `cf s i <recipe-name>`)
 
 ## MCP Servers
 

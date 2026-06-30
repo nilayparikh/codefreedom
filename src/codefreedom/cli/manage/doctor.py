@@ -579,33 +579,31 @@ def _check_codebase_memory_profile() -> CheckResult:
 
 
 def _check_tool_profile(name: str, label: str) -> CheckResult:
-    from codefreedom.core.config import get_config_dir
+    """Verify a tool profile is present in the resolved unified config.
 
-    config_dir = get_config_dir()
-    profiles_path = config_dir / "profiles.yaml"
+    Uses :func:`codefreedom.config.load_config` so the same precedence
+    chain (``profiles.yaml`` → ``recipe.yaml`` → ``override.yaml`` →
+    ``.cf.yaml``) is honoured — a tool added in ``override.yaml`` shows
+    up here just as it would in ``cf run tools start``.
+    """
+    try:
+        from codefreedom.config import load_config
 
-    if not profiles_path.exists():
+        config = load_config()
+    except FileNotFoundError:
         return _warn(
             f"{label} profile not found (no profiles.yaml)",
             "Run 'cf s i' to install a recipe",
         )
+    except Exception as e:
+        return _fail(f"Failed to load unified config: {e}")
 
-    try:
-        import yaml
-
-        with open(profiles_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        if not isinstance(data, dict):
-            return _fail("profiles.yaml is not a valid mapping")
-        tools = data.get("tools", {})
-        if name in tools:
-            return _ok(f"{label} profile found in profiles.yaml (tools.{name})")
-        return _warn(
-            f"{label} profile not found in profiles.yaml",
-            f"Run 'cf s i' to install a recipe with {name} config",
-        )
-    except (yaml.YAMLError, OSError) as e:
-        return _fail(f"profiles.yaml has parse errors: {e}")
+    if name in config.tools:
+        return _ok(f"{label} profile found (tools.{name})")
+    return _warn(
+        f"{label} profile not found in resolved config",
+        f"Run 'cf s i' to install a recipe with {name} config",
+    )
 
 
 # ── Section: Env Vars (Proxy) ──────────────────────────────────────────────
@@ -677,28 +675,16 @@ def _check_env_var_optional(name: str, label: str, _source_hint: str) -> CheckRe
 def _load_claude_profile_env() -> dict[str, str]:
     """Load env vars from the Claude Code profile's default profile.
 
-    Returns the ``env`` dict from the ``default`` profile in
-    ``profiles.yaml``, or an empty dict if not found.
+    Returns the resolved ``env`` dict for the ``claude-code`` agent's
+    ``default`` profile — same source ``cf run agent`` uses, so the
+    doctor reflects ``override.yaml`` and ``.cf.yaml`` overrides too.
     """
-    import yaml
+    try:
+        from codefreedom.config import load_config
 
-    from codefreedom.core.config import get_config_dir
-
-    config_dir = get_config_dir()
-    path = config_dir / "profiles.yaml"
-    if path.exists():
-        try:
-            with open(path, encoding="utf-8") as f:
-                data = yaml.safe_load(f)
-            if isinstance(data, dict):
-                profiles = data.get("profiles", {})
-                default = profiles.get("default", {})
-                env = default.get("env", {})
-                if isinstance(env, dict):
-                    return {k: str(v) for k, v in env.items()}
-        except Exception:
-            pass
-    return {}
+        return dict(load_config().for_agent("claude-code", profile="default").env)
+    except Exception:
+        return {}
 
 
 @_section("Environment Variables (Claude)")
@@ -820,14 +806,15 @@ def _check_proxy_port() -> CheckResult:
     proxy is on 4000 even when the user had overridden ``PROXY_PORT`` —
     the inverse of the same masking bug fixed in ``cli/run/proxy.py``.
     """
+    port = 4000
+    hint = "Proxy port (from override.yaml vars.PROXY_PORT or default)"
     try:
         from codefreedom.config import load_config
 
         proxy_env = load_config().for_component("proxy")
         port = int(proxy_env.get("PROXY_PORT", "4000"))
     except Exception:
-        port = 4000
-        hint = "Proxy port (from override.yaml vars.PROXY_PORT or default)"
+        pass
     return _check_port(port, "LiteLLM proxy", hint)
 
 

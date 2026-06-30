@@ -322,6 +322,28 @@ def run(args: argparse.Namespace) -> int:
     eprint(f"{tag('DEINIT')} Starting CodeFreedom teardown...")
     print()
 
+    if not force:
+        eprint(f"{tag('WARN')} About to perform the following destructive actions:")
+        eprint(f"   {tag('DEINIT')} Stop the proxy (docker compose down).")
+        eprint(f"   {tag('DEINIT')} Stop all tool containers (chrome, web, github, web-bridge).")
+        eprint(f"   {tag('DEINIT')} Force-remove any remaining CodeFreedom containers.")
+        eprint(f"   {tag('DEINIT')} Remove the shared 'codefreedom' Docker network.")
+        if clean_images:
+            eprint(f"   {tag('DEINIT')} Remove all CodeFreedom Docker images and PG volumes.")
+        if cf_dir.exists():
+            eprint(f"   {tag('DEINIT')} Permanently DELETE '{cf_dir}' (preserves config/override.yaml).")
+        eprint()
+        try:
+            response = input("   Continue with teardown? [y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            eprint()
+            eprint(f"{tag('DEINIT')} Aborted.")
+            return 1
+        if response not in ("y", "yes"):
+            eprint(f"{tag('DEINIT')} Aborted.")
+            return 1
+        print()
+
     # ── Step 1: Stop the proxy ───────────────────────────────────────────
     _stop_proxy(cf_dir)
     print()

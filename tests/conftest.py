@@ -65,6 +65,22 @@ def _isolate_proxy_api_key():
             os.environ.pop(name, None)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cf_yaml_path(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    """Isolate ``load_config()``'s per-folder .cf.yaml auto-discovery.
+
+    The unified config loader walks up from ``Path.cwd()`` looking for
+    a ``.cf.yaml``; without isolation, a test would pick up the real
+    ``.cf.yaml`` sitting in the repo root and shadow per-test fixtures.
+    We set the env var to an empty string (which the resolver treats as
+    "explicit empty — do not auto-discover") and ``chdir`` into a fresh
+    tmp_path so the walk-up has nothing to find either.
+    """
+    monkeypatch.setenv("CF_CLI_CF_YAML", "")
+    monkeypatch.chdir(tmp_path)
+    yield
+
+
 # ── Shared fixtures ─────────────────────────────────────────────────────
 
 

@@ -56,7 +56,11 @@ def list_recipes(store: Optional[str] = None, staging: bool = False) -> int:
     return 0
 
 
-def init_recipe(name: str, store: Optional[str] = None, staging: bool = False) -> int:
+def init_recipe(
+    name: str,
+    store: Optional[str] = None,
+    staging: bool = False,
+) -> int:
     """Fetch and apply a recipe to ``~/.codefreedom/``.
 
     This is the main entry point for ``cf s i -p <name>``.
@@ -558,16 +562,26 @@ def plan_recipe(name: str, store: Optional[str] = None, staging: bool = False) -
 
 
 def plan_and_apply_recipe(
-    name: str, store: Optional[str] = None, staging: bool = False
+    name: str,
+    store: Optional[str] = None,
+    staging: bool = False,
+    yes: bool = False,
 ) -> int:
     """Plan a recipe, show the preview, then apply after user confirmation.
 
     This is the ``cf setup init --plan-and-apply <name>`` (or ``-pa <name>``)
     workflow — a single command that replaces the two-step plan + apply.
+
+    When ``yes`` is True the confirmation prompt is skipped (for CI / non-
+    interactive use). EOFError and KeyboardInterrupt also bypass the prompt
+    and abort cleanly.
     """
     rc = plan_recipe(name, store=store, staging=staging)
     if rc != 0:
         return rc
+
+    if yes:
+        return init_recipe(name, store=store, staging=staging)
 
     try:
         answer = input(f"\n{tag('RECIPE')} Apply this plan? [y/N] ").strip().lower()
@@ -706,6 +720,91 @@ def _ensure_override_yaml(cf_dir: Path) -> None:
         yaml.dump(override_content, f, default_flow_style=False, sort_keys=False)
 
     print("  [CREATE] override.yaml (user-managed overrides)")
+
+
+def _write_cf_yaml(cf_dir: Path, folder: Optional[str], force: bool = False) -> bool:
+    """Copy ``override.yaml`` to ``<folder>/.cf.yaml`` for per-folder overrides.
+
+    ``.cf.yaml`` is the highest-precedence YAML layer in the config chain
+    (above ``override.yaml``, below ``CF_CLI_*`` machine env). It lets users
+    pin folder-specific overrides — e.g. a different ``SUFFIX_ID`` for an
+    experiment — without editing the global config.
+
+    The path is explicit: no auto-discovery. Callers must opt in via the
+    ``CF_CLI_CF_YAML`` env var, the ``cf_yaml_path`` arg to
+    :func:`codefreedom.config.load_config`, or by running
+    ``cf setup folder [path]`` (which writes the file).
+
+    Behavior:
+      - ``folder`` is ``None`` or empty → no-op.
+      - Relative paths are resolved against :data:`os.getcwd`.
+      - The target folder is created if missing.
+      - If ``<folder>/.cf.yaml`` already exists → leave it alone, emit a
+        warning, and return (``--force`` to overwrite).
+      - If ``override.yaml`` is missing in ``cf_dir`` → silent no-op (the
+        user has nothing to copy yet).
+
+    Returns ``True`` when the file was written, ``False`` otherwise. (Used
+    by the public :func:`seed_cf_yaml` to set the exit code.)
+    """
+    if not folder:
+        return False
+
+    override_path = cf_dir / "override.yaml"
+    if not override_path.exists():
+        eprint(
+            f"{tag('WARN')} override.yaml not found in {cf_dir}; "
+            "run 'cf setup init' first to create it."
+        )
+        return False
+
+    target_dir = Path(folder).expanduser()
+    if not target_dir.is_absolute():
+        target_dir = Path.cwd() / target_dir
+    target_file = target_dir / ".cf.yaml"
+
+    if target_file.exists():
+        if not force:
+            eprint(
+                f"{tag('WARN')} .cf.yaml already exists at {target_file}; "
+                "skipping copy to preserve user edits (use --force to overwrite)."
+            )
+            return False
+        eprint(f"{tag('WARN')} Overwriting existing .cf.yaml at {target_file} (--force).")
+
+    if not target_dir.exists():
+        target_dir.mkdir(parents=True, exist_ok=True)
+        print(f"  {tag('MKDIR')} {target_file.parent}/")
+
+    content = override_path.read_text(encoding="utf-8")
+    target_file.write_text(content, encoding="utf-8")
+    print(f"  {tag('CREATE')} {target_file} (folder-specific override)")
+    print(
+        f"   {tag('INFO')} Activate with:  export CF_CLI_CF_YAML={target_file}"
+    )
+    return True
+
+
+def seed_cf_yaml(
+    config_dir: Path,
+    folder: str = ".",
+    force: bool = False,
+) -> int:
+    """Public entry point for the ``cf setup folder [path]`` subcommand.
+
+    Args:
+        config_dir: CodeFreedom config directory (typically
+            ``~/.codefreedom/config``) where ``override.yaml`` lives.
+        folder: Target folder for ``.cf.yaml`` (default: current directory).
+            Relative paths are resolved against :data:`os.getcwd`.
+        force: Overwrite an existing ``.cf.yaml``.
+
+    Returns:
+        Exit code — ``0`` on success, ``1`` on failure (no override, target
+        occupied without ``force``, etc.).
+    """
+    written = _write_cf_yaml(config_dir, folder, force=force)
+    return 0 if written else 1
 
 
 def _create_recipe_dirs(

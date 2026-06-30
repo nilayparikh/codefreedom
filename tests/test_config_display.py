@@ -170,3 +170,52 @@ class TestFormatResolvedConfig:
         # PROXY_PORT is in profiles.yaml vars, but also defaults to 4000
         # so source could be default or profiles.yaml depending on resolution
         assert "(default)" in output or "(profiles.yaml)" in output
+
+    def test_cf_yaml_layer_is_picked_up(self, tmp_path, monkeypatch):
+        """Regression: ``.cf.yaml`` must show up in the formatted output.
+
+        The auto-discovered ``.cf.yaml`` is the highest-precedence YAML
+        layer, and ``format_resolved_config`` must use the same unified
+        loader as ``cf run`` so the per-folder override is honoured
+        (previously it duplicated the merge logic and missed ``.cf.yaml``
+        when the ``vars:`` section was the list-of-dicts form).
+        """
+        (tmp_path / "profiles.yaml").write_text(yaml.dump({
+            "common": {"suffix_id": "${SUFFIX_ID:-0000}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump({
+            "vars": [{"SUFFIX_ID": "from-cf-yaml"}],
+        }))
+
+        monkeypatch.setenv("CF_CLI_CF_YAML", str(cf_yaml))
+        output = format_resolved_config(tmp_path, show_source=True)
+
+        assert "SUFFIX_ID: from-cf-yaml" in output
+        assert "(.cf.yaml)" in output
+        assert "common:" in output
+        assert "suffix_id: from-cf-yaml" in output
+
+    def test_cf_yaml_overrides_override_yaml(self, tmp_path, monkeypatch):
+        """``.cf.yaml`` wins over ``override.yaml`` for shared keys."""
+        (tmp_path / "profiles.yaml").write_text(yaml.dump({
+            "common": {"suffix_id": "${SUFFIX_ID:-0000}"},
+            "agents": {"claude-code": {"profiles": {"default": {"env": {}}}}},
+            "tools": {"chrome": {}},
+        }))
+        (tmp_path / "override.yaml").write_text(yaml.dump({
+            "vars": {"SUFFIX_ID": "from-override"},
+        }))
+        cf_yaml = tmp_path / ".cf.yaml"
+        cf_yaml.write_text(yaml.dump({
+            "vars": [{"SUFFIX_ID": "from-cf-yaml"}],
+        }))
+
+        monkeypatch.setenv("CF_CLI_CF_YAML", str(cf_yaml))
+        output = format_resolved_config(tmp_path, show_source=True)
+
+        assert "SUFFIX_ID: from-cf-yaml" in output
+        assert "(.cf.yaml)" in output
+        assert "from-override" not in output

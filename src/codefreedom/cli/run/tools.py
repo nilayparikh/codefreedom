@@ -118,22 +118,45 @@ def ensure_tools(selected: set[str] | None = None) -> int:
     return start_all_tools(selected)
 
 
+def _selected_tools(args: argparse.Namespace) -> set[str] | None:
+    """Build the selected-tool set from the per-tool filter flags."""
+    if any(getattr(args, name, False) for name in _TOOL_NAMES):
+        return {name for name in _TOOL_NAMES if getattr(args, name, False)}
+    return None
+
+
+def cmd_start(args: argparse.Namespace) -> int:
+    """`cf run tools start` — start all (or filtered) tools."""
+    return start_all(_selected_tools(args))
+
+
+def cmd_stop(args: argparse.Namespace) -> int:
+    """`cf run tools stop` — stop all (or filtered) tools."""
+    return stop_all(_selected_tools(args))
+
+
+def cmd_restart(args: argparse.Namespace) -> int:
+    """`cf run tools restart` — restart all (or filtered) tools."""
+    return restart_all(_selected_tools(args))
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """`cf run tools status` (default) — show status of all (or filtered) tools."""
+    return status_all(_selected_tools(args))
+
+
 def run(args: argparse.Namespace) -> int:
     """Execute the tools subcommand. Returns exit code."""
-    action = args.action or "status"
-
-    selected: set[str] | None = None
-    if any(getattr(args, name, False) for name in _TOOL_NAMES):
-        selected = {name for name in _TOOL_NAMES if getattr(args, name, False)}
+    action = getattr(args, "action", None) or "status"
 
     if action == "start":
-        return start_all(selected)
+        return cmd_start(args)
     elif action == "stop":
-        return stop_all(selected)
+        return cmd_stop(args)
     elif action == "restart":
-        return restart_all(selected)
+        return cmd_restart(args)
     elif action == "status":
-        return status_all(selected)
+        return cmd_status(args)
     else:
         eprint(f"{tag('ERROR')} Unknown action: {action}")
         eprint("   Valid actions: start, stop, restart, status")

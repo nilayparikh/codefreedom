@@ -559,7 +559,66 @@ class TestRun:
         exit_code = run(args)
         assert exit_code == 0
         assert cleanup_called
-        assert len(prompts) == 2  # images prompt + directory prompt
+        assert len(prompts) == 3  # initial teardown + images + directory
+
+    def test_initial_teardown_prompt_aborts(self, monkeypatch, tmp_path):
+        """Without --force, aborting the initial teardown prompt returns 1
+        and leaves the directory in place."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        self._patch_all(monkeypatch)
+        (tmp_path / "profiles").mkdir(parents=True)
+
+        prompts = []
+
+        def fake_input(prompt):
+            prompts.append(prompt)
+            return "n"
+
+        monkeypatch.setattr("builtins.input", fake_input)
+
+        args = argparse.Namespace(force=False, clean_images=False)
+        exit_code = run(args)
+        assert exit_code == 1
+        assert tmp_path.exists()
+        assert len(prompts) == 1
+        assert "teardown" in prompts[0].lower() or "Continue" in prompts[0]
+
+    def test_initial_teardown_prompt_lists_actions(self, monkeypatch, tmp_path, capsys):
+        """The initial prompt warns about every destructive action."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        self._patch_all(monkeypatch)
+        (tmp_path / "profiles").mkdir(parents=True)
+
+        monkeypatch.setattr("builtins.input", lambda prompt: "n")
+
+        args = argparse.Namespace(force=False, clean_images=True)
+        run(args)
+        captured = capsys.readouterr()
+        assert "Stop the proxy" in captured.err
+        assert "Stop all tool containers" in captured.err
+        assert "Force-remove" in captured.err
+        assert "Docker network" in captured.err
+        assert "Docker images" in captured.err
+        assert "Permanently DELETE" in captured.err
+
+    def test_initial_teardown_prompt_skipped_with_force(self, monkeypatch, tmp_path):
+        """With --force, the initial prompt is skipped (no input call)."""
+        monkeypatch.setenv("CODEFREEDOM_HOME", str(tmp_path))
+        self._patch_all(monkeypatch)
+        (tmp_path / "profiles").mkdir(parents=True)
+
+        input_calls = []
+
+        def fake_input(prompt):
+            input_calls.append(prompt)
+            return "n"
+
+        monkeypatch.setattr("builtins.input", fake_input)
+
+        args = argparse.Namespace(force=True, clean_images=False)
+        exit_code = run(args)
+        assert exit_code == 0
+        assert input_calls == []  # no prompts at all when force=True and no clean-images
 
     def test_clean_images_prompt_abort(self, monkeypatch, tmp_path):
         """With --clean-images, aborting image prompt returns 1."""

@@ -8,12 +8,16 @@ import re
 def render_template(template: str, context: dict[str, str]) -> str:
     """Render a template by replacing ${VAR} with context values.
 
-    Unresolved ${VAR} placeholders are removed from the output.
+    Unresolved ${VAR} placeholders are removed from the output. Empty
+    ``()`` parentheticals left by a missing scope are collapsed so the
+    result is a clean conventional commit (``feat: add login``, not
+    ``feat(): add login``).
     """
     result = template.replace("$${", "${")
     for key, value in context.items():
         result = result.replace(f"${{{key}}}", value)
     result = re.sub(r"\$\{\w+\}", "", result)
+    result = re.sub(r"\(\s*\)", "", result)
     return result.strip()
 
 

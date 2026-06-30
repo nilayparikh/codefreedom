@@ -26,8 +26,8 @@ cf manage update [--services...]                     # Check for updates
 cf setup deinit [--force]                           # Tear down
 
 # Git workflows
-cf git cmt [options] [files]                        # LLM-powered commit (alias: g c)
-cf git pr create|generate [options]                 # LLM-powered PR (alias: g p)
+cf git commit [options] [files]                     # LLM-powered commit (alias: g c)
+cf git pr [create|generate] [options]                # LLM-powered PR (alias: g p)
 ```
 
 ## Agent Commands
@@ -74,6 +74,16 @@ cf setup init -a PLAN_ID                   # Apply a plan
 cf setup init --store URL                  # Custom recipe store
 ```
 
+## Folder Command
+
+```bash
+cf setup folder [PATH]                     # Copy override.yaml to <PATH>/.cf.yaml
+cf setup folder .                          # Seed .cf.yaml in current directory
+cf setup folder /path/to/project --force   # Overwrite existing .cf.yaml
+```
+
+The `folder` subcommand (alias `f`) seeds a per-folder `.cf.yaml` override file. It is the highest-priority YAML layer in the config chain, above `override.yaml` and below `CF_CLI_*`. Activate the file by exporting `CF_CLI_CF_YAML=<path>` before running `cf run` / `cf m` commands.
+
 ## Proxy Commands
 
 ```bash
@@ -112,11 +122,11 @@ cf setup deinit [--force]                        # Tear down
 ## Git Commands
 
 ```bash
-cf git cmt [options] [files]                     # LLM-powered commit workflow
-cf git pr create [options]                       # Create PR via gh CLI
+cf git commit [options] [files]                  # LLM-powered commit workflow
+cf git pr [create] [options]                     # Create PR via gh CLI (default)
 cf git pr generate [options]                     # Generate PR title/body only
 
-# Options for git cmt:
+# Options for git commit:
 -m, --message MSG      Provide commit message directly
 -y, --yes              Auto-commit without confirmation
 -n, --no-scope         Skip scope in conventional commit
@@ -126,7 +136,7 @@ cf git pr generate [options]                     # Generate PR title/body only
 -s, --stage-only       Only commit manually staged changes
 
 # Options for git pr:
--s, --source BRANCH    Source branch (default: current)
+-f, --from BRANCH      Source branch (default: current)
 -t, --target BRANCH    Target branch (default: main)
 -b, --browser-mode     Open browser instead of gh CLI
 --dry-run              Preview without action
@@ -149,7 +159,7 @@ cf git pr generate [options]                     # Generate PR title/body only
 | `cf setup config` | `cf s c` |
 | `cf setup deinit` | `cf s di` |
 | `cf git` | `cf g` |
-| `cf git cmt` | `cf g c` |
+| `cf git commit` | `cf g c` |
 | `cf git pr` | `cf g p` |
 
 ## Deprecated Commands

@@ -18,9 +18,12 @@ No `.env` files. All configuration comes from YAML + `CF_CLI_*` env vars.
 1. `profiles.yaml` — recipe-managed defaults with `${VAR:-default}`
 2. `recipe.yaml` — recipe vars (override profiles)
 3. `override.yaml` — user overrides (same schema)
-4. `CF_CLI_*` — secrets from machine env (prefix stripped, highest priority)
+4. `.cf.yaml` — per-folder override (same schema, explicit path; see below)
+5. `CF_CLI_*` — secrets from machine env (prefix stripped, highest priority)
 
 `${VAR}` interpolation happens at runtime on every `load_config()` call. Files are stored with literal `${VAR}` placeholders — no install-time baking. Empty-string values in `CF_CLI_*` are valid overrides (do NOT fall through to default).
+
+**Per-folder `.cf.yaml`:** Use `cf s folder <path>` (alias `cf s f`) to copy the current `override.yaml` into `<path>/.cf.yaml`. Same schema as `override.yaml`; sits one layer above it. Default path is the current directory. Activate it by exporting `CF_CLI_CF_YAML=<path>` or by passing `cf_yaml_path=` to `load_config()`. Existing `.cf.yaml` files are preserved by default — pass `--force` to overwrite. The existing block-schema `.cf.yaml` used by the `git` module (`git:` block) is unaffected: it lives in a disjoint top-level key and is read by `cli/git/config.py`, not by `load_config`.
 
 ## 3. Tools are Shared Infrastructure
 

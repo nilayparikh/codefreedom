@@ -16,6 +16,7 @@ from codefreedom.recipe.plan import (  # noqa: F401
     list_recipes,
     plan_and_apply_recipe,
     plan_recipe,
+    seed_cf_yaml,
 )
 from codefreedom.recipe.store import (  # noqa: F401
     _fetch_recipe_files,

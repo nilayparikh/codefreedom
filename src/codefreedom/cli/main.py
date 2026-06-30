@@ -5,7 +5,7 @@ Entry point: codefreedom | cf
 Lifecycle grouping (v3) with aliases:
     cf setup    (s)   init (i) | config (c) | deinit (di)
     cf run      (r)   agent (ag) | proxy (px) | tools (tl)
-    cf manage   (m)   doctor (dr) | update (up) | admin (adm/ad)
+    cf manage   (m)   doctor (dr) | update (up) | admin (adm)
 
 Short examples:
     cf r ag cc          # run agent claude-code
@@ -15,7 +15,7 @@ Short examples:
     cf s i              # setup init
     cf r px start       # run proxy start
     cf m dr             # manage doctor
-    cf m ad backup      # manage admin backup
+    cf m ad backup      # manage admin backup (alias adm)
 
 """
 
@@ -26,6 +26,25 @@ import sys
 
 from codefreedom.log import eprint, tag
 from codefreedom.cli.formatter import CodeFreedomHelpFormatter
+
+
+def _configure_streams() -> None:
+    """Reconfigure stdout/stderr to UTF-8 with replacement error handling.
+
+    Windows console uses cp1252 by default, which cannot encode common
+    Unicode characters (em-dash, right arrow, box-drawing) that may appear
+    in user-authored recipe content. Rather than crashing mid-install,
+    we coerce to UTF-8 and replace unencodable code points so a stale
+    ``recipe.yaml`` never bricks a CI run.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
 
 
 def _print_version() -> None:
@@ -98,18 +117,23 @@ def _add_subparser(
 
 
 def _expand_pa_flag() -> None:
-    """Expand ``-pa <name>`` to ``--plan-and-apply <name>`` for argparse."""
+    """Expand ``-pa <name>`` to ``setup init install <name>`` for argparse.
+
+    Kept for backward compatibility with muscle memory. Prefer
+    ``cf setup init install <name>`` (or the ``i`` alias) directly.
+    """
     argv = sys.argv
     for i, arg in enumerate(argv):
         if arg == "-pa" and i + 1 < len(argv):
-            sys.argv = argv[:i] + ["--plan-and-apply", argv[i + 1]] + argv[i + 2:]
+            sys.argv = argv[:i] + ["install", argv[i + 1]] + argv[i + 2:]
             return
         if arg.startswith("-pa=") and len(arg) > 4:
-            sys.argv = argv[:i] + ["--plan-and-apply", arg[4:]] + argv[i + 1:]
+            sys.argv = argv[:i] + ["install", arg[4:]] + argv[i + 1:]
             return
 
 
 def main() -> int:
+    _configure_streams()
     _expand_pa_flag()
     parser = argparse.ArgumentParser(
         prog="codefreedom",
@@ -129,7 +153,7 @@ def main() -> int:
         ),
     )
     parser.add_argument(
-        "-v", "--version", action="store_true", help="Show version and system info"
+        "-V", "--version", action="store_true", help="Show version and system info"
     )
     subparsers = parser.add_subparsers(dest="command", title="commands")
 
@@ -138,7 +162,7 @@ def main() -> int:
         subparsers,
         "setup",
         aliases=["s"],
-        help="One-time setup and configuration (init, config, deinit)",
+        help="One-time setup and configuration (init, folder, config, deinit)",
     )
     setup_sub = setup_parser.add_subparsers(dest="setup_command", title="setup commands")
 
@@ -147,10 +171,24 @@ def main() -> int:
         setup_sub,
         "init",
         aliases=["i"],
-        help="Initialize CodeFreedom config via a recipe",
+        help="Initialize CodeFreedom config via a recipe (install, plan, apply, list)",
         description="Initialize CodeFreedom configuration via a recipe.",
     )
     _build_init_args(init_parser)
+
+    # setup folder
+    folder_parser = _add_subparser(
+        setup_sub,
+        "folder",
+        aliases=["f"],
+        help="Seed a per-folder .cf.yaml override (copies override.yaml)",
+        description=(
+            "Copy the current override.yaml into <PATH>/.cf.yaml so the "
+            "folder can carry its own overrides (highest-priority YAML layer). "
+            "Activate by exporting CF_CLI_CF_YAML=<PATH>/.cf.yaml."
+        ),
+    )
+    _build_folder_args(folder_parser)
 
     # setup config
     config_parser = _add_subparser(
@@ -239,7 +277,7 @@ def main() -> int:
     admin_parser = _add_subparser(
         manage_sub,
         "admin",
-        aliases=["adm", "ad"],
+        aliases=["adm"],
         help="Backup, restore, list, inspect, and prune configuration",
     )
     from codefreedom.cli.manage.admin import build_parser as build_admin_parser
@@ -250,7 +288,7 @@ def main() -> int:
         subparsers,
         "git",
         aliases=["g"],
-        help="Git workflows: commit messages, PR creation (cmt, pr, init)",
+        help="Git workflows: commit messages, PR creation (commit, pr)",
     )
     from codefreedom.cli.git import build_parser as build_git_parser
     build_git_parser(git_parser)
@@ -280,6 +318,8 @@ def main() -> int:
         sc = args.setup_command
         if sc in ("init", "i"):
             _dispatch_init(args)
+        elif sc in ("folder", "f"):
+            _dispatch_folder(args)
         elif sc in ("config", "c"):
             _dispatch_config(args)
         elif sc in ("deinit", "di"):
@@ -308,7 +348,7 @@ def main() -> int:
             _dispatch("codefreedom.cli.manage.doctor", "run", verbose=getattr(args, "verbose", False))
         elif mc in ("update", "up"):
             _dispatch("codefreedom.cli.manage.update", "run", args)
-        elif mc in ("admin", "adm", "ad"):
+        elif mc in ("admin", "adm"):
             _dispatch("codefreedom.cli.manage.admin", "run", args)
         else:
             manage_parser.print_help()
@@ -332,14 +372,68 @@ def main() -> int:
 
 
 def _build_init_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("recipe", type=str, nargs="?", default=None, metavar="RECIPE", help="Recipe name to install (e.g., costeffective-coding)")
-    group = p.add_mutually_exclusive_group()
-    group.add_argument("-p", "--plan", type=str, metavar="NAME", help="Preview a recipe: generate .patch files without applying")
-    group.add_argument("-a", "--apply", type=str, metavar="PLAN_ID", help="Apply a previously generated plan by ID")
-    group.add_argument("--plan-and-apply", type=str, metavar="NAME", help="Plan and apply a recipe in one step (use -pa <name> for short)")
-    group.add_argument("-l", "--list", action="store_true", help="List all available recipes from the repository")
+    sub = p.add_subparsers(dest="init_command", title="init commands", metavar="<command>")
+    sub.required = False
+
+    install_p = sub.add_parser(
+        "install",
+        aliases=["i"],
+        help="Install a recipe (apply directly to the live config)",
+        description="Install a recipe: resolve the recipe, generate a plan, and apply it in one step.",
+    )
+    install_p.add_argument("recipe", metavar="RECIPE", help="Recipe name to install (e.g., costeffective-coding)")
+    install_p.add_argument(
+        "-y", "--yes", action="store_true",
+        help="Skip confirmation prompt (for non-interactive/CI use)",
+    )
+    _add_store_args(install_p)
+    p.set_defaults(init_command="install", action_recipe="install")
+
+    plan_p = sub.add_parser(
+        "plan",
+        aliases=["p"],
+        help="Preview a recipe: generate .patch files without applying",
+        description="Plan a recipe: write .patch files into the plans dir so you can review the diff first.",
+    )
+    plan_p.add_argument("recipe", metavar="RECIPE", help="Recipe name to plan (e.g., costeffective-coding)")
+    _add_store_args(plan_p)
+    p.set_defaults(action_recipe="plan")
+
+    apply_p = sub.add_parser(
+        "apply",
+        aliases=["a"],
+        help="Apply a previously generated plan by its ID",
+        description="Apply a plan that was generated by 'cf setup init plan'.",
+    )
+    apply_p.add_argument("plan_id", metavar="PLAN_ID", help="Plan identifier (as shown by 'plan')")
+    p.set_defaults(action_recipe="apply")
+
+    list_p = sub.add_parser(
+        "list",
+        aliases=["l"],
+        help="List all available recipes from the repository",
+        description="List recipes from the recipe store without applying any of them.",
+    )
+    _add_store_args(list_p)
+    p.set_defaults(action_recipe="list")
+
+
+def _add_store_args(p: argparse.ArgumentParser) -> None:
+    """Add the common --store / --staging flags to a setup init subcommand."""
     p.add_argument("-s", "--store", type=str, metavar="URL_OR_PATH", default=None, help="Custom recipe store: GitHub URL or local folder path")
     p.add_argument("--staging", action="store_true", help="Use recipes from the 'staging' branch instead of 'main'")
+
+
+def _build_folder_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "path", type=str, nargs="?", default=".",
+        metavar="PATH",
+        help="Folder to write .cf.yaml into (default: current directory)",
+    )
+    p.add_argument(
+        "--force", action="store_true",
+        help="Overwrite existing .cf.yaml (skips the user-edit safety check)",
+    )
 
 
 def _build_proxy_args(p: argparse.ArgumentParser) -> None:
@@ -356,13 +450,22 @@ def _build_proxy_args(p: argparse.ArgumentParser) -> None:
 
 
 def _build_tools_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("action", nargs="?", default="status", choices=["start", "stop", "restart", "status"])
-    tools_group = p.add_argument_group("tool filters (omit for all tools)")
-    tools_group.add_argument("-c", "--chrome", action="store_true", help="Include Chrome browser")
-    tools_group.add_argument("-w", "--web", action="store_true", help="Include Web search")
-    tools_group.add_argument("-g", "--github", action="store_true", help="Include GitHub MCP")
-    tools_group.add_argument("--web-bridge", action="store_true", help="Include Web bridge")
-    tools_group.add_argument("-m", "--codebase-memory", action="store_true", help="Include Codebase Memory MCP")
+    sub = p.add_subparsers(dest="action", title="actions")
+    sub.required = False
+
+    def _add_filters(sp: argparse.ArgumentParser) -> None:
+        grp = sp.add_argument_group("tool filters (omit for all tools)")
+        grp.add_argument("-c", "--chrome", action="store_true", help="Include Chrome browser")
+        grp.add_argument("-w", "--web", action="store_true", help="Include Web search")
+        grp.add_argument("-g", "--github", action="store_true", help="Include GitHub MCP")
+        grp.add_argument("--web-bridge", action="store_true", help="Include Web bridge")
+        grp.add_argument("-m", "--codebase-memory", action="store_true", help="Include Codebase Memory MCP")
+
+    sub.add_parser("status", help="Show tool status (default if no action given)")
+    _add_filters(sub.add_parser("start", help="Start all (or filtered) tools"))
+    _add_filters(sub.add_parser("stop", help="Stop all (or filtered) tools"))
+    _add_filters(sub.add_parser("restart", help="Restart all (or filtered) tools"))
+    p.set_defaults(action="status")
 
 
 def _build_doctor_args(p: argparse.ArgumentParser) -> None:
@@ -400,27 +503,54 @@ def _dispatch_config(args) -> None:
 
 
 def _dispatch_init(args) -> None:
+    cmd = getattr(args, "init_command", None) or "install"
     store = getattr(args, "store", None)
     staging = getattr(args, "staging", False)
 
-    if getattr(args, "list", False):
+    if cmd in ("install", "i"):
+        recipe = getattr(args, "recipe", None)
+        if not recipe:
+            eprint(f"{tag('ERROR')} A recipe name is required. Use 'cf setup init list' to list available recipes.")
+            sys.exit(2)
+        yes = getattr(args, "yes", False)
+        from codefreedom.cli.setup.recipe import plan_and_apply_recipe
+        sys.exit(plan_and_apply_recipe(recipe, store=store, staging=staging, yes=yes))
+
+    if cmd in ("plan", "p"):
+        recipe = getattr(args, "recipe", None)
+        if not recipe:
+            eprint(f"{tag('ERROR')} A recipe name is required. Use 'cf setup init list' to list available recipes.")
+            sys.exit(2)
+        from codefreedom.cli.setup.recipe import plan_recipe
+        sys.exit(plan_recipe(recipe, store=store, staging=staging))
+
+    if cmd in ("apply", "a"):
+        plan_id = getattr(args, "plan_id", None)
+        if not plan_id:
+            eprint(f"{tag('ERROR')} A plan ID is required. Use 'cf setup init plan <name>' to generate one.")
+            sys.exit(2)
+        from codefreedom.cli.setup.recipe import apply_plan
+        sys.exit(apply_plan(plan_id))
+
+    if cmd in ("list", "l"):
         from codefreedom.cli.setup.recipe import list_recipes
         sys.exit(list_recipes(store=store, staging=staging))
-    if getattr(args, "apply", None):
-        from codefreedom.cli.setup.recipe import apply_plan
-        sys.exit(apply_plan(args.apply))
-    if getattr(args, "plan_and_apply", None):
-        from codefreedom.cli.setup.recipe import plan_and_apply_recipe
-        sys.exit(plan_and_apply_recipe(args.plan_and_apply, store=store, staging=staging))
-    if getattr(args, "plan", None):
-        from codefreedom.cli.setup.recipe import plan_recipe
-        sys.exit(plan_recipe(args.plan, store=store, staging=staging))
 
-    if not args.recipe:
-        eprint(f"{tag('ERROR')} A recipe name is required. Use 'cf s i -l' to list available recipes.")
-        sys.exit(2)
-    from codefreedom.cli.setup.recipe import init_recipe
-    sys.exit(init_recipe(args.recipe, store=store, staging=staging))
+
+def _dispatch_folder(args) -> None:
+    """Seed a per-folder ``.cf.yaml`` override file.
+
+    Runs the ``cf s folder [path]`` (``cf s f [path]``) subcommand. Copies
+    the active ``override.yaml`` into ``<path>/.cf.yaml`` so the folder
+    can carry its own overrides (highest-precedence YAML layer). An
+    existing ``.cf.yaml`` is preserved unless ``--force`` is passed.
+    """
+    from codefreedom.cli.setup.recipe import seed_cf_yaml
+    from codefreedom.core.config import get_config_dir
+
+    path = getattr(args, "path", ".") or "."
+    force = getattr(args, "force", False)
+    sys.exit(seed_cf_yaml(config_dir=get_config_dir(), folder=path, force=force))
 
 
 def _dispatch_deinit(args) -> None:

@@ -153,16 +153,18 @@ cleanup() {
 trap cleanup EXIT TERM INT
 
 # ── Plugin bootstrap ────────────────────────────────────────────────────────
-# The reasoning-efforts mapping plugin .py is baked into the image at
-# /app/litellm-plugins/.  LiteLLM's callback loader resolves paths
-# relative to the config file's directory, which is bind-mounted from
-# the host at /app/litellm-config/.  Create a symlink from the mounted
-# directory to the baked location so LiteLLM can find it without
-# copying the .py source onto the host filesystem.
+# Each plugin's .py is baked into the image at /app/litellm-plugins/.
+# LiteLLM's callback loader resolves the module path relative to the
+# config file's directory (/app/litellm-config/).  The recipe's
+# docker-compose.yaml uses SUBPATH mounts so the parent dirs
+# /app/litellm-config/plugins/<name>/ are NOT bind-mounted.  The .yaml
+# files inside are mounted individually; the .py symlinks we create
+# here land in the (container-only) parent dirs and never leak onto
+# the host.  Result: ~/.codefreedom/config/proxy/config/plugins/ on
+# the host contains ONLY user-editable .yaml files.
 #
-# The plugin's YAML config lives on the host (user-editable); the .py
-# code is immutable (baked into the image).  Failures here are non-fatal
-# -- LiteLLM will start without the plugin if the mount is read-only.
+# Failures here are non-fatal -- LiteLLM will start without the plugin
+# if the symlink cannot be created.
 PLUGIN_SRC="/app/litellm-plugins/reasoning_efforts_mapping.py"
 PLUGIN_DST="/app/litellm-config/plugins/reasoning-efforts/reasoning_efforts_mapping.py"
 if [ -f "$PLUGIN_SRC" ]; then
