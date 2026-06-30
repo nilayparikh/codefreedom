@@ -12,7 +12,7 @@
 # @platform  linux/amd64, linux/arm64
 # ─────────────────────────────────────────────────────────────────────────
 
-ARG PG_BASE_IMAGE=nilayparikh/codefreedom:litellm-pg-base-latest
+ARG PG_BASE_IMAGE=ghcr.io/nilayparikh/codefreedom:litellm-pg-base-latest
 FROM ${PG_BASE_IMAGE} AS pg-artifacts
 
 FROM mirror.gcr.io/library/python:3.13-slim

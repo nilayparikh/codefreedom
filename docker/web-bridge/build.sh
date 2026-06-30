@@ -91,7 +91,9 @@ fi
 if [[ "$DRY_RUN" == false ]]; then
     if ! docker buildx inspect "${BUILDER_NAME}" &>/dev/null; then
         echo "Creating buildx builder '${BUILDER_NAME}'..."
-        docker buildx create --name "${BUILDER_NAME}" --driver docker-container --use
+        docker buildx create --name "${BUILDER_NAME}" --driver docker-container \
+            --driver-opt "image=mirror.gcr.io/moby/buildkit:buildx-stable-1" \
+            --use
     else
         docker buildx use "${BUILDER_NAME}"
     fi
