@@ -72,3 +72,30 @@ Both recipes extend `_default`, which provides:
 - Reasoning efforts plugin mapping
 
 When you switch recipes, shared files are merged (`deepdiff`) so your customizations are preserved. Only recipe-specific files (providers, secrets) are replaced.
+
+## Default Tools
+
+Each recipe configures default tools for each agent. The default tools for OpenCode are:
+
+| Tool | Description |
+|------|-------------|
+| **github** | GitHub MCP server for repo operations |
+| **codebase-memory** | Local code knowledge graph (14 MCP tools) |
+| **web** | Camoufox stealth browser for web search/scraping |
+
+To add more tools, edit `~/.codefreedom/config/profiles.yaml`:
+
+```yaml
+agents:
+  open-code:
+    profiles:
+      default:
+        tools:
+          - github
+          - codebase-memory
+          - web
+          - chrome          # Add Chrome for browser automation
+          - web-bridge      # Add Web Bridge for search interception
+```
+
+See [Tools](https://github.com/nilayparikh/codefreedom#tools) for the full list of available tools and configuration options.

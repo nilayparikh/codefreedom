@@ -116,6 +116,171 @@ See the [full documentation](https://nilayparikh.github.io/codefreedom/) for pro
 | Remote tools | Configure MCP endpoints to use remote tool servers |
 | Backup & restore | Config backups with diff preview and selective restore |
 
+## Tools
+
+CodeFreedom provides Docker-based tools that run as MCP servers. Each tool is managed via the unified tool group commands:
+
+```bash
+cf run tools start     # Start all tools
+cf run tools stop      # Stop all tools
+cf run tools restart   # Restart all tools
+cf run tools status    # Show status of all tools
+```
+
+### Available Tools
+
+| Tool | Image | Port | Purpose |
+|------|-------|------|---------|
+| **chrome** | `codefreedom:chrome-latest` | 9222 (CDP), 9223 (MCP) | Headless Chrome browser automation |
+| **web** | `codefreedom:web-latest` | 8420 | Camoufox stealth browser for web search/scraping |
+| **github** | `codefreedom:github-latest` | 8129 | GitHub MCP server for repo operations |
+| **web-bridge** | `codefreedom:web-bridge-latest` | 8500 | SearXNG bridge for web search interception |
+| **codebase-memory** | `codefreedom:codebase-memory-latest` | 8330 | Local code knowledge graph (14 MCP tools) |
+
+#### Chrome
+
+Headless Chromium browser for automation tasks. Provides both CDP (Chrome DevTools Protocol) and MCP endpoints.
+
+- **CDP endpoint:** `http://127.0.0.1:9222`
+- **MCP endpoint:** `http://127.0.0.1:9223/mcp`
+- **Use case:** Browser automation, screenshots, DOM manipulation
+
+#### Web (Camoufox)
+
+Stealth browser based on Camoufox that bypasses anti-bot detection. Provides two MCP tools:
+
+- **`web_search(query)`** — Search configured engines
+- **`web_fetch(url)`** — Fetch a page (bypasses Cloudflare, Akamai, etc.)
+- **MCP endpoint:** `http://127.0.0.1:8420/mcp`
+
+#### GitHub
+
+GitHub MCP server for repository operations (create issues, PRs, search code, etc.).
+
+- **MCP endpoint:** `http://127.0.0.1:8129/mcp`
+- **Required:** `GITHUB_PERSONAL_ACCESS_TOKEN` env var
+- **Use case:** GitHub API interactions, code search, PR management
+
+#### Web Bridge
+
+SearXNG-shaped HTTP bridge that translates web search requests into MCP calls against the Camoufox web_search tool.
+
+- **Endpoint:** `http://127.0.0.1:8500`
+- **Use case:** LiteLLM's websearch_interception routes Claude Code's native WebSearch through this bridge
+
+#### Codebase Memory
+
+Local code knowledge graph that indexes your codebase and provides 14 MCP tools for code search, architecture analysis, and more.
+
+- **MCP endpoint:** `http://127.0.0.1:8330/mcp`
+- **Use case:** Code understanding, architecture analysis, finding functions/classes
+
+### Configuring Tools for OpenCode
+
+Tools are configured per-agent in `~/.codefreedom/config/profiles.yaml`. Each agent profile has a `tools` list that determines which tools are started when the agent launches.
+
+#### Default OpenCode Tools
+
+By default, OpenCode is configured with these tools:
+
+```yaml
+agents:
+  open-code:
+    profiles:
+      default:
+        tools:
+          - github
+          - codebase-memory
+          - web
+```
+
+#### Adding More Tools
+
+To add additional tools to OpenCode, edit `~/.codefreedom/config/profiles.yaml`:
+
+```yaml
+agents:
+  open-code:
+    profiles:
+      default:
+        tools:
+          - github
+          - codebase-memory
+          - web
+          - chrome          # Add Chrome for browser automation
+          - web-bridge      # Add Web Bridge for search interception
+```
+
+#### Custom Profile with Tools
+
+Create a custom profile with specific tools:
+
+```yaml
+agents:
+  open-code:
+    profiles:
+      default:
+        tools:
+          - github
+          - codebase-memory
+          - web
+      browser-focused:
+        description: Profile with full browser automation
+        tools:
+          - github
+          - codebase-memory
+          - web
+          - chrome
+          - web-bridge
+```
+
+Then launch with:
+
+```bash
+cf r ag oc --profile browser-focused
+```
+
+### Tool Configuration Reference
+
+Each tool can be configured in the `tools` section of `profiles.yaml`:
+
+```yaml
+tools:
+  chrome:
+    image: docker.io/nilayparikh/codefreedom:chrome-latest
+    container_name: codefreedom-chrome
+    port: 9222
+    remote_url: http://192.168.1.5:9223  # Optional: use remote tool
+  web:
+    image: docker.io/nilayparikh/codefreedom:web-latest
+    container_name: codefreedom-web
+    port: 8420
+  github:
+    image: docker.io/nilayparikh/codefreedom:github-latest
+    container_name: codefreedom-tools-github
+    port: 8129
+  web-bridge:
+    image: docker.io/nilayparikh/codefreedom:web-bridge-latest
+    container_name: codefreedom-web-bridge
+    port: 8500
+  codebase-memory:
+    image: docker.io/nilayparikh/codefreedom:codebase-memory-latest
+    container_name: codefreedom-tools-codebase-memory
+    port: 8330
+```
+
+### Remote Tools
+
+Configure MCP endpoints to use remote tool servers:
+
+```bash
+cf setup config tools chrome --remote-url http://192.168.1.5:9223
+cf setup config tools web --remote-url http://192.168.1.5:8420
+cf setup config tools github --remote-url http://192.168.1.5:8129
+```
+
+When a tool is configured remote, the local Docker container is not started — the remote endpoint is used verbatim.
+
 ## Requirements
 
 - Python 3.10+

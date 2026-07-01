@@ -103,6 +103,33 @@ Identical to `costeffective-coding`. See [costeffective-coding profiles](costeff
 
 Inherited from `_default`. See [costeffective-coding tools](costeffective-coding.md#tools).
 
+### Default Tools for OpenCode
+
+OpenCode is configured with these default tools:
+
+| Tool | Description |
+| --- | --- |
+| GitHub | GitHub MCP server for repo operations |
+| Codebase Memory | Local code knowledge graph (14 MCP tools) |
+| Web | Camoufox stealth browser for web search/scraping |
+
+To add more tools, edit `~/.codefreedom/config/profiles.yaml`:
+
+```yaml
+agents:
+  open-code:
+    profiles:
+      default:
+        tools:
+          - github
+          - codebase-memory
+          - web
+          - chrome          # Add Chrome for browser automation
+          - web-bridge      # Add Web Bridge for search interception
+```
+
+See [Tools](https://github.com/nilayparikh/codefreedom#tools) for the full list of available tools and configuration options.
+
 ## Files Deployed
 
 ```text

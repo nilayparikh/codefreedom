@@ -161,6 +161,34 @@ Inherited from `_default`:
 | Web | `codefreedom:web-latest` | 8420 | Camoufox stealth browser for web scraping |
 | GitHub | `codefreedom:github-latest` | 8129 | GitHub MCP server for repo operations |
 | Web Bridge | `codefreedom:web-bridge-latest` | 8500 | SearXNG bridge for web search interception |
+| Codebase Memory | `codefreedom:codebase-memory-latest` | 8330 | Local code knowledge graph (14 MCP tools) |
+
+### Default Tools for OpenCode
+
+OpenCode is configured with these default tools:
+
+| Tool | Description |
+| --- | --- |
+| GitHub | GitHub MCP server for repo operations |
+| Codebase Memory | Local code knowledge graph (14 MCP tools) |
+| Web | Camoufox stealth browser for web search/scraping |
+
+To add more tools, edit `~/.codefreedom/config/profiles.yaml`:
+
+```yaml
+agents:
+  open-code:
+    profiles:
+      default:
+        tools:
+          - github
+          - codebase-memory
+          - web
+          - chrome          # Add Chrome for browser automation
+          - web-bridge      # Add Web Bridge for search interception
+```
+
+See [Tools](https://github.com/nilayparikh/codefreedom#tools) for the full list of available tools and configuration options.
 
 ## Proxy Configuration
 
