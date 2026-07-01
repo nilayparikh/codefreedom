@@ -474,6 +474,17 @@ def _build_tools_args(p: argparse.ArgumentParser) -> None:
     _add_filters(sub.add_parser("start", help="Start all (or filtered) tools"))
     _add_filters(sub.add_parser("stop", help="Stop all (or filtered) tools"))
     _add_filters(sub.add_parser("restart", help="Restart all (or filtered) tools"))
+
+    for tool_name in ("chrome", "web", "github", "web-bridge", "codebase-memory"):
+        tool_parser = sub.add_parser(tool_name, help=f"Manage the {tool_name} tool")
+        tool_sub = tool_parser.add_subparsers(dest="tool_action", title="actions")
+        tool_sub.required = False
+        tool_sub.add_parser("status", help=f"Show {tool_name} status")
+        tool_sub.add_parser("start", help=f"Start {tool_name}")
+        tool_sub.add_parser("stop", help=f"Stop {tool_name}")
+        tool_sub.add_parser("restart", help=f"Restart {tool_name}")
+        tool_parser.set_defaults(tool_name=tool_name, tool_action="status")
+
     p.set_defaults(action="status")
 
 

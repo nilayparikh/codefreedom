@@ -119,7 +119,10 @@ def ensure_tools(selected: set[str] | None = None) -> int:
 
 
 def _selected_tools(args: argparse.Namespace) -> set[str] | None:
-    """Build the selected-tool set from the per-tool filter flags."""
+    """Build the selected-tool set from tool-first args or per-tool filter flags."""
+    tool_name = getattr(args, "tool_name", None)
+    if tool_name:
+        return {tool_name}
     if any(getattr(args, name, False) for name in _TOOL_NAMES):
         return {name for name in _TOOL_NAMES if getattr(args, name, False)}
     return None
@@ -145,9 +148,17 @@ def cmd_status(args: argparse.Namespace) -> int:
     return status_all(_selected_tools(args))
 
 
+def _normalized_action(args: argparse.Namespace) -> str:
+    action = getattr(args, "action", None) or "status"
+    if action in _TOOL_NAMES:
+        return getattr(args, "tool_action", None) or "status"
+    return action
+
+
+
 def run(args: argparse.Namespace) -> int:
     """Execute the tools subcommand. Returns exit code."""
-    action = getattr(args, "action", None) or "status"
+    action = _normalized_action(args)
 
     if action == "start":
         return cmd_start(args)

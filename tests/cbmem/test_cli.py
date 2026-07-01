@@ -69,6 +69,11 @@ class TestInit:
 
 
 class TestStart:
+
+    @pytest.fixture(autouse=True)
+    def _mock_browser(self, monkeypatch):
+        monkeypatch.setattr(manager._browser, "open_ui", lambda _url: False)
+
     def test_creates_container(self, repo, capsys):
         cli._cmd_init(repo, _args("init"))
         with patch.object(manager, "container_exists", return_value=False), \
@@ -116,6 +121,11 @@ class TestStop:
 
 
 class TestRestart:
+
+    @pytest.fixture(autouse=True)
+    def _mock_browser(self, monkeypatch):
+        monkeypatch.setattr(manager._browser, "open_ui", lambda _url: False)
+
     def test_stop_then_start(self, repo, capsys):
         cli._cmd_init(repo, _args("init"))
         with patch.object(manager, "stop", return_value=True), \
