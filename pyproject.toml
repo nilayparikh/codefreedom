@@ -89,9 +89,10 @@ Documentation = "https://nilayparikh.github.io/codefreedom/"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Bundled examples removed — configuration is handled by the recipe system.
-# See `cf init recipe` and github.com/nilayparikh/codefreedom-recipes.
-codefreedom = []
+# Bundled proxy docker-compose template — used by `cf run proxy` to refresh
+# stale hardcoded compose files so ${VAR:-default} interpolation honours the
+# override.yaml / .cf.yaml vars chain. See `core.proxy_env` + `cli.run.proxy`.
+codefreedom = ["templates/proxy/docker-compose.yaml"]
 
 # ── Pylint ───────────────────────────────────────────────────────────────────
 [tool.pylint.messages_control]

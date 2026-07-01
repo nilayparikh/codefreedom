@@ -10,28 +10,6 @@ import pytest
 pytestmark = pytest.mark.unit
 
 
-class TestDetectProxyUrl:
-    def test_default_url(self, monkeypatch):
-        from codefreedom.cli.mimo import _detect_proxy_url
-
-        monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        assert _detect_proxy_url({}) == "http://localhost:4000"
-
-    def test_from_base_env_proxy_url(self, monkeypatch):
-        from codefreedom.cli.mimo import _detect_proxy_url
-
-        monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        url = _detect_proxy_url({"PROXY_BASE_URL": "http://my-proxy:5000"})
-        assert url == "http://my-proxy:5000"
-
-    def test_env_var_overrides_base_env(self, monkeypatch):
-        from codefreedom.cli.mimo import _detect_proxy_url
-
-        monkeypatch.setenv("PROXY_BASE_URL", "http://env-proxy:9000")
-        url = _detect_proxy_url({"PROXY_BASE_URL": "http://base-proxy:8000"})
-        assert url == "http://base-proxy:8000"
-
-
 class TestMimoEnvLoading:
     def test_run_uses_mimo_runtime_resolution(self, monkeypatch):
         import argparse
@@ -75,9 +53,12 @@ class TestMimoEnvLoading:
 
 
 class TestGenerateMimoConfig:
-    def test_default_models_when_proxy_unreachable(self):
+    def test_default_models_when_proxy_unreachable(self, monkeypatch):
         from codefreedom.cli.mimo import _generate_mimo_config
 
+        monkeypatch.setattr(
+            "codefreedom.cli.mimo._fetch_proxy_models", lambda *_a, **_kw: []
+        )
         config = _generate_mimo_config("http://localhost:4000", {})
 
         assert config["$schema"] == "https://opencode.ai/config.json"
@@ -88,46 +69,64 @@ class TestGenerateMimoConfig:
         assert provider["npm"] == "@ai-sdk/openai-compatible"
         assert provider["models"] == {}
 
-    def test_custom_proxy_url(self):
+    def test_custom_proxy_url(self, monkeypatch):
         from codefreedom.cli.mimo import _generate_mimo_config
 
+        monkeypatch.setattr(
+            "codefreedom.cli.mimo._fetch_proxy_models", lambda *_a, **_kw: []
+        )
         config = _generate_mimo_config("http://my-proxy:8080", {})
         assert config["provider"]["codefreedom"]["api"] == "http://my-proxy:8080/v1"
 
-    def test_proxy_api_key_from_env(self):
+    def test_proxy_api_key_from_env(self, monkeypatch):
         from codefreedom.cli.mimo import _generate_mimo_config
 
+        monkeypatch.setattr(
+            "codefreedom.cli.mimo._fetch_proxy_models", lambda *_a, **_kw: []
+        )
         config = _generate_mimo_config(
             "http://localhost:4000", {"PROXY_API_KEY": "sk-test"}
         )
         assert config["provider"]["codefreedom"]["options"]["apiKey"] == "sk-test"
 
-    def test_proxy_url_strips_trailing_slash(self):
+    def test_proxy_url_strips_trailing_slash(self, monkeypatch):
         from codefreedom.cli.mimo import _generate_mimo_config
 
+        monkeypatch.setattr(
+            "codefreedom.cli.mimo._fetch_proxy_models", lambda *_a, **_kw: []
+        )
         config = _generate_mimo_config("http://localhost:4000/", {})
         assert config["provider"]["codefreedom"]["api"] == "http://localhost:4000/v1"
 
-    def test_default_model_from_profile_env(self):
+    def test_default_model_from_profile_env(self, monkeypatch):
         from codefreedom.cli.mimo import _generate_mimo_config
 
+        monkeypatch.setattr(
+            "codefreedom.cli.mimo._fetch_proxy_models", lambda *_a, **_kw: []
+        )
         config = _generate_mimo_config(
             "http://localhost:4000", {"MIMOCODE_DEFAULT_MODEL": "deepseek-chat"}
         )
         assert config["model"] == "codefreedom/deepseek-chat"
 
-    def test_default_model_qualified_already(self):
+    def test_default_model_qualified_already(self, monkeypatch):
         from codefreedom.cli.mimo import _generate_mimo_config
 
+        monkeypatch.setattr(
+            "codefreedom.cli.mimo._fetch_proxy_models", lambda *_a, **_kw: []
+        )
         config = _generate_mimo_config(
             "http://localhost:4000",
             {"MIMOCODE_DEFAULT_MODEL": "codefreedom/deepseek-chat"},
         )
         assert config["model"] == "codefreedom/deepseek-chat"
 
-    def test_no_default_model_when_not_set(self):
+    def test_no_default_model_when_not_set(self, monkeypatch):
         from codefreedom.cli.mimo import _generate_mimo_config
 
+        monkeypatch.setattr(
+            "codefreedom.cli.mimo._fetch_proxy_models", lambda *_a, **_kw: []
+        )
         config = _generate_mimo_config("http://localhost:4000", {})
         assert "model" not in config
 

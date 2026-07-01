@@ -280,6 +280,15 @@ def discover_images() -> list[dict[str, str]]:
 
     # 2. proxy docker-compose.yaml
     compose_path = config_dir / "proxy" / "docker-compose.yaml"
+    # Refresh stale hardcoded compose file so ${VAR:-default} interpolation
+    # honours the override.yaml / .cf.yaml vars chain. No-op when already
+    # templated. Done before image scanning so the templated image line is
+    # parsed correctly.
+    if compose_path.exists():
+        from codefreedom.core.proxy_env import ensure_compose_template
+
+        ensure_compose_template(compose_path)
+
     if compose_path.exists():
         try:
             text = compose_path.read_text(encoding="utf-8")
