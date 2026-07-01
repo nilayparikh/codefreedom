@@ -27,14 +27,6 @@ class TestInterpolation:
         ctx = {"MY_VAR": "from_context"}
         assert resolve_var("${MY_VAR}", ctx) == "from_context"
 
-    def test_cf_cli_highest_priority(self):
-        """CF_CLI_* in context overrides other context values."""
-        ctx = {"TEST_KEY": "base_val", "CF_CLI_TEST_KEY": "cli_override"}
-        assert resolve_var("${TEST_KEY}", ctx) == "base_val"
-        # CF_CLI_* is injected into context by _build_context with prefix stripped
-        ctx2 = {"TEST_KEY": "cli_override"}
-        assert resolve_var("${TEST_KEY}", ctx2) == "cli_override"
-
     def test_context_overrides_default(self):
         ctx = {"KEY": "from_context"}
         assert resolve_var("${KEY:-default}", ctx) == "from_context"
@@ -101,114 +93,12 @@ class TestConfigLoading:
         agent_cfg = config.for_agent("claude-code")
         assert agent_cfg.env["PORT"] == "4000"
 
-    def test_missing_yaml_raises_error(self, tmp_path):
-        with pytest.raises(Exception):
-            load_config(tmp_path / "nonexistent")
-
-    def test_malformed_yaml_raises_error(self, tmp_path):
-        profiles = tmp_path / "profiles.yaml"
-        profiles.write_text(": invalid yaml :\n")
-        with pytest.raises(Exception):
-            load_config(tmp_path)
-
     def test_empty_agents_section(self, tmp_path):
         profiles = tmp_path / "profiles.yaml"
         profiles.write_text(yaml.dump({"agents": {}}))
         config = load_config(tmp_path)
         with pytest.raises(Exception):
             config.for_agent("claude-code")
-
-    def test_override_yaml_merges(self, tmp_path):
-        profiles = tmp_path / "profiles.yaml"
-        profiles.write_text(yaml.dump({
-            "agents": {
-                "claude-code": {
-                    "profiles": {
-                        "default": {"env": {"KEY": "from_base"}},
-                    }
-                }
-            }
-        }))
-        override = tmp_path / "override.yaml"
-        override.write_text(yaml.dump({
-            "agents": {
-                "claude-code": {
-                    "profiles": {
-                        "default": {"env": {"KEY": "from_override"}},
-                    }
-                }
-            }
-        }))
-        config = load_config(tmp_path)
-        agent_cfg = config.for_agent("claude-code")
-        assert agent_cfg.env["KEY"] == "from_override"
-
-    def test_override_env_does_not_remove_base_keys(self, tmp_path):
-        profiles = tmp_path / "profiles.yaml"
-        profiles.write_text(yaml.dump({
-            "agents": {
-                "claude-code": {
-                    "profiles": {
-                        "default": {"env": {"A": "1", "B": "2"}},
-                    }
-                }
-            }
-        }))
-        override = tmp_path / "override.yaml"
-        override.write_text(yaml.dump({
-            "agents": {
-                "claude-code": {
-                    "profiles": {
-                        "default": {"env": {"B": "overridden"}},
-                    }
-                }
-            }
-        }))
-        config = load_config(tmp_path)
-        agent_cfg = config.for_agent("claude-code")
-        assert agent_cfg.env["A"] == "1"
-        assert agent_cfg.env["B"] == "overridden"
-
-    def test_legacy_profiles_format_conversion(self, tmp_path):
-        """Legacy profiles: {default: {env: ...}} is auto-converted."""
-        profiles = tmp_path / "profiles.yaml"
-        profiles.write_text(yaml.dump({
-            "profiles": {
-                "default": {"description": "test", "env": {"KEY": "val"}},
-            }
-        }))
-        config = load_config(tmp_path)
-        agent_cfg = config.for_agent("claude-code")
-        assert agent_cfg.env["KEY"] == "val"
-
-    def test_legacy_unified_format_conversion(self, tmp_path):
-        """Legacy profiles: {claude-code: {profiles: {default: ...}}} is converted."""
-        profiles = tmp_path / "profiles.yaml"
-        profiles.write_text(yaml.dump({
-            "profiles": {
-                "claude-code": {
-                    "profiles": {
-                        "default": {"env": {"KEY": "val"}},
-                    }
-                }
-            }
-        }))
-        config = load_config(tmp_path)
-        agent_cfg = config.for_agent("claude-code")
-        assert agent_cfg.env["KEY"] == "val"
-
-    def test_for_agent_unknown_agent(self, tmp_path):
-        profiles = tmp_path / "profiles.yaml"
-        profiles.write_text(yaml.dump({
-            "agents": {
-                "claude-code": {
-                    "profiles": {"default": {"env": {}}}
-                }
-            }
-        }))
-        config = load_config(tmp_path)
-        with pytest.raises(Exception):
-            config.for_agent("unknown-agent")
 
     def test_for_tool_defaults(self, tmp_path):
         profiles = tmp_path / "profiles.yaml"

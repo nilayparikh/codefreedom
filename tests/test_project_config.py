@@ -90,19 +90,25 @@ class TestUpdateCfYaml:
 
 
 class TestFindCfYaml:
-    def test_finds_in_git_root(self, git_repo, monkeypatch):
-        monkeypatch.chdir(git_repo)
-        (git_repo / ".cf.yaml").write_text("git: {}", encoding="utf-8")
-        result = find_cf_yaml(git_repo)
+    def test_finds_in_git_root(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "codefreedom.cli.project_config.get_git_root", lambda _p: tmp_path
+        )
+        (tmp_path / ".cf.yaml").write_text("git: {}", encoding="utf-8")
+        result = find_cf_yaml(tmp_path)
         assert result is not None
         assert result.name == ".cf.yaml"
 
-    def test_returns_none_when_missing(self, git_repo, monkeypatch):
-        monkeypatch.chdir(git_repo)
-        result = find_cf_yaml(git_repo)
+    def test_returns_none_when_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "codefreedom.cli.project_config.get_git_root", lambda _p: tmp_path
+        )
+        result = find_cf_yaml(tmp_path)
         assert result is None
 
     def test_returns_none_outside_repo(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "codefreedom.cli.project_config.get_git_root", lambda _p: None
+        )
         result = find_cf_yaml(tmp_path)
         assert result is None

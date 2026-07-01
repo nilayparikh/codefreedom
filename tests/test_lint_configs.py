@@ -1,9 +1,3 @@
-"""Tests for workflow YAML and Dockerfile linting.
-
-Uses actionlint (GitHub Actions) and hadolint (Dockerfile) via Docker.
-Falls back to structural Python checks if Docker is unavailable.
-"""
-
 from __future__ import annotations
 
 import subprocess
@@ -16,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 DOCKER_DIR = REPO_ROOT / "docker"
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 
 def _docker_available() -> bool:
@@ -73,9 +67,6 @@ def _docker_linux_image_available(image: str) -> bool:
     return '"os": "linux"' in output
 
 
-# ── Workflow lint (actionlint) ──────────────────────────────────────────────
-
-
 class TestWorkflowLint:
     """Validate all GitHub Actions workflow files."""
 
@@ -127,9 +118,6 @@ class TestWorkflowLint:
                     f"{workflow_file}: 'branches' is not allowed under "
                     f"workflow_dispatch. Use a job-level 'if' condition instead."
                 )
-
-
-# ── Dockerfile lint (hadolint) ──────────────────────────────────────────────
 
 
 _SKIP_HADOLINT = {
