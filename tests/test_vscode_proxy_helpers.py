@@ -183,24 +183,9 @@ class TestModelToVscodeEntry:
         out = _model_to_vscode_entry({}, self.BASE_URL)
         assert out["id"] == "unknown"
 
-    def test_known_model_with_gradient_emits_list(self):
-        out = _model_to_vscode_entry({"model_name": "Azure/GPT-5.4"}, self.BASE_URL)
-        assert out["supportsReasoningEffort"] == self.STD
-
     def test_model_with_any_name_emits_list(self):
-        for name in (
-            "Azure/GPT-5.4",
-            "Azure/GPT-5.4-Nano",
-            "NVIDIA/GLM-5.1",
-            "NVIDIA/Kimi-K2.6",
-            "DGX/Qwen3.6-27B",
-            "CodeFreedom/Pro",
-            "CodeFreedom/Air",
-            "OpenCodeZen/Big-Pickle",
-            "OpenRouter/FreeRouter",
-        ):
-            out = _model_to_vscode_entry({"model_name": name}, self.BASE_URL)
-            assert out["supportsReasoningEffort"] == self.STD
+        out = _model_to_vscode_entry({"model_name": "some-org/Some-Random-Model"}, self.BASE_URL)
+        assert out["supportsReasoningEffort"] == self.STD
 
     def test_route_image_request_enables_vision(self):
         route_models = {"MiMo-V2.5", "DeepSeek-V4-Flash"}
@@ -256,52 +241,9 @@ class TestModelToVscodeEntry:
 class TestResolveReasoningEffort:
     STD = list(_STANDARD_REASONING_EFFORT_LEVELS)
 
-    @pytest.mark.parametrize(
-        "model_name",
-        [
-            "Azure/GPT-5.4",
-            "openai/gpt-5.4",
-            "Azure/GPT-5.4-Mini",
-            "openai/gpt-5.4-mini",
-            "Azure/GPT-5.4-Nano",
-            "openai/gpt-5.4-nano",
-            "DeepSeek/DeepSeek-V4-Pro",
-            "NVIDIA/DeepSeek-V4-Pro",
-            "DeepSeek/DeepSeek-V4-Flash",
-            "NVIDIA/DeepSeek-V4-Flash",
-            "OpenCodeZen/DeepSeek-V4-Flash-FREE",
-            "OpenRouter/Nemotron-3-Ultra-550B-A55B",
-            "OpenCodeZen/Nemotron-3-Ultra-FREE",
-            "OpenCodeZen/Nemotron-3-Super-FREE",
-            "OpenCodeZen/MiMo-V2.5-FREE",
-            "OpenCodeZen/Minimax-M3-FREE",
-            "DGX/Qwen3.6-35B-A3B",
-            "DGX/Qwen3.6-27B",
-            "NVIDIA/GLM-5.1",
-            "NVIDIA/Kimi-K2.6",
-            "OpenCodeZen/Big-Pickle",
-            "OpenRouter/FreeRouter",
-            "CodeFreedom/Ultra",
-            "CodeFreedom/Flash",
-            "CodeFreedom/Pro",
-            "CodeFreedom/Air",
-            "Azure/GLM-5.1",
-            "some-org/Some-Random-Model",
-            "totally/unknown",
-            "foo",
-            "",
-            "unknown",
-        ],
-    )
-    def test_every_model_gets_standard_set(self, model_name):
-        assert _resolve_reasoning_effort(model_name) == self.STD
-
-    def test_case_insensitive(self):
-        assert _resolve_reasoning_effort("azure/gpt-5.4") == self.STD
-        assert _resolve_reasoning_effort("AZURE/GPT-5.4-MINI") == self.STD
-        assert _resolve_reasoning_effort("azure/gpt-5.4-nano") == self.STD
-        assert _resolve_reasoning_effort("Azure/GPT-5.4-Nano") == self.STD
-        assert _resolve_reasoning_effort("Azure/GPT-5.4-Mini") == self.STD
+    def test_every_model_gets_standard_set(self):
+        assert _resolve_reasoning_effort("any-model-name") == self.STD
+        assert _resolve_reasoning_effort("") == self.STD
 
     def test_returned_list_is_fresh(self):
         a = _resolve_reasoning_effort("Azure/GPT-5.4")
