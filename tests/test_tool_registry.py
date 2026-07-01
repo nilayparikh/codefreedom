@@ -142,33 +142,128 @@ class TestWebBridgeToolMcpEndpoint:
 
 
 class TestCodebaseMemoryToolMcpEndpoint:
-    def test_defaults_when_no_profile(self):
+    def test_defaults_when_no_profile(self, monkeypatch, tmp_path):
+        """No git repo around: defaults to 8330."""
         from codefreedom.tools.codebase_memory import CodebaseMemoryTool
 
+        monkeypatch.chdir(tmp_path)  # not a git repo
         tool = CodebaseMemoryTool()
         assert tool.mcp_server_name == "codebase-memory"
         port, path = tool.mcp_endpoint
         assert port == 8330
         assert path == "/mcp"
 
-    def test_custom_port_from_profile(self):
+    def test_custom_port_from_manifest(self, monkeypatch, tmp_path):
+        """The endpoint reads ``mcp_port`` from the per-project manifest.
+
+        Set up a git repo in ``tmp_path``, write a manifest with port
+        9753, and verify the tool reports that port.
+        """
+        import subprocess
+
         from codefreedom.tools.codebase_memory import CodebaseMemoryTool
 
-        write_tool_profile(
-            "codebase-memory",
-            {
-                "codebase-memory": {
-                    "image": "codefreedom:codebase-memory",
-                    "container_name": "codefreedom-cbm",
-                    "port": 9753,
-                    "data_dir": "~/sandbox/cbm",
-                    "env": {},
-                }
-            },
-        )
+        # Make tmp_path a git repo so ``git rev-parse --show-toplevel`` works.
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        (tmp_path / "README.md").write_text("test")
+        subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "add", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "init"], check=True)
+
+        monkeypatch.chdir(tmp_path)
+
+        # Write a manifest with a non-default port.
+        from codebase_memory import manifest as _manifest
+        data = _manifest.init_defaults(tmp_path)
+        data["mcp_port"] = 9753
+        data["ui_port"] = 9753 + 1419
+        data["container_name"] = "codefreedom-tools-codebase-memory-test"
+        _manifest.save(tmp_path, data)
+
         tool = CodebaseMemoryTool()
         port, path = tool.mcp_endpoint
         assert port == 9753
+        assert path == "/mcp"
+
+    def test_remote_url_falls_back_to_default_port(self, monkeypatch, tmp_path):
+        """When ``remote_url`` is set, the tool class returns the default
+        port (the actual URL is opaque to the registry).
+        """
+        import subprocess
+
+        from codefreedom.tools.codebase_memory import CodebaseMemoryTool
+
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        (tmp_path / "README.md").write_text("test")
+        subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "add", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "init"], check=True)
+
+        monkeypatch.chdir(tmp_path)
+
+        from codebase_memory import manifest as _manifest
+        data = _manifest.init_defaults(tmp_path)
+        data["remote_url"] = "https://remote.example/mcp"
+        data["mcp_port"] = 9753
+        _manifest.save(tmp_path, data)
+
+        tool = CodebaseMemoryTool()
+        port, path = tool.mcp_endpoint
+        # remote_url path returns the default; the agent uses remote_url directly.
+        assert port == 8330
+        assert path == "/mcp"
+
+    def test_manifest_fallback_without_git(self, monkeypatch, tmp_path):
+        """When git resolution fails but a manifest exists, the tool
+        reads ``mcp_port`` from the manifest via the filesystem fallback.
+        """
+        from codefreedom.tools.codebase_memory import CodebaseMemoryTool
+
+        # No git init — just create a manifest directly.
+        from codebase_memory import manifest as _manifest
+        data = _manifest.init_defaults(tmp_path)
+        data["mcp_port"] = 8441
+        data["ui_port"] = 9860
+        data["container_name"] = "test-cbm"
+        _manifest.save(tmp_path, data)
+
+        monkeypatch.chdir(tmp_path)
+
+        tool = CodebaseMemoryTool()
+        port, path = tool.mcp_endpoint
+        assert port == 8441
+        assert path == "/mcp"
+
+    def test_bare_repo_reads_manifest_port(self, monkeypatch, tmp_path):
+        """A repo with ``core.bare=true`` should still resolve and read
+        the manifest's ``mcp_port``.
+        """
+        import subprocess
+
+        from codefreedom.tools.codebase_memory import CodebaseMemoryTool
+
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        (tmp_path / "README.md").write_text("test")
+        subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "add", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "init"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "config", "core.bare", "true"], check=True)
+
+        monkeypatch.chdir(tmp_path)
+
+        from codebase_memory import manifest as _manifest
+        data = _manifest.init_defaults(tmp_path)
+        data["mcp_port"] = 8442
+        data["ui_port"] = 9861
+        data["container_name"] = "test-cbm-bare"
+        _manifest.save(tmp_path, data)
+
+        tool = CodebaseMemoryTool()
+        port, path = tool.mcp_endpoint
+        assert port == 8442
         assert path == "/mcp"
 
 

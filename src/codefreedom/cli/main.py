@@ -246,6 +246,12 @@ def main() -> int:
     )
     _build_tools_args(tools_parser)
 
+    # run cbmem (per-workspace codebase-memory)
+    import codefreedom.tools.codebase_memory as _cbmem_shim  # noqa: F401 — sets up sys.path
+    from codebase_memory.cli import add_subparser as _cbmem_add_subparser
+
+    _cbmem_add_subparser(run_sub)
+
     # ── manage — occasional maintenance ────────────────────────────────────
     manage_parser = _add_subparser(
         subparsers,
@@ -337,6 +343,9 @@ def main() -> int:
             _dispatch("codefreedom.cli.run.proxy", "run", args)
         elif rc in ("tools", "tl"):
             _dispatch("codefreedom.cli.run.tools", "run", args)
+        elif rc in ("cbmem", "codebase-memory"):
+            from codebase_memory.cli import run as _cbmem_run
+            sys.exit(_cbmem_run(args))
         else:
             run_parser.print_help()
             sys.exit(1)
