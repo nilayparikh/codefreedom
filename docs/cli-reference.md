@@ -97,8 +97,9 @@ cf run proxy validate
 ## Tools Commands
 
 ```bash
-cf run tools [start|stop|restart|status]       # Default: status
-cf run tools [-c] [-w] [-g] [--web-bridge]    # Filter by tool
+cf run tools [start|stop|restart|status]          # Group actions, default: status
+cf run tools <tool> [start|stop|restart|status]   # Single-tool actions
+cf run tools start --chrome                       # Backward-compatible filtered group action
 ```
 
 ## Admin Commands
