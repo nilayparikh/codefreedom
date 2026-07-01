@@ -171,11 +171,15 @@ def _inject_default_model(
 
 
 def _update_codex_mcp(tools: list[str], codex_home: Path) -> None:
-    """Register MCP servers in codex config.toml."""
+    """Register MCP servers in codex config.toml.
+
+    Uses :func:`~codefreedom.tools.registry.get_tool_remote_url` as the
+    single source of truth for remote URL resolution.
+    """
     import tomlkit
 
     from codefreedom.tools.mcp import build_codex_mcp_entries
-    from codefreedom.tools.registry import _MCP_TOOLS
+    from codefreedom.tools.registry import _MCP_TOOLS, get_tool_remote_url
 
     if not tools:
         return
@@ -204,6 +208,14 @@ def _update_codex_mcp(tools: list[str], codex_home: Path) -> None:
             continue
 
         tool = _MCP_TOOLS[tool_name]
+
+        remote_url = get_tool_remote_url(tool_name)
+        if remote_url:
+            server_table = tomlkit.table()
+            server_table.add("url", remote_url)
+            existing["mcp_servers"][tool.mcp_server_name] = server_table
+            continue
+
         try:
             port, path = tool.mcp_endpoint
         except (FileNotFoundError, json.JSONDecodeError):

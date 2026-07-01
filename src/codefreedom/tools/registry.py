@@ -78,6 +78,27 @@ _MCP_TOOLS: dict[str, _McpTool] = {
     "codebase-memory": CodebaseMemoryTool(),
 }
 
+# ── Remote URL resolution ────────────────────────────────────────────────────
+
+
+def get_tool_remote_url(tool_name: str) -> str | None:
+    """Return ``remote_url`` from the tool's final merged profile, or ``None``.
+
+    This is the single source of truth for checking whether a tool is remote.
+    All consumers (``load_tool_mcp_endpoints``, ``start_all_tools``, native
+    MCP writers) must use this function instead of inlining the check.
+    """
+    if tool_name not in _KNOWN_TOOLS:
+        return None
+    _load_settings, _, _ = _KNOWN_TOOLS[tool_name]
+    try:
+        settings = _load_settings()
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    url = str(settings.get("remote_url", "") or "")
+    return url or None
+
+
 # ── Session ID generation ─────────────────────────────────────────────────────
 
 
@@ -149,7 +170,11 @@ def release_tools(_session_id: str, _tools: list[str]) -> None:
 
 
 def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
-    """Build MCP server entries for acquired tools."""
+    """Build MCP server entries for acquired tools.
+
+    Uses :func:`get_tool_remote_url` as the single source of truth for
+    remote URL resolution.
+    """
     servers = build_claude_mcp_servers(acquired_tools)
 
     for tool_name in acquired_tools:
@@ -157,21 +182,16 @@ def load_tool_mcp_endpoints(acquired_tools: list[str]) -> dict:
             continue
 
         tool = _MCP_TOOLS[tool_name]
-        try:
-            settings = _KNOWN_TOOLS[tool_name][0]()
-            remote_url = settings.get("remote_url")
-            if remote_url:
-                servers[tool.mcp_server_name] = {"type": "http", "url": remote_url}
-                continue
-            port, path = tool.mcp_endpoint
-        except FileNotFoundError:
-            eprint(
-                f"[MCP] Tool '{tool_name}' profile not found —"
-                " run 'codefreedom run tools {tool_name} init' first."
-            )
+
+        remote_url = get_tool_remote_url(tool_name)
+        if remote_url:
+            servers[tool.mcp_server_name] = {"type": "http", "url": remote_url}
             continue
-        except json.JSONDecodeError as exc:
-            eprint(f"{tag('MCP')} Tool '{tool_name}' profile is malformed — {exc}.")
+
+        try:
+            port, path = tool.mcp_endpoint
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
+            eprint(f"{tag('MCP')} Tool '{tool_name}' profile error — {exc}.")
             continue
 
         if not path.startswith("/"):
@@ -207,10 +227,18 @@ def get_all_tool_status() -> list[tuple[str, str, bool]]:
 
 
 def start_all_tools(selected: set[str] | None = None) -> int:
-    """Start all or selected tools. Returns exit code."""
+    """Start all or selected tools. Returns exit code.
+
+    Tools with ``remote_url`` set in their profile are skipped — they
+    are accessed via remote endpoint, not local Docker.
+    """
     failures = 0
     for name in _KNOWN_TOOLS:
         if selected and name not in selected:
+            continue
+        remote_url = get_tool_remote_url(name)
+        if remote_url:
+            eprint(f"{tag('TOOLS')} Tool '{name}' is remote — skipping local start.")
             continue
         _load_settings, _start, _ = _KNOWN_TOOLS[name]
         try:

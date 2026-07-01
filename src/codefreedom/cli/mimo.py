@@ -325,9 +325,13 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def _update_mimocode_mcp(tools: List[str]) -> None:
-    """Register MCP servers in MiMoCode config."""
+    """Register MCP servers in MiMoCode config.
+
+    Uses :func:`~codefreedom.tools.registry.get_tool_remote_url` as the
+    single source of truth for remote URL resolution.
+    """
     from codefreedom.tools.mcp import build_opencode_mcp_entries
-    from codefreedom.tools.registry import _MCP_TOOLS
+    from codefreedom.tools.registry import _MCP_TOOLS, get_tool_remote_url
 
     if not tools:
         return
@@ -354,6 +358,16 @@ def _update_mimocode_mcp(tools: List[str]) -> None:
             continue
 
         tool = _MCP_TOOLS[tool_name]
+
+        remote_url = get_tool_remote_url(tool_name)
+        if remote_url:
+            existing["mcp"][tool.mcp_server_name] = {
+                "type": "remote",
+                "url": remote_url,
+                "enabled": True,
+            }
+            continue
+
         try:
             port, path = tool.mcp_endpoint
         except (FileNotFoundError, json.JSONDecodeError):

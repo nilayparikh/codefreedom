@@ -423,4 +423,176 @@ class TestAcquireToolsRemoteUrl:
         assert len(start_calls) == 1, "start() must be called when no remote_url"
 
 
+class TestGetToolRemoteUrl:
+    """get_tool_remote_url is the single source of truth for remote checks."""
+
+    def test_returns_url_when_set(self, monkeypatch):
+        from codefreedom.tools import registry
+        from codefreedom.tools.registry import get_tool_remote_url
+
+        def fake_load_profile():
+            return {
+                "image": "img",
+                "container_name": "test",
+                "port": 9222,
+                "remote_url": "http://remote.local:9223/mcp",
+                "env": {},
+            }
+
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "chrome", (fake_load_profile, lambda s: 0, lambda s: 0)
+        )
+
+        assert get_tool_remote_url("chrome") == "http://remote.local:9223/mcp"
+
+    def test_returns_none_when_empty(self, monkeypatch):
+        from codefreedom.tools import registry
+        from codefreedom.tools.registry import get_tool_remote_url
+
+        def fake_load_profile():
+            return {
+                "image": "img",
+                "container_name": "test",
+                "port": 9222,
+                "remote_url": "",
+                "env": {},
+            }
+
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "chrome", (fake_load_profile, lambda s: 0, lambda s: 0)
+        )
+
+        assert get_tool_remote_url("chrome") is None
+
+    def test_returns_none_when_missing(self, monkeypatch):
+        from codefreedom.tools import registry
+        from codefreedom.tools.registry import get_tool_remote_url
+
+        def fake_load_profile():
+            return {
+                "image": "img",
+                "container_name": "test",
+                "port": 9222,
+                "env": {},
+            }
+
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "chrome", (fake_load_profile, lambda s: 0, lambda s: 0)
+        )
+
+        assert get_tool_remote_url("chrome") is None
+
+    def test_returns_none_for_unknown_tool(self):
+        from codefreedom.tools.registry import get_tool_remote_url
+
+        assert get_tool_remote_url("nonexistent-tool") is None
+
+    def test_handles_load_profile_error(self, monkeypatch):
+        from codefreedom.tools import registry
+        from codefreedom.tools.registry import get_tool_remote_url
+
+        def failing_load_profile():
+            raise FileNotFoundError("not found")
+
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "chrome", (failing_load_profile, lambda s: 0, lambda s: 0)
+        )
+
+        assert get_tool_remote_url("chrome") is None
+
+
+class TestStartAllToolsRemoteUrl:
+    """start_all_tools must skip Docker start for remote tools."""
+
+    def test_skips_remote_tool(self, monkeypatch):
+        from codefreedom.tools import registry
+
+        def fake_load_profile():
+            return {
+                "image": "img",
+                "container_name": "test",
+                "port": 9222,
+                "remote_url": "http://remote.local:9223/mcp",
+                "env": {},
+            }
+
+        start_calls: list = []
+
+        def fake_start(settings):
+            start_calls.append(settings)
+            return 0
+
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "chrome", (fake_load_profile, fake_start, lambda s: 0)
+        )
+
+        rc = registry.start_all_tools({"chrome"})
+        assert rc == 0
+        assert start_calls == [], "start() must not be called when remote_url is set"
+
+    def test_starts_local_tool(self, monkeypatch):
+        from codefreedom.tools import registry
+
+        def fake_load_profile():
+            return {
+                "image": "img",
+                "container_name": "test",
+                "port": 9222,
+                "remote_url": "",
+                "env": {},
+            }
+
+        start_calls: list = []
+
+        def fake_start(settings):
+            start_calls.append(settings)
+            return 0
+
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "chrome", (fake_load_profile, fake_start, lambda s: 0)
+        )
+
+        rc = registry.start_all_tools({"chrome"})
+        assert rc == 0
+        assert len(start_calls) == 1
+
+    def test_mixed_remote_and_local(self, monkeypatch):
+        from codefreedom.tools import registry
+
+        def remote_load_profile():
+            return {
+                "image": "img",
+                "container_name": "test",
+                "port": 9222,
+                "remote_url": "http://remote.local:9223/mcp",
+                "env": {},
+            }
+
+        def local_load_profile():
+            return {
+                "image": "img",
+                "container_name": "test",
+                "port": 8420,
+                "remote_url": "",
+                "env": {},
+            }
+
+        start_calls: list = []
+
+        def fake_start(settings):
+            start_calls.append(settings)
+            return 0
+
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "chrome", (remote_load_profile, fake_start, lambda s: 0)
+        )
+        monkeypatch.setitem(
+            registry._KNOWN_TOOLS, "web", (local_load_profile, fake_start, lambda s: 0)
+        )
+
+        rc = registry.start_all_tools({"chrome", "web"})
+        assert rc == 0
+        assert len(start_calls) == 1, "Only local tool should be started"
+
+
 pytestmark = pytest.mark.integration
