@@ -72,7 +72,8 @@ class TestStart:
     def test_creates_container(self, repo, capsys):
         cli._cmd_init(repo, _args("init"))
         with patch.object(manager, "container_exists", return_value=False), \
-             patch.object(manager, "_docker_run") as mock_run:
+             patch.object(manager, "_docker_run") as mock_run, \
+             patch.object(manager, "_auto_index_workspace"):
             mock_run.return_value = subprocess.CompletedProcess(args=(), returncode=0, stdout="abc", stderr="")
             rc = cli._cmd_start(repo, _args("start"))
         assert rc == 0
@@ -119,7 +120,8 @@ class TestRestart:
         cli._cmd_init(repo, _args("init"))
         with patch.object(manager, "stop", return_value=True), \
              patch.object(manager, "container_exists", return_value=False), \
-             patch.object(manager, "_docker_run") as mock_run:
+             patch.object(manager, "_docker_run") as mock_run, \
+             patch.object(manager, "_auto_index_workspace"):
             mock_run.return_value = subprocess.CompletedProcess(args=(), returncode=0, stdout="", stderr="")
             rc = cli._cmd_restart(repo, _args("restart"))
         assert rc == 0

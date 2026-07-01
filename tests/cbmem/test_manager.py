@@ -303,7 +303,8 @@ class TestEnsureRunning:
         manifest.save(repo, data)
 
         with patch.object(manager, "container_exists", return_value=False), \
-             patch.object(manager, "_docker_run") as mock_run:
+             patch.object(manager, "_docker_run") as mock_run, \
+             patch.object(manager, "_auto_index_workspace"):
             mock_run.return_value = subprocess.CompletedProcess(
                 args=(), returncode=0, stdout="abc123", stderr=""
             )
@@ -328,7 +329,8 @@ class TestEnsureRunning:
              patch.object(manager, "container_label", return_value=actual_hash), \
              patch.object(manager, "_docker_stop") as mock_stop, \
              patch.object(manager, "_docker_rm") as mock_rm, \
-             patch.object(manager, "_docker_run") as mock_run:
+             patch.object(manager, "_docker_run") as mock_run, \
+             patch.object(manager, "_auto_index_workspace"):
             mock_run.return_value = subprocess.CompletedProcess(
                 args=(), returncode=0, stdout="", stderr=""
             )
@@ -390,6 +392,39 @@ class TestEnsureRunning:
             )
             status, _ = manager.ensure_running(repo)
         assert status == manager.StartStatus.FAILED
+
+    def test_create_auto_indexes_main_and_related_paths(self, tmp_path):
+        repo = _make_repo(tmp_path / "proj")
+        extra = _make_repo(tmp_path / "extra")
+        shared = _make_repo(tmp_path / "shared")
+        manifest.save(
+            repo,
+            {
+                "id": "proj",
+                "related_paths": [
+                    {"path": str(extra.resolve()), "alias": "extra"},
+                    {"path": str(shared.resolve()), "alias": "shared"},
+                ],
+            },
+        )
+        data = manifest.load(repo)
+        data["path"] = str(repo.resolve())
+        data["container_name"] = "x"
+        manifest.save(repo, data)
+
+        with patch.object(manager, "container_exists", return_value=False), \
+             patch.object(manager, "_docker_run") as mock_run, \
+             patch.object(manager, "_auto_index_workspace") as mock_auto_index:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=(), returncode=0, stdout="abc123", stderr=""
+            )
+            status, _ = manager.ensure_running(repo)
+
+        assert status == manager.StartStatus.CREATED
+        mock_auto_index.assert_called_once()
+        payload, repo_paths = mock_auto_index.call_args.args
+        assert payload["mcp_port"] > 0
+        assert repo_paths == ["/workspace/proj", "/workspace/extra", "/workspace/shared"]
 
 
 # ── reset / cache dir helpers ─────────────────────────────────────────

@@ -32,6 +32,8 @@ import logging
 import os
 import socket
 import subprocess
+import time
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -239,12 +241,66 @@ def _restart(project_root: Path, data: dict[str, Any]) -> StartStatus:
 
 def _after_start(project_root: Path, data: dict[str, Any]) -> None:
     _manifest.update_last_used(project_root)
+    _auto_index_workspace(data, _workspace_paths(data))
     if data.get("auto_open_ui", True):
         url = f"http://127.0.0.1:{data['ui_port']}/"
         if _browser.open_ui(url):
             _log.info("UI auto-opened: %s", url)
         else:
             _log.info("UI URL (could not auto-open): %s", url)
+
+
+def _workspace_paths(data: dict[str, Any]) -> list[str]:
+    main_root = Path(data["path"]).resolve()
+    paths = [f"/workspace/{data['id']}"]
+    related_paths = data.get("related_paths") or []
+    if related_paths:
+        for _, sub in related.container_subpaths(main_root, related_paths):
+            paths.append(sub)
+    return paths
+
+
+def _auto_index_workspace(data: dict[str, Any], repo_paths: list[str]) -> None:
+    if not repo_paths:
+        return
+    mcp_port = int(data.get("mcp_port") or MCP_PORT_DEFAULT)
+    _wait_for_health(mcp_port)
+    for repo_path in repo_paths:
+        _mcp_call(mcp_port, "index_repository", {"repo_path": repo_path})
+
+
+def _wait_for_health(mcp_port: int, timeout_s: float = 30.0) -> None:
+    deadline = time.time() + timeout_s
+    url = f"http://127.0.0.1:{mcp_port}/healthz"
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                if response.status == 200:
+                    return
+        except Exception:
+            time.sleep(0.5)
+    raise RuntimeError(f"codebase-memory health check timed out on port {mcp_port}")
+
+
+def _mcp_call(mcp_port: int, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    url = f"http://127.0.0.1:{mcp_port}/mcp"
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": tool_name, "arguments": arguments},
+    }
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 
 def _build_run_args(data: dict[str, Any]) -> list[str]:
