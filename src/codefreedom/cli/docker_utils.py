@@ -633,15 +633,20 @@ def _layer_profiles_yaml() -> tuple[dict, dict]:
     across all four YAML layers — ``profiles.yaml``, ``recipe.yaml``,
     ``override.yaml``, ``.cf.yaml``) and ``interpolation_ctx`` is the
     context used for ``${VAR}`` resolution with:
-    ``os.environ`` < flattened ``common`` < ``recipe.yaml`` ``vars`` <
-    ``override.yaml`` ``vars`` < ``.cf.yaml`` ``vars`` < ``CF_CLI_*``
-    (highest).
+    ``os.environ`` < flattened ``common`` < resolved ``vars`` (recipe ->
+    override -> .cf.yaml) < ``CF_CLI_*`` (highest).
 
     This is a thin adapter over :func:`codefreedom.config.load_config` so
     tool modules benefit from the same precedence chain and ``.cf.yaml``
     auto-discovery as the rest of the CLI. The legacy in-function YAML
     reader was removed in favor of this single source of truth — see
     `AGENTS.md` (Environment Variable Chain) and `docs/patterns.md`.
+
+    The context now includes the full resolved ``vars:`` dict from
+    :func:`load_config` so ``${VAR}`` references in ``tools.<name>`` fields
+    resolve through the complete chain (recipe -> override -> .cf.yaml ->
+    CF_CLI_*). Previously only ``common.vars`` was layered, which omitted
+    recipe/override ``vars:`` and left some references unresolved.
     """
     from codefreedom.config import load_config
 
@@ -660,9 +665,10 @@ def _layer_profiles_yaml() -> tuple[dict, dict]:
     common_section = raw.get("common", {})
     if isinstance(common_section, dict):
         ctx.update(_flatten_dict(common_section, prefix="common"))
-    common_vars = common_section.get("vars", {}) if isinstance(common_section, dict) else {}
-    if isinstance(common_vars, dict):
-        ctx.update({str(k): str(v) for k, v in common_vars.items()})
+    # Full resolved vars chain (recipe -> override -> .cf.yaml -> CF_CLI_*)
+    # so ${VAR} refs in tools.<name> fields resolve identically to the
+    # in-process interpolator. config.vars already has CF_CLI_* applied.
+    ctx.update(config.vars)
     ctx = apply_cf_cli_overrides(ctx)
     return raw, ctx
 

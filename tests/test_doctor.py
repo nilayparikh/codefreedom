@@ -520,4 +520,102 @@ class TestRun:
 
         result = run(verbose=True)
         assert result in (0, 1, 2)
+
+
+class TestCheckUnwiredProxyVars:
+    """Tests for ``_check_unwired_proxy_vars``.
+
+    Regression for the bug where a var set in ``override.yaml`` / ``.cf.yaml``
+    was displayed by ``cf m dr`` but silently ignored by ``cf r px`` because
+    the compose file used a hardcoded literal instead of ``${VAR}``.
+    """
+
+    def _write_compose(self, config_dir: Path, content: str) -> None:
+        proxy_dir = config_dir / "proxy"
+        proxy_dir.mkdir(parents=True, exist_ok=True)
+        (proxy_dir / "docker-compose.yaml").write_text(content, encoding="utf-8")
+
+    def test_warns_on_stale_hardcoded_compose(self, monkeypatch, tmp_path):
+        from codefreedom.cli.manage.doctor import _check_unwired_proxy_vars
+
+        monkeypatch.setattr(
+            "codefreedom.cli.manage.doctor.get_config_dir", lambda: tmp_path
+        )
+        self._write_compose(
+            tmp_path,
+            'services:\n  litellm:\n    ports:\n      - "127.0.0.1:4000:4000"\n',
+        )
+
+        result = _check_unwired_proxy_vars()
+
+        assert result.status == CheckResult.WARN
+        assert "hardcoded literals" in result.message
+
+    def test_warns_on_unwired_var(self, monkeypatch, tmp_path):
+        from codefreedom.cli.manage.doctor import _check_unwired_proxy_vars
+
+        monkeypatch.setattr(
+            "codefreedom.cli.manage.doctor.get_config_dir", lambda: tmp_path
+        )
+        # Templated compose that references some vars but not the unwired one.
+        # Must include ${PROXY_BIND_HOST} so it is not flagged as stale.
+        self._write_compose(
+            tmp_path,
+            "services:\n  litellm:\n    ports:\n"
+            '      - "${PROXY_BIND_HOST:-0.0.0.0}:${PROXY_PORT:-4000}:4000"\n'
+            "    environment:\n"
+            "      OPENCODE_SUB_ROUTING_ORDER: ${OPENCODE_SUB_ROUTING_ORDER:-10}\n",
+        )
+        # override.yaml declares a var not referenced in the compose file.
+        (tmp_path / "override.yaml").write_text(
+            yaml.safe_dump(
+                {"vars": {"TOTALLY_UNWIRED_VAR": "x"}}, sort_keys=False
+            ),
+            encoding="utf-8",
+        )
+        # Avoid .cf.yaml walk-up picking up a real file.
+        monkeypatch.setenv("CF_CLI_CF_YAML", "")
+
+        result = _check_unwired_proxy_vars()
+
+        assert result.status == CheckResult.WARN
+        assert "TOTALLY_UNWIRED_VAR" in result.detail
+
+    def test_passes_when_all_vars_wired(self, monkeypatch, tmp_path):
+        from codefreedom.cli.manage.doctor import _check_unwired_proxy_vars
+
+        monkeypatch.setattr(
+            "codefreedom.cli.manage.doctor.get_config_dir", lambda: tmp_path
+        )
+        self._write_compose(
+            tmp_path,
+            "services:\n  litellm:\n    ports:\n"
+            '      - "${PROXY_BIND_HOST:-0.0.0.0}:${PROXY_PORT:-4000}:4000"\n'
+            "    environment:\n"
+            "      OPENCODE_SUB_ROUTING_ORDER: ${OPENCODE_SUB_ROUTING_ORDER:-10}\n",
+        )
+        (tmp_path / "override.yaml").write_text(
+            yaml.safe_dump(
+                {"vars": {"OPENCODE_SUB_ROUTING_ORDER": "5"}}, sort_keys=False
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CF_CLI_CF_YAML", "")
+
+        result = _check_unwired_proxy_vars()
+
+        assert result.status == CheckResult.PASS
+
+    def test_skips_when_compose_missing(self, monkeypatch, tmp_path):
+        from codefreedom.cli.manage.doctor import _check_unwired_proxy_vars
+
+        monkeypatch.setattr(
+            "codefreedom.cli.manage.doctor.get_config_dir", lambda: tmp_path
+        )
+
+        result = _check_unwired_proxy_vars()
+
+        assert result.status == CheckResult.SKIP
+
+
 pytestmark = pytest.mark.integration

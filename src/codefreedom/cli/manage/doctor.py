@@ -428,6 +428,85 @@ def _check_proxy_config_files() -> CheckResult:
 
 
 @_section("Config Files")
+def _check_unwired_proxy_vars() -> CheckResult:
+    """Warn about vars set in override.yaml/.cf.yaml but not wired into compose.
+
+    A var only affects the proxy if ``docker-compose.yaml`` references it as
+    ``${VAR}`` (or ``${VAR:-default}``). A var declared in ``override.yaml``
+    or ``.cf.yaml`` but absent from the compose file is silently ignored by
+    ``cf run proxy`` — this check makes that visible so users do not assume
+    a value takes effect when it does not.
+
+    Structured proxy fields (``SUFFIX_ID``, ``PROXY_*``) flow via
+    ``for_component("proxy")`` and are excluded from this check.
+    """
+    import re
+
+    from codefreedom.config.loader import _extract_vars, _load_yaml_optional, _resolve_cf_yaml_path
+    from codefreedom.core.proxy_env import is_compose_stale
+
+    config_dir = get_config_dir()
+    compose_path = config_dir / "proxy" / "docker-compose.yaml"
+    if not compose_path.exists():
+        return _skip("(proxy docker-compose.yaml missing)")
+
+    try:
+        compose_text = compose_path.read_text(encoding="utf-8")
+    except OSError:
+        return _skip("(could not read proxy docker-compose.yaml)")
+
+    # If the compose file is stale (hardcoded literals), the refresh on
+    # `cf r px start` will fix it; warn here so the user understands why
+    # their vars may not have been taking effect.
+    if is_compose_stale(compose_path):
+        return _warn(
+            "proxy/docker-compose.yaml uses hardcoded literals instead of"
+            " ${VAR:-default} — override.yaml/.cf.yaml vars are bypassed.",
+            "Run 'cf r px start' to auto-refresh the template, or 'cf m up'.",
+        )
+
+    referenced = set(re.findall(r"\$\{(\w+)", compose_text))
+
+    # Vars that flow through structured fields (for_component) rather than
+    # compose interpolation — not expected to appear as ${VAR} in the file.
+    structured = {
+        "SUFFIX_ID",
+        "COMPOSE_PROJECT_NAME",
+        "PROXY_CONTAINER_NAME",
+        "PROXY_PUBLIC_BASE_URL",
+        "POSTGRES_HOST_DATA_DIR",
+        "POSTGRES_HOST_BACKUP_DIR",
+    }
+
+    user_vars: dict[str, str] = {}
+    override_path = config_dir / "override.yaml"
+    if override_path.exists():
+        try:
+            user_vars.update(_extract_vars(_load_yaml_optional(override_path)))
+        except Exception:
+            pass
+    cf_yaml_path = _resolve_cf_yaml_path()
+    if cf_yaml_path and cf_yaml_path.exists():
+        try:
+            user_vars.update(_extract_vars(_load_yaml_optional(cf_yaml_path)))
+        except Exception:
+            pass
+
+    unwired = sorted(
+        k for k in user_vars
+        if k not in referenced and k not in structured and not k.startswith("CF_CLI_")
+    )
+    if not unwired:
+        return _ok("All override.yaml/.cf.yaml vars are wired into the proxy")
+    detail = "; ".join(unwired)
+    return _warn(
+        f"{len(unwired)} var(s) set in override.yaml/.cf.yaml but not referenced"
+        " in proxy/docker-compose.yaml — they won't affect the proxy.",
+        f"  Unwired: {detail}",
+    )
+
+
+@_section("Config Files")
 def _check_claude_code_profile() -> CheckResult:
     """Check claude-code profile (unified profiles.yaml)."""
     from codefreedom.core.config import get_config_dir

@@ -119,3 +119,92 @@ def test_proxy_container_name_no_double_suffix(monkeypatch, tmp_path):
     env["PROXY_CONTAINER_NAME"] = name1
     name2 = proxy_container_name(env)
     assert name2 == "codefreedom-proxy-windemo"
+
+
+def test_override_yaml_vars_exported_to_compose_env(monkeypatch, tmp_path):
+    """vars from override.yaml are exported so docker-compose ${VAR} sees them.
+
+    Regression for the bug where ``cf m dr`` displayed a var (e.g.
+    ``OPENCODE_SUB_ROUTING_ORDER``) but ``cf r px`` never injected it into
+    the ``docker compose`` subprocess, so the proxy container used the
+    hardcoded literal from docker-compose.yaml instead.
+    """
+    cf_home = tmp_path / ".codefreedom"
+    monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    _write_config(
+        cf_home,
+        overrides={
+            "vars": {
+                "OPENCODE_SUB_ROUTING_ORDER": "5",
+                "CLINE_SUB_ROUTING_ORDER": "7",
+                "OPENROUTER_BASE_URL": "https://custom.openrouter.example/v1",
+            }
+        },
+    )
+
+    env = build_proxy_run_env()
+
+    assert env["OPENCODE_SUB_ROUTING_ORDER"] == "5"
+    assert env["CLINE_SUB_ROUTING_ORDER"] == "7"
+    assert env["OPENROUTER_BASE_URL"] == "https://custom.openrouter.example/v1"
+
+
+def test_cf_yaml_vars_exported_to_compose_env(monkeypatch, tmp_path):
+    """vars from a per-folder .cf.yaml are exported to the compose env."""
+    cf_home = tmp_path / ".codefreedom"
+    monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    _write_config(cf_home)
+    # Write a .cf.yaml in the cwd and point CF_CLI_CF_YAML at it.
+    cf_yaml = tmp_path / ".cf.yaml"
+    cf_yaml.write_text(
+        yaml.safe_dump(
+            {"vars": {"OPENCODE_SUB_ROUTING_ORDER": "3", "SUFFIX_ID": "cfyaml"}},
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CF_CLI_CF_YAML", str(cf_yaml))
+    monkeypatch.chdir(tmp_path)
+
+    env = build_proxy_run_env()
+
+    assert env["OPENCODE_SUB_ROUTING_ORDER"] == "3"
+    # SUFFIX_ID from .cf.yaml flows through for_component -> structured field.
+    assert env["SUFFIX_ID"] == "cfyaml"
+    assert env["COMPOSE_PROJECT_NAME"] == "codefreedom-cfyaml"
+
+
+def test_structured_proxy_fields_win_over_flat_vars(monkeypatch, tmp_path):
+    """common.proxy.bind_port wins over a vars.PROXY_PORT of the same name.
+
+    Ensures the merge order is: os.environ < vars < for_component("proxy")
+    < CF_CLI_*. A flat var must not shadow the structured proxy field.
+    """
+    cf_home = tmp_path / ".codefreedom"
+    monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    _write_config(
+        cf_home,
+        overrides={
+            "vars": {"PROXY_PORT": "4000"},
+            "common": {"proxy": {"bind_host": "0.0.0.0", "bind_port": 5000}},
+        },
+    )
+
+    env = build_proxy_run_env()
+
+    assert env["PROXY_PORT"] == "5000"
+
+
+def test_cf_cli_var_wins_over_override_yaml_var(monkeypatch, tmp_path):
+    """CF_CLI_* overrides a var set in override.yaml."""
+    cf_home = tmp_path / ".codefreedom"
+    monkeypatch.setenv("CODEFREEDOM_HOME", str(cf_home))
+    _write_config(
+        cf_home,
+        overrides={"vars": {"OPENCODE_SUB_ROUTING_ORDER": "5"}},
+    )
+    monkeypatch.setenv("CF_CLI_OPENCODE_SUB_ROUTING_ORDER", "9")
+
+    env = build_proxy_run_env()
+
+    assert env["OPENCODE_SUB_ROUTING_ORDER"] == "9"

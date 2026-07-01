@@ -64,7 +64,8 @@ class ResolvedConfig:
     common: CommonSection
     agents: Dict[str, AgentDefinition]
     tools: Dict[str, Dict[str, Any]]
-    _config_dir: Path
+    vars: Dict[str, str] = field(default_factory=dict)
+    _config_dir: Path = field(default_factory=Path)
 
     def for_agent(
         self,
@@ -483,6 +484,19 @@ def load_config(
 
     context = resolve_dict(context, context)
 
+    # Step 3c: Snapshot the resolved vars (recipe -> override -> .cf.yaml ->
+    # CF_CLI_*) so callers that hand a static template to an external
+    # interpolator (e.g. docker compose) can export the same values the
+    # in-process interpolator used. ``context`` already holds the resolved
+    # values (vars + CF_CLI_* overrides); we project back onto the var keys
+    # so non-var context entries (common.* dotted keys) are excluded.
+    resolved_vars: Dict[str, str] = {}
+    for var_key in all_vars:
+        resolved_vars[var_key] = context.get(var_key, all_vars[var_key])
+    for key, val in os.environ.items():
+        if key.startswith("CF_CLI_"):
+            resolved_vars[key[len("CF_CLI_"):]] = val
+
     # Step 4: Single-pass ${VAR} resolution
     resolved = copy.deepcopy(merged)
     interpolate_all(resolved, context)
@@ -500,5 +514,6 @@ def load_config(
         common=config_model.common,
         agents=config_model.agents,
         tools=config_model.tools,
+        vars=resolved_vars,
         _config_dir=config_dir,
     )
