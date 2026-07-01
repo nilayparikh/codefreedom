@@ -268,6 +268,10 @@ class TestBuildRunArgs:
 
 class TestEnsureRunning:
 
+    @pytest.fixture(autouse=True)
+    def _mock_browser(self, monkeypatch):
+        monkeypatch.setattr(manager._browser, "open_ui", lambda _url: False)
+
     def test_remote_url_short_circuits(self, tmp_path):
         repo = _make_repo(tmp_path / "proj")
         manifest.save(repo, {"id": "proj", "remote_url": "https://x/mcp"})
