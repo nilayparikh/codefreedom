@@ -25,6 +25,8 @@ produced ``codefreedom-proxy-0000`` even when ``override.yaml`` set
 from __future__ import annotations
 
 import os
+import shutil
+from pathlib import Path
 from typing import Dict
 
 from codefreedom.config import load_config
@@ -48,11 +50,24 @@ _DEFAULT_PROJECT_NAME = f"codefreedom-{_DEFAULT_SUFFIX_ID}"
 def build_proxy_run_env() -> dict[str, str]:
     """Build the merged environment for a ``docker compose`` proxy invocation.
 
+    Exports the full resolved ``vars:`` chain (recipe.yaml -> override.yaml ->
+    .cf.yaml -> CF_CLI_*) so docker-compose ``${VAR:-default}`` interpolation
+    sees the same values the in-process interpolator used. Structured proxy
+    fields (``common.proxy.*``, ``common.suffix_id``) then win over flat vars
+    for proxy-specific keys, and ``CF_CLI_*`` overrides are applied *last*.
+
+    Precedence (highest wins):
+
+      1. ``CF_CLI_*`` machine-env overrides
+      2. ``for_component("proxy")`` (structured ``common.proxy.*`` +
+         ``common.suffix_id``)
+      3. resolved ``vars:`` (recipe.yaml -> override.yaml -> .cf.yaml)
+      4. bare ``os.environ`` (paths, TLS settings, etc.)
+
     Config-derived values (``SUFFIX_ID``, ``PROXY_BIND_HOST``,
     ``PROXY_PORT``, ``COMPOSE_PROJECT_NAME``) always overwrite any stray
     values present in bare :data:`os.environ`, so a value leaked into
     the shell can no longer shadow the user's ``override.yaml`` ``vars:`` block.
-    ``CF_CLI_*`` overrides are applied *last* and win over everything else.
 
     On :class:`ConfigError` we surface a warning (rather than silently
     masking the symptom) and fall back to the schema defaults above.
@@ -69,7 +84,16 @@ def build_proxy_run_env() -> dict[str, str]:
         "COMPOSE_PROJECT_NAME": _DEFAULT_PROJECT_NAME,
     }
     try:
-        proxy_env = dict(load_config().for_component("proxy"))
+        config = load_config()
+        # Export ALL resolved vars (recipe/override/.cf.yaml) so docker-compose
+        # ${VAR:-default} interpolation sees them. Without this, vars like
+        # OPENCODE_SUB_ROUTING_ORDER set in .cf.yaml never reach the proxy
+        # container even though `cf m dr` displays them.
+        merged.update(config.vars)
+        # Structured proxy fields win over flat vars for proxy-specific keys
+        # (PROXY_BIND_HOST, PROXY_PORT, PROXY_BASE_URL, SUFFIX_ID,
+        # COMPOSE_PROJECT_NAME, plus common.proxy.env entries).
+        proxy_env = dict(config.for_component("proxy"))
     except ConfigError as exc:
         eprint(
             f"{tag('PROXY')} Warning: proxy config could not be loaded ({exc}); "
@@ -109,3 +133,131 @@ def proxy_container_name(merged_env: dict[str, str]) -> str:
     if base.endswith(f"-{suffix}"):
         return base
     return f"{base}-{suffix}"
+
+
+# ── Compose template refresh ─────────────────────────────────────────────────
+
+
+# Marker that distinguishes a templated compose file (honours the vars chain)
+# from a stale hardcoded one. ``${PROXY_BIND_HOST`` only appears in the
+# templated ``ports:`` line; hardcoded files have a literal like
+# ``127.0.0.1:4000:4000`` which bypasses the config chain.
+_TEMPLATE_MARKER = "${PROXY_BIND_HOST"
+
+
+def _bundled_compose_template() -> str:
+    """Return the bundled ``docker-compose.yaml`` template content.
+
+    Shipped inside the installed package at
+    ``codefreedom/templates/proxy/docker-compose.yaml`` so the refresh works
+    even when the recipe store is absent (e.g. wheel-only install).
+    """
+    import importlib.resources
+
+    pkg = importlib.resources.files("codefreedom.templates.proxy")
+    return pkg.joinpath("docker-compose.yaml").read_text(encoding="utf-8")
+
+
+def _recipe_store_compose_template() -> str | None:
+    """Return a compose template from the recipe store, if present.
+
+    Scans ``~/.codefreedom/stores/*/*/proxy/docker-compose.yaml`` for a
+    templated file (one carrying :data:`_TEMPLATE_MARKER`). Returns the first
+    match, else ``None``. The recipe store is the canonical source when the
+    user has applied a recipe; the bundled template is the fallback.
+    """
+    cf_dir = get_codefreedom_dir()
+    stores_dir = cf_dir / "stores"
+    if not stores_dir.is_dir():
+        return None
+    for candidate in sorted(stores_dir.glob("*/*/proxy/docker-compose.yaml")):
+        try:
+            content = candidate.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if _TEMPLATE_MARKER in content:
+            return content
+    return None
+
+
+def is_compose_stale(compose_path: Path) -> bool:
+    """Return True if the installed compose file is hardcoded (not templated).
+
+    A templated file uses ``${PROXY_BIND_HOST:-...}`` so docker-compose
+    interpolation honours the ``override.yaml`` / ``.cf.yaml`` vars chain.
+    A stale file has a literal ``127.0.0.1:4000:4000`` ports line and
+    hardcoded provider settings, which silently bypass the config chain.
+    """
+    try:
+        content = compose_path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return _TEMPLATE_MARKER not in content
+
+
+def refresh_compose_template(compose_path: Path) -> bool:
+    """Refresh a stale hardcoded compose file to the templated form.
+
+    Source priority:
+      1. Recipe store template (``~/.codefreedom/stores/.../proxy/docker-compose.yaml``)
+      2. Bundled package template (``codefreedom/templates/proxy/docker-compose.yaml``)
+
+    The old file is backed up to ``<name>.bak`` before overwrite. Returns
+    ``True`` if the file was refreshed, ``False`` if it was already templated
+    or no template source was available.
+    """
+    if not compose_path.exists():
+        return False
+    if not is_compose_stale(compose_path):
+        return False
+
+    template = _recipe_store_compose_template()
+    if template is None:
+        try:
+            template = _bundled_compose_template()
+        except (FileNotFoundError, OSError, ModuleNotFoundError):
+            eprint(
+                f"{tag('PROXY')} Warning: could not load bundled compose template;"
+                " stale docker-compose.yaml left untouched."
+            )
+            return False
+
+    backup = compose_path.with_suffix(compose_path.suffix + ".bak")
+    try:
+        shutil.copy2(compose_path, backup)
+    except OSError as exc:
+        eprint(
+            f"{tag('PROXY')} Warning: could not back up {compose_path} ({exc});"
+            " stale docker-compose.yaml left untouched."
+        )
+        return False
+
+    try:
+        compose_path.write_text(template, encoding="utf-8")
+    except OSError as exc:
+        eprint(
+            f"{tag('PROXY')} Warning: could not refresh {compose_path} ({exc});"
+            " stale docker-compose.yaml left untouched."
+        )
+        return False
+
+    eprint(
+        f"{tag('PROXY')} Refreshed docker-compose.yaml from template"
+        f" (previous version backed up to {backup.name})."
+    )
+    eprint(
+        "   Hardcoded literals were replaced with ${VAR:-default} so"
+        " override.yaml / .cf.yaml vars now take effect."
+    )
+    return True
+
+
+def ensure_compose_template(compose_path: Path) -> None:
+    """Refresh the compose file if stale; no-op when already templated.
+
+    Called by ``cf run proxy start`` (and ``cf manage update``) so a user who
+    edits a value in ``.cf.yaml`` and runs ``cf r px restart`` sees the new
+    value take effect — even if their installed compose file predates the
+    templating fix.
+    """
+    refresh_compose_template(compose_path)

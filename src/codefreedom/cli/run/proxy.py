@@ -304,6 +304,13 @@ def _start_compose(args: Optional[argparse.Namespace] = None) -> int:
         eprint("   Run: cf s i")
         return 1
 
+    # Refresh stale hardcoded compose file so ${VAR:-default} interpolation
+    # honours the override.yaml / .cf.yaml vars chain. No-op when already
+    # templated. Non-fatal — proxy starts with the existing file on failure.
+    from codefreedom.core.proxy_env import ensure_compose_template
+
+    ensure_compose_template(compose_file)
+
     eprint(f"{tag('PROXY')} Starting LiteLLM via Docker Compose ({compose_file})...")
 
     # Ensure tools are running (needed for WebSearch, browser automation, etc.)

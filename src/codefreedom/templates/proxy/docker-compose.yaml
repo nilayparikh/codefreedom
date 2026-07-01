@@ -1,0 +1,167 @@
+---
+# ── LiteLLM Proxy (CodeFreedom image) ───────────────────────────────────────
+# Self-contained LiteLLM deployment for codefreedom.
+#
+# IMAGE:  Uses the published codefreedom:litellm-latest image (also
+#         available on ghcr.io/nilayparikh/codefreedom as a mirror).
+#         The image bakes in the WebSearch count display patch — no
+#         entrypoint wrapper, no runtime mutation, no surprises.
+#         The image is multi-arch (linux/arm64 + linux/amd64). Keep this
+#         compose file free of a `platform:` pin so Docker selects the
+#         matching manifest on Apple Silicon, Linux ARM, and Intel/AMD.
+#         Override PROXY_IMAGE in .env.proxy to use a different tag
+#         (e.g. a locally-built `codefreedom:litellm-local`).
+#
+# DATABASE: Embedded PostgreSQL 18.4 inside the image.
+#   The image ships its own stripped PG (Unix-socket only, no TCP listener).
+#   The entrypoint auto-initialises the cluster, runs `prisma db push`,
+#   and exports DATABASE_URL before exec'ing litellm. NO user
+#   configuration is needed for the embedded PG.
+#   To point at an EXTERNAL PG instead, set DATABASE_URL in .env.proxy
+#   and remove the two PG named-volume mounts below.
+#
+# ── DISABLING PROVIDERS ───────────────────────────────────────────────────
+# To disable a provider, comment out or remove its env vars below.
+# LiteLLM will skip any provider whose API key is empty, but removing
+# env vars from this file keeps it cleaner. See docs/configuration.md.
+# ───────────────────────────────────────────────────────────────────────────
+#
+# ── VARIABLE INJECTION ────────────────────────────────────────────────────
+# Every configurable value below uses ${VAR:-default} so that values
+# declared in override.yaml / .cf.yaml `vars:` blocks (exported by
+# `cf run proxy` via build_proxy_run_env) actually take effect. Hardcoded
+# literals here would bypass the config chain — keep them templated.
+# ───────────────────────────────────────────────────────────────────────────
+
+services:
+  litellm:
+    image: ${PROXY_IMAGE:-${IMAGE_BASE:-docker.io/nilayparikh/codefreedom}:litellm-${PROXY_IMAGE_TAG:-v1.90.0}}
+    container_name: ${PROXY_CONTAINER_NAME:-codefreedom-proxy}
+    restart: unless-stopped
+    profiles:
+      - litellm
+      - all
+    labels:
+      "codefreedom.component": "litellm-proxy"
+    # Entrypoint is tini -> litellm (set in the image). The compose
+    # file just passes the config path and port through. `--port` and
+    # `--host` are passed as args (not the PROXY_PORT env var) so
+    # they always win over the image's CMD defaults.
+    command:
+      - --config
+      - /app/litellm-config/config.yaml
+      - --port
+      - "4000"
+      - --host
+      - "0.0.0.0"
+    ports:
+      - "${PROXY_BIND_HOST:-0.0.0.0}:${PROXY_PORT:-4000}:4000"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    extra_hosts:
+      # Docker Desktop already provides host.docker.internal on
+      # macOS/Windows; this host-gateway mapping gives Linux the same
+      # hostname so one compose file works across all supported OSes.
+      - host.docker.internal:host-gateway
+    environment:
+      # ── Auth ────────────────────────────────────────────────────────────
+      # Docker Compose reads .env for ${VAR} interpolation (lowest priority).
+      # System env vars override .env (highest priority).
+      # .env.secrets is loaded at runtime by codefreedom CLI.
+      # The canonical user-facing name is PROXY_API_KEY; the codefreedom CLI
+      # mirrors it to LITELLM_MASTER_KEY at start time (LiteLLM's own
+      # convention) so the container always receives its auth key.
+      # LITELLM_LOG, LITELLM_DROP_PARAMS, and LITELLM_NO_DOCS are read
+      # directly by the LiteLLM process inside the container — they are
+      # LiteLLM's own conventions, not CodeFreedom names.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      LITELLM_LOG: ${LITELLM_LOG:-INFO}
+
+      # LiteLLM config flags
+      NO_DOCS: ${LITELLM_NO_DOCS:-True}
+      NO_REDOC: ${LITELLM_NO_REDOC:-True}
+      JSON_LOGS: ${JSON_LOGS:-true}
+
+      # LiteLLM runtime settings (also set in config.yaml)
+      LITELLM_DROP_PARAMS: ${LITELLM_DROP_PARAMS:-true}
+
+      # ── Web Search Bridge ──────────────────────────────────────────────
+      # The websearch_interception callback (in config.yaml) uses LiteLLM's
+      # SearXNG search provider. The handler doesn't pass api_base from
+      # litellm_params, so we set it as an env var for the SearXNG transformer.
+      SEARXNG_API_BASE: ${SEARXNG_API_BASE:-http://host.docker.internal:8500}
+
+      # ── Cloud provider credentials ───────────────────────────────────────
+      # Set API keys in .env or .env.secrets; leave empty to disable that provider.
+      # To fully disable a cloud provider, also comment out its include line
+      # in litellm/config/config.yaml. See docs/configuration.md.
+
+      # Microsoft Foundry (Azure)
+      MICROSOFT_FOUNDRY_API_BASE: ${MICROSOFT_FOUNDRY_API_BASE:-}
+      MICROSOFT_FOUNDRY_API_KEY: ${MICROSOFT_FOUNDRY_API_KEY:-}
+
+      # OpenCode Zen (also used for GO subscription models)
+      OPENCODE_ZEN_BASE_URL: ${OPENCODE_ZEN_BASE_URL:-https://opencode.ai/zen/v1}
+      OPENCODE_GO_BASE_URL: ${OPENCODE_GO_BASE_URL:-https://opencode.ai/zen/go/v1}
+      OPENCODE_GO_ANTHROPIC_BASE_URL: ${OPENCODE_GO_ANTHROPIC_BASE_URL:-https://opencode.ai/zen/go}
+      OPENCODE_ZEN_API_KEY: ${OPENCODE_ZEN_API_KEY:-}
+      OPENCODE_SUB_ROUTING_ORDER: ${OPENCODE_SUB_ROUTING_ORDER:-10}
+
+      # OpenRouter
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+
+      # Cline Pass
+      CLINE_PASS_BASE_URL: ${CLINE_PASS_BASE_URL:-https://api.cline.bot/api/v1}
+      CLINE_PASS_API_KEY: ${CLINE_PASS_API_KEY:-}
+      CLINE_SUB_ROUTING_ORDER: ${CLINE_SUB_ROUTING_ORDER:-11}
+
+      # ── Local backends (optional) ──────────────────────────────────────
+      # Cloud-only users: comment out this entire block or leave keys empty.
+      # Leave LOCAL_M_API_KEY / LOCAL_S_API_KEY empty to disable local models.
+      LOCAL_M_BASE_URL: ${LOCAL_M_BASE_URL:-http://host.docker.internal:8000/v1}
+      LOCAL_M_API_KEY: ${LOCAL_M_API_KEY:-}
+      LOCAL_S_BASE_URL: ${LOCAL_S_BASE_URL:-http://host.docker.internal:8001/v1}
+      LOCAL_S_API_KEY: ${LOCAL_S_API_KEY:-}
+
+    networks:
+      - codefreedom
+    volumes:
+      # ── Subpath mounts (NOT a whole-dir bind) ─────────────────────
+      # Each plugin's yaml file is mounted individually, so the
+      # parent dirs /app/litellm-config/plugins/<name>/ are NOT
+      # bind-mounted.  The entrypoint.sh creates .py symlinks in
+      # those dirs that point at the image-baked plugin code; those
+      # symlinks stay in the container and never appear on the host.
+      # Host's ~/.codefreedom/config/proxy/config/plugins/ therefore
+      # contains only user-editable .yaml files.
+      - ./config/config.yaml:/app/litellm-config/config.yaml:ro
+      - ./config/providers:/app/litellm-config/providers:ro
+      - ./config/plugins/reasoning-efforts/reasoning-efforts-mapping.yaml:/app/litellm-config/plugins/reasoning-efforts/reasoning-efforts-mapping.yaml:ro
+      - ./config/plugins/system-message-merger/system-message-merger.yaml:/app/litellm-config/plugins/system-message-merger/system-message-merger.yaml:ro
+      - ./config/plugins/image-router/image-router.yaml:/app/litellm-config/plugins/image-router/image-router.yaml:ro
+
+      # ── Embedded PostgreSQL 18.4 ────────────────────────────────────
+      # The entrypoint auto-initialises the cluster, generates the Prisma
+      # client, pushes the schema, and exports DATABASE_URL before
+      # exec'ing litellm. No DATABASE_URL to set, no migrations to run.
+      #
+      # Both PG data and backup use Docker named volumes (cross-platform,
+      # no permission issues on Windows/macOS/Linux).  Backup files are
+      # extracted via `docker cp` from the running container.  Override
+      # `CODEFREEDOM_PG_DATA_VOLUME` / `CODEFREEDOM_PG_BACKUP_VOLUME` when
+      # you want an isolated test stack with its own embedded PostgreSQL volumes.
+      - codefreedom_pg_data:/var/lib/postgresql/data
+      - codefreedom_pg_backup:/var/lib/postgresql/backup
+
+volumes:
+  codefreedom_pg_data:
+    name: ${CODEFREEDOM_PG_DATA_VOLUME:-codefreedom_pg_data}
+  codefreedom_pg_backup:
+    name: ${CODEFREEDOM_PG_BACKUP_VOLUME:-codefreedom_pg_backup}
+
+networks:
+  codefreedom:
+    name: codefreedom
+    external: true
