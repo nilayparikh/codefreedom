@@ -283,7 +283,7 @@ class TestBuildCommitSystemPrompt:
         prompt = _build_commit_system_prompt(
             {"conventional_commit": True, "modules": []}
         )
-        assert "do NOT include <think>" in prompt or "no chain-of-thought" in prompt.lower() or "reasoning" in prompt.lower()
+        assert "Do NOT include" in prompt and "chain-of-thought" in prompt.lower()
 
     def test_prompt_excludes_chat_tokens(self):
         prompt = _build_commit_system_prompt(
@@ -366,7 +366,7 @@ class TestBuildRetryUserPrompt:
             error_reason="Response was empty.",
             original_user_prompt="Files changed:\n- x.py\n\nDiff:",
         )
-        assert "():" in prompt
+        assert "()" in prompt
 
     def test_includes_error_reason(self):
         prompt = _build_retry_user_prompt(
@@ -585,7 +585,7 @@ class TestBuildPrSystemPrompt:
             {"conventional_commit": True, "modules": []},
             "## Summary\n${summary}",
         )
-        assert "github.com" not in prompt.lower() or "compare" not in prompt.lower()
+        assert "github.com" not in prompt.lower() and "compare" not in prompt.lower()
 
     def test_includes_template(self):
         prompt = _build_pr_system_prompt(
@@ -614,7 +614,7 @@ class TestBuildPrSystemPrompt:
             {"conventional_commit": True, "modules": []},
             "## Summary",
         )
-        assert "think" in prompt.lower() or "chain-of-thought" in prompt.lower() or "reasoning" in prompt.lower()
+        assert "Do NOT include" in prompt and "chain-of-thought" in prompt.lower()
 
 
 # ── PR validation ───────────────────────────────────────────────────────
