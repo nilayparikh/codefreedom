@@ -5,21 +5,29 @@
 #
 # Multi-stage design:
 #   Stage 1 (downloader): alpine:3.20 fetches the linux-{amd64,arm64}
-#                         -portable static binary from the upstream
-#                         GitHub release and verifies its SHA-256
-#                         checksum against checksums.txt.
+#                         -portable UI variant of the upstream static
+#                         binary from GitHub and verifies its SHA-256
+#                         checksum against checksums.txt. The UI variant
+#                         is required so the built-in graph visualization
+#                         (port 9749) actually works.
 #   Stage 2 (runtime):    python:3.13-slim runs bridge.py which:
 #     1. Spawns /usr/local/bin/codebase-memory-mcp stdio
-#        (optionally with --ui=true --port=9749)
+#        (with --ui=true --port=9749 when ENABLE_UI=1)
 #     2. Listens on :8330 for HTTP JSON-RPC requests /mcp
 #     3. Bridges requests/responses between HTTP and stdio
 #
 # Ports:
-#   8330 — HTTP MCP endpoint (/mcp)
-#   9749 — Optional graph-UI web server (gated by ENABLE_UI=1)
+#   8330 — HTTP MCP endpoint (/mcp) and /healthz
+#   9749 — Graph-UI web server (when ENABLE_UI=1)
+#
+# Volumes:
+#   /cache            — upstream SQLite graph store (mount ~/.codefreedom/tools/codebase-memory)
+#   /workspace        — optional bind mount for repos to be indexed
 #
 # Healthcheck:
-#   Bridge exposes /healthz; check passes when the HTTP listener starts.
+#   /healthz on 8330 returns 200 when the bridge is up. When ENABLE_UI=1,
+#   the check also probes 9749 to ensure the UI binary is actually in use
+#   (a non-UI binary silently no-ops the UI server).
 #
 # @platform  python:3.13-slim
 # @version   v1.0.0
@@ -28,13 +36,15 @@
 # Build:
 #   docker build \
 #     --build-arg CBM_VERSION=0.8.1 \
+#     --build-arg ENABLE_UI=1 \
 #     -t docker.io/nilayparikh/codefreedom:codebase-memory-latest \
 #     -f docker/codebase-memory/Dockerfile.CodebaseMemory docker/codebase-memory/
 #
 # Run:
 #   docker run -d --name codefreedom-tools-codebase-memory \
-#     -p 8330:8330 \
+#     -p 8330:8330 -p 9749:9749 \
 #     -e CBM_LOG_LEVEL=info \
+#     -e ENABLE_UI=1 \
 #     -v ~/.codefreedom/tools/codebase-memory:/cache \
 #     docker.io/nilayparikh/codefreedom:codebase-memory-latest
 #
@@ -42,20 +52,27 @@
 
 ARG CBM_VERSION=0.8.1
 ARG IMAGE_VERSION=1.0.0
+ARG ENABLE_UI=1
 
-# ── Stage 1: download upstream static binary ─────────────────────────────
+# ── Stage 1: download upstream UI variant static binary ─────────────────
 # Use mirror.gcr.io (Google's free Docker Hub mirror) for the base image
 # to avoid Docker Hub's per-IP rate limits during cross-arch builds.
 FROM --platform=$BUILDPLATFORM mirror.gcr.io/library/alpine:3.20 AS downloader
 
 ARG CBM_VERSION
 ARG TARGETARCH
+ARG ENABLE_UI
 
 RUN apk add --no-cache curl \
  && mkdir -p /dl \
  && cd /dl \
  && ARCH=${TARGETARCH} \
- && ARTIFACT="codebase-memory-mcp-linux-${ARCH}-portable.tar.gz" \
+ && if [ "${ENABLE_UI}" = "1" ]; then \
+      ARTIFACT="codebase-memory-mcp-ui-linux-${ARCH}-portable.tar.gz"; \
+    else \
+      ARTIFACT="codebase-memory-mcp-linux-${ARCH}-portable.tar.gz"; \
+    fi \
+ && echo "[downloader] Fetching ${ARTIFACT} (upstream v${CBM_VERSION})" \
  && curl -fSL -o "${ARTIFACT}" \
       "https://github.com/DeusData/codebase-memory-mcp/releases/download/v${CBM_VERSION}/${ARTIFACT}" \
  && curl -fSL -o checksums.txt \
@@ -70,6 +87,7 @@ FROM mirror.gcr.io/library/python:3.13-slim
 
 ARG IMAGE_VERSION
 ARG CBM_VERSION
+ARG ENABLE_UI
 
 LABEL org.opencontainers.image.title="CodeFreedom - Codebase Memory MCP Bridge" \
       org.opencontainers.image.description="HTTP MCP bridge over codebase-memory-mcp stdio — exposes code intelligence tools (indexing, search, trace, query, architecture) as an HTTP MCP server on port 8330" \
@@ -78,7 +96,8 @@ LABEL org.opencontainers.image.title="CodeFreedom - Codebase Memory MCP Bridge" 
       org.opencontainers.image.authors="Nilay Parikh" \
       com.codefreedom.platform="Codebase Memory" \
       com.codefreedom.arch="linux/amd64,linux/arm64" \
-      com.codefreedom.upstream.version="v${CBM_VERSION}"
+      com.codefreedom.upstream.version="v${CBM_VERSION}" \
+      com.codefreedom.enable_ui="${ENABLE_UI}"
 
 # Patch known vulnerabilities in base image
 RUN apt-get update && apt-get -y dist-upgrade && rm -rf /var/lib/apt/lists/*
@@ -89,10 +108,34 @@ COPY --from=downloader /dl/codebase-memory-mcp /usr/local/bin/codebase-memory-mc
 # Copy the bridge
 COPY bridge.py /app/bridge.py
 
-# Healthcheck — bridge exposes /healthz
+# Healthcheck — bridge exposes /healthz on 8330. The check itself returns
+# non-zero if the upstream subprocess is gone, so unhealthy containers
+# surface the failure in `docker ps` instead of silently serving 502s.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
     CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8330/healthz')" || exit 1
 
 EXPOSE 8330 9749
+
+# Pre-create persistent directories so bind mounts can overlay them
+# without permission issues. /cache holds the SQLite graph store.
+# /workspace is the optional bind mount for repos to be indexed.
+RUN mkdir -p /cache /workspace
+
+# Deliberately no USER directive — the container runs as root.
+#
+# Rationale: the host-side manager (docker/codebase-memory/src/) bind-
+# mounts the user's host source code at /workspace/<id> (read-only) and
+# a per-project cache directory at /cache (read-write for SQLite WAL).
+# Running as root avoids permission issues with host UIDs and per-file
+# modes (e.g. a 600-mode file owned by the host user's UID is still
+# readable as root inside the container). The github MCP tool follows
+# the same convention; chrome/web/web-bridge drop to a non-root user
+# because they only touch their own internal /data, /app, /cache
+# directories and never bind-mount the user's source tree.
+#
+# Do not add a USER directive here. If a future maintainer is tempted
+# to "harden" the image, they should add a per-mount user remap (e.g.
+# --user "$(id -u):$(id -g)" at run time, plus matching fsGroup) rather
+# than baking a UID into the image.
 
 ENTRYPOINT ["python3", "/app/bridge.py"]
