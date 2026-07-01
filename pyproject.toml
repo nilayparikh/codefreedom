@@ -86,7 +86,7 @@ Documentation = "https://nilayparikh.github.io/codefreedom/"
 "Claude Code" = "https://nilayparikh.github.io/codefreedom/claude-code/"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "docker/codebase-memory/src"]
 
 [tool.setuptools.package-data]
 # Bundled proxy docker-compose template — used by `cf run proxy` to refresh
