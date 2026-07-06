@@ -63,7 +63,7 @@ dev = [
     "pytest-cov>=5.0",
     "types-PyYAML",
     "httpx>=0.28",
-    "fastapi>=0.115",
+    "fastapi>=0.139.0",
 ]
 docs = ["mkdocs-material[imaging]>=9.7.6", "mkdocs-mermaid2-plugin>=1.2"]
 camoufox = ["beautifulsoup4>=4.14.3"]
